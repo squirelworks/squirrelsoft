@@ -4,8 +4,11 @@
 *.sqdwg
 *.sqobs
 *.wav
-*.svg
 .DS_Store
 
 **/__pycache__/
 *.pyc
+
+# generated analysis artifacts (keep web icons)
+*.svg
+!squirrelfield/web/icon.svg
