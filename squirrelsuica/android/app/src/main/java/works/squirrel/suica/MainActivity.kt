@@ -21,13 +21,12 @@ class MainActivity : AppCompatActivity() {
         setContentView(binding.root)
 
         nfcAdapter = NfcAdapter.getDefaultAdapter(this)
-        when {
-            nfcAdapter == null -> binding.status.setText(R.string.nfc_missing)
-            nfcAdapter?.isEnabled != true -> binding.status.setText(R.string.nfc_off)
-            else -> binding.status.text = getString(R.string.hold_card_en)
-        }
+        resetStatus()
 
-        binding.btnDemo.setOnClickListener { showCard(SuicaParse.demoCard(), demo = true) }
+        binding.btnDemoSuica.setOnClickListener { showCard(FelicaParse.demoSuica(), demo = true) }
+        binding.btnDemoNanaco.setOnClickListener { showCard(FelicaParse.demoNanaco(), demo = true) }
+        binding.btnDemoEdy.setOnClickListener { showCard(FelicaParse.demoEdy(), demo = true) }
+        binding.btnDemoWaon.setOnClickListener { showCard(FelicaParse.demoWaon(), demo = true) }
         binding.btnClear.setOnClickListener { clearUi() }
         binding.btnQr.setOnClickListener {
             startActivity(Intent(this, QrScanActivity::class.java))
@@ -75,24 +74,48 @@ class MainActivity : AppCompatActivity() {
         }
         if (tag == null) return
         try {
-            val card = SuicaReader.read(tag)
+            val card = FelicaReader.read(tag)
             showCard(card, demo = false)
-            Toast.makeText(this, "Suica read OK", Toast.LENGTH_SHORT).show()
+            val msg = if (card.balanceYen != null) {
+                "${card.brandLabel} ¥${card.balanceYen}"
+            } else {
+                card.brandLabel
+            }
+            Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
         } catch (e: Exception) {
-            binding.status.text = "Read failed: ${e.message}"
-            Toast.makeText(this, "Read failed: ${e.message}", Toast.LENGTH_LONG).show()
+            // Clear stale balance so a prior wrong read cannot linger under an error.
+            clearCardValues()
+            val tip = if (e.message?.contains("lost", ignoreCase = true) == true) {
+                "Tag was lost — hold the card still on the NFC spot and try again."
+            } else {
+                "Read failed: ${e.message}"
+            }
+            binding.status.text = tip
+            Toast.makeText(this, tip, Toast.LENGTH_LONG).show()
         }
     }
 
-    private fun showCard(card: SuicaCard, demo: Boolean) {
-        binding.prompt.text = if (demo) "Demo Suica" else "Suica / PASMO"
-        binding.promptEn.text = if (demo) "Synthetic card (no NFC)" else getString(R.string.hold_card_en)
+    private fun showCard(card: FelicaCard, demo: Boolean) {
+        binding.prompt.text = if (demo) "Demo · ${card.brandLabel}" else card.brandLabel
+        binding.promptEn.text = when {
+            demo -> card.note.ifBlank { "Synthetic card (no NFC)" }
+            card.note.isNotBlank() -> card.note
+            else -> getString(R.string.hold_card_en)
+        }
         binding.balance.visibility = View.VISIBLE
         binding.idm.visibility = View.VISIBLE
-        binding.balance.text = getString(R.string.balance_fmt, card.balanceYen)
+        binding.balance.text = if (card.balanceYen != null) {
+            getString(R.string.balance_fmt, card.balanceYen)
+        } else {
+            getString(R.string.balance_unknown)
+        }
         binding.idm.text = getString(R.string.idm_fmt, card.idm) +
             "\nPMm ${card.pmm}\nSystem ${card.systemCode}"
-        binding.status.text = if (demo) "Demo payload loaded" else "Live FeliCa read"
+        binding.status.text = if (demo) {
+            "Demo payload · balances are synthetic (~¥2–5k), not your card"
+        } else {
+            card.note.ifBlank { "Live FeliCa read" }
+        }
         binding.history.text = if (card.history.isEmpty()) {
             "(no history blocks)"
         } else {
@@ -104,12 +127,20 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun clearUi() {
+    private fun clearCardValues() {
         binding.prompt.setText(R.string.hold_card)
         binding.promptEn.setText(R.string.hold_card_en)
         binding.balance.visibility = View.GONE
         binding.idm.visibility = View.GONE
         binding.history.text = "(empty)"
+    }
+
+    private fun clearUi() {
+        clearCardValues()
+        resetStatus()
+    }
+
+    private fun resetStatus() {
         binding.status.text = when {
             nfcAdapter == null -> getString(R.string.nfc_missing)
             nfcAdapter?.isEnabled != true -> getString(R.string.nfc_off)
