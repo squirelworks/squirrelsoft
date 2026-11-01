@@ -67,6 +67,8 @@ def main() -> int:
     expect(card.history[0].enter_station == "乃木坂", "demo enter name")
     expect(card.history[0].exit_station == "代々木上原", "demo exit name")
     expect(card.history[0].fare_yen == 168, f"demo fare {card.history[0].fare_yen}")
+    expect(card.history[2].kind == "charge", "demo charge kind")
+    expect(card.history[2].fare_yen == 2000, f"demo charge amount {card.history[2].fare_yen}")
     expect(len(parse_history_blocks([block])) == 1, "history list")
 
     # nanaco history 0x564f

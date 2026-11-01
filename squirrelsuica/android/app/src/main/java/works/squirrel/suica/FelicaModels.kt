@@ -8,6 +8,18 @@ enum class FelicaBrand {
     UNKNOWN
 }
 
+/** Outcome of reading the purse history service (distinct from parse success). */
+enum class HistoryStatus {
+    /** One or more history rows parsed. */
+    OK,
+    /** Service responded but no usable records (new/blank card). */
+    EMPTY_CARD,
+    /** Could not read history blocks (tag lost, IO, wrong service). */
+    READ_FAILED,
+    /** Some blocks arrived before the tag was lost. */
+    PARTIAL
+}
+
 data class HistoryEntry(
     val date: String,
     val kind: String,
@@ -48,5 +60,7 @@ data class FelicaCard(
     val systemCode: String,
     val balanceYen: Int?,
     val history: List<HistoryEntry>,
-    val note: String = ""
+    val note: String = "",
+    val historyStatus: HistoryStatus = if (history.isNotEmpty()) HistoryStatus.OK else HistoryStatus.EMPTY_CARD,
+    val historyMessage: String = ""
 )

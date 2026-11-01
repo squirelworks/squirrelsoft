@@ -139,6 +139,7 @@ class FelicaParseTest {
     fun demoSuicaResolvesStationNamesAndFares() {
         val card = FelicaParse.demoSuica()
         assertTrue(card.history.size >= 3)
+        assertEquals(HistoryStatus.OK, card.historyStatus)
         val ride = card.history[0]
         assertEquals("乃木坂", ride.enterStation)
         assertEquals("代々木上原", ride.exitStation)
@@ -150,6 +151,68 @@ class FelicaParseTest {
         assertEquals("charge", charge.kind)
         assertEquals("東京", charge.enterStation)
         assertNull(charge.exitStation)
+        assertEquals(2000, charge.fareYen) // 2858 - 858
+    }
+
+    @Test
+    fun historyFormatShowsStationsFareBalance() {
+        val card = FelicaParse.demoSuica()
+        val text = HistoryFormat.formatHistoryPanel(card)
+        assertTrue(text.contains("乃木坂"))
+        assertTrue(text.contains("代々木上原"))
+        assertTrue(text.contains("残高"))
+        assertTrue(text.contains("運賃"))
+        assertFalse(text.contains("(empty)"))
+        assertFalse(text.contains("(no history blocks)"))
+    }
+
+    @Test
+    fun historyFormatReadFailedIsActionable() {
+        val text = HistoryFormat.emptyMessage(HistoryStatus.READ_FAILED)
+        assertTrue(text.contains("Could not read history"))
+        assertTrue(text.contains("Hold the card still"))
+        assertFalse(text.contains("(empty)"))
+    }
+
+    @Test
+    fun multiBlockReadCommandEncodesFourIndices() {
+        val idm = ByteArray(8) { (it + 1).toByte() }
+        val cmd = FelicaReader.readWithoutEncryption(idm, 0x090f, intArrayOf(0, 1, 2, 3))
+        assertEquals(4, cmd[13].toInt() and 0xff)
+        assertEquals(0x80, cmd[14].toInt() and 0xff)
+        assertEquals(0x83, cmd[20].toInt() and 0xff)
+    }
+
+    @Test
+    fun extractBlocksMultiBlockResponse() {
+        val idm = ByteArray(8) { it.toByte() }
+        val b0 = FelicaParse.histRail(
+            terminal = 0x16, process = 0x01,
+            y = 2026, m = 10, d = 28,
+            inLine = 0xe3, inSta = 0x59, outLine = 0xe3, outSta = 0x5e,
+            bal = 2480, region = 0
+        )
+        val b1 = FelicaParse.histRail(
+            terminal = 0x16, process = 0x01,
+            y = 2026, m = 10, d = 27,
+            inLine = 0x25, inSta = 0x07, outLine = 0x25, outSta = 0x0a,
+            bal = 2648, region = 0
+        )
+        val body = ArrayList<Byte>()
+        body.add(0x07)
+        idm.forEach { body.add(it) }
+        body.add(0); body.add(0)
+        body.add(2)
+        b0.forEach { body.add(it) }
+        b1.forEach { body.add(it) }
+        val packet = byteArrayOf((body.size + 1).toByte()) + body.toByteArray()
+        val got = FelicaReader.extractBlocks(packet)
+        assertEquals(2, got.size)
+        val entries = FelicaParse.historyEntries(got)
+        assertEquals(2, entries.size)
+        assertEquals("乃木坂", entries[0].enterStation)
+        assertEquals("渋谷", entries[1].enterStation)
+        assertEquals(168, entries[0].fareYen)
     }
 
     @Test

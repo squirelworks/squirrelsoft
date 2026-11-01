@@ -284,6 +284,8 @@ def parse_history_blocks(blocks: List[bytes]) -> List[HistoryEntry]:
             delta = older.balance_yen - e.balance_yen
             if 1 <= delta <= 20_000:
                 fare = delta
+            elif e.kind == "charge" and 1 <= (-delta) <= 50_000:
+                fare = -delta
         out.append(
             HistoryEntry(
                 e.date,
@@ -426,6 +428,7 @@ def demo_suica() -> FelicaCard:
                 hist_rail(0x16, 0x01, 2026, 10, 28, 0xE3, 0x59, 0xE3, 0x5E, 2480),
                 hist_rail(0x16, 0x01, 2026, 10, 27, 0x25, 0x07, 0x25, 0x0A, 2648),
                 hist_rail(0x16, 0x02, 2026, 10, 26, 0x01, 0x01, 0, 0, 2858),
+                hist_rail(0x16, 0x01, 2026, 10, 25, 0x25, 0x01, 0x25, 0x02, 858),
             ]
         ),
         note="Demo Suica (synthetic)",

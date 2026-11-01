@@ -12,5 +12,6 @@
     <string name="balance_unknown">Balance  (unknown / unsupported purse)</string>
     <string name="idm_fmt">IDm  %1$s</string>
     <string name="history_title">History</string>
+    <string name="history_placeholder">Hold a card to load journey history.\nIf a scan fails, an error will appear here — not a blank list.</string>
     <string name="read_only">SquirrelSuica · read-only FeliCa Suica Reader · station names · no writes</string>
 </resources>
