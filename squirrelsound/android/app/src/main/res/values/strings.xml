@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">SquirrelSound</string>
+    <string name="tagline">Live mic spectrum + waterfall · NR-style FFT on phone</string>
+    <string name="start">Start</string>
+    <string name="stop">Stop</string>
+    <string name="hold">Max-hold</string>
+    <string name="hold_on">Hold ✓</string>
+    <string name="reset">Reset zoom</string>
+    <string name="fft">FFT</string>
+    <string name="demo_tone">Demo 440 Hz</string>
+    <string name="status_idle">Idle — Start mic or enable Demo tone</string>
+    <string name="status_live">%1$s · fs=%2$d · fft=%3$d · peak %4$.1f Hz</string>
+    <string name="mic_permission">Microphone permission required for live spectrum</string>
+</resources>

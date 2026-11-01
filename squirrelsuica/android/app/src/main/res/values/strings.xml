@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">SquirrelSuica</string>
+    <string name="hold_card">Suica / PASMO をかざしてください</string>
+    <string name="hold_card_en">Hold a Suica/PASMO to the NFC area</string>
+    <string name="demo">Demo card</string>
+    <string name="scan_qr">Scan QR</string>
+    <string name="clear">Clear</string>
+    <string name="nfc_missing">This device has no NFC. Demo mode still works.</string>
+    <string name="nfc_off">NFC is off — enable it in Settings, or use Demo.</string>
+    <string name="balance_fmt">Balance  ¥%1$d</string>
+    <string name="idm_fmt">IDm  %1$s</string>
+    <string name="history_title">History</string>
+    <string name="read_only">Read-only FeliCa · no writes · no cloning</string>
+    <string name="qr_title">QR reader</string>
+    <string name="qr_hint">Point at a QR code</string>
+    <string name="copy">Copy</string>
+    <string name="camera_permission">Camera permission is required for QR scanning.</string>
+</resources>

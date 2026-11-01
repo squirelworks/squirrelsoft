@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0b1020" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" href="icon.svg" />
+  <title>SquirrelField</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="top">
+    <div class="brand">Squirrel<span>Field</span></div>
+    <nav class="nav">
+      <a href="spectrum.html">Spectrum</a>
+      <a href="qr.html">QR</a>
+      <a href="suica.html">Suica</a>
+    </nav>
+  </header>
+  <main>
+    <h1>Field toolkit</h1>
+    <p class="lead">Phone-ready live spectrum, QR camera reader, and Suica / FeliCa entry points for survey and transit work.</p>
+    <div class="grid">
+      <a class="tile" href="spectrum.html">
+        <h2>Live spectrum</h2>
+        <p>Mic → realtime spectrum + waterfall. Pinch zoom, peak marker, max-hold.</p>
+      </a>
+      <a class="tile" href="qr.html">
+        <h2>QR reader</h2>
+        <p>Camera barcode/QR scan with continuous detection and clipboard copy.</p>
+      </a>
+      <a class="tile" href="suica.html">
+        <h2>Suica reader</h2>
+        <p>Transit IC balance UI, demo mode, and hooks to the FeliCa companion.</p>
+      </a>
+    </div>
+  </main>
+  <script>
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("./sw.js").catch(() => {});
+    }
+  </script>
+</body>
+</html>

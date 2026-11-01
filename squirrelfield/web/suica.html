@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0b1020" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" href="icon.svg" />
+  <title>Suica — SquirrelField</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="top">
+    <div class="brand"><a href="index.html" style="color:inherit;text-decoration:none">Squirrel<span>Field</span></a></div>
+    <nav class="nav">
+      <a href="spectrum.html">Spectrum</a>
+      <a href="qr.html">QR</a>
+      <a href="suica.html">Suica</a>
+    </nav>
+  </header>
+  <main>
+    <h1>Suica reader</h1>
+    <p class="lead">Browser demo only — real Suica balance needs the <strong>SquirrelSuica Android app</strong> (<code>squirrelsuica/android/</code>, FeliCa NFC-F) or a USB PaSoRi. Use Demo card here for UI checks.</p>
+    <div class="toolbar">
+      <button class="primary" id="btnDemo">Demo card</button>
+      <button id="btnNfc">Try Web NFC</button>
+      <button id="btnClear">Clear</button>
+    </div>
+    <div class="panel">
+      <h3>Card</h3>
+      <div class="mono" id="card">Tap Demo card or present a FeliCa card to a supported reader.</div>
+    </div>
+    <div class="panel">
+      <h3>History</h3>
+      <div class="mono" id="history">(empty)</div>
+    </div>
+    <div class="status" id="status">Ready.</div>
+  </main>
+  <script src="suica.js"></script>
+</body>
+</html>

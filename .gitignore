@@ -1,0 +1,25 @@
+**/build/
+*.o
+*.sqdgn
+*.sqdwg
+*.sqobs
+*.wav
+.DS_Store
+
+**/__pycache__/
+*.pyc
+
+# generated analysis artifacts (keep web icons)
+*.svg
+!squirrelfield/web/icon.svg
+!squirrelfield/android/app/src/main/assets/web/icon.svg
+
+# Android local machine config / build junk
+**/android/local.properties
+**/android/.gradle/
+**/android/app/build/
+**/android/build/
+*.apk
+*.aab
+*.ap_
+*.dex
