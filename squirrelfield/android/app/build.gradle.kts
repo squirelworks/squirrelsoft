@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -16,6 +18,43 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    val localProps = Properties().apply {
+        val f = rootProject.file("local.properties")
+        if (f.exists()) {
+            f.inputStream().use { load(it) }
+        }
+    }
+    fun prop(name: String): String? =
+        System.getenv(name)
+            ?: (project.findProperty(name) as String?)
+            ?: localProps.getProperty(name)
+
+    val uploadStoreFile = prop("SQUIRREL_UPLOAD_STORE_FILE")
+        ?: prop("squirrel.upload.storeFile")
+    val uploadStorePassword = prop("SQUIRREL_UPLOAD_STORE_PASSWORD")
+        ?: prop("squirrel.upload.storePassword")
+    val uploadKeyAlias = prop("SQUIRREL_UPLOAD_KEY_ALIAS")
+        ?: prop("squirrel.upload.keyAlias")
+    val uploadKeyPassword = prop("SQUIRREL_UPLOAD_KEY_PASSWORD")
+        ?: prop("squirrel.upload.keyPassword")
+    val uploadStore = uploadStoreFile?.takeIf { it.isNotBlank() }?.let { file(it) }
+    val hasUploadSigning = uploadStore != null &&
+        uploadStore.isFile &&
+        !uploadStorePassword.isNullOrBlank() &&
+        !uploadKeyAlias.isNullOrBlank() &&
+        !uploadKeyPassword.isNullOrBlank()
+
+    if (hasUploadSigning) {
+        signingConfigs {
+            create("release") {
+                storeFile = uploadStore
+                storePassword = uploadStorePassword
+                keyAlias = uploadKeyAlias
+                keyPassword = uploadKeyPassword
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
@@ -23,6 +62,9 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            if (hasUploadSigning) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
 
