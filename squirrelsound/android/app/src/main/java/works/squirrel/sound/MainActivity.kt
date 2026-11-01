@@ -86,6 +86,7 @@ class MainActivity : AppCompatActivity() {
         stopEngine()
         val fft = binding.fftSize.selectedItem.toString().toInt()
         val eng = AudioEngine(
+            appContext = applicationContext,
             onFrame = { frame ->
                 binding.spectrum.update(frame)
                 val ok = !frame.sourceLabel.startsWith("mic-failed")
@@ -103,9 +104,14 @@ class MainActivity : AppCompatActivity() {
                 )
             },
             onStatus = { msg ->
+                // Avoid toast spam on transient focus / restart notices.
                 binding.status.setTextColor(ContextCompat.getColor(this, R.color.warm))
                 binding.status.text = msg
-                Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
+                if (msg.contains("denied", ignoreCase = true) ||
+                    msg.contains("unavailable", ignoreCase = true)
+                ) {
+                    Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
+                }
             }
         )
         eng.fftSize = fft
@@ -138,15 +144,23 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        // Keep / restart capture while the spectrum screen is visible.
         if (wantLive && engine == null && !isFinishing && !awaitingPermission) {
             binding.root.post { if (wantLive && engine == null) requestStart() }
         }
     }
 
     override fun onPause() {
+        // Do NOT stop the mic here — notification shade / dialogs pause the
+        // activity without leaving the spectrum screen. Spectroid-like apps
+        // keep capturing while still visible.
         super.onPause()
-        // Release the mic whenever we leave the foreground, but remember wantLive
-        // so onResume restarts. Skip while the permission dialog is up.
+    }
+
+    override fun onStop() {
+        super.onStop()
+        // Leaving the app (home / another activity): release mic + wake lock.
+        // Remember wantLive so onResume restarts when we come back.
         if (!awaitingPermission) {
             engine?.stop()
             engine = null
@@ -155,5 +169,12 @@ class MainActivity : AppCompatActivity() {
             binding.fftSize.isEnabled = true
             binding.demoTone.isEnabled = true
         }
+    }
+
+    override fun onDestroy() {
+        wantLive = false
+        engine?.stop()
+        engine = null
+        super.onDestroy()
     }
 }
