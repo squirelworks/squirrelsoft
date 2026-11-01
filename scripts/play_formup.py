@@ -18,6 +18,9 @@ Cannot set via this API (Play Console UI required):
   - Ads declaration / Advertising ID declaration
   - Email-list testers (API only supports Google Groups)
   - Countries for the internal track (N/A; production only)
+
+Graphics: default docs/play-graphics/ (repo), else PLAY_GRAPHICS_DIR /
+--graphics-dir, else /opt/cursor/artifacts/play-graphics/. Missing dir fails.
 """
 
 from __future__ import annotations
@@ -36,6 +39,7 @@ from googleapiclient.http import MediaFileUpload
 
 # Reuse listing copy from play_listing.py when available.
 _SCRIPTS = Path(__file__).resolve().parent
+_REPO_ROOT = _SCRIPTS.parent
 if str(_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS))
 try:
@@ -66,17 +70,25 @@ PACKAGES = {
 CONTACT_EMAIL = "squirelworks@gmail.com"
 CONTACT_WEBSITE = "https://github.com/squirelworks/squirrelsoft"
 DEFAULT_LANGUAGE = "en-US"
+DEFAULT_PRIVACY_BRANCH = "main"
 
-# jsDelivr serves raw HTML without GitHub login; update BRANCH after push.
+# jsDelivr serves raw HTML without GitHub login. Prefer @main so URLs survive
+# feature-branch deletion.
 PRIVACY_CDN_TMPL = (
     "https://cdn.jsdelivr.net/gh/squirelworks/squirrelsoft@{branch}/{path}"
 )
+
+REPO_GRAPHICS_DIR = _REPO_ROOT / "docs" / "play-graphics"
+ARTIFACTS_GRAPHICS_DIR = Path("/opt/cursor/artifacts/play-graphics")
 
 BLOCKED_CONSOLE_STEPS = [
     {
         "item": "Privacy policy URL",
         "path": "Play Console → App → Policy and programs → App content → Privacy policy → Manage",
-        "action": "Paste the jsDelivr (or Pages) privacy HTML URL for that package, Save.",
+        "action": (
+            "Paste the jsDelivr @main privacy HTML URL for that package (see "
+            "docs/README.md), Save. API cannot set this field."
+        ),
     },
     {
         "item": "App category",
@@ -132,6 +144,45 @@ def load_credentials(key_path: Path):
 def privacy_url(branch: str, package: str) -> str:
     path = PACKAGES[package]["privacy_path"]
     return PRIVACY_CDN_TMPL.format(branch=branch, path=path)
+
+
+def resolve_graphics_dir(explicit: Path | None) -> Path:
+    """Resolve store-graphics directory; fail loudly when nothing usable exists."""
+    if explicit is not None:
+        path = explicit.expanduser()
+        source = "--graphics-dir"
+    elif os.environ.get("PLAY_GRAPHICS_DIR"):
+        path = Path(os.environ["PLAY_GRAPHICS_DIR"]).expanduser()
+        source = "PLAY_GRAPHICS_DIR"
+    elif REPO_GRAPHICS_DIR.is_dir():
+        path = REPO_GRAPHICS_DIR
+        source = "repo docs/play-graphics"
+    elif ARTIFACTS_GRAPHICS_DIR.is_dir():
+        path = ARTIFACTS_GRAPHICS_DIR
+        source = "artifacts fallback"
+        print(
+            f"WARNING: graphics dir missing at {REPO_GRAPHICS_DIR}; "
+            f"falling back to {path}. Prefer committing icons under "
+            f"docs/play-graphics/ or set PLAY_GRAPHICS_DIR / --graphics-dir.",
+            file=sys.stderr,
+        )
+    else:
+        die(
+            "Graphics directory not found.\n"
+            f"  Expected repo path: {REPO_GRAPHICS_DIR}\n"
+            f"  Or cloud artifacts:  {ARTIFACTS_GRAPHICS_DIR}\n"
+            "  Or set --graphics-dir / PLAY_GRAPHICS_DIR.\n"
+            "  Required files: {suica,sound,qr}-icon-512.png, "
+            "*-feature-1024x500.png; optional *-phone-*.png"
+        )
+
+    if not path.is_dir():
+        die(
+            f"Graphics directory from {source} does not exist: {path}\n"
+            f"Populate {REPO_GRAPHICS_DIR} or set PLAY_GRAPHICS_DIR / --graphics-dir."
+        )
+    print(f"graphics dir ({source}): {path}")
+    return path
 
 
 def upload_image(service, edit_id: str, package: str, image_type: str, path: Path) -> dict:
@@ -195,11 +246,12 @@ def update_listing(service, edit_id: str, package: str) -> bool:
     return True
 
 
-def update_details(service, edit_id: str, package: str, website: str) -> dict:
+def update_details(service, edit_id: str, package: str) -> dict:
+    """Set contact email + repo website. Privacy policy is Console-only."""
     body = {
         "defaultLanguage": DEFAULT_LANGUAGE,
         "contactEmail": CONTACT_EMAIL,
-        "contactWebsite": website,
+        "contactWebsite": CONTACT_WEBSITE,
     }
     resp = (
         service.edits()
@@ -279,6 +331,7 @@ def formup_package(
         "package": package,
         "ok": False,
         "privacyPolicyUrlSuggested": privacy_url(branch, package),
+        "contactWebsite": CONTACT_WEBSITE,
         "categoryHint": cfg["category_hint"],
     }
     icon = graphics_dir / f"{stem}-icon-512.png"
@@ -289,16 +342,25 @@ def formup_package(
         edit = service.edits().insert(body={}, packageName=package).execute()
         edit_id = edit["id"]
         print(f"\n=== {package} edit={edit_id} ===")
+        print(f"  privacy (Console paste): {result['privacyPolicyUrlSuggested']}")
 
-        website = privacy_url(branch, package)
-        result["details"] = update_details(service, edit_id, package, website)
+        result["details"] = update_details(service, edit_id, package)
         result["listing"] = update_listing(service, edit_id, package)
 
         if icon.is_file():
             result["icon"] = replace_images(service, edit_id, package, "icon", [icon]) > 0
+        else:
+            result["icon"] = False
+            print(f"  WARNING: missing icon {icon.name} — skipping icon upload", file=sys.stderr)
         if feature.is_file():
             result["featureGraphic"] = (
                 replace_images(service, edit_id, package, "featureGraphic", [feature]) > 0
+            )
+        else:
+            result["featureGraphic"] = False
+            print(
+                f"  WARNING: missing feature graphic {feature.name} — skipping",
+                file=sys.stderr,
             )
         if phones:
             result["phoneScreenshots"] = replace_images(
@@ -306,7 +368,11 @@ def formup_package(
             )
         else:
             result["phoneScreenshots"] = 0
-            print("  phone screenshots missing")
+            print(
+                f"  WARNING: no {stem}-phone-*.png under {graphics_dir} — "
+                "skipping phone screenshots",
+                file=sys.stderr,
+            )
 
         commit = service.edits().commit(editId=edit_id, packageName=package).execute()
         result["editId"] = commit.get("id", edit_id)
@@ -345,14 +411,23 @@ def main() -> int:
     ap.add_argument(
         "--graphics-dir",
         type=Path,
-        default=Path("/opt/cursor/artifacts/play-graphics"),
+        default=None,
+        help=(
+            "Directory with {suica,sound,qr}-icon-512.png and *-feature-1024x500.png. "
+            "Default: docs/play-graphics/, else PLAY_GRAPHICS_DIR, else "
+            "/opt/cursor/artifacts/play-graphics/."
+        ),
     )
     ap.add_argument(
         "--data-safety-csv",
         type=Path,
         default=_SCRIPTS / "play_data" / "data_safety_no_data.csv",
     )
-    ap.add_argument("--branch", default="main", help="Git branch for jsDelivr privacy URLs")
+    ap.add_argument(
+        "--branch",
+        default=DEFAULT_PRIVACY_BRANCH,
+        help="Git ref for jsDelivr privacy URLs (default: main)",
+    )
     ap.add_argument("--skip-data-safety", action="store_true")
     ap.add_argument("--inspect-only", action="store_true")
     ap.add_argument("--track", default="internal")
@@ -368,6 +443,8 @@ def main() -> int:
         if p not in PACKAGES:
             die(f"unknown package: {p}")
 
+    graphics_dir = resolve_graphics_dir(args.graphics_dir)
+
     creds = load_credentials(Path(key))
     service = build("androidpublisher", "v3", credentials=creds, cache_discovery=False)
 
@@ -381,6 +458,7 @@ def main() -> int:
             info = inspect_track(service, package, args.track)
             info["package"] = package
             info["privacyPolicyUrlSuggested"] = privacy_url(args.branch, package)
+            info["contactWebsiteExpected"] = CONTACT_WEBSITE
             results.append(info)
             print(json.dumps(info, indent=2)[:2000])
     else:
@@ -389,7 +467,7 @@ def main() -> int:
                 formup_package(
                     service,
                     package=package,
-                    graphics_dir=args.graphics_dir,
+                    graphics_dir=graphics_dir,
                     csv_text=csv_text,
                     branch=args.branch,
                     skip_data_safety=args.skip_data_safety,
@@ -399,14 +477,23 @@ def main() -> int:
     summary = {
         "results": results,
         "contactEmail": CONTACT_EMAIL,
+        "contactWebsite": CONTACT_WEBSITE,
         "privacyCdnTemplate": PRIVACY_CDN_TMPL,
         "branch": args.branch,
+        "graphicsDir": str(graphics_dir),
         "blockedConsoleSteps": BLOCKED_CONSOLE_STEPS,
+        "privacyUrlsForConsolePaste": {
+            pkg: privacy_url(args.branch, pkg) for pkg in packages
+        },
     }
     if args.json_out:
         args.json_out.parent.mkdir(parents=True, exist_ok=True)
         args.json_out.write_text(json.dumps(summary, indent=2) + "\n")
         print(f"\nwrote {args.json_out}")
+
+    print("\n=== privacy URLs (paste in Console — API cannot set) ===")
+    for pkg in packages:
+        print(f"- {pkg}: {privacy_url(args.branch, pkg)}")
 
     print("\n=== blocked Console steps (API cannot finish) ===")
     for step in BLOCKED_CONSOLE_STEPS:
