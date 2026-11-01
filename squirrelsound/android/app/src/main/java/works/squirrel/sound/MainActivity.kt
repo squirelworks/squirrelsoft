@@ -31,23 +31,12 @@ class MainActivity : AppCompatActivity() {
             ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, sizes)
         binding.fftSize.setSelection(1)
 
-        binding.btnStart.setOnClickListener {
-            if (binding.demoTone.isChecked) {
-                startEngine(AudioEngine.Source.DEMO)
-            } else {
-                when {
-                    ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) ==
-                        PackageManager.PERMISSION_GRANTED -> startEngine(AudioEngine.Source.MIC)
-                    else -> micPermission.launch(Manifest.permission.RECORD_AUDIO)
-                }
-            }
-        }
+        binding.btnStart.setOnClickListener { requestStart() }
         binding.btnStop.setOnClickListener { stopEngine() }
         binding.btnHold.setOnClickListener {
             maxHold = !maxHold
             binding.spectrum.setMaxHold(maxHold)
             binding.btnHold.text = getString(if (maxHold) R.string.hold_on else R.string.hold)
-            binding.status.append(if (maxHold) " · max-hold on" else " · max-hold off")
         }
         binding.btnReset.setOnClickListener {
             binding.spectrum.resetHold()
@@ -57,21 +46,41 @@ class MainActivity : AppCompatActivity() {
         }
 
         binding.btnStop.isEnabled = false
+
+        // Spectroid-style: start the mic as soon as the app opens.
+        binding.root.post { requestStart() }
+    }
+
+    private fun requestStart() {
+        if (binding.demoTone.isChecked) {
+            startEngine(AudioEngine.Source.DEMO)
+            return
+        }
+        when {
+            ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) ==
+                PackageManager.PERMISSION_GRANTED -> startEngine(AudioEngine.Source.MIC)
+            else -> micPermission.launch(Manifest.permission.RECORD_AUDIO)
+        }
     }
 
     private fun startEngine(source: AudioEngine.Source) {
         stopEngine()
         val fft = binding.fftSize.selectedItem.toString().toInt()
-        val eng = AudioEngine { db, sr, peak ->
-            binding.spectrum.update(db, sr, peak)
-            binding.status.text = getString(
-                R.string.status_live,
-                if (source == AudioEngine.Source.DEMO) "demo 440 Hz" else "mic",
-                sr,
-                fft,
-                peak
-            )
-        }
+        val eng = AudioEngine(
+            onFrame = { db, sr, peak ->
+                binding.spectrum.update(db, sr, peak)
+                binding.status.text = getString(
+                    R.string.status_live,
+                    engine?.activeLabel ?: if (source == AudioEngine.Source.DEMO) "demo" else "mic",
+                    sr,
+                    fft,
+                    peak
+                )
+            },
+            onInfo = { msg ->
+                Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
+            }
+        )
         eng.fftSize = fft
         eng.source = source
         eng.start()
@@ -90,6 +99,13 @@ class MainActivity : AppCompatActivity() {
         binding.fftSize.isEnabled = true
         binding.demoTone.isEnabled = true
         binding.status.setText(R.string.status_idle)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (engine == null && !isFinishing) {
+            binding.root.post { requestStart() }
+        }
     }
 
     override fun onPause() {

@@ -6,36 +6,44 @@
   <meta name="theme-color" content="#0b1020" />
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" href="icon.svg" />
-  <title>SquirrelField</title>
+  <title>SquirrelField — QR</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <header class="top">
     <div class="brand">Squirrel<span>Field</span></div>
     <nav class="nav">
-      <a href="spectrum.html">Spectrum</a>
-      <a href="qr.html">QR</a>
-      <a href="suica.html">Suica</a>
+      <a href="index.html">QR</a>
     </nav>
   </header>
   <main>
-    <h1>Field toolkit</h1>
-    <p class="lead">Phone-ready live spectrum, QR camera reader, and Suica / FeliCa entry points for survey and transit work.</p>
-    <div class="grid">
-      <a class="tile" href="spectrum.html">
-        <h2>Live spectrum</h2>
-        <p>Mic → realtime spectrum + waterfall. Pinch zoom, peak marker, max-hold.</p>
-      </a>
-      <a class="tile" href="qr.html">
-        <h2>QR reader</h2>
-        <p>Camera barcode/QR scan with continuous detection and clipboard copy.</p>
-      </a>
-      <a class="tile" href="suica.html">
-        <h2>Suica reader</h2>
-        <p>Transit IC balance UI, demo mode, and hooks to the FeliCa companion.</p>
-      </a>
+    <h1>QR reader</h1>
+    <p class="lead">Field camera QR / barcode scanner. Spectrum lives in SquirrelSound; FeliCa in SquirrelSuica.</p>
+    <div class="toolbar">
+      <button class="primary" id="btnStart">Start camera</button>
+      <button id="btnStop" disabled>Stop</button>
+      <button id="btnCopy" disabled>Copy</button>
+      <label class="inline">Facing
+        <select id="facing">
+          <option value="environment" selected>Back</option>
+          <option value="user">Front</option>
+        </select>
+      </label>
+      <label class="inline">Image
+        <input type="file" id="file" accept="image/*" capture="environment" />
+      </label>
     </div>
+    <div class="stage">
+      <video id="video" playsinline muted></video>
+      <canvas id="overlay" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none"></canvas>
+    </div>
+    <div class="panel">
+      <h3>Last result</h3>
+      <div class="mono" id="result">(none yet)</div>
+    </div>
+    <div class="status" id="status">Idle.</div>
   </main>
+  <script src="qr.js"></script>
   <script>
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.register("./sw.js").catch(() => {});

@@ -12,9 +12,9 @@ libraries.
 | `squirrelstation/` | **SquirrelStation** | MicroStation-class 3D design / DGN-style CAD |
 | `squirrelcad/` | **SquirrelCAD** | AutoCAD-class 2D/3D drafting |
 | `squirrelgnss/` | **SquirrelGNSS** | Continuous satellite / GPS land surveying |
-| `squirrelsound/` | **SquirrelSound** | Spectral sound analyzer (`sqdsp`) + live UI |
-| `squirrelfield/` | **SquirrelField** | Phone PWA: live spectrum, QR reader, Suica UI |
-| `squirrelsuica/` | **SquirrelSuica** | FeliCa Suica/PASMO reader (USB + Android) |
+| `squirrelsound/` | **SquirrelSound** | Spectral sound analyzer (`sqdsp`) + phone Spectroid UI |
+| `squirrelfield/` | **SquirrelField** | Phone QR / barcode reader only |
+| `squirrelsuica/` | **SquirrelSuica** | FeliCa Suica/PASMO/nanaco/Edy/WAON reader (USB + Android) |
 
 ## Build
 
@@ -49,9 +49,9 @@ squirrelsoft/
 ├── squirrelstation/
 ├── squirrelcad/
 ├── squirrelgnss/
-├── squirrelsound/     # FFT analyzer + live mic/demo SDL waterfall
-├── squirrelfield/     # phone PWA (spectrum / QR / Suica)
-└── squirrelsuica/     # FeliCa reader (nfcpy + Android NFC-F)
+├── squirrelsound/     # FFT analyzer + live mic Spectroid UI (desktop + Android)
+├── squirrelfield/     # phone QR / barcode reader (PWA + Android)
+└── squirrelsuica/     # FeliCa reader only (nfcpy + Android NFC-F)
 ```
 
 ## License posture

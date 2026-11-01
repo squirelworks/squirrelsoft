@@ -1,7 +1,7 @@
 {
   "name": "SquirrelField",
   "short_name": "SqField",
-  "description": "Live spectrum, QR reader, Suica field tools",
+  "description": "QR / barcode camera reader for field work",
   "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#0b1020",

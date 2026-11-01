@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">SquirrelSound</string>
-    <string name="tagline">Live mic spectrum + waterfall · NR-style FFT on phone</string>
+    <string name="tagline">Live mic spectrum + waterfall · Spectroid-style analyzer</string>
     <string name="start">Start</string>
     <string name="stop">Stop</string>
     <string name="hold">Max-hold</string>
