@@ -1,7 +1,11 @@
-# SquirrelSuica
+# SquirrelSuica — Suica Reader
 
-Read-only **FeliCa** e-money reader for field use: **Suica/PASMO family**,
-**nanaco**, **楽天Edy**, and **WAON**. No writes, no cloning.
+Read-only **FeliCa Suica Reader** for field use: **Suica/PASMO family**,
+**nanaco**, **楽天Edy**, and **WAON**. Journey history shows **station names**
+(enter → exit) from the public Saibane station-code table. No writes, no cloning.
+
+On Android the launcher label is **Suica Reader** (package `works.squirrel.suica`)
+so it is easy to find next to unrelated Field/Sound apps.
 
 You do **not** need every physical card to develop or test — parsers are covered
 by **fixture unit tests** and **Demo** buttons with realistic ¥2–5k balances.
@@ -10,10 +14,11 @@ by **fixture unit tests** and **Demo** buttons with realistic ¥2–5k balances.
 
 | Path | When to use |
 |------|-------------|
-| **`android/`** | Phone app (NFC-F) |
+| **`android/`** | Phone app (NFC-F) — preferred Suica Reader |
+| `data/StationCode.csv` | Saibane region/line/station → name table |
 | `suica_read.py` | USB PaSoRi via `nfcpy`, or `--demo suica\|nanaco\|edy\|waon` |
 | `felica_parse.py` | Shared parsers + synthetic demos |
-| `../squirrelfield/web/suica.html` | Browser UI demo (cannot read live balances) |
+| `../squirrelfield/web/` | Field tools (not the Suica Reader) |
 
 ## Android
 
@@ -29,8 +34,9 @@ Hold the card **still** on the NFC spot **with the app open**. NFC is registered
 only in the foreground (no `TECH_DISCOVERED` launch filter), so a card in your
 phone flap will not auto-open the app.
 
-If you see “Tag was lost”, the previous balance is cleared so a bad read cannot
-linger. Demo buttons load synthetic purses (not your real balance).
+History rows show date, kind, fare (from balance delta), balance, and
+**station names** when the codes resolve. Unknown codes fall back to `LINE/STA`
+hex. Demo Suica includes 乃木坂→代々木上原 and 渋谷→新宿 samples.
 
 ## Desktop / USB
 
@@ -45,17 +51,20 @@ python3 suica_read.py
 
 | Brand | System (typical) | Balance service | Layout |
 |-------|------------------|-----------------|--------|
-| Suica/PASMO/… | `0x0003` | `0x090f` (+ `0x008b` check) | LE u16 |
+| Suica/PASMO/… | `0x0003` | `0x090f` (+ `0x008b` check) | LE u16; history stations at bytes 6–9 |
 | nanaco | `0xFE00` / `0x04C7` | `0x5597` | LE u32 |
 | 楽天Edy | `0xFE00` | `0x1317` | LE u32 |
 | WAON | `0xFE00` | `0x6817` | LE u16 |
 
 Unknown FeliCa: shows IDm and an unsupported-purse note (no invented balance).
 
+Station names come from the community SFCardFan サイバネ表 (see `data/README.md`).
+Clean-room parsers — study open FeliCa history layouts; do not copy proprietary apps.
+
 ## Tests
 
 ```bash
 make test
-# Android fixtures:
+# Android fixtures (includes station-name cases):
 cd android && ./gradlew :app:testDebugUnitTest
 ```

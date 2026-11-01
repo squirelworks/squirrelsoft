@@ -1,8 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">SquirrelSuica</string>
+    <!-- Launcher / title: searchable as "Suica Reader"; Squirrel brand in subtitle. -->
+    <string name="app_name">Suica Reader</string>
+    <string name="app_brand">SquirrelSuica</string>
     <string name="hold_card">カードをかざしてください</string>
-    <string name="hold_card_en">App open → hold Suica / nanaco / Edy / WAON still on NFC (won’t auto-launch)</string>
+    <string name="hold_card_en">App open → hold Suica / PASMO / nanaco / Edy / WAON still on NFC</string>
     <string name="demo_suica">Demo Suica</string>
     <string name="demo_nanaco">Demo nanaco</string>
     <string name="demo_edy">Demo Edy</string>
@@ -14,5 +16,5 @@
     <string name="balance_unknown">Balance  (unknown / unsupported purse)</string>
     <string name="idm_fmt">IDm  %1$s</string>
     <string name="history_title">History</string>
-    <string name="read_only">Read-only FeliCa · Suica · nanaco · Edy · WAON · no writes</string>
+    <string name="read_only">SquirrelSuica · read-only FeliCa Suica Reader · station names · no writes</string>
 </resources>
