@@ -185,7 +185,7 @@ void sqdsp_rfft(double *data, size_t n, int isign) {
     }
 }
 
-/* Modified Bessel I0 from its power series / asymptotic — power series. */
+/* Modified Bessel I0 from its power series / asymptotic. */
 static double modified_bessel_i0(double x) {
     double ax = fabs(x);
     if (ax < 15.0) {
