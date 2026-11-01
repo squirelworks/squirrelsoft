@@ -1,3 +1,4 @@
+#include "sqc_dxf.h"
 #include "sqcad.h"
 
 #include <stdio.h>
@@ -12,7 +13,14 @@ static int parse_xy(const char *s, SqcPoint *p) {
 
 static void usage(void) {
     puts("SquirrelCAD — AutoCAD-class drafting core");
-    puts("commands: new LINE CIRCLE ARC PLINE TEXT LAYER BLOCK INSERT LIST LEN help");
+    puts("commands:");
+    puts("  new LINE CIRCLE ARC PLINE TEXT LAYER BLOCK INSERT LIST LEN");
+    puts("  IMPORT-DXF <out.sqdwg> <in.dxf>   # AutoCAD bridge");
+    puts("  EXPORT-DXF <in.sqdwg> <out.dxf>");
+    puts("  PROBE <file>                     # detect dxf/dwg/sqdwg");
+    puts("  help");
+    puts("");
+    puts("AutoCAD .dwg: SAVEAS → DXF, then IMPORT-DXF.");
 }
 
 static int load(SqcDrawing *d, const char *path) {
@@ -51,6 +59,84 @@ int main(int argc, char **argv) {
         free(d);
         return rc;
     }
+
+    if (strcmp(cmd, "PROBE") == 0 || strcmp(cmd, "probe") == 0) {
+        if (argc < 3) {
+            usage();
+            free(d);
+            return 1;
+        }
+        const char *path = argv[2];
+        free(d);
+        if (sqc_file_looks_like_dxf(path)) {
+            puts("format=dxf (ASCII) — use: squirrelcad IMPORT-DXF out.sqdwg this.dxf");
+            return 0;
+        }
+        if (sqc_file_looks_like_dwg(path)) {
+            puts("format=dwg (binary AutoCAD) — not readable directly.");
+            puts("In AutoCAD: SAVEAS → AutoCAD DXF (*.dxf), then IMPORT-DXF.");
+            return 2;
+        }
+        FILE *f = fopen(path, "r");
+        if (!f) {
+            fprintf(stderr, "cannot open %s\n", path);
+            return 1;
+        }
+        char line[64];
+        if (fgets(line, sizeof(line), f) && strncmp(line, "SQDWG", 5) == 0) {
+            puts("format=sqdwg");
+            fclose(f);
+            return 0;
+        }
+        fclose(f);
+        puts("format=unknown");
+        return 1;
+    }
+
+    if (strcmp(cmd, "IMPORT-DXF") == 0 || strcmp(cmd, "import-dxf") == 0) {
+        if (argc < 4) {
+            usage();
+            free(d);
+            return 1;
+        }
+        sqc_drawing_init(d, "from-dxf");
+        SqcDxfStats st;
+        int irc = sqc_import_dxf(d, argv[3], &st);
+        if (irc != 0) {
+            free(d);
+            return 1;
+        }
+        if (save(d, argv[2]) != 0) {
+            free(d);
+            return 1;
+        }
+        printf("imported → %s\n", argv[2]);
+        printf("  layers=%d lines=%d circles=%d arcs=%d texts=%d plines=%d skipped=%d\n",
+               st.layers, st.lines, st.circles, st.arcs, st.texts, st.plines, st.skipped);
+        free(d);
+        return 0;
+    }
+
+    if (strcmp(cmd, "EXPORT-DXF") == 0 || strcmp(cmd, "export-dxf") == 0) {
+        if (argc < 4) {
+            usage();
+            free(d);
+            return 1;
+        }
+        if (load(d, argv[2]) != 0) {
+            free(d);
+            return 1;
+        }
+        if (sqc_export_dxf(d, argv[3]) != 0) {
+            fprintf(stderr, "export failed\n");
+            free(d);
+            return 1;
+        }
+        printf("exported %s → %s (%d ents)\n", argv[2], argv[3], d->ent_count);
+        free(d);
+        return 0;
+    }
+
     if (argc < 3) {
         usage();
         free(d);
