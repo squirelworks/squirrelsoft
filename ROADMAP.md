@@ -37,4 +37,11 @@
 - Radix-2 FFT, windows, periodogram, Welch PSD, STFT
 - Pitch (autocorr + spectral peak), THD, SNR estimates
 - WAV I/O and CLI reports / SVG spectrum plots
-- Expand to realtime capture when OS audio exists
+- Live SDL spectrum/waterfall + ALSA mic (done); optimize waterfall blit
+- Multi-resolution FFT (Spectroid-style decimations)
+
+### SquirrelField / SquirrelSuica
+
+- Phone PWA: spectrum, QR, Suica demo UI (done)
+- USB FeliCa via nfcpy + Android NFC-F companion (done)
+- Richer Suica station-code tables; optional PASMO/ICOCA labeling

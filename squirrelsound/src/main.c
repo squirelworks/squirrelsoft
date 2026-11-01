@@ -1,3 +1,6 @@
+#include "live_audio.h"
+#include "live_engine.h"
+#include "live_view.h"
 #include "spectrogram.h"
 #include "sqnr.h"
 #include "synth.h"
@@ -18,7 +21,11 @@ static void usage(void) {
     puts("  squirrelsound thd <in.wav> [--fund Hz] [--harmonics N] [--fft N]");
     puts("  squirrelsound snr <in.wav> [--fund Hz] [--bw Hz] [--fft N]");
     puts("  squirrelsound spectrogram <in.wav> <out.svg> [--fft N] [--overlap F]");
+    puts("  squirrelsound live [--source demo|wav|alsa] [--file path] [--device name]");
+    puts("                     [--fft N] [--window name] [--freq Hz] [--headless]");
+    puts("                     [--frames N] [--max-hold]");
     puts("  squirrelsound help");
+    puts("Phone field UI (mic + QR + Suica): see ../squirrelfield/web/");
 }
 
 static const char *get_opt(int argc, char **argv, const char *key, const char *def) {
@@ -241,6 +248,57 @@ int main(int argc, char **argv) {
         }
         wav_free(&wav);
         return 0;
+    }
+
+    if (strcmp(cmd, "live") == 0) {
+        const char *src = get_opt(argc, argv, "--source", "demo");
+        LiveAudioConfig acfg;
+        memset(&acfg, 0, sizeof(acfg));
+        acfg.sample_rate = atof(get_opt(argc, argv, "--rate", "44100"));
+        acfg.demo_freq_hz = atof(get_opt(argc, argv, "--freq", "440"));
+        acfg.demo_harmonics = atoi(get_opt(argc, argv, "--harmonics", "3"));
+        acfg.wav_path = get_opt(argc, argv, "--file", NULL);
+        acfg.alsa_dev = get_opt(argc, argv, "--device", "default");
+        if (strcmp(src, "wav") == 0) acfg.kind = LIVE_SRC_WAV;
+        else if (strcmp(src, "alsa") == 0 || strcmp(src, "mic") == 0)
+            acfg.kind = LIVE_SRC_ALSA;
+        else acfg.kind = LIVE_SRC_DEMO;
+
+        LiveAudio *audio = live_audio_open(&acfg);
+        if (!audio) {
+            fprintf(stderr, "failed to open live source '%s'\n", src);
+            return 1;
+        }
+
+        LiveEngineConfig ecfg;
+        memset(&ecfg, 0, sizeof(ecfg));
+        ecfg.fft_size = (size_t)atoi(get_opt(argc, argv, "--fft", "2048"));
+        if (!sqnr_is_pow2(ecfg.fft_size)) ecfg.fft_size = 2048;
+        ecfg.window = sqnr_window_parse(get_opt(argc, argv, "--window", "hann"));
+        ecfg.sample_rate = live_audio_sample_rate(audio);
+        ecfg.max_hold = has_flag(argc, argv, "--max-hold");
+        ecfg.db_min = -90;
+        ecfg.db_max = 0;
+        ecfg.f_min_hz = 0;
+        ecfg.f_max_hz = ecfg.sample_rate * 0.5;
+
+        LiveEngine engine;
+        if (live_engine_init(&engine, &ecfg) != 0) {
+            fprintf(stderr, "live engine init failed\n");
+            live_audio_close(audio);
+            return 1;
+        }
+
+        int rc;
+        if (has_flag(argc, argv, "--headless")) {
+            int frames = atoi(get_opt(argc, argv, "--frames", "30"));
+            rc = live_view_headless_run(audio, &engine, frames, 5);
+        } else {
+            rc = live_view_sdl_run(audio, &engine);
+        }
+        live_engine_free(&engine);
+        live_audio_close(audio);
+        return rc == 0 ? 0 : 1;
     }
 
     usage();
