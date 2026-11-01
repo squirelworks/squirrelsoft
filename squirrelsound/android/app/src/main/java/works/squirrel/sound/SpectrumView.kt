@@ -1,15 +1,22 @@
 package works.squirrel.sound
 
 import android.content.Context
+import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import android.graphics.Path
+import android.graphics.RectF
 import android.util.AttributeSet
 import android.view.MotionEvent
 import android.view.View
 import kotlin.math.max
 import kotlin.math.min
 
+/**
+ * Spectroid-like spectrum trace + scrolling waterfall.
+ * Waterfall is a scrolled ARGB bitmap (one row per hop) so redraws stay cheap.
+ */
 class SpectrumView @JvmOverloads constructor(
     context: Context,
     attrs: AttributeSet? = null
@@ -17,7 +24,7 @@ class SpectrumView @JvmOverloads constructor(
 
     private val spectrumPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.parseColor("#50DCFF")
-        strokeWidth = 2f
+        strokeWidth = 2.5f
         style = Paint.Style.STROKE
     }
     private val holdPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -26,24 +33,42 @@ class SpectrumView @JvmOverloads constructor(
         style = Paint.Style.STROKE
         alpha = 180
     }
+    private val gridPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.parseColor("#243048")
+        strokeWidth = 1f
+    }
     private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.parseColor("#9AA8C7")
         textSize = 28f
     }
-    private val wfPaint = Paint()
+    private val axisPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.parseColor("#6E7C9A")
+        textSize = 22f
+    }
+    private val wfPaint = Paint(Paint.FILTER_BITMAP_FLAG)
 
     private var db: FloatArray? = null
     private var hold: FloatArray? = null
     private var sampleRate = 44100
     private var peakHz = 0f
+    private var peakDb = -90f
+    private var rmsDb = -90f
     private var maxHoldEnabled = false
 
-    private val waterfall = ArrayDeque<IntArray>()
-    private val wfRows = 120
+    private var wfBitmap: Bitmap? = null
+    private var wfPixels: IntArray? = null
+    private var wfWidth = 0
+    private val wfRows = 160
+
+    private val spectrumPath = Path()
 
     /** Visible frequency window (Hz). */
     var fMin = 20f
     var fMax = 8000f
+
+    /** dBFS display range (Spectroid-style negative full-scale). */
+    var dbMin = -90f
+    var dbMax = 0f
 
     private var pinchStartSpan = 0f
     private var pinchStartMin = 0f
@@ -58,22 +83,82 @@ class SpectrumView @JvmOverloads constructor(
         hold = null
     }
 
-    fun update(frame: FloatArray, sr: Int, peak: Float) {
-        sampleRate = sr
-        peakHz = peak
-        db = frame
+    fun clearWaterfall() {
+        val pix = wfPixels
+        if (pix != null) {
+            pix.fill(Color.rgb(12, 16, 32))
+            wfBitmap?.setPixels(pix, 0, wfWidth, 0, 0, wfWidth, wfRows)
+        }
+        invalidate()
+    }
+
+    fun update(frame: SpectrumFrame) {
+        sampleRate = frame.sampleRate
+        peakHz = frame.peakHz
+        peakDb = frame.peakDb
+        rmsDb = frame.rmsDb
+        db = frame.db
         if (maxHoldEnabled) {
             val h = hold
-            if (h == null || h.size != frame.size) {
-                hold = frame.copyOf()
+            if (h == null || h.size != frame.db.size) {
+                hold = frame.db.copyOf()
             } else {
-                for (i in frame.indices) if (frame[i] > h[i]) h[i] = frame[i]
+                for (i in frame.db.indices) if (frame.db[i] > h[i]) h[i] = frame.db[i]
             }
         }
-        val row = IntArray(frame.size) { i -> dbToColor(frame[i]) }
-        waterfall.addFirst(row)
-        while (waterfall.size > wfRows) waterfall.removeLast()
+        pushWaterfallRow(frame.db)
         invalidate()
+    }
+
+    /** Legacy overload used by older call sites / tests. */
+    fun update(frame: FloatArray, sr: Int, peak: Float) {
+        update(
+            SpectrumFrame(
+                db = frame,
+                sampleRate = sr,
+                fftSize = frame.size * 2,
+                peakHz = peak,
+                peakDb = frame.maxOrNull() ?: -90f,
+                rmsDb = -90f,
+                sourceLabel = "legacy"
+            )
+        )
+    }
+
+    private fun ensureWaterfall(widthPx: Int) {
+        if (widthPx <= 0) return
+        if (wfBitmap != null && wfWidth == widthPx) return
+        wfWidth = widthPx
+        wfPixels = IntArray(widthPx * wfRows) { Color.rgb(12, 16, 32) }
+        wfBitmap = Bitmap.createBitmap(widthPx, wfRows, Bitmap.Config.ARGB_8888).also {
+            it.setPixels(wfPixels!!, 0, widthPx, 0, 0, widthPx, wfRows)
+        }
+    }
+
+    private fun pushWaterfallRow(frame: FloatArray) {
+        val w = width
+        if (w <= 0) return
+        ensureWaterfall(w)
+        val pix = wfPixels ?: return
+        val bmp = wfBitmap ?: return
+        // Scroll existing rows down by one.
+        System.arraycopy(pix, 0, pix, wfWidth, wfWidth * (wfRows - 1))
+        val ny = sampleRate / 2f
+        val lo = max(0f, fMin)
+        val hi = min(ny, fMax)
+        val n = frame.size
+        val b0 = ((lo / ny) * n).toInt().coerceIn(0, n - 2)
+        val b1 = ((hi / ny) * n).toInt().coerceIn(b0 + 1, n)
+        for (x in 0 until wfWidth) {
+            val bin = b0 + ((b1 - b0) * x) / wfWidth
+            pix[x] = dbToColor(frame[bin.coerceIn(0, n - 1)])
+        }
+        bmp.setPixels(pix, 0, wfWidth, 0, 0, wfWidth, wfRows)
+    }
+
+    override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
+        super.onSizeChanged(w, h, oldw, oldh)
+        if (w != oldw) ensureWaterfall(w)
     }
 
     override fun onDraw(canvas: Canvas) {
@@ -89,57 +174,63 @@ class SpectrumView @JvmOverloads constructor(
         val n = data.size
         val b0 = ((lo / ny) * n).toInt().coerceIn(0, n - 2)
         val b1 = ((hi / ny) * n).toInt().coerceIn(b0 + 1, n)
+        val span = (dbMax - dbMin).coerceAtLeast(1f)
 
         fun xOf(bin: Int): Float =
             ((bin - b0).toFloat() / (b1 - b0).toFloat()) * w
 
         fun yOf(v: Float): Float {
-            val t = ((v + 90f) / 90f).coerceIn(0f, 1f)
+            val t = ((v - dbMin) / span).coerceIn(0f, 1f)
             return spectrumH - t * (spectrumH - 8f)
         }
 
-        var prevX = xOf(b0)
-        var prevY = yOf(data[b0])
-        for (i in b0 + 1 until b1) {
-            val x = xOf(i)
-            val y = yOf(data[i])
-            canvas.drawLine(prevX, prevY, x, y, spectrumPaint)
-            prevX = x
-            prevY = y
+        for (g in 0..3) {
+            val dbLine = dbMin + span * g / 3f
+            val y = yOf(dbLine)
+            canvas.drawLine(0f, y, w, y, gridPaint)
+            canvas.drawText("${dbLine.toInt()} dB", 8f, y - 4f, axisPaint)
         }
+
+        spectrumPath.reset()
+        spectrumPath.moveTo(xOf(b0), yOf(data[b0]))
+        for (i in b0 + 1 until b1) {
+            spectrumPath.lineTo(xOf(i), yOf(data[i]))
+        }
+        canvas.drawPath(spectrumPath, spectrumPaint)
 
         val hd = hold
         if (maxHoldEnabled && hd != null && hd.size == data.size) {
-            prevX = xOf(b0)
-            prevY = yOf(hd[b0])
+            spectrumPath.reset()
+            spectrumPath.moveTo(xOf(b0), yOf(hd[b0]))
             for (i in b0 + 1 until b1) {
-                val x = xOf(i)
-                val y = yOf(hd[i])
-                canvas.drawLine(prevX, prevY, x, y, holdPaint)
-                prevX = x
-                prevY = y
+                spectrumPath.lineTo(xOf(i), yOf(hd[i]))
             }
+            canvas.drawPath(spectrumPath, holdPaint)
         }
 
         canvas.drawText(
-            "peak ${"%.1f".format(peakHz)} Hz · ${lo.toInt()}–${hi.toInt()} Hz",
+            "peak ${"%.1f".format(peakHz)} Hz (${"%.0f".format(peakDb)} dBFS) · " +
+                "rms ${"%.0f".format(rmsDb)} · ${lo.toInt()}–${hi.toInt()} Hz",
             16f,
             36f,
             textPaint
         )
 
+        val ticks = floatArrayOf(100f, 250f, 500f, 1000f, 2000f, 4000f, 8000f)
+        for (hz in ticks) {
+            if (hz < lo || hz > hi) continue
+            val bin = ((hz / ny) * n).toInt().coerceIn(b0, b1)
+            val x = xOf(bin)
+            canvas.drawLine(x, spectrumH - 6f, x, spectrumH, gridPaint)
+            val label = if (hz >= 1000f) "${(hz / 1000f).toInt()}k" else "${hz.toInt()}"
+            canvas.drawText(label, x + 2f, spectrumH - 8f, axisPaint)
+        }
+
         val wfTop = spectrumH + 8f
         val wfH = h - wfTop
-        if (waterfall.isEmpty() || wfH <= 0f) return
-        val rowH = wfH / wfRows
-        waterfall.forEachIndexed { ri, row ->
-            val y = wfTop + ri * rowH
-            for (i in b0 until b1) {
-                val x0 = xOf(i)
-                val x1 = xOf(i + 1)
-                wfPaint.color = row[i]
-                canvas.drawRect(x0, y, x1, y + rowH + 1f, wfPaint)
-            }
+        val bmp = wfBitmap
+        if (bmp != null && wfH > 0f) {
+            canvas.drawBitmap(bmp, null, RectF(0f, wfTop, w, h), wfPaint)
         }
     }
 
@@ -172,11 +263,12 @@ class SpectrumView @JvmOverloads constructor(
         return kotlin.math.sqrt(dx * dx + dy * dy)
     }
 
-    private fun dbToColor(db: Float): Int {
-        val t = ((db + 90f) / 90f).coerceIn(0f, 1f)
-        val r = (20 + 235 * t).toInt()
-        val g = (30 + 200 * t * t).toInt()
-        val b = (90 + 140 * (1 - t)).toInt()
+    private fun dbToColor(dbVal: Float): Int {
+        val span = (dbMax - dbMin).coerceAtLeast(1f)
+        val t = ((dbVal - dbMin) / span).coerceIn(0f, 1f)
+        val r = (8 + 40 * t + 200 * t * t).toInt().coerceIn(0, 255)
+        val g = (12 + 180 * t).toInt().coerceIn(0, 255)
+        val b = (28 + 140 * (1f - t) + 80 * t).toInt().coerceIn(0, 255)
         return Color.rgb(r, g, b)
     }
 }

@@ -10,6 +10,10 @@
     <string name="fft">FFT</string>
     <string name="demo_tone">Demo 440 Hz</string>
     <string name="status_idle">Idle — Start mic or enable Demo tone</string>
-    <string name="status_live">%1$s · fs=%2$d · fft=%3$d · peak %4$.1f Hz</string>
+    <string name="status_need_mic">Waiting for microphone permission…</string>
+    <string name="status_mic_denied">Microphone permission denied — enable Demo tone or grant mic access</string>
+    <string name="status_starting_mic">Starting microphone capture…</string>
+    <string name="status_starting_demo">Starting demo tone…</string>
+    <string name="status_live">%1$s · fs=%2$d · fft=%3$d · peak %4$.1f Hz (%5$.0f dB) · rms %6$.0f dB</string>
     <string name="mic_permission">Microphone permission required for live spectrum</string>
 </resources>
