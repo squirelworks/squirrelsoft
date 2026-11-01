@@ -5,13 +5,9 @@
     <string name="app_brand">SquirrelSuica</string>
     <string name="hold_card">カードをかざしてください</string>
     <string name="hold_card_en">App open → hold Suica / PASMO / nanaco / Edy / WAON still on NFC</string>
-    <string name="demo_suica">Demo Suica</string>
-    <string name="demo_nanaco">Demo nanaco</string>
-    <string name="demo_edy">Demo Edy</string>
-    <string name="demo_waon">Demo WAON</string>
     <string name="clear">Clear</string>
-    <string name="nfc_missing">This device has no NFC. Demo modes still work.</string>
-    <string name="nfc_off">NFC is off — enable it in Settings, or use Demo.</string>
+    <string name="nfc_missing">This device has no NFC.</string>
+    <string name="nfc_off">NFC is off — enable it in Settings.</string>
     <string name="balance_fmt">Balance  ¥%1$d</string>
     <string name="balance_unknown">Balance  (unknown / unsupported purse)</string>
     <string name="idm_fmt">IDm  %1$s</string>

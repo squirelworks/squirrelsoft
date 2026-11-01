@@ -7,8 +7,7 @@ Read-only **FeliCa Suica Reader**: **Suica/PASMO family**, **nanaco**,
 On Android the launcher label is **Suica Reader** (package `works.squirrel.suica`)
 so it is easy to find next to SquirrelQR / SquirrelSound.
 
-You do **not** need every physical card to develop or test — parsers are covered
-by **fixture unit tests** and **Demo** buttons with realistic ¥2–5k balances.
+Parsers are covered by **fixture unit tests** (no physical card required).
 
 ## Paths
 
@@ -17,7 +16,7 @@ by **fixture unit tests** and **Demo** buttons with realistic ¥2–5k balances.
 | **`android/`** | Phone app (NFC-F) — preferred Suica Reader |
 | `data/StationCode.csv` | Saibane region/line/station → name table |
 | `suica_read.py` | USB PaSoRi via `nfcpy`, or `--demo suica\|nanaco\|edy\|waon` |
-| `felica_parse.py` | Shared parsers + synthetic demos |
+| `felica_parse.py` | Shared parsers + synthetic fixtures |
 | `../squirrelqr/web/` | QR code reader PWA (not the Suica Reader) |
 
 ## Android
@@ -36,7 +35,7 @@ phone flap will not auto-open the app.
 
 History rows show date, kind, fare (from balance delta), balance, and
 **station names** when the codes resolve. Unknown codes fall back to `LINE/STA`
-hex. Demo Suica includes 乃木坂→代々木上原 and 渋谷→新宿 samples.
+hex.
 
 ## Desktop / USB
 
@@ -49,14 +48,18 @@ python3 suica_read.py
 
 ## What is read (public layouts)
 
-| Brand | System (typical) | Balance service | Layout |
-|-------|------------------|-----------------|--------|
-| Suica/PASMO/… | `0x0003` | `0x090f` (+ `0x008b` check) | LE u16; history stations at bytes 6–9 |
-| nanaco | `0xFE00` / `0x04C7` | `0x5597` | LE u32 |
-| 楽天Edy | `0xFE00` | `0x1317` | LE u32 |
-| WAON | `0xFE00` | `0x6817` | LE u16 |
+| Brand | System (typical) | Balance | History | Notes |
+|-------|------------------|---------|---------|-------|
+| Suica/PASMO/… | `0x0003` | `0x090f` bytes 10–11 LE (+ `0x008b` check) | **`0x090f`** (≤20 blocks) | Stations at bytes 6–9; region at 15 |
+| nanaco | `0xFE00` / `0x04C7` | `0x5597` LE u32 | `0x564f` (5 blocks) | Amount/balance BE in history |
+| 楽天Edy | `0xFE00` | `0x1317` LE u32 | `0x170f` (6 blocks) | Timestamp days+seconds since 2000 |
+| WAON | `0xFE00` | `0x6817` LE u16 | `0x680b` (3×32-byte records) | Bit-packed date/amount |
 
 Unknown FeliCa: shows IDm and an unsupported-purse note (no invented balance).
+
+**Bug fixed in 0.0.5:** history was incorrectly read from service `0x010f`
+(empty/wrong). Suica history is service `0x090f`. Balance in history blocks is
+at bytes **10–11**, not 0–1.
 
 Station names come from the community SFCardFan サイバネ表 (see `data/README.md`).
 Clean-room parsers — study open FeliCa history layouts; do not copy proprietary apps.
@@ -65,6 +68,6 @@ Clean-room parsers — study open FeliCa history layouts; do not copy proprietar
 
 ```bash
 make test
-# Android fixtures (includes station-name cases):
+# Android fixtures (includes station-name + nanaco/Edy/WAON history cases):
 cd android && ./gradlew :app:testDebugUnitTest
 ```

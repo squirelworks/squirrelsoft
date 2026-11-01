@@ -3,24 +3,34 @@ package works.squirrel.suica
 import android.nfc.Tag
 import android.nfc.tech.NfcF
 import java.io.IOException
+import kotlin.math.min
 
 /**
  * Read-only multi-brand FeliCa access via Android [NfcF].
  *
  * Tries transit (0x0003) then common-area e-money (0xFE00 / 0x04C7).
  * Balance is read first with few round-trips to reduce "Tag was lost".
+ *
+ * Suica history lives on service **0x090f** (not 0x010f). Each 16-byte
+ * history block carries the post-transaction balance at bytes 10–11 LE.
  */
 object FelicaReader {
     private const val SYS_TRANSIT = 0x0003
     private const val SYS_COMMON = 0xFE00
     private const val SYS_NANACO = 0x04C7
 
-    private const val SVC_SUICA_BAL = 0x090f
+    /** Suica/PASMO journey history (also the live balance source). */
+    private const val SVC_SUICA_HIST = 0x090f
     private const val SVC_SUICA_INFO = 0x008b
-    private const val SVC_SUICA_HIST = 0x010f
     private const val SVC_NANACO_BAL = 0x5597
+    private const val SVC_NANACO_HIST = 0x564f
     private const val SVC_EDY_BAL = 0x1317
+    private const val SVC_EDY_HIST = 0x170f
     private const val SVC_WAON_BAL = 0x6817
+    private const val SVC_WAON_HIST = 0x680b
+
+    /** FeliCa Read Without Encryption is reliable in chunks of ≤4 blocks. */
+    private const val CHUNK = 4
 
     fun read(tag: Tag): FelicaCard {
         val nfc = NfcF.get(tag) ?: throw IOException("Not FeliCa / NfcF")
@@ -31,11 +41,11 @@ object FelicaReader {
 
             // 1) Transit IC (Suica/PASMO/…)
             tryPoll(nfc, SYS_TRANSIT)?.let { (idm, pmm) ->
-                val b090f = readBlocks(nfc, idm, SVC_SUICA_BAL, intArrayOf(0)).getOrNull(0)
+                // History service 0x090f first (up to 20 blocks); balance is in each record.
+                val hist = readServiceRange(nfc, idm, SVC_SUICA_HIST, 0, 20)
                 val b008b = readBlocks(nfc, idm, SVC_SUICA_INFO, intArrayOf(0)).getOrNull(0)
-                val bal = FelicaParse.suicaBalance(b090f, b008b)
-                if (bal != null) {
-                    val hist = readBlocks(nfc, idm, SVC_SUICA_HIST, (0 until 5).toList().toIntArray())
+                val bal = FelicaParse.suicaBalance(hist.firstOrNull(), b008b)
+                if (bal != null || hist.isNotEmpty()) {
                     return FelicaCard(
                         brand = FelicaBrand.SUICA_FAMILY,
                         brandLabel = FelicaParse.brandLabel(FelicaBrand.SUICA_FAMILY),
@@ -58,6 +68,7 @@ object FelicaReader {
             tryPoll(nfc, SYS_NANACO)?.let { (idm, pmm) ->
                 val blocks = readBlocks(nfc, idm, SVC_NANACO_BAL, intArrayOf(0))
                 if (blocks.isNotEmpty()) {
+                    val hist = readServiceRange(nfc, idm, SVC_NANACO_HIST, 0, 5)
                     return FelicaCard(
                         brand = FelicaBrand.NANACO,
                         brandLabel = FelicaParse.brandLabel(FelicaBrand.NANACO),
@@ -65,7 +76,7 @@ object FelicaReader {
                         pmm = pmm.joinToString("") { "%02x".format(it) },
                         systemCode = "%04x".format(SYS_NANACO),
                         balanceYen = FelicaParse.nanacoBalance(blocks[0]),
-                        history = emptyList(),
+                        history = FelicaParse.nanacoHistoryEntries(hist),
                         note = "Live nanaco"
                     )
                 }
@@ -101,6 +112,7 @@ object FelicaReader {
         val sys = "%04x".format(systemCode)
 
         readBlocks(nfc, idm, SVC_NANACO_BAL, intArrayOf(0)).getOrNull(0)?.let { block ->
+            val hist = readServiceRange(nfc, idm, SVC_NANACO_HIST, 0, 5)
             return FelicaCard(
                 brand = FelicaBrand.NANACO,
                 brandLabel = FelicaParse.brandLabel(FelicaBrand.NANACO),
@@ -108,11 +120,12 @@ object FelicaReader {
                 pmm = pmmHex,
                 systemCode = sys,
                 balanceYen = FelicaParse.nanacoBalance(block),
-                history = emptyList(),
+                history = FelicaParse.nanacoHistoryEntries(hist),
                 note = "Live nanaco (common area)"
             )
         }
         readBlocks(nfc, idm, SVC_EDY_BAL, intArrayOf(0)).getOrNull(0)?.let { block ->
+            val hist = readServiceRange(nfc, idm, SVC_EDY_HIST, 0, 6)
             return FelicaCard(
                 brand = FelicaBrand.EDY,
                 brandLabel = FelicaParse.brandLabel(FelicaBrand.EDY),
@@ -120,11 +133,13 @@ object FelicaReader {
                 pmm = pmmHex,
                 systemCode = sys,
                 balanceYen = FelicaParse.edyBalance(block),
-                history = emptyList(),
+                history = FelicaParse.edyHistoryEntries(hist),
                 note = "Live 楽天Edy"
             )
         }
         readBlocks(nfc, idm, SVC_WAON_BAL, intArrayOf(0)).getOrNull(0)?.let { block ->
+            // WAON history: three 32-byte records across blocks 0–5.
+            val histBlocks = readServiceRange(nfc, idm, SVC_WAON_HIST, 0, 6)
             return FelicaCard(
                 brand = FelicaBrand.WAON,
                 brandLabel = FelicaParse.brandLabel(FelicaBrand.WAON),
@@ -132,7 +147,7 @@ object FelicaReader {
                 pmm = pmmHex,
                 systemCode = sys,
                 balanceYen = FelicaParse.waonBalance(block),
-                history = emptyList(),
+                history = FelicaParse.waonHistoryEntries(histBlocks),
                 note = "Live WAON"
             )
         }
@@ -157,6 +172,29 @@ object FelicaReader {
         } catch (_: Exception) {
             null
         }
+    }
+
+    /** Read [count] blocks starting at [start], in chunks of [CHUNK]. Stops on empty/short reply. */
+    private fun readServiceRange(
+        nfc: NfcF,
+        idm: ByteArray,
+        service: Int,
+        start: Int,
+        count: Int
+    ): List<ByteArray> {
+        val out = ArrayList<ByteArray>(count)
+        var i = start
+        val end = start + count
+        while (i < end) {
+            val n = min(CHUNK, end - i)
+            val indices = IntArray(n) { i + it }
+            val got = readBlocks(nfc, idm, service, indices)
+            if (got.isEmpty()) break
+            out.addAll(got)
+            if (got.size < n) break
+            i += n
+        }
+        return out
     }
 
     private fun readBlocks(nfc: NfcF, idm: ByteArray, service: Int, blocks: IntArray): List<ByteArray> {

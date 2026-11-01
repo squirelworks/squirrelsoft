@@ -25,11 +25,15 @@ def main() -> int:
             print("FAIL:", msg)
             fails += 1
 
-    bal = suica_balance_090f(bytes([0xB0, 0x09]) + bytes(14))
+    # Balance is at bytes 10-11 LE of a 0x090f history block.
+    from felica_parse import hist_rail, parse_nanaco_history_block
+
+    rail = hist_rail(0x16, 0x01, 2026, 10, 28, 0xE3, 0x59, 0xE3, 0x5E, 2480)
+    bal = suica_balance_090f(rail)
     expect(bal == 2480, f"balance 2480 got {bal}")
 
-    # Field report: 090f looked like ¥50945 while 008b had ~¥5094
-    inflated = bytes([0xE1, 0xC6]) + bytes(14)
+    # Prefer 008b when history balance is ~10x larger (guard).
+    inflated = hist_rail(0x16, 0x01, 2026, 1, 1, 1, 1, 1, 2, 50945)
     info = bytearray(16)
     info[11] = 0xE6
     info[12] = 0x13
@@ -64,6 +68,13 @@ def main() -> int:
     expect(card.history[0].exit_station == "代々木上原", "demo exit name")
     expect(card.history[0].fare_yen == 168, f"demo fare {card.history[0].fare_yen}")
     expect(len(parse_history_blocks([block])) == 1, "history list")
+
+    # nanaco history 0x564f
+    nc = demo_nanaco()
+    expect(len(nc.history) >= 2, "nanaco history")
+    expect(nc.history[0].kind == "sale", "nanaco sale")
+    expect(nc.history[0].fare_yen == 480, f"nanaco fare {nc.history[0].fare_yen}")
+    expect(nc.history[0].balance_yen == 5200, "nanaco hist bal")
 
     if fails:
         print(fails, "failure(s)")

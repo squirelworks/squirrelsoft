@@ -4,7 +4,7 @@ Native Android **Suica Reader** for **read-only Suica / PASMO / nanaco / Edy / W
 FeliCa** balance and journey history with **station names**. NFC-F only — no
 camera, no QR, no other scanners.
 
-Launcher label: **Suica Reader** · package `works.squirrel.suica` · version `0.0.3`.
+Launcher label: **Suica Reader** · package `works.squirrel.suica` · version `0.0.5`.
 
 Browsers cannot read FeliCa balances over Web NFC. This app uses `NfcF`.
 
@@ -12,13 +12,15 @@ Browsers cannot read FeliCa balances over Web NFC. This app uses `NfcF`.
 
 - Hold a FeliCa purse card → IDm, balance (¥), journey/charge history
 - History shows **enter → exit station names** when Saibane codes resolve
-- Demo buttons for Suica / nanaco / Edy / WAON (no NFC hardware required)
+- Suica history from service **`0x090f`** (balance at bytes 10–11 LE)
+- nanaco / Edy / WAON history when the purse is present
 - Reads only while the app is open (no TECH_DISCOVERED auto-launch)
 - Read-only — no writes, no cloning
+- Fixture unit tests cover parsers (no physical card required)
 
 ## Build (CLI)
 
-Requires JDK 17+ and Android SDK 34.
+Requires JDK 17+ and Android SDK 34+.
 
 ```bash
 export ANDROID_HOME=/path/to/android-sdk
