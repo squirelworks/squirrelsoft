@@ -1,11 +1,11 @@
 # SquirrelSuica — Suica Reader
 
-Read-only **FeliCa Suica Reader** for field use: **Suica/PASMO family**,
-**nanaco**, **楽天Edy**, and **WAON**. Journey history shows **station names**
+Read-only **FeliCa Suica Reader**: **Suica/PASMO family**, **nanaco**,
+**楽天Edy**, and **WAON**. Journey history shows **station names**
 (enter → exit) from the public Saibane station-code table. No writes, no cloning.
 
 On Android the launcher label is **Suica Reader** (package `works.squirrel.suica`)
-so it is easy to find next to unrelated Field/Sound apps.
+so it is easy to find next to SquirrelQR / SquirrelSound.
 
 You do **not** need every physical card to develop or test — parsers are covered
 by **fixture unit tests** and **Demo** buttons with realistic ¥2–5k balances.
@@ -18,7 +18,7 @@ by **fixture unit tests** and **Demo** buttons with realistic ¥2–5k balances.
 | `data/StationCode.csv` | Saibane region/line/station → name table |
 | `suica_read.py` | USB PaSoRi via `nfcpy`, or `--demo suica\|nanaco\|edy\|waon` |
 | `felica_parse.py` | Shared parsers + synthetic demos |
-| `../squirrelfield/web/` | Field tools (not the Suica Reader) |
+| `../squirrelqr/web/` | QR code reader PWA (not the Suica Reader) |
 
 ## Android
 

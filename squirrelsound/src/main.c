@@ -25,7 +25,7 @@ static void usage(void) {
     puts("                     [--fft N] [--window name] [--freq Hz] [--headless]");
     puts("                     [--frames N] [--max-hold]");
     puts("  squirrelsound help");
-    puts("Phone field UI (mic + QR + Suica): see ../squirrelfield/web/");
+    puts("Phone QR reader PWA: see ../squirrelqr/web/");
 }
 
 static const char *get_opt(int argc, char **argv, const char *key, const char *def) {

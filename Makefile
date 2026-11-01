@@ -1,11 +1,11 @@
 # Top-level squirrelsoft build
 PROGRAMS = squirrelstation squirrelcad squirrelgnss squirrelsound
-PY_PROGRAMS = squirrelfield squirrelsuica
+PY_PROGRAMS = squirrelqr squirrelsuica
 
 .PHONY: all test clean $(PROGRAMS) $(PY_PROGRAMS)
 
 all: $(PROGRAMS)
-	@echo "Also: squirrelfield (web) and squirrelsuica (python) — run make test"
+	@echo "Also: squirrelqr (web) and squirrelsuica (python) — run make test"
 
 $(PROGRAMS):
 	$(MAKE) -C $@

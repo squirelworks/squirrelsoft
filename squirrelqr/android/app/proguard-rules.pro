@@ -1,0 +1,1 @@
+-keep class works.squirrel.qr.** { *; }
