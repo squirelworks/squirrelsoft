@@ -8,7 +8,8 @@ reader only (not a field kit).
 
 ## Android APK (`android/`)
 
-Native CameraX + ML Kit scanner (`works.squirrel.qr`).
+Native CameraX + ML Kit scanner (`works.squirrel.qr`) with detection crosshairs
+and a bottom-half history panel (open URL / copy / clear).
 
 ```bash
 export ANDROID_HOME=/path/to/android-sdk
@@ -18,7 +19,7 @@ make android-test
 ```
 
 **Play Console note:** `applicationId` is `works.squirrel.qr` (version
-`0.1.0`). The previous identity `works.squirrel.field` is abandoned — create a
+`0.1.4`). The previous identity `works.squirrel.field` is abandoned — create a
 **new** Play app listing for `works.squirrel.qr`.
 
 ## Progressive web app (`web/`)

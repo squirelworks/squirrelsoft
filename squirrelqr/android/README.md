@@ -2,8 +2,9 @@
 
 **QR code reader** (`works.squirrel.qr`).
 
-- CameraX + ML Kit continuous scan
-- Copy to clipboard / clear for next code
+- CameraX + ML Kit continuous scan with bounding-box crosshair overlay
+- Bottom half: last result, scan history, open URL / copy, clear history
+- WindowInsets padding so controls clear the system nav / home gesture area
 - No spectrum (see **SquirrelSound**)
 - No Suica / FeliCa (see **SquirrelSuica**)
 - No field-kit / multi-tool hub
@@ -18,7 +19,7 @@ echo "sdk.dir=$ANDROID_HOME" > local.properties
 ```
 
 APK: `app/build/outputs/apk/debug/app-debug.apk`  
-Package: `works.squirrel.qr` — version `0.1.0`
+Package: `works.squirrel.qr` — version `0.1.4`
 
 ## Play Console
 
