@@ -25,9 +25,12 @@ echo "sdk.dir=$ANDROID_HOME" > local.properties
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
-Hold the card **still** on the NFC spot. If you see “Tag was lost”, the previous
-balance is cleared so a bad read cannot linger. Demo buttons load synthetic
-purses (not your real balance).
+Hold the card **still** on the NFC spot **with the app open**. NFC is registered
+only in the foreground (no `TECH_DISCOVERED` launch filter), so a card in your
+phone flap will not auto-open the app.
+
+If you see “Tag was lost”, the previous balance is cleared so a bad read cannot
+linger. Demo buttons load synthetic purses (not your real balance).
 
 ## Desktop / USB
 

@@ -2,7 +2,7 @@
 <resources>
     <string name="app_name">SquirrelSuica</string>
     <string name="hold_card">カードをかざしてください</string>
-    <string name="hold_card_en">Hold Suica / nanaco / Edy / WAON still on the NFC spot</string>
+    <string name="hold_card_en">App open → hold Suica / nanaco / Edy / WAON still on NFC (won’t auto-launch)</string>
     <string name="demo_suica">Demo Suica</string>
     <string name="demo_nanaco">Demo nanaco</string>
     <string name="demo_edy">Demo Edy</string>
