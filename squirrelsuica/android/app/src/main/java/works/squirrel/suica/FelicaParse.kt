@@ -3,6 +3,15 @@ package works.squirrel.suica
 /**
  * Pure, fixture-testable parsers for publicly documented FeliCa purse layouts.
  * Physical cards are not required — unit tests feed canned blocks.
+ *
+ * Suica history (service 0x090f) 16-byte block layout (open reverse-engineering notes):
+ * 0 terminal, 1 process, 2 settlement, 3 entry/exit type,
+ * 4–5 date (7-bit year from 2000, 4-bit month, 5-bit day),
+ * 6–7 enter line/station (rail) or time/bus fields,
+ * 8–9 exit line/station (rail),
+ * 10–11 balance LE uint16,
+ * 12–14 sequence,
+ * 15 region (bits 7–6 enter area, 5–4 exit area for private railways).
  */
 object FelicaParse {
 
@@ -61,9 +70,13 @@ object FelicaParse {
         if (block.size < 16) return null
         if (block.all { it == 0.toByte() }) return null
 
-        var year = 2000 + ((block[4].toInt() and 0xff) shr 1)
-        var month = (((block[4].toInt() and 1) shl 3) or ((block[5].toInt() and 0xff) shr 5))
-        var day = block[5].toInt() and 0x1f
+        val terminal = block[0].toInt() and 0xff
+        val process = block[1].toInt() and 0xff
+
+        val dateWord = ((block[4].toInt() and 0xff) shl 8) or (block[5].toInt() and 0xff)
+        var year = 2000 + (dateWord shr 9)
+        var month = (dateWord shr 5) and 0xf
+        var day = dateWord and 0x1f
         if (month !in 1..12 || day !in 1..31 || year !in 2000..2099) {
             year = 2000 + bcd(block[4])
             month = bcd(block[5])
@@ -75,31 +88,88 @@ object FelicaParse {
             "????-??-??"
         }
 
-        val process = block[0].toInt() and 0xff
-        val (kind, note) = when (process) {
-            0x02 -> "charge" to "チャージ"
-            0x01, 0x0F, 0x46, 0x49 -> "train" to "入場/出場"
-            0x5C, 0xC7, 0xC8 -> "bus" to "バス"
+        val isProduct = terminal == 0xc7 || terminal == 0xc8
+        val isBus = terminal == 0x05 || process in setOf(0x0d, 0x0f, 0x1f, 0x23)
+        val isCharge = process == 0x02 || process == 0x48
+
+        val (kind, baseNote) = when {
+            isCharge -> "charge" to "チャージ"
+            isBus -> "bus" to processLabel(process)
+            isProduct || process in setOf(0x46, 0x49, 0x4a, 0x4b, 0xc6, 0xcb) ->
+                "sale" to processLabel(process)
+            process in setOf(0x01, 0x03, 0x04, 0x05, 0x06, 0x08, 0x13, 0x14, 0x15, 0x84, 0x85) ->
+                "train" to processLabel(process)
             else -> "other" to "proc=0x%02x".format(process)
         }
 
-        var fare = u16le(block, 10)
-        var bal = u16le(block, 12)
-        if (fare > 20_000) fare = 0
+        var enterName: String? = null
+        var exitName: String? = null
+        var enterCode: String? = null
+        var exitCode: String? = null
+        var note = baseNote
+
+        if (!isProduct && !isBus) {
+            val region = block[15].toInt() and 0xff
+            val inLine = block[6].toInt() and 0xff
+            val inSta = block[7].toInt() and 0xff
+            val outLine = block[8].toInt() and 0xff
+            val outSta = block[9].toInt() and 0xff
+            if (inLine != 0 || inSta != 0) {
+                enterCode = StationDb.formatCode(inLine, inSta)
+                enterName = StationDb.resolveRail(region, inLine, inSta, forExit = false)
+                    ?.shortLabel()
+                    ?: enterCode
+            }
+            if (!isCharge && (outLine != 0 || outSta != 0)) {
+                exitCode = StationDb.formatCode(outLine, outSta)
+                exitName = StationDb.resolveRail(region, outLine, outSta, forExit = true)
+                    ?.shortLabel()
+                    ?: exitCode
+            }
+            val route = when {
+                enterName != null && exitName != null -> "$enterName → $exitName"
+                enterName != null -> enterName
+                exitName != null -> exitName
+                else -> null
+            }
+            if (route != null) note = "$baseNote · $route"
+        } else if (isProduct) {
+            val timeWord = ((block[6].toInt() and 0xff) shl 8) or (block[7].toInt() and 0xff)
+            val hh = timeWord shr 11
+            val mm = (timeWord shr 5) and 0x3f
+            if (hh in 0..23 && mm in 0..59) {
+                note = "%s · %02d:%02d".format(baseNote, hh, mm)
+            }
+        }
+
+        var bal = u16le(block, 10)
         if (bal > 100_000) bal = 0
 
         return HistoryEntry(
             date = date,
             kind = kind,
-            fareYen = fare,
+            fareYen = 0, // filled by historyEntries() from balance deltas
             balanceYen = bal,
             note = note,
-            rawHex = block.joinToString("") { "%02x".format(it) }
+            rawHex = block.joinToString("") { "%02x".format(it) },
+            enterStation = enterName,
+            exitStation = exitName,
+            enterCode = enterCode,
+            exitCode = exitCode,
+            terminal = terminal,
+            process = process
         )
     }
 
-    fun historyEntries(blocks: List<ByteArray>): List<HistoryEntry> =
-        blocks.mapNotNull { historyEntry(it) }
+    fun historyEntries(blocks: List<ByteArray>): List<HistoryEntry> {
+        val parsed = blocks.mapNotNull { historyEntry(it) }
+        // History is newest-first: fare ≈ older.balance − this.balance when spending.
+        return parsed.mapIndexed { i, e ->
+            val older = parsed.getOrNull(i + 1) ?: return@mapIndexed e
+            val delta = older.balanceYen - e.balanceYen
+            if (delta in 1..20_000) e.copy(fareYen = delta) else e
+        }
+    }
 
     fun brandLabel(brand: FelicaBrand): String = when (brand) {
         FelicaBrand.SUICA_FAMILY -> "Suica / PASMO"
@@ -121,9 +191,36 @@ object FelicaParse {
             balanceYen = suicaBalance090f(bal090f),
             history = historyEntries(
                 listOf(
-                    hist(0x01, 2026, 10, 28, 168, 2480),
-                    hist(0x01, 2026, 10, 27, 210, 2648),
-                    hist(0x02, 2026, 10, 26, 0, 2858)
+                    // 乃木坂 → 代々木上原 (Tokyo Metro Chiyoda), bal ¥2480
+                    histRail(
+                        terminal = 0x16,
+                        process = 0x01,
+                        y = 2026, m = 10, d = 28,
+                        inLine = 0xe3, inSta = 0x59,
+                        outLine = 0xe3, outSta = 0x5e,
+                        bal = 2480,
+                        region = 0x00
+                    ),
+                    // 渋谷 → 新宿 (Yamanote), bal ¥2648
+                    histRail(
+                        terminal = 0x16,
+                        process = 0x01,
+                        y = 2026, m = 10, d = 27,
+                        inLine = 0x25, inSta = 0x07,
+                        outLine = 0x25, outSta = 0x0a,
+                        bal = 2648,
+                        region = 0x00
+                    ),
+                    // Charge at 東京 (Tokaido), bal ¥2858
+                    histRail(
+                        terminal = 0x16,
+                        process = 0x02,
+                        y = 2026, m = 10, d = 26,
+                        inLine = 0x01, inSta = 0x01,
+                        outLine = 0, outSta = 0,
+                        bal = 2858,
+                        region = 0x00
+                    )
                 )
             ),
             note = "Demo Suica (synthetic)"
@@ -173,17 +270,55 @@ object FelicaParse {
         )
     }
 
-    private fun hist(process: Int, y: Int, m: Int, d: Int, fare: Int, bal: Int): ByteArray {
-        val yy = y - 2000
-        val b4 = ((yy shl 1) or ((m shr 3) and 1)) and 0xff
-        val b5 = (((m and 7) shl 5) or (d and 0x1f)) and 0xff
+    /** Build a synthetic rail history block with the public 0x090f layout. */
+    fun histRail(
+        terminal: Int,
+        process: Int,
+        y: Int,
+        m: Int,
+        d: Int,
+        inLine: Int,
+        inSta: Int,
+        outLine: Int,
+        outSta: Int,
+        bal: Int,
+        region: Int,
+        settlement: Int = 0,
+        entryExit: Int = 0
+    ): ByteArray {
+        val dateWord = (((y - 2000) and 0x7f) shl 9) or ((m and 0xf) shl 5) or (d and 0x1f)
         return byteArrayOf(
-            process.toByte(), 0, 0, 0,
-            b4.toByte(), b5.toByte(), 0, 0, 0, 0,
-            (fare and 0xff).toByte(), ((fare shr 8) and 0xff).toByte(),
-            (bal and 0xff).toByte(), ((bal shr 8) and 0xff).toByte(),
-            0, 0
+            terminal.toByte(),
+            process.toByte(),
+            settlement.toByte(),
+            entryExit.toByte(),
+            ((dateWord shr 8) and 0xff).toByte(),
+            (dateWord and 0xff).toByte(),
+            inLine.toByte(),
+            inSta.toByte(),
+            outLine.toByte(),
+            outSta.toByte(),
+            (bal and 0xff).toByte(),
+            ((bal shr 8) and 0xff).toByte(),
+            0, 0, 0,
+            region.toByte()
         )
+    }
+
+    private fun processLabel(process: Int): String = when (process) {
+        0x01 -> "運賃支払"
+        0x02 -> "チャージ"
+        0x03 -> "券購"
+        0x04 -> "精算"
+        0x05 -> "入場精算"
+        0x06 -> "窓出"
+        0x0d, 0x0f -> "バス"
+        0x13 -> "新幹線"
+        0x14 -> "入A"
+        0x15 -> "出A"
+        0x46 -> "物販"
+        0x48 -> "特典チャージ"
+        else -> "proc=0x%02x".format(process)
     }
 
     private fun u16le(b: ByteArray, off: Int): Int =

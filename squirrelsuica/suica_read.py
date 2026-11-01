@@ -156,9 +156,13 @@ def format_text(card: FelicaCard) -> str:
     if not card.history:
         lines.append("  (none)")
     for i, h in enumerate(card.history, 1):
+        route = h.station_summary()
+        fare = f"fare ¥{h.fare_yen}" if h.fare_yen else "fare —"
+        extra = f"  {route}" if route else ""
         lines.append(
-            f"  {i}. {h.date}  {h.kind:6}  fare ¥{h.fare_yen}  bal ¥{h.balance_yen}  {h.note}"
+            f"  {i}. {h.date}  {h.kind:6}  {fare}  bal ¥{h.balance_yen}{extra}"
         )
+        lines.append(f"      {h.note}")
     return "\n".join(lines)
 
 

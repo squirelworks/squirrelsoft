@@ -14,8 +14,27 @@ data class HistoryEntry(
     val fareYen: Int,
     val balanceYen: Int,
     val note: String,
-    val rawHex: String
-)
+    val rawHex: String,
+    val enterStation: String? = null,
+    val exitStation: String? = null,
+    val enterCode: String? = null,
+    val exitCode: String? = null,
+    val terminal: Int = 0,
+    val process: Int = 0
+) {
+    /** One-line station summary for UI lists. */
+    fun stationSummary(): String {
+        val enter = enterStation
+        val exit = exitStation
+        return when {
+            !enter.isNullOrBlank() && !exit.isNullOrBlank() && enter != exit ->
+                "$enter → $exit"
+            !enter.isNullOrBlank() -> enter
+            !exit.isNullOrBlank() -> exit
+            else -> ""
+        }
+    }
+}
 
 /**
  * Read-only snapshot of a FeliCa purse.

@@ -1,6 +1,8 @@
 package works.squirrel.suica
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -80,5 +82,69 @@ class FelicaParseTest {
     @Test
     fun emptyHistory() {
         assertNull(FelicaParse.historyEntry(ByteArray(16)))
+    }
+
+    @Test
+    fun stationDbLoadsCommunityTable() {
+        assertTrue(StationDb.size() > 1000)
+        val nogi = StationDb.lookup(0, 0xe3, 0x59)
+        assertNotNull(nogi)
+        assertEquals("乃木坂", nogi!!.stationName)
+        val yoyogi = StationDb.lookup(0, 0xe3, 0x5e)
+        assertEquals("代々木上原", yoyogi!!.stationName)
+        val tokyo = StationDb.lookup(0, 0x01, 0x01)
+        assertEquals("東京", tokyo!!.stationName)
+    }
+
+    @Test
+    fun qiitaNogizakaToYoyogiUeharaFixture() {
+        // Public sample from Qiita open write-up (乃木坂→代々木上原, bal ¥2929, 2018-04-25).
+        val hex = "160100042499e359e35e710b001b0800"
+        val block = hex.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
+        val e = FelicaParse.historyEntry(block)!!
+        assertEquals("2018-04-25", e.date)
+        assertEquals("train", e.kind)
+        assertEquals(2929, e.balanceYen)
+        assertEquals("乃木坂", e.enterStation)
+        assertEquals("代々木上原", e.exitStation)
+        assertEquals("E3/59", e.enterCode)
+        assertEquals("E3/5E", e.exitCode)
+        assertTrue(e.stationSummary().contains("乃木坂"))
+        assertTrue(e.stationSummary().contains("代々木上原"))
+        assertTrue(e.note.contains("乃木坂"))
+    }
+
+    @Test
+    fun demoSuicaResolvesStationNamesAndFares() {
+        val card = FelicaParse.demoSuica()
+        assertTrue(card.history.size >= 3)
+        val ride = card.history[0]
+        assertEquals("乃木坂", ride.enterStation)
+        assertEquals("代々木上原", ride.exitStation)
+        assertEquals(168, ride.fareYen) // 2648 - 2480
+        val yamanote = card.history[1]
+        assertEquals("渋谷", yamanote.enterStation)
+        assertEquals("新宿", yamanote.exitStation)
+        val charge = card.history[2]
+        assertEquals("charge", charge.kind)
+        assertEquals("東京", charge.enterStation)
+        assertNull(charge.exitStation)
+    }
+
+    @Test
+    fun unknownStationFallsBackToCode() {
+        val block = FelicaParse.histRail(
+            terminal = 0x16,
+            process = 0x01,
+            y = 2026, m = 1, d = 2,
+            inLine = 0xff, inSta = 0xfe,
+            outLine = 0xff, outSta = 0xfd,
+            bal = 1000,
+            region = 0x00
+        )
+        val e = FelicaParse.historyEntry(block)!!
+        assertEquals("FF/FE", e.enterStation)
+        assertEquals("FF/FD", e.exitStation)
+        assertFalse(e.stationSummary().isEmpty())
     }
 }

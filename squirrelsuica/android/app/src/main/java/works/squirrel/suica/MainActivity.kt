@@ -117,8 +117,11 @@ class MainActivity : AppCompatActivity() {
             "(no history blocks)"
         } else {
             card.history.mapIndexed { i, h ->
-                "%2d. %s  %-6s  fare ¥%d  bal ¥%d  %s".format(
-                    i + 1, h.date, h.kind, h.fareYen, h.balanceYen, h.note
+                val stations = h.stationSummary()
+                val fare = if (h.fareYen > 0) "fare ¥%d".format(h.fareYen) else "fare —"
+                val route = if (stations.isNotEmpty()) "  $stations" else ""
+                "%2d. %s  %-6s  %s  bal ¥%d%s\n    %s".format(
+                    i + 1, h.date, h.kind, fare, h.balanceYen, route, h.note
                 )
             }.joinToString("\n")
         }

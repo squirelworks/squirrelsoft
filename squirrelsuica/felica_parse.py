@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import csv
 from dataclasses import asdict, dataclass
 from enum import Enum
-from typing import List, Optional
+from functools import lru_cache
+from pathlib import Path
+from typing import Dict, List, Optional, Tuple
 
 
 class FelicaBrand(str, Enum):
@@ -23,6 +26,18 @@ class HistoryEntry:
     balance_yen: int
     note: str
     raw_hex: str
+    enter_station: Optional[str] = None
+    exit_station: Optional[str] = None
+    enter_code: Optional[str] = None
+    exit_code: Optional[str] = None
+    terminal: int = 0
+    process: int = 0
+
+    def station_summary(self) -> str:
+        enter, exit_ = self.enter_station, self.exit_station
+        if enter and exit_ and enter != exit_:
+            return f"{enter} → {exit_}"
+        return enter or exit_ or ""
 
 
 @dataclass
@@ -102,12 +117,91 @@ def _bcd_byte(v: int) -> int:
     return ((v >> 4) & 0xF) * 10 + (v & 0xF)
 
 
+def _format_code(line: int, station: int) -> str:
+    return f"{line & 0xFF:02X}/{station & 0xFF:02X}"
+
+
+def _area_code(region_byte: int, line: int, for_exit: bool) -> int:
+    if (line & 0xFF) < 0x80:
+        return 0
+    shift = 4 if for_exit else 6
+    return (region_byte >> shift) & 0x3
+
+
+@lru_cache(maxsize=1)
+def _station_table() -> Dict[Tuple[int, int, int], Tuple[str, str, str]]:
+    """Load SFCardFan-style CSV shipped under squirrelsuica/data/."""
+    here = Path(__file__).resolve().parent
+    path = here / "data" / "StationCode.csv"
+    out: Dict[Tuple[int, int, int], Tuple[str, str, str]] = {}
+    if not path.is_file():
+        return out
+    with path.open(encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            try:
+                area = int(row["area"], 16)
+                line = int(row["line"], 16)
+                station = int(row["station"], 16)
+            except (KeyError, ValueError):
+                continue
+            key = (area, line, station)
+            if key in out:
+                continue
+            out[key] = (
+                (row.get("company") or "").strip(),
+                (row.get("line_name") or "").strip(),
+                (row.get("station_name") or "").strip(),
+            )
+    return out
+
+
+def lookup_station(area: int, line: int, station: int) -> Optional[str]:
+    if line == 0 and station == 0:
+        return None
+    row = _station_table().get((area & 0xFF, line & 0xFF, station & 0xFF))
+    return row[2] if row else None
+
+
+def resolve_rail(region_byte: int, line: int, station: int, for_exit: bool) -> Optional[str]:
+    if line == 0 and station == 0:
+        return None
+    area = _area_code(region_byte, line, for_exit)
+    name = lookup_station(area, line, station)
+    if name:
+        return name
+    if area != 0:
+        return lookup_station(0, line, station)
+    return None
+
+
+def _process_label(process: int) -> str:
+    return {
+        0x01: "運賃支払",
+        0x02: "チャージ",
+        0x03: "券購",
+        0x04: "精算",
+        0x05: "入場精算",
+        0x06: "窓出",
+        0x0D: "バス",
+        0x0F: "バス",
+        0x13: "新幹線",
+        0x14: "入A",
+        0x15: "出A",
+        0x46: "物販",
+        0x48: "特典チャージ",
+    }.get(process, f"proc=0x{process:02x}")
+
+
 def parse_history_block(block: bytes) -> Optional[HistoryEntry]:
     if len(block) < 16 or all(x == 0 for x in block):
         return None
-    year = 2000 + (block[4] >> 1)
-    month = ((block[4] & 1) << 3) | (block[5] >> 5)
-    day = block[5] & 0x1F
+    terminal = block[0]
+    process = block[1]
+    date_word = (block[4] << 8) | block[5]
+    year = 2000 + (date_word >> 9)
+    month = (date_word >> 5) & 0xF
+    day = date_word & 0x1F
     if not (1 <= month <= 12 and 1 <= day <= 31 and 2000 <= year <= 2099):
         try:
             year = 2000 + _bcd_byte(block[4])
@@ -116,55 +210,130 @@ def parse_history_block(block: bytes) -> Optional[HistoryEntry]:
         except Exception:
             year, month, day = 0, 0, 0
     date = f"{year:04d}-{month:02d}-{day:02d}" if year else "????-??-??"
-    process = block[0]
-    if process == 0x02:
-        kind, note = "charge", "チャージ"
-    elif process in (0x01, 0x0F, 0x46, 0x49):
-        kind, note = "train", "入場/出場"
-    elif process in (0x5C, 0xC7, 0xC8):
-        kind, note = "bus", "バス"
+
+    is_product = terminal in (0xC7, 0xC8)
+    is_bus = terminal == 0x05 or process in (0x0D, 0x0F, 0x1F, 0x23)
+    is_charge = process in (0x02, 0x48)
+
+    if is_charge:
+        kind, base_note = "charge", "チャージ"
+    elif is_bus:
+        kind, base_note = "bus", _process_label(process)
+    elif is_product or process in (0x46, 0x49, 0x4A, 0x4B, 0xC6, 0xCB):
+        kind, base_note = "sale", _process_label(process)
+    elif process in (0x01, 0x03, 0x04, 0x05, 0x06, 0x08, 0x13, 0x14, 0x15, 0x84, 0x85):
+        kind, base_note = "train", _process_label(process)
     else:
-        kind, note = "other", f"proc=0x{process:02x}"
-    fare = _u16le(block, 10)
-    bal = _u16le(block, 12)
-    if fare > 20000:
-        fare = 0
-    if bal > 100000:
+        kind, base_note = "other", f"proc=0x{process:02x}"
+
+    enter_name = exit_name = enter_code = exit_code = None
+    note = base_note
+    if not is_product and not is_bus:
+        region = block[15]
+        in_line, in_sta = block[6], block[7]
+        out_line, out_sta = block[8], block[9]
+        if in_line or in_sta:
+            enter_code = _format_code(in_line, in_sta)
+            enter_name = resolve_rail(region, in_line, in_sta, for_exit=False) or enter_code
+        if not is_charge and (out_line or out_sta):
+            exit_code = _format_code(out_line, out_sta)
+            exit_name = resolve_rail(region, out_line, out_sta, for_exit=True) or exit_code
+        route = None
+        if enter_name and exit_name:
+            route = f"{enter_name} → {exit_name}"
+        elif enter_name:
+            route = enter_name
+        elif exit_name:
+            route = exit_name
+        if route:
+            note = f"{base_note} · {route}"
+    elif is_product:
+        time_word = (block[6] << 8) | block[7]
+        hh = time_word >> 11
+        mm = (time_word >> 5) & 0x3F
+        if 0 <= hh <= 23 and 0 <= mm <= 59:
+            note = f"{base_note} · {hh:02d}:{mm:02d}"
+
+    bal = _u16le(block, 10)
+    if bal > 100_000:
         bal = 0
-    return HistoryEntry(date, kind, fare, bal, note, block.hex())
+    return HistoryEntry(
+        date,
+        kind,
+        0,
+        bal,
+        note,
+        block.hex(),
+        enter_name,
+        exit_name,
+        enter_code,
+        exit_code,
+        terminal,
+        process,
+    )
 
 
 def parse_history_blocks(blocks: List[bytes]) -> List[HistoryEntry]:
-    return [e for b in blocks if (e := parse_history_block(b))]
+    parsed = [e for b in blocks if (e := parse_history_block(b))]
+    out: List[HistoryEntry] = []
+    for i, e in enumerate(parsed):
+        older = parsed[i + 1] if i + 1 < len(parsed) else None
+        fare = 0
+        if older is not None:
+            delta = older.balance_yen - e.balance_yen
+            if 1 <= delta <= 20_000:
+                fare = delta
+        out.append(
+            HistoryEntry(
+                e.date,
+                e.kind,
+                fare,
+                e.balance_yen,
+                e.note,
+                e.raw_hex,
+                e.enter_station,
+                e.exit_station,
+                e.enter_code,
+                e.exit_code,
+                e.terminal,
+                e.process,
+            )
+        )
+    return out
 
 
-def _pack_date(year: int, month: int, day: int) -> tuple[int, int]:
-    y = year - 2000
-    b4 = ((y << 1) | ((month >> 3) & 1)) & 0xFF
-    b5 = (((month & 7) << 5) | (day & 0x1F)) & 0xFF
-    return b4, b5
-
-
-def _hist(process: int, y: int, m: int, d: int, fare: int, bal: int) -> bytes:
-    b4, b5 = _pack_date(y, m, d)
+def hist_rail(
+    terminal: int,
+    process: int,
+    y: int,
+    m: int,
+    d: int,
+    in_line: int,
+    in_sta: int,
+    out_line: int,
+    out_sta: int,
+    bal: int,
+    region: int = 0,
+) -> bytes:
+    date_word = (((y - 2000) & 0x7F) << 9) | ((m & 0xF) << 5) | (d & 0x1F)
     return bytes(
         [
+            terminal & 0xFF,
             process & 0xFF,
             0,
             0,
-            0,
-            b4,
-            b5,
-            0,
-            0,
-            0,
-            0,
-            fare & 0xFF,
-            (fare >> 8) & 0xFF,
+            (date_word >> 8) & 0xFF,
+            date_word & 0xFF,
+            in_line & 0xFF,
+            in_sta & 0xFF,
+            out_line & 0xFF,
+            out_sta & 0xFF,
             bal & 0xFF,
             (bal >> 8) & 0xFF,
             0,
             0,
+            0,
+            region & 0xFF,
         ]
     )
 
@@ -180,9 +349,9 @@ def demo_suica() -> FelicaCard:
         balance_yen=suica_balance_090f(bal),
         history=parse_history_blocks(
             [
-                _hist(0x01, 2026, 10, 28, 168, 2480),
-                _hist(0x01, 2026, 10, 27, 210, 2648),
-                _hist(0x02, 2026, 10, 26, 0, 2858),
+                hist_rail(0x16, 0x01, 2026, 10, 28, 0xE3, 0x59, 0xE3, 0x5E, 2480),
+                hist_rail(0x16, 0x01, 2026, 10, 27, 0x25, 0x07, 0x25, 0x0A, 2648),
+                hist_rail(0x16, 0x02, 2026, 10, 26, 0x01, 0x01, 0, 0, 2858),
             ]
         ),
         note="Demo Suica (synthetic)",
