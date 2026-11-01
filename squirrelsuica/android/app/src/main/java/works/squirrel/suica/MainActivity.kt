@@ -23,10 +23,6 @@ class MainActivity : AppCompatActivity() {
         nfcAdapter = NfcAdapter.getDefaultAdapter(this)
         resetStatus()
 
-        binding.btnDemoSuica.setOnClickListener { showCard(FelicaParse.demoSuica(), demo = true) }
-        binding.btnDemoNanaco.setOnClickListener { showCard(FelicaParse.demoNanaco(), demo = true) }
-        binding.btnDemoEdy.setOnClickListener { showCard(FelicaParse.demoEdy(), demo = true) }
-        binding.btnDemoWaon.setOnClickListener { showCard(FelicaParse.demoWaon(), demo = true) }
         binding.btnClear.setOnClickListener { clearUi() }
 
         handleIntent(intent)
@@ -72,7 +68,7 @@ class MainActivity : AppCompatActivity() {
         if (tag == null) return
         try {
             val card = FelicaReader.read(tag)
-            showCard(card, demo = false)
+            showCard(card)
             val msg = if (card.balanceYen != null) {
                 "${card.brandLabel} ¥${card.balanceYen}"
             } else {
@@ -92,13 +88,9 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun showCard(card: FelicaCard, demo: Boolean) {
-        binding.prompt.text = if (demo) "Demo · ${card.brandLabel}" else card.brandLabel
-        binding.promptEn.text = when {
-            demo -> card.note.ifBlank { "Synthetic card (no NFC)" }
-            card.note.isNotBlank() -> card.note
-            else -> getString(R.string.hold_card_en)
-        }
+    private fun showCard(card: FelicaCard) {
+        binding.prompt.text = card.brandLabel
+        binding.promptEn.text = card.note.ifBlank { getString(R.string.hold_card_en) }
         binding.balance.visibility = View.VISIBLE
         binding.idm.visibility = View.VISIBLE
         binding.balance.text = if (card.balanceYen != null) {
@@ -108,11 +100,7 @@ class MainActivity : AppCompatActivity() {
         }
         binding.idm.text = getString(R.string.idm_fmt, card.idm) +
             "\nPMm ${card.pmm}\nSystem ${card.systemCode}"
-        binding.status.text = if (demo) {
-            "Demo payload · balances are synthetic (~¥2–5k), not your card"
-        } else {
-            card.note.ifBlank { "Live FeliCa read" }
-        }
+        binding.status.text = card.note.ifBlank { "Live FeliCa read" }
         binding.history.text = if (card.history.isEmpty()) {
             "(no history blocks)"
         } else {

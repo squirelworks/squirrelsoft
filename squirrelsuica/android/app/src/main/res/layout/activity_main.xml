@@ -47,74 +47,26 @@
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toBottomOf="@id/brand" />
 
-        <HorizontalScrollView
-            android:id="@+id/actionsScroll"
-            android:layout_width="0dp"
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnClear"
+            style="@style/Widget.Material3.Button.TextButton"
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:scrollbars="none"
-            app:layout_constraintEnd_toEndOf="parent"
+            android:layout_marginTop="12dp"
+            android:text="@string/clear"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@id/subtitle">
-
-            <LinearLayout
-                android:id="@+id/actions"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:gravity="center_vertical"
-                android:orientation="horizontal">
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btnDemoSuica"
-                    style="@style/Widget.Material3.Button"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="@string/demo_suica" />
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btnDemoNanaco"
-                    style="@style/Widget.Material3.Button.TonalButton"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="8dp"
-                    android:text="@string/demo_nanaco" />
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btnDemoEdy"
-                    style="@style/Widget.Material3.Button.TonalButton"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="8dp"
-                    android:text="@string/demo_edy" />
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btnDemoWaon"
-                    style="@style/Widget.Material3.Button.TonalButton"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="8dp"
-                    android:text="@string/demo_waon" />
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btnClear"
-                    style="@style/Widget.Material3.Button.TextButton"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="4dp"
-                    android:text="@string/clear" />
-            </LinearLayout>
-        </HorizontalScrollView>
+            app:layout_constraintTop_toBottomOf="@id/subtitle" />
 
         <com.google.android.material.card.MaterialCardView
             android:id="@+id/cardPanel"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginTop="20dp"
+            android:layout_marginTop="12dp"
             app:cardBackgroundColor="@color/bg2"
             app:cardCornerRadius="16dp"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@id/actionsScroll"
+            app:layout_constraintTop_toBottomOf="@id/btnClear"
             app:strokeColor="#2A3966"
             app:strokeWidth="1dp">
 
