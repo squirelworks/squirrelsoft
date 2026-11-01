@@ -76,7 +76,6 @@ class MainActivity : AppCompatActivity() {
             }
             Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
         } catch (e: Exception) {
-            // Clear stale balance so a prior wrong read cannot linger under an error.
             clearCardValues()
             val tip = if (e.message?.contains("lost", ignoreCase = true) == true) {
                 "Tag was lost — hold the card still on the NFC spot and try again."
@@ -84,6 +83,10 @@ class MainActivity : AppCompatActivity() {
                 "Read failed: ${e.message}"
             }
             binding.status.text = tip
+            binding.history.text = HistoryFormat.emptyMessage(
+                HistoryStatus.READ_FAILED,
+                tip
+            )
             Toast.makeText(this, tip, Toast.LENGTH_LONG).show()
         }
     }
@@ -101,18 +104,7 @@ class MainActivity : AppCompatActivity() {
         binding.idm.text = getString(R.string.idm_fmt, card.idm) +
             "\nPMm ${card.pmm}\nSystem ${card.systemCode}"
         binding.status.text = card.note.ifBlank { "Live FeliCa read" }
-        binding.history.text = if (card.history.isEmpty()) {
-            "(no history blocks)"
-        } else {
-            card.history.mapIndexed { i, h ->
-                val stations = h.stationSummary()
-                val fare = if (h.fareYen > 0) "fare ¥%d".format(h.fareYen) else "fare —"
-                val route = if (stations.isNotEmpty()) "  $stations" else ""
-                "%2d. %s  %-6s  %s  bal ¥%d%s\n    %s".format(
-                    i + 1, h.date, h.kind, fare, h.balanceYen, route, h.note
-                )
-            }.joinToString("\n")
-        }
+        binding.history.text = HistoryFormat.formatHistoryPanel(card)
     }
 
     private fun clearCardValues() {
@@ -120,7 +112,7 @@ class MainActivity : AppCompatActivity() {
         binding.promptEn.setText(R.string.hold_card_en)
         binding.balance.visibility = View.GONE
         binding.idm.visibility = View.GONE
-        binding.history.text = "(empty)"
+        binding.history.text = getString(R.string.history_placeholder)
     }
 
     private fun clearUi() {

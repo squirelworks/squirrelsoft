@@ -61,6 +61,12 @@ Unknown FeliCa: shows IDm and an unsupported-purse note (no invented balance).
 (empty/wrong). Suica history is service `0x090f`. Balance in history blocks is
 at bytes **10–11**, not 0–1.
 
+**Bug fixed in 0.0.6:** History section could stay blank/`(empty)` even when
+balance worked. Phone readers now follow the public SuicaReader-style path —
+`0x090f` up to 20 blocks, multi-block with **single-block fallback**, longer
+NFC timeout, and actionable History errors when the tag is lost mid-read.
+Rows show date, process, **station names**, fare (balance delta), and balance.
+
 Station names come from the community SFCardFan サイバネ表 (see `data/README.md`).
 Clean-room parsers — study open FeliCa history layouts; do not copy proprietary apps.
 

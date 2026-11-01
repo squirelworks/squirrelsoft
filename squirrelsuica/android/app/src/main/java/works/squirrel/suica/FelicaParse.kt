@@ -166,11 +166,16 @@ object FelicaParse {
 
     fun historyEntries(blocks: List<ByteArray>): List<HistoryEntry> {
         val parsed = blocks.mapNotNull { historyEntry(it) }
-        // History is newest-first: fare ≈ older.balance − this.balance when spending.
+        // History is newest-first:
+        // spend fare ≈ older.balance − this.balance; charge amount ≈ this − older.
         return parsed.mapIndexed { i, e ->
             val older = parsed.getOrNull(i + 1) ?: return@mapIndexed e
             val delta = older.balanceYen - e.balanceYen
-            if (delta in 1..20_000) e.copy(fareYen = delta) else e
+            when {
+                delta in 1..20_000 -> e.copy(fareYen = delta)
+                e.kind == "charge" && -delta in 1..50_000 -> e.copy(fareYen = -delta)
+                else -> e
+            }
         }
     }
 
@@ -389,10 +394,21 @@ object FelicaParse {
                         outLine = 0, outSta = 0,
                         bal = 2858,
                         region = 0x00
+                    ),
+                    // Prior balance before charge (for charge amount delta)
+                    histRail(
+                        terminal = 0x16,
+                        process = 0x01,
+                        y = 2026, m = 10, d = 25,
+                        inLine = 0x25, inSta = 0x01,
+                        outLine = 0x25, outSta = 0x02,
+                        bal = 858,
+                        region = 0x00
                     )
                 )
             ),
-            note = "Fixture Suica (synthetic)"
+            note = "Fixture Suica (synthetic)",
+            historyStatus = HistoryStatus.OK
         )
     }
 
@@ -410,7 +426,8 @@ object FelicaParse {
             systemCode = "fe00",
             balanceYen = nanacoBalance(balBlock),
             history = nanacoHistoryEntries(hist),
-            note = "Fixture nanaco (synthetic)"
+            note = "Fixture nanaco (synthetic)",
+            historyStatus = HistoryStatus.OK
         )
     }
 
@@ -428,7 +445,8 @@ object FelicaParse {
             systemCode = "fe00",
             balanceYen = edyBalance(block),
             history = edyHistoryEntries(hist),
-            note = "Fixture Edy (synthetic)"
+            note = "Fixture Edy (synthetic)",
+            historyStatus = HistoryStatus.OK
         )
     }
 
@@ -447,7 +465,8 @@ object FelicaParse {
             systemCode = "fe00",
             balanceYen = waonBalance(block),
             history = waonHistoryEntries(listOf(rec.copyOfRange(0, 16), rec.copyOfRange(16, 32))),
-            note = "Fixture WAON (synthetic)"
+            note = "Fixture WAON (synthetic)",
+            historyStatus = HistoryStatus.OK
         )
     }
 
