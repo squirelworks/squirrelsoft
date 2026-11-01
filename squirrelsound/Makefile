@@ -1,5 +1,5 @@
 CC ?= gcc
-CFLAGS ?= -std=c11 -Wall -Wextra -O2 -Iinclude
+CFLAGS ?= -std=c11 -Wall -Wextra -O2 -Iinclude -D_POSIX_C_SOURCE=200809L
 LDFLAGS ?= -lm
 BUILD = build
 
