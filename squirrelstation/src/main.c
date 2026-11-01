@@ -1,3 +1,4 @@
+#include "sqs_dxf.h"
 #include "sqstation.h"
 
 #include <stdio.h>
@@ -18,6 +19,11 @@ static void usage(void) {
     puts("  squirrelstation level <file> <name> [color_hex]");
     puts("  squirrelstation list <file>");
     puts("  squirrelstation snap <file> x,y,z [tol]");
+    puts("  squirrelstation import-dxf <out.sqdgn> <in.dxf>   # MicroStation bridge");
+    puts("  squirrelstation export-dxf <in.sqdgn> <out.dxf>");
+    puts("  squirrelstation probe <file>                     # detect dxf/dgn/sqdgn");
+    puts("");
+    puts("MicroStation .dgn: export DXF from MicroStation, then import-dxf.");
 }
 
 static int load(SqsDesign *d, const char *path) {
@@ -55,6 +61,70 @@ int main(int argc, char **argv) {
         sqs_design_init(&d, argc >= 4 ? argv[3] : "untitled");
         return save(&d, argv[2]) == 0 ? 0 : 1;
     }
+
+    if (strcmp(cmd, "probe") == 0) {
+        if (argc < 3) {
+            usage();
+            return 1;
+        }
+        const char *path = argv[2];
+        if (sqs_file_looks_like_dxf(path)) {
+            puts("format=dxf (ASCII) — use: squirrelstation import-dxf out.sqdgn this.dxf");
+            return 0;
+        }
+        if (sqs_file_looks_like_dgn(path)) {
+            puts("format=dgn (binary MicroStation) — not readable directly.");
+            puts("In MicroStation: File → Export → DXF, then import-dxf.");
+            return 2;
+        }
+        FILE *f = fopen(path, "r");
+        if (!f) {
+            fprintf(stderr, "cannot open %s\n", path);
+            return 1;
+        }
+        char line[64];
+        if (fgets(line, sizeof(line), f) && strncmp(line, "SQDGN", 5) == 0) {
+            puts("format=sqdgn");
+            fclose(f);
+            return 0;
+        }
+        fclose(f);
+        puts("format=unknown");
+        return 1;
+    }
+
+    if (strcmp(cmd, "import-dxf") == 0) {
+        if (argc < 4) {
+            usage();
+            return 1;
+        }
+        SqsDesign d;
+        sqs_design_init(&d, "from-dxf");
+        SqsDxfStats st;
+        int rc = sqs_import_dxf(&d, argv[3], &st);
+        if (rc != 0) return 1;
+        if (save(&d, argv[2]) != 0) return 1;
+        printf("imported → %s\n", argv[2]);
+        printf("  layers=%d lines=%d arcs=%d circles=%d texts=%d pline_segs=%d skipped=%d\n",
+               st.layers, st.lines, st.arcs, st.circles, st.texts, st.pline_segs, st.skipped);
+        return 0;
+    }
+
+    if (strcmp(cmd, "export-dxf") == 0) {
+        if (argc < 4) {
+            usage();
+            return 1;
+        }
+        SqsDesign d;
+        if (load(&d, argv[2]) != 0) return 1;
+        if (sqs_export_dxf(&d, argv[3]) != 0) {
+            fprintf(stderr, "export failed\n");
+            return 1;
+        }
+        printf("exported %s → %s (%d elements)\n", argv[2], argv[3], d.element_count);
+        return 0;
+    }
+
     if (argc < 3) {
         usage();
         return 1;
