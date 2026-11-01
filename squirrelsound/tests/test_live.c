@@ -41,7 +41,7 @@ int main(void) {
     LiveEngineConfig ecfg;
     memset(&ecfg, 0, sizeof(ecfg));
     ecfg.fft_size = 2048;
-    ecfg.window = SQNR_WIN_HANN;
+    ecfg.window = SQDSP_WIN_HANN;
     ecfg.sample_rate = 44100;
     ecfg.db_min = -90;
     ecfg.db_max = 0;

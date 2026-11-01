@@ -7,7 +7,7 @@
 
 int live_engine_init(LiveEngine *e, const LiveEngineConfig *cfg) {
     memset(e, 0, sizeof(*e));
-    if (!cfg || !sqnr_is_pow2(cfg->fft_size) || cfg->fft_size > LIVE_MAX_FFT ||
+    if (!cfg || !sqdsp_is_pow2(cfg->fft_size) || cfg->fft_size > LIVE_MAX_FFT ||
         cfg->fft_size < 256)
         return -1;
     e->cfg = *cfg;
@@ -30,7 +30,7 @@ int live_engine_init(LiveEngine *e, const LiveEngineConfig *cfg) {
         live_engine_free(e);
         return -1;
     }
-    sqnr_window(e->window, cfg->fft_size, cfg->window, 8.6);
+    sqdsp_window(e->window, cfg->fft_size, cfg->window, 8.6);
     for (size_t k = 0; k < e->bins; k++)
         e->freq[k] = cfg->sample_rate * (double)k / (double)cfg->fft_size;
     live_engine_reset_hold(e);
@@ -74,8 +74,8 @@ size_t live_engine_hz_to_bin(const LiveEngine *e, double hz) {
 int live_engine_process(LiveEngine *e, const double *samples) {
     if (!e || !samples) return -1;
     memcpy(e->frame, samples, e->cfg.fft_size * sizeof(double));
-    sqnr_apply_window(e->frame, e->window, e->cfg.fft_size);
-    size_t nb = sqnr_magnitude_spectrum(e->frame, e->cfg.fft_size, e->mag, e->scratch);
+    sqdsp_apply_window(e->frame, e->window, e->cfg.fft_size);
+    size_t nb = sqdsp_magnitude_spectrum(e->frame, e->cfg.fft_size, e->mag, e->scratch);
     if (nb != e->bins) return -1;
 
     /* Convert to dBFS-ish relative to fft size */
@@ -96,7 +96,7 @@ int live_engine_process(LiveEngine *e, const double *samples) {
     e->peak_db = peak_db;
     e->peak_hz = e->freq[peak_i];
     if (peak_i > 0 && peak_i + 1 < e->bins) {
-        double bin = sqnr_parabolic_bin(e->mag, e->bins, peak_i);
+        double bin = sqdsp_parabolic_bin(e->mag, e->bins, peak_i);
         size_t i0 = (size_t)bin;
         double frac = bin - (double)i0;
         if (i0 + 1 < e->bins)

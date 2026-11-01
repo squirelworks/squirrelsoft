@@ -1,4 +1,4 @@
-#include "sqnr.h"
+#include "sqdsp.h"
 
 #include <math.h>
 #include <stdio.h>
@@ -7,9 +7,9 @@
 
 /* Write a simple SVG spectrogram heatmap. Returns 0 on success. */
 int sqsound_write_spectrogram_svg(const char *path, const double *x, size_t n, double fs,
-                                  size_t fft, double overlap, SqnrWindow win) {
+                                  size_t fft, double overlap, SqdspWindow win) {
     (void)fs; /* reserved for axis labeling in later SVG revisions */
-    if (!sqnr_is_pow2(fft) || fft > n) return -1;
+    if (!sqdsp_is_pow2(fft) || fft > n) return -1;
     size_t hop = (size_t)((1.0 - overlap) * (double)fft);
     if (hop < 1) hop = 1;
     size_t nframes = 0;
@@ -26,13 +26,13 @@ int sqsound_write_spectrogram_svg(const char *path, const double *x, size_t n, d
         free(scratch);
         return -1;
     }
-    sqnr_window(w, fft, win, 8.6);
+    sqdsp_window(w, fft, win, 8.6);
     size_t fi = 0;
     double maxv = 1e-20;
     for (size_t s = 0; s + fft <= n; s += hop, fi++) {
         memcpy(buf, x + s, fft * sizeof(double));
-        sqnr_apply_window(buf, w, fft);
-        size_t got = sqnr_magnitude_spectrum(buf, fft, mag + fi * nb, fftbuf);
+        sqdsp_apply_window(buf, w, fft);
+        size_t got = sqdsp_magnitude_spectrum(buf, fft, mag + fi * nb, fftbuf);
         (void)got;
         for (size_t k = 0; k < nb; k++)
             if (mag[fi * nb + k] > maxv) maxv = mag[fi * nb + k];

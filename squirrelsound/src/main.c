@@ -2,7 +2,7 @@
 #include "live_engine.h"
 #include "live_view.h"
 #include "spectrogram.h"
-#include "sqnr.h"
+#include "sqdsp.h"
 #include "synth.h"
 #include "wavio.h"
 
@@ -12,7 +12,7 @@
 #include <string.h>
 
 static void usage(void) {
-    puts("SquirrelSound — Numerical Recipes–style spectral analyzer");
+    puts("SquirrelSound — spectral analyzer (sqdsp)");
     puts("  squirrelsound synth <out.wav> [--freq Hz] [--seconds s] [--rate Hz]");
     puts("                      [--harmonics N] [--amp A] [--noise A]");
     puts("  squirrelsound spectrum <in.wav> [--fft N] [--window name]");
@@ -43,10 +43,10 @@ static int has_flag(int argc, char **argv, const char *key) {
 }
 
 static size_t choose_fft(size_t n, size_t want) {
-    if (want && sqnr_is_pow2(want) && want <= n) return want;
+    if (want && sqdsp_is_pow2(want) && want <= n) return want;
     size_t p = 1;
     while ((p << 1) <= n && p < 16384) p <<= 1;
-    if (p < 256) p = n >= 256 ? 256 : (sqnr_is_pow2(n) ? n : 128);
+    if (p < 256) p = n >= 256 ? 256 : (sqdsp_is_pow2(n) ? n : 128);
     while (p > n) p >>= 1;
     return p ? p : 1;
 }
@@ -67,7 +67,7 @@ static void print_top_peaks(const double *mag, const double *freq, size_t nb, in
     }
     puts("top peaks:");
     for (int i = 0; i < n && idx[i] >= 0; i++) {
-        double bin = sqnr_parabolic_bin(mag, nb, (size_t)idx[i]);
+        double bin = sqdsp_parabolic_bin(mag, nb, (size_t)idx[i]);
         size_t i0 = (size_t)bin;
         double frac = bin - (double)i0;
         double f =
@@ -127,7 +127,7 @@ int main(int argc, char **argv) {
             return 1;
         }
         double fs = (double)wav.sample_rate;
-        SqnrWindow win = sqnr_window_parse(get_opt(argc, argv, "--window", "hann"));
+        SqdspWindow win = sqdsp_window_parse(get_opt(argc, argv, "--window", "hann"));
 
         if (strcmp(cmd, "spectrum") == 0) {
             size_t want = (size_t)atoi(get_opt(argc, argv, "--fft", "0"));
@@ -137,12 +137,12 @@ int main(int argc, char **argv) {
             double *psd = (double *)malloc((nfft / 2 + 1) * sizeof(double));
             double *scratch = (double *)malloc(nfft * 3 * sizeof(double));
             size_t nb =
-                sqnr_periodogram(wav.samples, nfft, fs, win, psd, freq, scratch);
+                sqdsp_periodogram(wav.samples, nfft, fs, win, psd, freq, scratch);
             for (size_t i = 0; i < nb; i++) mag[i] = sqrt(psd[i] * fs); /* display scale */
             printf("fft=%zu  fs=%.1f  window=%s  bins=%zu\n", nfft, fs,
                    get_opt(argc, argv, "--window", "hann"), nb);
             print_top_peaks(mag, freq, nb, 8);
-            double peak = sqnr_peak_frequency(mag, freq, nb);
+            double peak = sqdsp_peak_frequency(mag, freq, nb);
             printf("dominant ~= %.3f Hz\n", peak);
             free(mag);
             free(freq);
@@ -150,14 +150,14 @@ int main(int argc, char **argv) {
             free(scratch);
         } else if (strcmp(cmd, "welch") == 0) {
             size_t seg = (size_t)atoi(get_opt(argc, argv, "--seg", "2048"));
-            if (!sqnr_is_pow2(seg)) seg = 2048;
+            if (!sqdsp_is_pow2(seg)) seg = 2048;
             if (seg > wav.n_samples) seg = choose_fft(wav.n_samples, 0);
             double overlap = atof(get_opt(argc, argv, "--overlap", "0.5"));
             size_t nb = seg / 2 + 1;
             double *psd = (double *)malloc(nb * sizeof(double));
             double *freq = (double *)malloc(nb * sizeof(double));
             double *scratch = (double *)malloc((nb * 2 + seg * 3) * sizeof(double));
-            size_t got = sqnr_welch_psd(wav.samples, wav.n_samples, fs, seg, overlap, win,
+            size_t got = sqdsp_welch_psd(wav.samples, wav.n_samples, fs, seg, overlap, win,
                                         psd, freq, scratch);
             printf("welch seg=%zu overlap=%.2f bins=%zu\n", seg, overlap, got);
             double *mag = (double *)malloc(got * sizeof(double));
@@ -176,17 +176,17 @@ int main(int argc, char **argv) {
             np2 <<= 1;
             double *scratch = (double *)malloc((n + np2 + 8) * sizeof(double));
             double f0 =
-                sqnr_pitch_autocorr(wav.samples, n, fs, fmin, fmax, scratch);
+                sqdsp_pitch_autocorr(wav.samples, n, fs, fmin, fmax, scratch);
             printf("pitch (autocorr) ~= %.3f Hz\n", f0);
             size_t nfft = choose_fft(wav.n_samples, 4096);
             double *psd = (double *)malloc((nfft / 2 + 1) * sizeof(double));
             double *freq = (double *)malloc((nfft / 2 + 1) * sizeof(double));
             double *tmp = (double *)malloc(nfft * 3 * sizeof(double));
-            size_t nb = sqnr_periodogram(wav.samples, nfft, fs, win, psd, freq, tmp);
+            size_t nb = sqdsp_periodogram(wav.samples, nfft, fs, win, psd, freq, tmp);
             double *mag = psd;
             for (size_t i = 0; i < nb; i++) mag[i] = sqrt(psd[i]);
             printf("pitch (spectrum peak) ~= %.3f Hz\n",
-                   sqnr_peak_frequency(mag, freq, nb));
+                   sqdsp_peak_frequency(mag, freq, nb));
             free(scratch);
             free(psd);
             free(freq);
@@ -198,12 +198,12 @@ int main(int argc, char **argv) {
             double *psd = (double *)malloc((nfft / 2 + 1) * sizeof(double));
             double *freq = (double *)malloc((nfft / 2 + 1) * sizeof(double));
             double *tmp = (double *)malloc(nfft * 3 * sizeof(double));
-            size_t nb = sqnr_periodogram(wav.samples, nfft, fs, win, psd, freq, tmp);
+            size_t nb = sqdsp_periodogram(wav.samples, nfft, fs, win, psd, freq, tmp);
             double *mag = (double *)malloc(nb * sizeof(double));
             for (size_t i = 0; i < nb; i++) mag[i] = sqrt(psd[i]);
             double fund = atof(get_opt(argc, argv, "--fund", "0"));
-            if (fund <= 0.0) fund = sqnr_peak_frequency(mag, freq, nb);
-            double thd = sqnr_thd(mag, freq, nb, fund, harms);
+            if (fund <= 0.0) fund = sqdsp_peak_frequency(mag, freq, nb);
+            double thd = sqdsp_thd(mag, freq, nb, fund, harms);
             printf("fund=%.3f Hz  THD=%.6f (%.2f%%)\n", fund, thd, thd * 100.0);
             free(psd);
             free(freq);
@@ -215,16 +215,16 @@ int main(int argc, char **argv) {
             double *psd = (double *)malloc((nfft / 2 + 1) * sizeof(double));
             double *freq = (double *)malloc((nfft / 2 + 1) * sizeof(double));
             double *tmp = (double *)malloc(nfft * 3 * sizeof(double));
-            size_t nb = sqnr_periodogram(wav.samples, nfft, fs, win, psd, freq, tmp);
+            size_t nb = sqdsp_periodogram(wav.samples, nfft, fs, win, psd, freq, tmp);
             double fund = atof(get_opt(argc, argv, "--fund", "0"));
             double bw = atof(get_opt(argc, argv, "--bw", "20"));
             if (fund <= 0.0) {
                 double *mag = (double *)malloc(nb * sizeof(double));
                 for (size_t i = 0; i < nb; i++) mag[i] = sqrt(psd[i]);
-                fund = sqnr_peak_frequency(mag, freq, nb);
+                fund = sqdsp_peak_frequency(mag, freq, nb);
                 free(mag);
             }
-            double snr = sqnr_snr_db(psd, freq, nb, fund, bw);
+            double snr = sqdsp_snr_db(psd, freq, nb, fund, bw);
             printf("fund=%.3f Hz  bw=±%.1f Hz  SNR=%.2f dB\n", fund, bw, snr);
             free(psd);
             free(freq);
@@ -273,8 +273,8 @@ int main(int argc, char **argv) {
         LiveEngineConfig ecfg;
         memset(&ecfg, 0, sizeof(ecfg));
         ecfg.fft_size = (size_t)atoi(get_opt(argc, argv, "--fft", "2048"));
-        if (!sqnr_is_pow2(ecfg.fft_size)) ecfg.fft_size = 2048;
-        ecfg.window = sqnr_window_parse(get_opt(argc, argv, "--window", "hann"));
+        if (!sqdsp_is_pow2(ecfg.fft_size)) ecfg.fft_size = 2048;
+        ecfg.window = sqdsp_window_parse(get_opt(argc, argv, "--window", "hann"));
         ecfg.sample_rate = live_audio_sample_rate(audio);
         ecfg.max_hold = has_flag(argc, argv, "--max-hold");
         ecfg.db_min = -90;

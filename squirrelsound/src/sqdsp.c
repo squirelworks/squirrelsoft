@@ -1,4 +1,4 @@
-#include "sqnr.h"
+#include "sqdsp.h"
 
 #include <math.h>
 #include <stdlib.h>
@@ -8,15 +8,15 @@
 #define M_PI 3.14159265358979323846
 #endif
 
-int sqnr_is_pow2(size_t n) { return n && !(n & (n - 1)); }
+int sqdsp_is_pow2(size_t n) { return n && !(n & (n - 1)); }
 
 /*
  * Complex radix-2 FFT — original 0-based iterative Cooley–Tukey.
  * Layout: data[2*k]=Re, data[2*k+1]=Im for k = 0 .. nn-1.
  * isign > 0 → forward (e^{-2πi}), isign < 0 → inverse (no 1/nn scale).
  */
-void sqnr_four1(double *data, size_t nn, int isign) {
-    if (nn < 2 || !sqnr_is_pow2(nn)) return;
+void sqdsp_fft(double *data, size_t nn, int isign) {
+    if (nn < 2 || !sqdsp_is_pow2(nn)) return;
 
     /* Bit-reversal permutation (0-based complex indices). */
     size_t j = 0;
@@ -84,14 +84,14 @@ void sqnr_four1(double *data, size_t nn, int isign) {
  * Forward uses a length-n/2 complex FFT on even/odd split; inverse undoes it.
  * After inverse, divide by (n/2) to recover the original real sequence.
  */
-void sqnr_realft(double *data, size_t n, int isign) {
-    if (n < 4 || !sqnr_is_pow2(n)) return;
+void sqdsp_rfft(double *data, size_t n, int isign) {
+    if (n < 4 || !sqdsp_is_pow2(n)) return;
     const size_t half = n >> 1;
     const size_t quarter = n >> 2;
 
     if (isign >= 0) {
         /* Even/odd split → complex vector of length half, then FFT. */
-        sqnr_four1(data, half, 1);
+        sqdsp_fft(data, half, 1);
 
         double *re = (double *)malloc(half * sizeof(double));
         double *im = (double *)malloc(half * sizeof(double));
@@ -181,11 +181,11 @@ void sqnr_realft(double *data, size_t n, int isign) {
         }
         free(re);
         free(im);
-        sqnr_four1(data, half, -1);
+        sqdsp_fft(data, half, -1);
     }
 }
 
-/* Modified Bessel I0 from its power series / asymptotic — not NR bessi0. */
+/* Modified Bessel I0 from its power series / asymptotic — power series. */
 static double modified_bessel_i0(double x) {
     double ax = fabs(x);
     if (ax < 15.0) {
@@ -206,32 +206,32 @@ static double modified_bessel_i0(double x) {
     return exp(ax) * series / sqrt(2.0 * M_PI * ax);
 }
 
-void sqnr_window(double *w, size_t n, SqnrWindow kind, double kaiser_beta) {
+void sqdsp_window(double *w, size_t n, SqdspWindow kind, double kaiser_beta) {
     if (n == 0) return;
     for (size_t i = 0; i < n; i++) {
         double t = (n == 1) ? 0.0 : (2.0 * (double)i / (double)(n - 1) - 1.0);
         double x = (double)i;
         switch (kind) {
-        case SQNR_WIN_RECT:
+        case SQDSP_WIN_RECT:
             w[i] = 1.0;
             break;
-        case SQNR_WIN_HANN:
+        case SQDSP_WIN_HANN:
             w[i] = 0.5 - 0.5 * cos(2.0 * M_PI * x / (double)(n - 1));
             break;
-        case SQNR_WIN_HAMMING:
+        case SQDSP_WIN_HAMMING:
             w[i] = 0.54 - 0.46 * cos(2.0 * M_PI * x / (double)(n - 1));
             break;
-        case SQNR_WIN_BLACKMAN:
+        case SQDSP_WIN_BLACKMAN:
             w[i] = 0.42 - 0.5 * cos(2.0 * M_PI * x / (double)(n - 1)) +
                    0.08 * cos(4.0 * M_PI * x / (double)(n - 1));
             break;
-        case SQNR_WIN_KAISER: {
+        case SQDSP_WIN_KAISER: {
             double beta = kaiser_beta > 0 ? kaiser_beta : 8.6;
             double a = modified_bessel_i0(beta);
             w[i] = modified_bessel_i0(beta * sqrt(1.0 - t * t)) / a;
             break;
         }
-        case SQNR_WIN_FLATTOP:
+        case SQDSP_WIN_FLATTOP:
             w[i] = 0.21557895 - 0.41663158 * cos(2.0 * M_PI * x / (double)(n - 1)) +
                    0.277263158 * cos(4.0 * M_PI * x / (double)(n - 1)) -
                    0.083578947 * cos(6.0 * M_PI * x / (double)(n - 1)) +
@@ -244,15 +244,15 @@ void sqnr_window(double *w, size_t n, SqnrWindow kind, double kaiser_beta) {
     }
 }
 
-void sqnr_apply_window(double *x, const double *w, size_t n) {
+void sqdsp_apply_window(double *x, const double *w, size_t n) {
     for (size_t i = 0; i < n; i++) x[i] *= w[i];
 }
 
-size_t sqnr_magnitude_spectrum(const double *x, size_t n, double *mag_out,
+size_t sqdsp_magnitude_spectrum(const double *x, size_t n, double *mag_out,
                                double *scratch) {
-    if (!sqnr_is_pow2(n)) return 0;
+    if (!sqdsp_is_pow2(n)) return 0;
     memcpy(scratch, x, n * sizeof(double));
-    sqnr_realft(scratch, n, 1);
+    sqdsp_rfft(scratch, n, 1);
     mag_out[0] = fabs(scratch[0]);
     mag_out[n / 2] = fabs(scratch[1]);
     for (size_t k = 1; k < n / 2; k++) {
@@ -269,16 +269,16 @@ static double window_power(const double *w, size_t n) {
     return u;
 }
 
-size_t sqnr_periodogram(const double *x, size_t n, double fs, SqnrWindow win,
+size_t sqdsp_periodogram(const double *x, size_t n, double fs, SqdspWindow win,
                         double *psd_out, double *freq_out, double *scratch) {
-    if (!sqnr_is_pow2(n) || fs <= 0.0) return 0;
+    if (!sqdsp_is_pow2(n) || fs <= 0.0) return 0;
     double *w = scratch;
     double *buf = scratch + n;
-    sqnr_window(w, n, win, 8.6);
+    sqdsp_window(w, n, win, 8.6);
     memcpy(buf, x, n * sizeof(double));
-    sqnr_apply_window(buf, w, n);
+    sqdsp_apply_window(buf, w, n);
     double U = window_power(w, n);
-    sqnr_realft(buf, n, 1);
+    sqdsp_rfft(buf, n, 1);
     size_t nb = n / 2 + 1;
     double scale = 1.0 / (fs * U);
     psd_out[0] = (buf[0] * buf[0]) * scale;
@@ -293,10 +293,10 @@ size_t sqnr_periodogram(const double *x, size_t n, double fs, SqnrWindow win,
     return nb;
 }
 
-size_t sqnr_welch_psd(const double *x, size_t n, double fs, size_t seg,
-                      double overlap, SqnrWindow win, double *psd_out,
+size_t sqdsp_welch_psd(const double *x, size_t n, double fs, size_t seg,
+                      double overlap, SqdspWindow win, double *psd_out,
                       double *freq_out, double *scratch) {
-    if (!sqnr_is_pow2(seg) || seg > n || fs <= 0.0) return 0;
+    if (!sqdsp_is_pow2(seg) || seg > n || fs <= 0.0) return 0;
     if (overlap < 0.0) overlap = 0.0;
     if (overlap > 0.95) overlap = 0.95;
     size_t hop = (size_t)((1.0 - overlap) * (double)seg);
@@ -308,7 +308,7 @@ size_t sqnr_welch_psd(const double *x, size_t n, double fs, size_t seg,
     double *inner = scratch + 2 * nb;
     size_t count = 0;
     for (size_t start = 0; start + seg <= n; start += hop) {
-        sqnr_periodogram(x + start, seg, fs, win, seg_psd, seg_freq, inner);
+        sqdsp_periodogram(x + start, seg, fs, win, seg_psd, seg_freq, inner);
         for (size_t i = 0; i < nb; i++) psd_out[i] += seg_psd[i];
         count++;
     }
@@ -326,12 +326,12 @@ static size_t next_pow2(size_t n) {
     return p;
 }
 
-void sqnr_correlate(const double *x, size_t n, double *out, double *scratch) {
+void sqdsp_correlate(const double *x, size_t n, double *out, double *scratch) {
     size_t np2 = next_pow2(n) << 1;
     double *a = scratch;
     memset(a, 0, np2 * sizeof(double));
     for (size_t i = 0; i < n; i++) a[i] = x[i];
-    sqnr_realft(a, np2, 1);
+    sqdsp_rfft(a, np2, 1);
     /* Power spectrum then inverse — autocorrelation. */
     a[0] = a[0] * a[0];
     a[1] = a[1] * a[1];
@@ -340,12 +340,12 @@ void sqnr_correlate(const double *x, size_t n, double *out, double *scratch) {
         a[2 * k] = re * re + im * im;
         a[2 * k + 1] = 0.0;
     }
-    sqnr_realft(a, np2, -1);
+    sqdsp_rfft(a, np2, -1);
     double norm = 1.0 / (double)np2;
     for (size_t i = 0; i < n; i++) out[i] = a[i] * norm;
 }
 
-double sqnr_parabolic_bin(const double *mag, size_t nbins, size_t k) {
+double sqdsp_parabolic_bin(const double *mag, size_t nbins, size_t k) {
     if (k == 0 || k + 1 >= nbins) return (double)k;
     double alpha = mag[k - 1], beta = mag[k], gamma = mag[k + 1];
     double denom = alpha - 2.0 * beta + gamma;
@@ -353,12 +353,12 @@ double sqnr_parabolic_bin(const double *mag, size_t nbins, size_t k) {
     return (double)k + 0.5 * (alpha - gamma) / denom;
 }
 
-double sqnr_peak_frequency(const double *mag, const double *freq, size_t nbins) {
+double sqdsp_peak_frequency(const double *mag, const double *freq, size_t nbins) {
     if (nbins < 3) return 0.0;
     size_t kmax = 1;
     for (size_t k = 2; k < nbins - 1; k++)
         if (mag[k] > mag[kmax]) kmax = k;
-    double bin = sqnr_parabolic_bin(mag, nbins, kmax);
+    double bin = sqdsp_parabolic_bin(mag, nbins, kmax);
     /* linear interpolate frequency axis */
     size_t i0 = (size_t)bin;
     if (i0 + 1 >= nbins) return freq[nbins - 1];
@@ -366,12 +366,12 @@ double sqnr_peak_frequency(const double *mag, const double *freq, size_t nbins) 
     return freq[i0] * (1.0 - frac) + freq[i0 + 1] * frac;
 }
 
-double sqnr_pitch_autocorr(const double *x, size_t n, double fs, double fmin,
+double sqdsp_pitch_autocorr(const double *x, size_t n, double fs, double fmin,
                            double fmax, double *scratch) {
     if (fmin <= 0 || fmax <= fmin || fs <= 0) return 0.0;
     double *ac = scratch;
     double *tmp = scratch + n;
-    sqnr_correlate(x, n, ac, tmp);
+    sqdsp_correlate(x, n, ac, tmp);
     size_t lag_min = (size_t)(fs / fmax);
     size_t lag_max = (size_t)(fs / fmin);
     if (lag_max >= n) lag_max = n - 1;
@@ -390,7 +390,7 @@ double sqnr_pitch_autocorr(const double *x, size_t n, double fs, double fmin,
     return fs / (double)best;
 }
 
-double sqnr_thd(const double *mag, const double *freq, size_t nbins, double fund_hz,
+double sqdsp_thd(const double *mag, const double *freq, size_t nbins, double fund_hz,
                 int max_harmonic) {
     if (fund_hz <= 0 || nbins < 2 || max_harmonic < 2) return 0.0;
     double fund_p = 0.0, harm_p = 0.0;
@@ -413,7 +413,7 @@ double sqnr_thd(const double *mag, const double *freq, size_t nbins, double fund
     return sqrt(harm_p / fund_p);
 }
 
-double sqnr_snr_db(const double *psd, const double *freq, size_t nbins, double fund_hz,
+double sqdsp_snr_db(const double *psd, const double *freq, size_t nbins, double fund_hz,
                    double bw_hz) {
     double sig = 0.0, noise = 0.0;
     for (size_t i = 1; i < nbins; i++) {
@@ -424,7 +424,7 @@ double sqnr_snr_db(const double *psd, const double *freq, size_t nbins, double f
     return 10.0 * log10(sig / noise);
 }
 
-int sqnr_linfit(const double *x, const double *y, size_t n, double *a, double *b) {
+int sqdsp_linfit(const double *x, const double *y, size_t n, double *a, double *b) {
     if (n < 2) return -1;
     double sx = 0, sy = 0, sxx = 0, sxy = 0;
     for (size_t i = 0; i < n; i++) {
@@ -440,13 +440,13 @@ int sqnr_linfit(const double *x, const double *y, size_t n, double *a, double *b
     return 0;
 }
 
-SqnrWindow sqnr_window_parse(const char *name) {
-    if (!name) return SQNR_WIN_HANN;
-    if (!strcmp(name, "rect") || !strcmp(name, "rectangular")) return SQNR_WIN_RECT;
-    if (!strcmp(name, "hann") || !strcmp(name, "hanning")) return SQNR_WIN_HANN;
-    if (!strcmp(name, "hamming")) return SQNR_WIN_HAMMING;
-    if (!strcmp(name, "blackman")) return SQNR_WIN_BLACKMAN;
-    if (!strcmp(name, "kaiser")) return SQNR_WIN_KAISER;
-    if (!strcmp(name, "flattop")) return SQNR_WIN_FLATTOP;
-    return SQNR_WIN_HANN;
+SqdspWindow sqdsp_window_parse(const char *name) {
+    if (!name) return SQDSP_WIN_HANN;
+    if (!strcmp(name, "rect") || !strcmp(name, "rectangular")) return SQDSP_WIN_RECT;
+    if (!strcmp(name, "hann") || !strcmp(name, "hanning")) return SQDSP_WIN_HANN;
+    if (!strcmp(name, "hamming")) return SQDSP_WIN_HAMMING;
+    if (!strcmp(name, "blackman")) return SQDSP_WIN_BLACKMAN;
+    if (!strcmp(name, "kaiser")) return SQDSP_WIN_KAISER;
+    if (!strcmp(name, "flattop")) return SQDSP_WIN_FLATTOP;
+    return SQDSP_WIN_HANN;
 }

@@ -1,15 +1,12 @@
-# SquirrelSound numerics
+# SquirrelSound numerics (`sqdsp`)
 
-The `sqnr` library is an **original** spectral toolkit. The *feature menu*
-(FFT, windows, Welch PSD, pitch, THD) is inspired by the kind of chapter
-set you would find in a Numerical Recipes–style DSP book. The **code** is
-not taken from that book.
+Original spectral DSP used by SquirrelSound — clean-room Cooley–Tukey FFT,
+windows, Welch PSD, pitch, and THD helpers.
 
 ## Core transforms
 
-- `sqnr_four1` — 0-based iterative radix-2 complex FFT with precomputed
-  twiddle tables (Cooley–Tukey; clean-room)
-- `sqnr_realft` — real input via even/odd split + half-length complex FFT,
+- `sqdsp_fft` — 0-based iterative radix-2 complex FFT with precomputed twiddles
+- `sqdsp_rfft` — real input via even/odd split + half-length complex FFT,
   packed Hermitian output (`data[0]`=DC, `data[1]`=Nyquist, then Re/Im pairs)
 
 ## Windows / estimators
@@ -21,5 +18,5 @@ not taken from that book.
 - Pitch, THD, SNR helpers
 - Linear fit utility
 
-`tests/test_sqnr.c` checks the complex FFT against a naive DFT on random
+`tests/test_sqdsp.c` checks the complex FFT against a naive DFT on random
 input, plus impulse / tone / WAV round-trips.

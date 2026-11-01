@@ -5,7 +5,7 @@ import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.math.sqrt
 
-/** In-place radix-2 Cooley–Tukey FFT (clean-room; not NR book code). */
+/** In-place radix-2 Cooley–Tukey FFT (clean-room). */
 object Fft {
     fun forward(re: FloatArray, im: FloatArray) {
         val n = re.size

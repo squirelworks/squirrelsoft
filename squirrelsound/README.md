@@ -1,12 +1,8 @@
 # SquirrelSound
 
-Spectral sound analyzer built with an original **Numerical Recipes–style**
-numerics core (`sqnr/`): radix-2 FFT, real FFT packing, windowed periodograms,
-Welch PSD, autocorrelation, peak picking, THD, and SNR estimates.
-
-> Important: this does **not** ship copyrighted *Numerical Recipes* book source.
-> Algorithms are standard spectral methods reimplemented from first principles,
-> organized the way an NR-flavored DSP toolkit would be.
+Spectral sound analyzer with an original DSP core (`sqdsp`): radix-2 FFT,
+packed real FFT, windowed periodograms, Welch PSD, autocorrelation, peak
+picking, THD, and SNR estimates.
 
 ## Features
 

@@ -1,4 +1,4 @@
-#include "sqnr.h"
+#include "sqdsp.h"
 #include "synth.h"
 #include "wavio.h"
 
@@ -19,7 +19,7 @@ static void expect(int c, const char *m) {
 #define M_PI 3.14159265358979323846
 #endif
 
-/* Slow O(n²) DFT reference — independent of sqnr_four1. */
+/* Slow O(n²) DFT reference — independent of sqdsp_fft. */
 static void naive_dft(const double *re_in, const double *im_in, size_t n,
                       double *re_out, double *im_out, int forward) {
     double sign = forward ? -1.0 : 1.0;
@@ -50,24 +50,24 @@ static void test_fft_vs_naive_dft(void) {
         data[2 * i + 1] = im_in[i];
     }
     naive_dft(re_in, im_in, n, re_ref, im_ref, 1);
-    sqnr_four1(data, n, 1);
+    sqdsp_fft(data, n, 1);
     double err = 0.0;
     for (size_t i = 0; i < n; i++) {
         double dr = data[2 * i] - re_ref[i];
         double di = data[2 * i + 1] - im_ref[i];
         err += dr * dr + di * di;
     }
-    expect(err < 1e-16 * (double)n, "four1 matches naive DFT on random input");
+    expect(err < 1e-16 * (double)n, "fft matches naive DFT on random input");
 
     /* Inverse: FFT^{-1}(FFT(x)) / n ≈ x */
-    sqnr_four1(data, n, -1);
+    sqdsp_fft(data, n, -1);
     err = 0.0;
     for (size_t i = 0; i < n; i++) {
         double dr = data[2 * i] / (double)n - re_in[i];
         double di = data[2 * i + 1] / (double)n - im_in[i];
         err += dr * dr + di * di;
     }
-    expect(err < 1e-16 * (double)n, "four1 inverse round-trip");
+    expect(err < 1e-16 * (double)n, "fft inverse round-trip");
 }
 
 static void test_fft_impulse(void) {
@@ -75,19 +75,19 @@ static void test_fft_impulse(void) {
     double x[16];
     memset(x, 0, sizeof(x));
     x[0] = 1.0;
-    sqnr_realft(x, n, 1);
+    sqdsp_rfft(x, n, 1);
     /* Unit impulse ⇒ flat spectrum: DC/Nyquist = 1, other bins Re=1 Im=0. */
-    expect(fabs(x[0] - 1.0) < 1e-9, "realft impulse DC");
-    expect(fabs(x[1] - 1.0) < 1e-9, "realft impulse Nyquist");
+    expect(fabs(x[0] - 1.0) < 1e-9, "rfft impulse DC");
+    expect(fabs(x[1] - 1.0) < 1e-9, "rfft impulse Nyquist");
     for (size_t k = 1; k < n / 2; k++) {
         expect(fabs(x[2 * k] - 1.0) < 1e-9 && fabs(x[2 * k + 1]) < 1e-9,
-               "realft impulse flat bin");
+               "rfft impulse flat bin");
     }
     /* Round-trip */
-    sqnr_realft(x, n, -1);
+    sqdsp_rfft(x, n, -1);
     for (size_t i = 0; i < n; i++) x[i] /= (double)(n / 2);
-    expect(fabs(x[0] - 1.0) < 1e-9, "realft inverse impulse");
-    for (size_t i = 1; i < n; i++) expect(fabs(x[i]) < 1e-9, "realft inverse zeros");
+    expect(fabs(x[0] - 1.0) < 1e-9, "rfft inverse impulse");
+    for (size_t i = 1; i < n; i++) expect(fabs(x[i]) < 1e-9, "rfft inverse zeros");
 }
 
 static void test_tone_peak(void) {
@@ -98,17 +98,17 @@ static void test_tone_peak(void) {
     double *psd = (double *)malloc((n / 2 + 1) * sizeof(double));
     double *freq = (double *)malloc((n / 2 + 1) * sizeof(double));
     double *scratch = (double *)malloc(n * 3 * sizeof(double));
-    size_t nb = sqnr_periodogram(x, n, fs, SQNR_WIN_HANN, psd, freq, scratch);
+    size_t nb = sqdsp_periodogram(x, n, fs, SQDSP_WIN_HANN, psd, freq, scratch);
     double *mag = (double *)malloc(nb * sizeof(double));
     for (size_t i = 0; i < nb; i++) mag[i] = sqrt(psd[i]);
-    double peak = sqnr_peak_frequency(mag, freq, nb);
+    double peak = sqdsp_peak_frequency(mag, freq, nb);
     expect(fabs(peak - 440.0) < 2.0, "440 Hz peak within 2 Hz");
 
     size_t np2 = 1;
     while (np2 < n) np2 <<= 1;
     np2 <<= 1;
     double *acscratch = (double *)malloc((n + np2 + 8) * sizeof(double));
-    double f0 = sqnr_pitch_autocorr(x, n, fs, 80.0, 800.0, acscratch);
+    double f0 = sqdsp_pitch_autocorr(x, n, fs, 80.0, 800.0, acscratch);
     expect(fabs(f0 - 440.0) < 3.0, "autocorr pitch near 440");
 
     free(x);
@@ -127,10 +127,10 @@ static void test_thd_harmonics(void) {
     double *psd = (double *)malloc((n / 2 + 1) * sizeof(double));
     double *freq = (double *)malloc((n / 2 + 1) * sizeof(double));
     double *scratch = (double *)malloc(n * 3 * sizeof(double));
-    size_t nb = sqnr_periodogram(x, n, fs, SQNR_WIN_BLACKMAN, psd, freq, scratch);
+    size_t nb = sqdsp_periodogram(x, n, fs, SQDSP_WIN_BLACKMAN, psd, freq, scratch);
     double *mag = (double *)malloc(nb * sizeof(double));
     for (size_t i = 0; i < nb; i++) mag[i] = sqrt(psd[i]);
-    double thd = sqnr_thd(mag, freq, nb, 500.0, 5);
+    double thd = sqdsp_thd(mag, freq, nb, 500.0, 5);
     /* harmonics 1/2 + 1/3 amplitude => power (0.5^2 + ~0.333^2) / 1^2 */
     expect(thd > 0.4 && thd < 0.8, "thd in expected band for 1/h series");
     free(x);
@@ -145,7 +145,7 @@ static void test_wav_roundtrip(void) {
     size_t n = 1000;
     double *x = (double *)malloc(n * sizeof(double));
     synth_tone(x, n, fs, 1000.0, 1, 0.25);
-    const char *path = "/tmp/sqnr_wav_test.wav";
+    const char *path = "/tmp/sqdsp_wav_test.wav";
     expect(wav_write_pcm16(path, x, n, (uint32_t)fs) == 0, "wav write");
     WavBuffer w;
     expect(wav_read(path, &w) == 0, "wav read");
@@ -166,7 +166,7 @@ static void test_welch_and_linfit(void) {
     double *psd = (double *)malloc(nb * sizeof(double));
     double *freq = (double *)malloc(nb * sizeof(double));
     double *scratch = (double *)malloc((nb * 2 + seg * 3) * sizeof(double));
-    size_t got = sqnr_welch_psd(x, n, fs, seg, 0.5, SQNR_WIN_HANN, psd, freq, scratch);
+    size_t got = sqdsp_welch_psd(x, n, fs, seg, 0.5, SQDSP_WIN_HANN, psd, freq, scratch);
     expect(got == nb, "welch bins");
     size_t kmax = 1;
     for (size_t k = 1; k < got; k++)
@@ -174,7 +174,7 @@ static void test_welch_and_linfit(void) {
     expect(fabs(freq[kmax] - 250.0) < 5.0, "welch peak ~250");
 
     double xs[4] = {0, 1, 2, 3}, ys[4] = {1, 3, 5, 7}, a, b;
-    expect(sqnr_linfit(xs, ys, 4, &a, &b) == 0, "linfit");
+    expect(sqdsp_linfit(xs, ys, 4, &a, &b) == 0, "linfit");
     expect(fabs(a - 1.0) < 1e-9 && fabs(b - 2.0) < 1e-9, "linfit coeffs");
     free(x);
     free(psd);
@@ -193,6 +193,6 @@ int main(void) {
         fprintf(stderr, "%d failure(s)\n", failures);
         return 1;
     }
-    puts("squirrelsound / sqnr tests ok");
+    puts("squirrelsound / sqdsp tests ok");
     return 0;
 }

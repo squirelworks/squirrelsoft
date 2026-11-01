@@ -12,7 +12,7 @@ libraries.
 | `squirrelstation/` | **SquirrelStation** | MicroStation-class 3D design / DGN-style CAD |
 | `squirrelcad/` | **SquirrelCAD** | AutoCAD-class 2D/3D drafting |
 | `squirrelgnss/` | **SquirrelGNSS** | Continuous satellite / GPS land surveying |
-| `squirrelsound/` | **SquirrelSound** | Numerical spectral sound analyzer + live UI |
+| `squirrelsound/` | **SquirrelSound** | Spectral sound analyzer (`sqdsp`) + live UI |
 | `squirrelfield/` | **SquirrelField** | Phone PWA: live spectrum, QR reader, Suica UI |
 | `squirrelsuica/` | **SquirrelSuica** | FeliCa Suica/PASMO reader (USB + Android) |
 

@@ -1,7 +1,7 @@
 #ifndef LIVE_ENGINE_H
 #define LIVE_ENGINE_H
 
-#include "sqnr.h"
+#include "sqdsp.h"
 
 #include <stddef.h>
 
@@ -10,7 +10,7 @@
 
 typedef struct {
     size_t fft_size;
-    SqnrWindow window;
+    SqdspWindow window;
     double sample_rate;
     int max_hold;
     double db_min; /* e.g. -90 */
