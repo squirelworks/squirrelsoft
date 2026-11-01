@@ -20,6 +20,7 @@ class SuicaParseTest {
         assertEquals(16, card.idm.length)
         assertTrue(card.history.isNotEmpty())
         assertNotNull(card.history.first().date)
+        assertEquals("乃木坂", card.history.first().enterStation)
     }
 
     @Test
