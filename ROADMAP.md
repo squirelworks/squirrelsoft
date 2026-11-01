@@ -40,9 +40,10 @@
 - Live SDL spectrum/waterfall + ALSA mic (done); optimize waterfall blit
 - Multi-resolution FFT (Spectroid-style decimations)
 
-### SquirrelField
+### SquirrelQR
 
 - Phone QR / barcode reader only (CameraX + ML Kit; PWA BarcodeDetector) (done)
+- Rebranded from SquirrelField → SquirrelQR (`works.squirrel.qr`); Play needs a new listing
 - Keep specialized — do not re-bundle Sound or Suica features
 
 ### SquirrelSuica

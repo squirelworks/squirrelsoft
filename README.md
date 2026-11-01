@@ -13,7 +13,7 @@ libraries.
 | `squirrelcad/` | **SquirrelCAD** | AutoCAD-class 2D/3D drafting |
 | `squirrelgnss/` | **SquirrelGNSS** | Continuous satellite / GPS land surveying |
 | `squirrelsound/` | **SquirrelSound** | Spectral sound analyzer (`sqdsp`) + phone Spectroid UI |
-| `squirrelfield/` | **SquirrelField** | Phone QR / barcode reader only |
+| `squirrelqr/` | **SquirrelQR** | Phone QR code reader only |
 | `squirrelsuica/` | **Suica Reader (SquirrelSuica)** | FeliCa Suica/PASMO reader with station-name history (USB + Android) |
 
 ## Build
@@ -23,14 +23,14 @@ Live spectrum UI optionally uses SDL2 + ALSA (`pkg-config sdl2 alsa`).
 
 ```bash
 make            # build C programs
-make test       # C + field/Suica smoke tests
+make test       # C + QR/Suica smoke tests
 make clean
 ```
 
-Phone field UI:
+QR code reader PWA:
 
 ```bash
-make -C squirrelfield serve   # http://0.0.0.0:8765/
+make -C squirrelqr serve   # http://0.0.0.0:8765/
 ```
 
 Suica demo (no card reader required):
@@ -50,7 +50,7 @@ squirrelsoft/
 ├── squirrelcad/
 ├── squirrelgnss/
 ├── squirrelsound/     # FFT analyzer + live mic Spectroid UI (desktop + Android)
-├── squirrelfield/     # phone QR / barcode reader (PWA + Android)
+├── squirrelqr/        # phone QR code reader (PWA + Android)
 └── squirrelsuica/     # FeliCa reader only (nfcpy + Android NFC-F)
 ```
 

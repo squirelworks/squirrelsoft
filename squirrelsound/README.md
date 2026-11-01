@@ -16,7 +16,7 @@ picking, THD, and SNR estimates.
 - **Live mode**: demo / WAV loop / ALSA mic → SDL spectrum + waterfall
   (pinch/wheel zoom, max-hold, peak marker) or `--headless` for CI
 - **Android phone app** under `android/` (`works.squirrel.sound`) — mic FFT +
-  waterfall; also Field PWA spectrum at `../squirrelfield/web/spectrum.html`
+  waterfall (QR scanning lives in `../squirrelqr/`)
 
 ## Build
 
