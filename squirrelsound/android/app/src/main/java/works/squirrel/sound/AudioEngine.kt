@@ -1,11 +1,16 @@
 package works.squirrel.sound
 
+import android.content.Context
+import android.media.AudioAttributes
+import android.media.AudioFocusRequest
 import android.media.AudioFormat
+import android.media.AudioManager
 import android.media.AudioRecord
 import android.media.MediaRecorder
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.os.PowerManager
 import kotlin.math.PI
 import kotlin.math.log10
 import kotlin.math.sin
@@ -19,9 +24,11 @@ import kotlin.math.sqrt
  * Implementation is original — no Spectroid source was used.
  *
  * Prefers [MediaRecorder.AudioSource.UNPROCESSED] then MIC so the graph is not
- * stuck on a voice-recognition AGC path.
+ * stuck on a voice-recognition AGC path. Transient AudioRecord failures restart
+ * capture instead of permanently stopping the UI feed.
  */
 class AudioEngine(
+    private val appContext: Context,
     private val onFrame: (SpectrumFrame) -> Unit,
     private val onStatus: (msg: String) -> Unit = {}
 ) {
@@ -45,10 +52,30 @@ class AudioEngine(
     @Volatile var lastError: String? = null
         private set
 
+    private val audioManager =
+        appContext.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+    private var focusRequest: AudioFocusRequest? = null
+    private var wakeLock: PowerManager.WakeLock? = null
+
+    private val focusChangeListener = AudioManager.OnAudioFocusChangeListener { change ->
+        when (change) {
+            AudioManager.AUDIOFOCUS_LOSS,
+            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT,
+            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> {
+                // Keep reading; OEM may reclaim briefly. Restart path recovers.
+                postStatus("Audio focus lost ($change) — keeping capture")
+            }
+            AudioManager.AUDIOFOCUS_GAIN -> {
+                postStatus("Audio focus regained")
+            }
+        }
+    }
+
     fun start() {
         stop()
         lastError = null
         running = true
+        acquireKeepAlive()
         val size = fftSize
         val hop = hopMs
         thread = Thread({ loop(size, hop) }, "sq-sound-fft").also {
@@ -68,7 +95,73 @@ class AudioEngine(
                 t.join(250)
             }
         }
+        releaseKeepAlive()
         activeLabel = "idle"
+    }
+
+    private fun acquireKeepAlive() {
+        requestAudioFocus()
+        try {
+            val pm = appContext.getSystemService(Context.POWER_SERVICE) as PowerManager
+            val wl = pm.newWakeLock(
+                PowerManager.PARTIAL_WAKE_LOCK,
+                "SquirrelSound:capture"
+            )
+            wl.setReferenceCounted(false)
+            wl.acquire(60 * 60 * 1000L) // capped; stop() always releases
+            wakeLock = wl
+        } catch (_: Exception) {
+            wakeLock = null
+        }
+    }
+
+    private fun releaseKeepAlive() {
+        abandonAudioFocus()
+        try {
+            wakeLock?.let { if (it.isHeld) it.release() }
+        } catch (_: Exception) {
+        }
+        wakeLock = null
+    }
+
+    private fun requestAudioFocus() {
+        try {
+            if (Build.VERSION.SDK_INT >= 26) {
+                val attrs = AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_MEDIA)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+                    .build()
+                val req = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
+                    .setAudioAttributes(attrs)
+                    .setOnAudioFocusChangeListener(focusChangeListener, main)
+                    .setAcceptsDelayedFocusGain(true)
+                    .build()
+                focusRequest = req
+                audioManager.requestAudioFocus(req)
+            } else {
+                @Suppress("DEPRECATION")
+                audioManager.requestAudioFocus(
+                    focusChangeListener,
+                    AudioManager.STREAM_MUSIC,
+                    AudioManager.AUDIOFOCUS_GAIN
+                )
+            }
+        } catch (_: Exception) {
+            focusRequest = null
+        }
+    }
+
+    private fun abandonAudioFocus() {
+        try {
+            if (Build.VERSION.SDK_INT >= 26) {
+                focusRequest?.let { audioManager.abandonAudioFocusRequest(it) }
+            } else {
+                @Suppress("DEPRECATION")
+                audioManager.abandonAudioFocus(focusChangeListener)
+            }
+        } catch (_: Exception) {
+        }
+        focusRequest = null
     }
 
     private fun openMic(sampleRate: Int, bufBytes: Int): Pair<AudioRecord, String>? {
@@ -112,6 +205,45 @@ class AudioEngine(
         return null
     }
 
+    private fun releaseRecorder(rec: AudioRecord?) {
+        if (rec == null) return
+        try {
+            rec.stop()
+        } catch (_: Exception) {
+        }
+        try {
+            rec.release()
+        } catch (_: Exception) {
+        }
+    }
+
+    /** Open + startRecording; returns null if all candidates fail. */
+    private fun startMicSession(): Triple<AudioRecord, String, Int>? {
+        for (sr in intArrayOf(48000, 44100, 16000)) {
+            val min = AudioRecord.getMinBufferSize(
+                sr,
+                AudioFormat.CHANNEL_IN_MONO,
+                AudioFormat.ENCODING_PCM_16BIT
+            )
+            if (min <= 0) continue
+            val opened = openMic(sr, maxOf(min * 2, fftSize * 8))
+            if (opened != null) {
+                val (rec, label) = opened
+                try {
+                    rec.startRecording()
+                    if (rec.recordingState != AudioRecord.RECORDSTATE_RECORDING) {
+                        throw IllegalStateException("recordingState=${rec.recordingState}")
+                    }
+                    return Triple(rec, label, sr)
+                } catch (e: Exception) {
+                    releaseRecorder(rec)
+                    lastError = "Mic start failed: ${e.message}"
+                }
+            }
+        }
+        return null
+    }
+
     private fun postStatus(msg: String) {
         main.post { onStatus(msg) }
     }
@@ -131,60 +263,36 @@ class AudioEngine(
         val ring = RingBuffer(size * 8)
         val wantMic = source == Source.MIC
         var useMic = wantMic
+        var consecutiveRestarts = 0
+        val maxRestartsBeforeBackoff = 8
 
         try {
             if (useMic) {
-                for (sr in intArrayOf(48000, 44100, 16000)) {
-                    val min = AudioRecord.getMinBufferSize(
-                        sr,
-                        AudioFormat.CHANNEL_IN_MONO,
-                        AudioFormat.ENCODING_PCM_16BIT
-                    )
-                    if (min <= 0) continue
-                    val opened = openMic(sr, maxOf(min * 2, size * 8))
-                    if (opened != null) {
-                        recorder = opened.first
-                        activeLabel = opened.second
-                        sampleRate = sr
-                        break
-                    }
-                }
-                if (recorder == null) {
+                val session = startMicSession()
+                if (session == null) {
                     useMic = false
                     activeLabel = "mic-failed"
                     lastError = lastError ?: "Microphone unavailable"
                     postStatus(lastError!!)
-                    if (wantMic) {
-                        // Do not silently substitute a demo tone when the user asked for mic.
+                    if (!wantMic) {
+                        // Demo was not requested either — nothing to do.
                         return
                     }
+                    // Keep the capture thread alive and retry; do not fall back to demo.
                 } else {
-                    try {
-                        recorder.startRecording()
-                        if (recorder.recordingState != AudioRecord.RECORDSTATE_RECORDING) {
-                            throw IllegalStateException("recordingState=${recorder.recordingState}")
-                        }
-                        postStatus("Capturing via $activeLabel @ ${sampleRate} Hz")
-                    } catch (e: Exception) {
-                        try {
-                            recorder.release()
-                        } catch (_: Exception) {
-                        }
-                        recorder = null
-                        useMic = false
-                        activeLabel = "mic-failed"
-                        lastError = "Mic start failed: ${e.message}"
-                        postStatus(lastError!!)
-                        if (wantMic) return
-                    }
+                    recorder = session.first
+                    activeLabel = session.second
+                    sampleRate = session.third
+                    consecutiveRestarts = 0
+                    postStatus("Capturing via $activeLabel @ ${sampleRate} Hz")
                 }
             } else {
                 activeLabel = "demo 440 Hz"
                 postStatus("Demo tone 440 Hz")
             }
 
-            val hop = ((sampleRate * hopMsCfg) / 1000).coerceIn(size / 16, size)
-            val demoScratch = FloatArray(hop.coerceAtLeast(64))
+            var hop = ((sampleRate * hopMsCfg) / 1000).coerceIn(size / 16, size)
+            val demoScratch = FloatArray(size.coerceAtLeast(64))
 
             while (running) {
                 if (useMic && recorder != null) {
@@ -198,13 +306,46 @@ class AudioEngine(
                             n == AudioRecord.ERROR_BAD_VALUE ||
                             n == AudioRecord.ERROR_DEAD_OBJECT ||
                             n == AudioRecord.ERROR -> {
-                            activeLabel = "mic-failed"
-                            lastError = "Mic read error ($n)"
+                            lastError = "Mic read error ($n) — restarting"
                             postStatus(lastError!!)
-                            break
+                            releaseRecorder(recorder)
+                            recorder = null
+                            consecutiveRestarts++
+                            val backoffMs = (50L * consecutiveRestarts).coerceAtMost(1500L)
+                            try {
+                                Thread.sleep(backoffMs)
+                            } catch (_: InterruptedException) {
+                                break
+                            }
+                            if (!running) break
+                            val session = startMicSession()
+                            if (session == null) {
+                                activeLabel = "mic-failed"
+                                lastError = lastError ?: "Microphone unavailable after restart"
+                                postStatus(lastError!!)
+                                // Keep trying while the engine is supposed to run.
+                                if (consecutiveRestarts >= maxRestartsBeforeBackoff) {
+                                    try {
+                                        Thread.sleep(2000)
+                                    } catch (_: InterruptedException) {
+                                        break
+                                    }
+                                    consecutiveRestarts = maxRestartsBeforeBackoff / 2
+                                }
+                                continue
+                            }
+                            recorder = session.first
+                            activeLabel = session.second
+                            sampleRate = session.third
+                            hop = ((sampleRate * hopMsCfg) / 1000).coerceIn(size / 16, size)
+                            ring.clear()
+                            if (consecutiveRestarts <= 2) {
+                                postStatus("Mic restarted via $activeLabel @ ${sampleRate} Hz")
+                            }
+                            continue
                         }
                         n <= 0 -> {
-                            // Spurious empty read — brief yield, do not FFT zeros.
+                            // Spurious empty / short read — brief yield, do not FFT zeros.
                             try {
                                 Thread.sleep(2)
                             } catch (_: InterruptedException) {
@@ -213,17 +354,37 @@ class AudioEngine(
                             continue
                         }
                         else -> {
+                            consecutiveRestarts = 0
                             for (i in 0 until n) {
                                 floatChunk[i] = shortBuf[i] / 32768f
                             }
                             ring.write(floatChunk, 0, n)
                         }
                     }
+                } else if (wantMic && !useMic) {
+                    // Waiting to recover a failed initial open.
+                    try {
+                        Thread.sleep(500)
+                    } catch (_: InterruptedException) {
+                        break
+                    }
+                    if (!running) break
+                    val session = startMicSession()
+                    if (session != null) {
+                        recorder = session.first
+                        activeLabel = session.second
+                        sampleRate = session.third
+                        hop = ((sampleRate * hopMsCfg) / 1000).coerceIn(size / 16, size)
+                        useMic = true
+                        ring.clear()
+                        postStatus("Mic recovered via $activeLabel @ ${sampleRate} Hz")
+                    }
+                    continue
                 } else {
                     // Demo: push ~hop samples of a sine at wall-clock pace.
                     val sr = sampleRate.toDouble()
                     val f = demoHz.toDouble()
-                    val count = demoScratch.size
+                    val count = hop.coerceAtLeast(64).coerceAtMost(demoScratch.size)
                     for (i in 0 until count) {
                         demoScratch[i] = (0.25 * sin(phase)).toFloat()
                         phase += 2.0 * PI * f / sr
@@ -288,14 +449,7 @@ class AudioEngine(
                 }
             }
         } finally {
-            try {
-                recorder?.stop()
-            } catch (_: Exception) {
-            }
-            try {
-                recorder?.release()
-            } catch (_: Exception) {
-            }
+            releaseRecorder(recorder)
         }
     }
 }
