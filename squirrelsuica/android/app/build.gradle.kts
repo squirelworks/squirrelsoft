@@ -7,14 +7,14 @@ plugins {
 
 android {
     namespace = "works.squirrel.suica"
-    compileSdk = 34
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "works.squirrel.suica"
         minSdk = 26
-        targetSdk = 34
-        versionCode = 3
-        versionName = "0.0.3"
+        targetSdk = 36
+        versionCode = 4
+        versionName = "0.0.4"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 

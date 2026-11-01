@@ -7,14 +7,14 @@ plugins {
 
 android {
     namespace = "works.squirrel.qr"
-    compileSdk = 34
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "works.squirrel.qr"
         minSdk = 26
-        targetSdk = 34
-        versionCode = 3
-        versionName = "0.1.0"
+        targetSdk = 36
+        versionCode = 5
+        versionName = "0.1.2"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
