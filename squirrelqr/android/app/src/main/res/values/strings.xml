@@ -5,8 +5,16 @@
     <string name="qr_title">QR reader</string>
     <string name="copy">Copy</string>
     <string name="copied">Copied</string>
-    <string name="rescan">Clear</string>
+    <string name="open_link">Open link</string>
+    <string name="last_read">Last read</string>
+    <string name="history_title">History</string>
+    <string name="clear_history">Clear</string>
+    <string name="history_cleared">History cleared</string>
+    <string name="history_empty">No scans yet</string>
+    <string name="qr_empty">—</string>
     <string name="qr_hint">Point the camera at a QR or barcode</string>
-    <string name="qr_found">Decoded — tap Copy, or Clear for the next code</string>
+    <string name="qr_found">Detected — open, copy, or keep scanning</string>
     <string name="camera_permission">Camera permission required for QR scanning</string>
+    <string name="open_failed">Could not open link</string>
+    <string name="link_badge">Link</string>
 </resources>
