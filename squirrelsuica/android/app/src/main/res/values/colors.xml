@@ -9,4 +9,5 @@
     <color name="ok">#5DFFA8</color>
     <color name="danger">#FF5A7A</color>
     <color name="suica_green">#00A040</color>
+    <color name="ic_launcher_background">#00A040</color>
 </resources>
