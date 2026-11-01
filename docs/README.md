@@ -14,6 +14,10 @@ jsDelivr works without GitHub Pages. Use the **`main`** tip (stable while files 
 Paste each URL in Play Console → **Policy and programs → App content → Privacy policy**.
 The Android Publisher API cannot set the privacy-policy field for Play-hosted apps.
 
+**Full App content answers** (privacy, sign-in, ads, content rating, target audience,
+data safety, government, financial features, health): see
+[`play-app-content-checklist.md`](play-app-content-checklist.md).
+
 **Contact website** (store listing / `edits.details`) should be the repo URL
 `https://github.com/squirelworks/squirrelsoft`, not the privacy HTML URL.
 `scripts/play_formup.py` sets contact email + website via API; privacy URLs are printed for Console paste.
