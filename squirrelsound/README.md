@@ -19,7 +19,8 @@ Welch PSD, autocorrelation, peak picking, THD, and SNR estimates.
 - Synthetic tone / chirp / noise generators for self-tests
 - **Live mode**: demo / WAV loop / ALSA mic → SDL spectrum + waterfall
   (pinch/wheel zoom, max-hold, peak marker) or `--headless` for CI
-- Phone mic UI: see `../squirrelfield/web/spectrum.html`
+- **Android phone app** under `android/` (`works.squirrel.sound`) — mic FFT +
+  waterfall; also Field PWA spectrum at `../squirrelfield/web/spectrum.html`
 
 ## Build
 
@@ -27,6 +28,10 @@ Welch PSD, autocorrelation, peak picking, THD, and SNR estimates.
 make
 make test
 ./build/squirrelsound --help
+
+# Android APK (needs ANDROID_HOME / SDK 34)
+make android
+make android-test
 ```
 
 ## Examples

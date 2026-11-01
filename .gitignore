@@ -14,10 +14,10 @@
 !squirrelfield/web/icon.svg
 
 # Android local machine config / build junk
-squirrelsuica/android/local.properties
-squirrelsuica/android/.gradle/
-squirrelsuica/android/app/build/
-squirrelsuica/android/build/
+**/android/local.properties
+**/android/.gradle/
+**/android/app/build/
+**/android/build/
 *.apk
 *.aab
 *.ap_

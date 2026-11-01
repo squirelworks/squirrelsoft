@@ -20,9 +20,15 @@ LIB_OBJ = $(BUILD)/sqnr.o $(BUILD)/wavio.o $(BUILD)/synth.o $(BUILD)/spectrogram
 	$(BUILD)/live_audio.o $(BUILD)/live_engine.o $(BUILD)/live_view_headless.o \
 	$(BUILD)/live_view_sdl.o
 
-.PHONY: all test clean
+.PHONY: all test clean android android-test
 
 all: $(BUILD)/squirrelsound $(BUILD)/test_sqnr $(BUILD)/test_live
+
+android:
+	cd android && ./gradlew :app:assembleDebug
+
+android-test:
+	cd android && ./gradlew :app:testDebugUnitTest
 
 $(BUILD):
 	mkdir -p $(BUILD)
@@ -74,3 +80,4 @@ test: $(BUILD)/test_sqnr $(BUILD)/test_live $(BUILD)/squirrelsound
 
 clean:
 	rm -rf $(BUILD)
+	@cd android && ./gradlew clean >/dev/null 2>&1 || true
