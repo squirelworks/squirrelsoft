@@ -45,7 +45,7 @@
   btnNfc.addEventListener("click", async () => {
     if (!("NDEFReader" in window)) {
       status.textContent =
-        "Web NFC (NDEFReader) not available. Suica needs FeliCa/NFC-F — use squirrelsuica CLI with a PaSoRi, or the Android companion.";
+        "Web NFC unavailable. Install the SquirrelSuica Android APK (squirrelsuica/android) for real FeliCa reads, or use a USB PaSoRi.";
       return;
     }
     try {

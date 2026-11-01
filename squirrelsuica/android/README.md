@@ -1,22 +1,43 @@
-# SquirrelSuica Android (NFC-F)
+# SquirrelSuica — Android app
 
-Minimal Android companion to read Suica/PASMO-class FeliCa cards on a phone.
+Native Android app for **read-only Suica / PASMO-class FeliCa** balance and
+history, plus a CameraX / ML Kit QR scanner.
 
-## Why native Android?
+Browsers cannot read FeliCa balances over Web NFC. This app uses `NfcF`.
 
-Chrome Web NFC is NDEF-oriented and typically **cannot** read FeliCa transit
-balances. Android `NfcF` can.
+## Features
 
-## Import
+- Hold Suica/PASMO → IDm, balance (¥), journey/charge history
+- **Demo card** button (no NFC hardware required)
+- **QR scan** activity (back camera)
+- Read-only — no writes, no cloning
 
-1. Open Android Studio → Open this `android/` folder (or copy `app/` into a new project).
-2. Build the `app` module, install on a device with NFC.
-3. Hold a Suica/PASMO to the back of the phone.
+## Build (CLI)
 
-## Source
+Requires JDK 17+ and Android SDK 34.
 
-- `app/src/main/java/works/squirrel/suica/MainActivity.kt` — UI
-- `app/src/main/java/works/squirrel/suica/SuicaReader.kt` — NFC-F polling + balance read
-- `app/src/main/AndroidManifest.xml` — `NFC` permission + tech filter
+```bash
+export ANDROID_HOME=/path/to/android-sdk
+echo "sdk.dir=$ANDROID_HOME" > local.properties
+./gradlew assembleDebug test
+```
 
-Read-only. No writes.
+Debug APK:
+
+```text
+app/build/outputs/apk/debug/app-debug.apk
+```
+
+Install on a phone:
+
+```bash
+adb install -r app/build/outputs/apk/debug/app-debug.apk
+```
+
+## Android Studio
+
+Open this `android/` folder as a project, sync Gradle, Run on a device with NFC.
+
+## Package
+
+`works.squirrel.suica` — version `1.0.0`

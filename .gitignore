@@ -12,3 +12,13 @@
 # generated analysis artifacts (keep web icons)
 *.svg
 !squirrelfield/web/icon.svg
+
+# Android local machine config / build junk
+squirrelsuica/android/local.properties
+squirrelsuica/android/.gradle/
+squirrelsuica/android/app/build/
+squirrelsuica/android/build/
+*.apk
+*.aab
+*.ap_
+*.dex
