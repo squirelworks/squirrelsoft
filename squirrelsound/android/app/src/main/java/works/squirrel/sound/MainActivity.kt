@@ -14,11 +14,20 @@ class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
     private var engine: AudioEngine? = null
     private var maxHold = false
+    /** User intends live capture (auto-start / Start). Cleared only by Stop. */
+    private var wantLive = true
+    private var awaitingPermission = false
 
     private val micPermission =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
-            if (ok) startEngine(AudioEngine.Source.MIC)
-            else Toast.makeText(this, R.string.mic_permission, Toast.LENGTH_LONG).show()
+            awaitingPermission = false
+            if (ok) {
+                startEngine(AudioEngine.Source.MIC)
+            } else {
+                wantLive = false
+                binding.status.setText(R.string.status_mic_denied)
+                Toast.makeText(this, R.string.mic_permission, Toast.LENGTH_LONG).show()
+            }
         }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -31,8 +40,14 @@ class MainActivity : AppCompatActivity() {
             ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, sizes)
         binding.fftSize.setSelection(1)
 
-        binding.btnStart.setOnClickListener { requestStart() }
-        binding.btnStop.setOnClickListener { stopEngine() }
+        binding.btnStart.setOnClickListener {
+            wantLive = true
+            requestStart()
+        }
+        binding.btnStop.setOnClickListener {
+            wantLive = false
+            stopEngine()
+        }
         binding.btnHold.setOnClickListener {
             maxHold = !maxHold
             binding.spectrum.setMaxHold(maxHold)
@@ -40,15 +55,15 @@ class MainActivity : AppCompatActivity() {
         }
         binding.btnReset.setOnClickListener {
             binding.spectrum.resetHold()
+            binding.spectrum.clearWaterfall()
             binding.spectrum.fMin = 20f
             binding.spectrum.fMax = 8000f
             binding.spectrum.invalidate()
         }
 
         binding.btnStop.isEnabled = false
-
         // Spectroid-style: start the mic as soon as the app opens.
-        binding.root.post { requestStart() }
+        binding.root.post { if (wantLive) requestStart() }
     }
 
     private fun requestStart() {
@@ -59,7 +74,11 @@ class MainActivity : AppCompatActivity() {
         when {
             ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) ==
                 PackageManager.PERMISSION_GRANTED -> startEngine(AudioEngine.Source.MIC)
-            else -> micPermission.launch(Manifest.permission.RECORD_AUDIO)
+            else -> {
+                awaitingPermission = true
+                binding.status.setText(R.string.status_need_mic)
+                micPermission.launch(Manifest.permission.RECORD_AUDIO)
+            }
         }
     }
 
@@ -67,21 +86,31 @@ class MainActivity : AppCompatActivity() {
         stopEngine()
         val fft = binding.fftSize.selectedItem.toString().toInt()
         val eng = AudioEngine(
-            onFrame = { db, sr, peak ->
-                binding.spectrum.update(db, sr, peak)
+            onFrame = { frame ->
+                binding.spectrum.update(frame)
+                val ok = !frame.sourceLabel.startsWith("mic-failed")
+                binding.status.setTextColor(
+                    ContextCompat.getColor(this, if (ok) R.color.ok else R.color.warm)
+                )
                 binding.status.text = getString(
                     R.string.status_live,
-                    engine?.activeLabel ?: if (source == AudioEngine.Source.DEMO) "demo" else "mic",
-                    sr,
-                    fft,
-                    peak
+                    frame.sourceLabel,
+                    frame.sampleRate,
+                    frame.fftSize,
+                    frame.peakHz,
+                    frame.peakDb,
+                    frame.rmsDb
                 )
             },
-            onInfo = { msg ->
+            onStatus = { msg ->
+                binding.status.setTextColor(ContextCompat.getColor(this, R.color.warm))
+                binding.status.text = msg
                 Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
             }
         )
         eng.fftSize = fft
+        eng.hopMs = 20
+        eng.smooth = 0.30f
         eng.source = source
         eng.start()
         engine = eng
@@ -89,6 +118,11 @@ class MainActivity : AppCompatActivity() {
         binding.btnStop.isEnabled = true
         binding.fftSize.isEnabled = false
         binding.demoTone.isEnabled = false
+        binding.status.setTextColor(ContextCompat.getColor(this, R.color.ok))
+        binding.status.text = getString(
+            if (source == AudioEngine.Source.DEMO) R.string.status_starting_demo
+            else R.string.status_starting_mic
+        )
     }
 
     private fun stopEngine() {
@@ -98,18 +132,28 @@ class MainActivity : AppCompatActivity() {
         binding.btnStop.isEnabled = false
         binding.fftSize.isEnabled = true
         binding.demoTone.isEnabled = true
+        binding.status.setTextColor(ContextCompat.getColor(this, R.color.ok))
         binding.status.setText(R.string.status_idle)
     }
 
     override fun onResume() {
         super.onResume()
-        if (engine == null && !isFinishing) {
-            binding.root.post { requestStart() }
+        if (wantLive && engine == null && !isFinishing && !awaitingPermission) {
+            binding.root.post { if (wantLive && engine == null) requestStart() }
         }
     }
 
     override fun onPause() {
         super.onPause()
-        stopEngine()
+        // Release the mic whenever we leave the foreground, but remember wantLive
+        // so onResume restarts. Skip while the permission dialog is up.
+        if (!awaitingPermission) {
+            engine?.stop()
+            engine = null
+            binding.btnStart.isEnabled = true
+            binding.btnStop.isEnabled = false
+            binding.fftSize.isEnabled = true
+            binding.demoTone.isEnabled = true
+        }
     }
 }
