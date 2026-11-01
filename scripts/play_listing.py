@@ -9,12 +9,9 @@ What this can set via API:
   - images: icon (512), featureGraphic (1024x500)
   - track release notes (on an existing edit / with a new edit)
 
-What still needs Play Console UI (documented in output):
-  - Privacy policy URL, app category, contact email/phone
-  - Content rating questionnaire, target audience, News app declaration
-  - Data safety form, ads declaration
-  - Phone/tablet screenshots (can upload via API but assets are product-owned)
-  - Production rollout, countries, pricing
+Related: scripts/play_formup.py also sets contact details, phone screenshots,
+and applications.dataSafety. Privacy policy URL / category / IARC / ads /
+target audience / email-list testers still need Play Console UI.
 """
 
 from __future__ import annotations
@@ -87,13 +84,13 @@ LISTINGS = {
 }
 
 MANUAL_CONSOLE_STEPS = [
-    "Privacy policy URL (Policy → App content)",
-    "App category + contact email (Store settings)",
-    "Content rating questionnaire",
+    "Privacy policy URL (Policy and programs → App content → Privacy policy)",
+    "App category (Store settings) — contact email is set via edits.details",
+    "Content rating questionnaire (IARC)",
     "Target audience / Designed for families answers",
-    "Data safety form",
-    "Ads declaration",
-    "Phone screenshots (API can upload later when assets are ready)",
+    "Ads / Advertising ID declaration",
+    "Confirm Data safety submitted in Console (CSV can be written via API)",
+    "Internal testing email-list testers (API only supports Google Groups)",
     "Countries / pricing / production promote (when leaving internal)",
 ]
 
