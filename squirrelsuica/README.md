@@ -1,20 +1,21 @@
 # SquirrelSuica
 
-Suica / PASMO-class **FeliCa** transit IC reader for land-survey and daily
-field use. Read-only: IDm, balance, and journey history blocks.
+Read-only **FeliCa** e-money reader for field use: **Suica/PASMO family**,
+**nanaco**, **楽天Edy**, and **WAON**. No writes, no cloning.
+
+You do **not** need every physical card to develop or test — parsers are covered
+by **fixture unit tests** and **Demo** buttons with realistic ¥2–5k balances.
 
 ## Paths
 
 | Path | When to use |
 |------|-------------|
-| **`android/`** | **Phone app (FeliCa NFC-F)** — install the APK |
-| `suica_read.py` | USB NFC reader (Sony PaSoRi RC-S380/RC-S300, etc.) via `nfcpy` |
-| `--demo` | No hardware — canned card for UI/tests |
-| `../squirrelfield/web/suica.html` | Browser demo / NDEF probe (cannot read Suica balance) |
+| **`android/`** | Phone app (NFC-F) |
+| `suica_read.py` | USB PaSoRi via `nfcpy`, or `--demo suica\|nanaco\|edy\|waon` |
+| `felica_parse.py` | Shared parsers + synthetic demos |
+| `../squirrelfield/web/suica.html` | Browser UI demo (cannot read live balances) |
 
-## Android phone app (recommended)
-
-Full Gradle project under `android/`:
+## Android
 
 ```bash
 export ANDROID_HOME=/path/to/android-sdk
@@ -24,30 +25,34 @@ echo "sdk.dir=$ANDROID_HOME" > local.properties
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
-Or open `android/` in Android Studio → Run.
-
-App id: `works.squirrel.suica` — hold Suica/PASMO to read balance/history, or tap **Demo card**. Includes a QR scanner.
+Hold the card **still** on the NFC spot. If you see “Tag was lost”, the previous
+balance is cleared so a bad read cannot linger. Demo buttons load synthetic
+purses (not your real balance).
 
 ## Desktop / USB
 
 ```bash
 python3 -m pip install --user nfcpy
+python3 suica_read.py --demo nanaco
 python3 suica_read.py --demo
-python3 suica_read.py            # waits for card on USB reader
-python3 suica_read.py --json
+python3 suica_read.py
 ```
 
-## What is read
+## What is read (public layouts)
 
-Publicly documented FeliCa transit services (system code `0x0003`):
+| Brand | System (typical) | Balance service | Layout |
+|-------|------------------|-----------------|--------|
+| Suica/PASMO/… | `0x0003` | `0x090f` (+ `0x008b` check) | LE u16 |
+| nanaco | `0xFE00` / `0x04C7` | `0x5597` | LE u32 |
+| 楽天Edy | `0xFE00` | `0x1317` | LE u32 |
+| WAON | `0xFE00` | `0x6817` | LE u16 |
 
-- Balance service `0x090f`
-- History-style blocks commonly used by open Suica readers
-
-No writes, no cloning, no payment cryptography bypass.
+Unknown FeliCa: shows IDm and an unsupported-purse note (no invented balance).
 
 ## Tests
 
 ```bash
 make test
+# Android fixtures:
+cd android && ./gradlew :app:testDebugUnitTest
 ```
