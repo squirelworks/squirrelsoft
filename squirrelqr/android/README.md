@@ -18,7 +18,11 @@ echo "sdk.dir=$ANDROID_HOME" > local.properties
 ```
 
 APK: `app/build/outputs/apk/debug/app-debug.apk`  
-Package: `works.squirrel.qr` — version `0.1.0`
+Package: `works.squirrel.qr` — version `0.1.1`
+
+Permissions: `CAMERA` only (Play Services `INTERNET` /
+`ACCESS_NETWORK_STATE` removed from the merged manifest; ML Kit models ship
+offline in `assets/mlkit_barcode_models/`).
 
 ## Play Console
 

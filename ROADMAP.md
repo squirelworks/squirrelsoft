@@ -44,6 +44,7 @@
 
 - Phone QR / barcode reader only (CameraX + ML Kit; PWA BarcodeDetector) (done)
 - Rebranded from SquirrelField → SquirrelQR (`works.squirrel.qr`); Play needs a new listing
+- Scanner-only UI (preview + decode + copy/clear); no hub/WebView/spectrum/Suica
 - Keep specialized — do not re-bundle Sound or Suica features
 
 ### SquirrelSuica

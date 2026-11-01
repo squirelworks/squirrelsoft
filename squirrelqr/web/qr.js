@@ -7,6 +7,7 @@
   const btnStart = document.getElementById("btnStart");
   const btnStop = document.getElementById("btnStop");
   const btnCopy = document.getElementById("btnCopy");
+  const btnClear = document.getElementById("btnClear");
   const facing = document.getElementById("facing");
   const file = document.getElementById("file");
 
@@ -59,8 +60,18 @@
     lastText = text;
     resultEl.textContent = `[${fmt || "code"}] ${text}`;
     btnCopy.disabled = false;
+    btnClear.disabled = false;
     setStatus(`Detected ${fmt || "code"}`);
     if (navigator.vibrate) navigator.vibrate(30);
+  }
+
+  function clearResult() {
+    lastText = "";
+    resultEl.textContent = "(none yet)";
+    btnCopy.disabled = true;
+    btnClear.disabled = true;
+    octx.clearRect(0, 0, overlay.width, overlay.height);
+    setStatus("Cleared.");
   }
 
   async function detectFromSource(source) {
@@ -124,6 +135,7 @@
     await navigator.clipboard.writeText(lastText);
     setStatus("Copied to clipboard.");
   });
+  btnClear.addEventListener("click", clearResult);
   file.addEventListener("change", async () => {
     const f = file.files && file.files[0];
     if (!f) return;

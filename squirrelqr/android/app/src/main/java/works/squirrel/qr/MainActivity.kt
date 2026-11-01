@@ -21,10 +21,7 @@ import works.squirrel.qr.databinding.ActivityMainBinding
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicReference
 
-/**
- * SquirrelQR = QR / barcode camera reader only.
- * Spectrum lives in SquirrelSound; FeliCa lives in SquirrelSuica.
- */
+/** SquirrelQR: camera preview + barcode decode + copy/clear. */
 class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
     private val executor = Executors.newSingleThreadExecutor()
