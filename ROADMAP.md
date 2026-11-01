@@ -40,8 +40,13 @@
 - Live SDL spectrum/waterfall + ALSA mic (done); optimize waterfall blit
 - Multi-resolution FFT (Spectroid-style decimations)
 
-### SquirrelField / SquirrelSuica
+### SquirrelField
 
-- Phone PWA: spectrum, QR, Suica demo UI (done)
+- Phone QR / barcode reader only (CameraX + ML Kit; PWA BarcodeDetector) (done)
+- Keep specialized — do not re-bundle Sound or Suica features
+
+### SquirrelSuica
+
 - USB FeliCa via nfcpy + Android NFC-F companion (done)
+- FeliCa-only APK (no QR / camera) (done)
 - Richer Suica station-code tables; optional PASMO/ICOCA labeling

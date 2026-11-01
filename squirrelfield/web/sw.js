@@ -1,14 +1,9 @@
-const CACHE = "squirrelfield-v1";
+const CACHE = "squirrelfield-v2-qr";
 const ASSETS = [
   "./",
   "./index.html",
-  "./spectrum.html",
-  "./qr.html",
-  "./suica.html",
   "./style.css",
-  "./spectrum.js",
   "./qr.js",
-  "./suica.js",
   "./manifest.webmanifest",
   "./icon.svg"
 ];

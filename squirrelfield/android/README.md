@@ -1,11 +1,12 @@
 # SquirrelField — Android app
 
-Phone field toolkit APK:
+**QR / barcode camera reader only** (`works.squirrel.field`).
 
-- **Live spectrum** — bundled PWA (`web/spectrum.html`) in WebView with mic permission
-- **QR reader** — CameraX + ML Kit (native)
-- **Suica** — launches `works.squirrel.suica` when installed; demo web UI otherwise
-- **Field hub** — full bundled PWA index
+- CameraX + ML Kit continuous scan
+- Copy to clipboard / clear for next code
+- No spectrum (see **SquirrelSound**)
+- No Suica / FeliCa (see **SquirrelSuica**)
+- No bundled WebView hub
 
 ## Build
 
@@ -17,6 +18,4 @@ echo "sdk.dir=$ANDROID_HOME" > local.properties
 ```
 
 APK: `app/build/outputs/apk/debug/app-debug.apk`  
-Package: `works.squirrel.field`
-
-Bundled assets under `app/src/main/assets/web/` (copy of `../web/`).
+Package: `works.squirrel.field` — version `0.0.2`

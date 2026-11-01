@@ -1,15 +1,15 @@
 # SquirrelSuica — Android app
 
-Native Android app for **read-only Suica / PASMO-class FeliCa** balance and
-history, plus a CameraX / ML Kit QR scanner.
+Native Android app for **read-only Suica / PASMO / nanaco / Edy / WAON FeliCa**
+balance and history. NFC-F only — no camera, no QR, no other scanners.
 
 Browsers cannot read FeliCa balances over Web NFC. This app uses `NfcF`.
 
 ## Features
 
-- Hold Suica/PASMO → IDm, balance (¥), journey/charge history
-- **Demo card** button (no NFC hardware required)
-- **QR scan** activity (back camera)
+- Hold a FeliCa purse card → IDm, balance (¥), journey/charge history
+- Demo buttons for Suica / nanaco / Edy / WAON (no NFC hardware required)
+- Reads only while the app is open (no TECH_DISCOVERED auto-launch)
 - Read-only — no writes, no cloning
 
 ## Build (CLI)
@@ -40,4 +40,4 @@ Open this `android/` folder as a project, sync Gradle, Run on a device with NFC.
 
 ## Package
 
-`works.squirrel.suica` — version `1.0.0`
+`works.squirrel.suica` — version `0.0.2`

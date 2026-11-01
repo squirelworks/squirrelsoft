@@ -1,8 +1,10 @@
 # SquirrelSound — Android app
 
-Native phone spectrum analyzer: **AudioRecord** mic (or demo 440 Hz) →
-windowed radix-2 FFT → spectrum trace + scrolling waterfall. Pinch to zoom
-frequency; max-hold overlay.
+Native phone spectrum analyzer only: **AudioRecord** mic (UNPROCESSED/MIC,
+with fallback) or demo 440 Hz → windowed radix-2 FFT → spectrum trace +
+scrolling waterfall. Pinch to zoom frequency; max-hold overlay.
+
+No QR. No NFC. No Field hub. This APK is the Spectroid-class sound tool.
 
 Pairs with the desktop `squirrelsound live` CLI (SDL/ALSA).
 
@@ -16,4 +18,4 @@ echo "sdk.dir=$ANDROID_HOME" > local.properties
 ```
 
 APK: `app/build/outputs/apk/debug/app-debug.apk`  
-Package: `works.squirrel.sound`
+Package: `works.squirrel.sound` — version `0.0.2`

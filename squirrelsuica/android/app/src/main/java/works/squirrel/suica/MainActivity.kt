@@ -28,9 +28,6 @@ class MainActivity : AppCompatActivity() {
         binding.btnDemoEdy.setOnClickListener { showCard(FelicaParse.demoEdy(), demo = true) }
         binding.btnDemoWaon.setOnClickListener { showCard(FelicaParse.demoWaon(), demo = true) }
         binding.btnClear.setOnClickListener { clearUi() }
-        binding.btnQr.setOnClickListener {
-            startActivity(Intent(this, QrScanActivity::class.java))
-        }
 
         handleIntent(intent)
     }

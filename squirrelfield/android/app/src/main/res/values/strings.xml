@@ -1,24 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">SquirrelField</string>
-    <string name="tagline">Phone field toolkit — spectrum, QR, Suica</string>
-    <string name="spectrum_title">Live spectrum</string>
-    <string name="spectrum_blurb">Mic analyzer with waterfall (bundled field web UI)</string>
+    <string name="tagline">QR / barcode camera reader for field work</string>
     <string name="qr_title">QR reader</string>
-    <string name="qr_blurb">Native camera barcode / QR scanner</string>
-    <string name="suica_title">Suica / FeliCa</string>
-    <string name="suica_blurb">Open SquirrelSuica for NFC-F, or demo UI</string>
-    <string name="web_title">Field hub (web)</string>
-    <string name="web_blurb">Full bundled PWA index</string>
-    <string name="back">Back</string>
     <string name="copy">Copy</string>
     <string name="copied">Copied</string>
-    <string name="qr_hint">Point at a QR / barcode</string>
-    <string name="qr_found">Decoded — tap Copy</string>
-    <string name="camera_permission">Camera permission required</string>
-    <string name="mic_permission">Microphone permission required for spectrum</string>
-    <string name="suica_detail">Real Suica balance needs NFC-F via the SquirrelSuica Android app. This screen launches it when installed, or opens the demo web UI.</string>
-    <string name="open_suica_app">Open SquirrelSuica</string>
-    <string name="suica_demo_web">Demo web UI</string>
-    <string name="suica_missing">SquirrelSuica not installed (works.squirrel.suica). Install that APK for live FeliCa reads.</string>
+    <string name="rescan">Clear</string>
+    <string name="qr_hint">Point the camera at a QR or barcode</string>
+    <string name="qr_found">Decoded — tap Copy, or Clear for the next code</string>
+    <string name="camera_permission">Camera permission required for QR scanning</string>
 </resources>
