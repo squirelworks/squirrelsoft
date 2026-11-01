@@ -13,19 +13,36 @@ import org.junit.Test
  */
 class FelicaParseTest {
     @Test
-    fun suica090fBalance() {
-        val block = byteArrayOf(0xB0.toByte(), 0x09) + ByteArray(14)
+    fun suica090fBalanceAtOffset10() {
+        // Balance is at bytes 10–11 LE (not 0–1 = terminal/process).
+        val block = FelicaParse.histRail(
+            terminal = 0x16,
+            process = 0x01,
+            y = 2026, m = 10, d = 28,
+            inLine = 0xe3, inSta = 0x59,
+            outLine = 0xe3, outSta = 0x5e,
+            bal = 2480,
+            region = 0
+        )
         assertEquals(2480, FelicaParse.suicaBalance090f(block))
+        // Bytes 0–1 are NOT the balance (would be 0x0116 = 278).
+        assertEquals(0x16, block[0].toInt() and 0xff)
+        assertEquals(0x01, block[1].toInt() and 0xff)
     }
 
     @Test
     fun suica008bPreferredWhen090fIsRoughlyTenTimesLarger() {
-        // Matches the field report: UI showed ¥50945 while true balance ~¥5094.
-        val inflated090f = byteArrayOf(0xE1.toByte(), 0xC6.toByte()) + ByteArray(14) // 50945
+        // Guard for legacy mis-parses / corrupted history vs card-info.
+        val hist = FelicaParse.histRail(
+            terminal = 0x16, process = 0x01,
+            y = 2026, m = 1, d = 1,
+            inLine = 1, inSta = 1, outLine = 1, outSta = 2,
+            bal = 50945, region = 0
+        )
         val info008b = ByteArray(16)
         info008b[11] = 0xE6.toByte()
         info008b[12] = 0x13 // 0x13E6 = 5094
-        assertEquals(5094, FelicaParse.suicaBalance(inflated090f, info008b))
+        assertEquals(5094, FelicaParse.suicaBalance(hist, info008b))
         assertEquals(5094, FelicaParse.suicaBalance008b(info008b))
     }
 
@@ -48,7 +65,7 @@ class FelicaParseTest {
     }
 
     @Test
-    fun demosAreRealisticNotInflated() {
+    fun fixtureBalancesAreRealisticNotInflated() {
         assertTrue(FelicaParse.demoSuica().balanceYen!! < 10_000)
         assertTrue(FelicaParse.demoNanaco().balanceYen!! < 10_000)
         assertTrue(FelicaParse.demoEdy().balanceYen!! < 10_000)
@@ -65,9 +82,12 @@ class FelicaParseTest {
     @Test
     fun extractBlocksValidResponse() {
         val idm = ByteArray(8) { it.toByte() }
-        val block = ByteArray(16)
-        block[0] = 0xB0.toByte()
-        block[1] = 0x09
+        val block = FelicaParse.histRail(
+            terminal = 0x16, process = 0x01,
+            y = 2026, m = 10, d = 28,
+            inLine = 0xe3, inSta = 0x59, outLine = 0xe3, outSta = 0x5e,
+            bal = 2480, region = 0
+        )
         val body = ArrayList<Byte>()
         body.add(0x07)
         idm.forEach { body.add(it) }
@@ -105,6 +125,7 @@ class FelicaParseTest {
         assertEquals("2018-04-25", e.date)
         assertEquals("train", e.kind)
         assertEquals(2929, e.balanceYen)
+        assertEquals(2929, FelicaParse.suicaBalance090f(block))
         assertEquals("乃木坂", e.enterStation)
         assertEquals("代々木上原", e.exitStation)
         assertEquals("E3/59", e.enterCode)
@@ -146,5 +167,74 @@ class FelicaParseTest {
         assertEquals("FF/FE", e.enterStation)
         assertEquals("FF/FD", e.exitStation)
         assertFalse(e.stationSummary().isEmpty())
+    }
+
+    @Test
+    fun nanacoHistoryPaymentAndCharge() {
+        val pay = FelicaParse.histNanaco(
+            type = 0x47, amount = 480, bal = 5200,
+            y = 2026, m = 10, d = 28, hh = 18, mm = 42
+        )
+        val e = FelicaParse.nanacoHistoryEntry(pay)!!
+        assertEquals("sale", e.kind)
+        assertEquals(480, e.fareYen)
+        assertEquals(5200, e.balanceYen)
+        assertEquals("2026-10-28", e.date)
+        assertTrue(e.note.contains("18:42"))
+
+        val charge = FelicaParse.histNanaco(
+            type = 0x6f, amount = 3000, bal = 5680,
+            y = 2026, m = 10, d = 27, hh = 12, mm = 5
+        )
+        val c = FelicaParse.nanacoHistoryEntry(charge)!!
+        assertEquals("charge", c.kind)
+        assertEquals(5680, c.balanceYen)
+        assertTrue(FelicaParse.demoNanaco().history.size >= 2)
+    }
+
+    @Test
+    fun edyHistoryPayment() {
+        val block = FelicaParse.histEdy(
+            type = 0x20, amount = 350, bal = 3100,
+            days = 0, // 2000-01-01
+            seconds = 14 * 3600 + 22 * 60
+        )
+        val e = FelicaParse.edyHistoryEntry(block)!!
+        assertEquals("sale", e.kind)
+        assertEquals(350, e.fareYen)
+        assertEquals(3100, e.balanceYen)
+        assertEquals("2000-01-01", e.date)
+        assertTrue(e.note.contains("14:22"))
+        assertTrue(FelicaParse.demoEdy().history.isNotEmpty())
+    }
+
+    @Test
+    fun waonHistoryPayment() {
+        val rec = FelicaParse.histWaon(
+            type = 0x04,
+            y = 2026, m = 10, d = 28, hh = 19, mm = 10,
+            bal = 4584, usage = 620, charge = 0
+        )
+        val e = FelicaParse.waonHistoryEntry(rec)!!
+        assertEquals("sale", e.kind)
+        assertEquals(620, e.fareYen)
+        assertEquals(4584, e.balanceYen)
+        assertEquals("2026-10-28", e.date)
+        assertTrue(e.note.contains("19:10"))
+        assertTrue(FelicaParse.demoWaon().history.isNotEmpty())
+    }
+
+    @Test
+    fun suicaHistoryServiceCodeIs090fNot010f() {
+        // Regression: FelicaReader must read history from 0x090f.
+        // Command builder is public — ensure wire encoding for 0x090f.
+        val idm = ByteArray(8) { (it + 1).toByte() }
+        val cmd = FelicaReader.readWithoutEncryption(idm, 0x090f, intArrayOf(0, 1, 2, 3))
+        assertEquals(0x06, cmd[1].toInt() and 0xff)
+        // layout: len, cmd, IDm[8], serviceCount, serviceLo, serviceHi, blockCount, …
+        assertEquals(0x01, cmd[10].toInt() and 0xff) // one service
+        assertEquals(0x0f, cmd[11].toInt() and 0xff) // 0x090f LE
+        assertEquals(0x09, cmd[12].toInt() and 0xff)
+        assertEquals(4, cmd[13].toInt() and 0xff) // 4 blocks
     }
 }

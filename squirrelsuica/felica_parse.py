@@ -64,9 +64,10 @@ def _u32le(b: bytes, off: int = 0) -> int:
 
 
 def suica_balance_090f(block: bytes) -> int:
-    if len(block) < 2:
+    """Balance from Suica history block at bytes 10-11 LE (not 0-1)."""
+    if len(block) < 12:
         raise ValueError("short")
-    return _u16le(block, 0)
+    return _u16le(block, 10)
 
 
 def suica_balance_008b(block: bytes) -> int:
@@ -76,7 +77,7 @@ def suica_balance_008b(block: bytes) -> int:
 
 
 def suica_balance(block_090f: Optional[bytes], block_008b: Optional[bytes]) -> Optional[int]:
-    a = suica_balance_090f(block_090f) if block_090f and len(block_090f) >= 2 else None
+    a = suica_balance_090f(block_090f) if block_090f and len(block_090f) >= 12 else None
     b = suica_balance_008b(block_008b) if block_008b and len(block_008b) >= 13 else None
 
     def ok(v: int) -> bool:
@@ -302,6 +303,80 @@ def parse_history_blocks(blocks: List[bytes]) -> List[HistoryEntry]:
     return out
 
 
+
+def _u32be(b: bytes, off: int = 0) -> int:
+    return (b[off] << 24) | (b[off + 1] << 16) | (b[off + 2] << 8) | b[off + 3]
+
+
+def parse_nanaco_history_block(block: bytes) -> Optional[HistoryEntry]:
+    if len(block) < 16 or all(x == 0 for x in block):
+        return None
+    typ = block[0]
+    if typ == 0:
+        return None
+    amount = _u32be(block, 1)
+    bal = max(0, min(500_000, _u32be(block, 5)))
+    packed = (block[9] << 24) | (block[10] << 16) | (block[11] << 8) | block[12]
+    year = 2000 + ((packed >> 21) & 0x7FF)
+    month = (packed >> 17) & 0xF
+    day = (packed >> 12) & 0x1F
+    hour = (packed >> 6) & 0x3F
+    minute = packed & 0x3F
+    date = f"{year:04d}-{month:02d}-{day:02d}" if 1 <= month <= 12 and 1 <= day <= 31 else "????-??-??"
+    if typ == 0x47:
+        kind, base = "sale", "支払"
+    elif typ in (0x5C, 0x6F, 0x70):
+        kind, base = "charge", "チャージ"
+    elif typ == 0x83:
+        kind, base = "other", "ポイント交換"
+    elif typ == 0x35:
+        kind, base = "other", "転送"
+    else:
+        kind, base = "other", f"type=0x{typ:02x}"
+    note = f"{base} · {hour:02d}:{minute:02d} · ¥{amount}" if hour <= 23 and minute <= 59 else f"{base} · ¥{amount}"
+    return HistoryEntry(date, kind, amount if kind == "sale" and 1 <= amount <= 100_000 else 0, bal, note, block.hex(), terminal=typ, process=typ)
+
+
+def parse_nanaco_history_blocks(blocks: List[bytes]) -> List[HistoryEntry]:
+    return [e for b in blocks if (e := parse_nanaco_history_block(b))]
+
+
+def parse_edy_history_block(block: bytes) -> Optional[HistoryEntry]:
+    if len(block) < 16 or all(x == 0 for x in block):
+        return None
+    typ = block[0]
+    if typ == 0:
+        return None
+    ts = _u32be(block, 4)
+    days = ts >> 17
+    seconds = ts & 0x1FFFF
+    # days since 2000-01-01
+    from datetime import date, timedelta
+    try:
+        d = date(2000, 1, 1) + timedelta(days=days)
+        date_s = d.isoformat()
+    except Exception:
+        date_s = "????-??-??"
+    hour = seconds // 3600
+    minute = (seconds % 3600) // 60
+    amount = _u32be(block, 8)
+    bal = max(0, min(500_000, _u32be(block, 12)))
+    if typ == 0x20:
+        kind, base = "sale", "支払"
+    elif typ == 0x02:
+        kind, base = "charge", "チャージ"
+    elif typ == 0x04:
+        kind, base = "charge", "ギフト"
+    else:
+        kind, base = "other", f"type=0x{typ:02x}"
+    note = f"{base} · {hour:02d}:{minute:02d} · ¥{amount}"
+    return HistoryEntry(date_s, kind, amount if kind == "sale" and 1 <= amount <= 100_000 else 0, bal, note, block.hex(), terminal=typ, process=typ)
+
+
+def parse_edy_history_blocks(blocks: List[bytes]) -> List[HistoryEntry]:
+    return [e for b in blocks if (e := parse_edy_history_block(b))]
+
+
 def hist_rail(
     terminal: int,
     process: int,
@@ -339,14 +414,13 @@ def hist_rail(
 
 
 def demo_suica() -> FelicaCard:
-    bal = bytes([0xB0, 0x09]) + bytes(14)
     return FelicaCard(
         brand=FelicaBrand.SUICA_FAMILY.value,
         brand_label=brand_label(FelicaBrand.SUICA_FAMILY),
         idm="0101020304050607",
         pmm="0000000000000000",
         system_code="0003",
-        balance_yen=suica_balance_090f(bal),
+        balance_yen=2480,
         history=parse_history_blocks(
             [
                 hist_rail(0x16, 0x01, 2026, 10, 28, 0xE3, 0x59, 0xE3, 0x5E, 2480),
@@ -358,7 +432,21 @@ def demo_suica() -> FelicaCard:
     )
 
 
+def _hist_nanaco(typ: int, amount: int, bal: int, y: int, m: int, d: int, hh: int, mm: int) -> bytes:
+    packed = (((y - 2000) & 0x7FF) << 21) | ((m & 0xF) << 17) | ((d & 0x1F) << 12) | ((hh & 0x3F) << 6) | (mm & 0x3F)
+    out = bytearray(16)
+    out[0] = typ & 0xFF
+    out[1:5] = amount.to_bytes(4, "big")
+    out[5:9] = bal.to_bytes(4, "big")
+    out[9:13] = packed.to_bytes(4, "big")
+    return bytes(out)
+
+
 def demo_nanaco() -> FelicaCard:
+    hist = [
+        _hist_nanaco(0x47, 480, 5200, 2026, 10, 28, 18, 42),
+        _hist_nanaco(0x6F, 3000, 5680, 2026, 10, 27, 12, 5),
+    ]
     return FelicaCard(
         brand=FelicaBrand.NANACO.value,
         brand_label=brand_label(FelicaBrand.NANACO),
@@ -366,7 +454,7 @@ def demo_nanaco() -> FelicaCard:
         pmm="0000000000000000",
         system_code="fe00",
         balance_yen=nanaco_balance(bytes([0x50, 0x14, 0x00, 0x00]) + bytes(12)),
-        history=[],
+        history=parse_nanaco_history_blocks(hist),
         note="Demo nanaco (synthetic)",
     )
 

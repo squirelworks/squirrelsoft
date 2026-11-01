@@ -9,7 +9,13 @@ import org.junit.Test
 class SuicaParseTest {
     @Test
     fun balanceLittleEndian() {
-        val block = byteArrayOf(0xB0.toByte(), 0x09) + ByteArray(14)
+        // History-block balance is LE u16 at bytes 10–11.
+        val block = FelicaParse.histRail(
+            terminal = 0x16, process = 0x01,
+            y = 2026, m = 10, d = 28,
+            inLine = 0xe3, inSta = 0x59, outLine = 0xe3, outSta = 0x5e,
+            bal = 2480, region = 0
+        )
         assertEquals(2480, SuicaParse.balanceYen(block))
     }
 

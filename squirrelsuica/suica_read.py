@@ -26,9 +26,11 @@ from felica_parse import (
 SYS_TRANSIT = 0x0003
 SYS_COMMON = 0xFE00
 SYS_NANACO = 0x04C7
-SVC_SUICA_BAL = 0x090F
+SVC_SUICA_HIST = 0x090F
 SVC_SUICA_INFO = 0x008B
-SVC_SUICA_HIST = 0x010F
+SVC_NANACO_HIST = 0x564F
+SVC_EDY_HIST = 0x170F
+SVC_WAON_HIST = 0x680B
 SVC_NANACO_BAL = 0x5597
 SVC_EDY_BAL = 0x1317
 SVC_WAON_BAL = 0x6817
@@ -68,24 +70,23 @@ def read_with_nfcpy(device: Optional[str] = None) -> FelicaCard:
         idm = "".join(f"{b:02x}" for b in tag.idm)
         pmm = "".join(f"{b:02x}" for b in getattr(tag, "pmm", b"") or b"")
 
-        # Transit
+        # Transit — history service 0x090f (NOT 0x010f); balance at bytes 10-11.
         try:
-            b090f = _read_block(tag, SVC_SUICA_BAL)
+            hist: List[bytes] = []
+            try:
+                sc = tt3.ServiceCode(SVC_SUICA_HIST >> 6, SVC_SUICA_HIST & 0x3F)
+                bcs = [tt3.BlockCode(i, service=0) for i in range(20)]
+                bl = tag.read_without_encryption([sc], bcs)
+                hist = [bytes(x) for x in bl] if bl else []
+            except Exception:
+                pass
             b008b = None
             try:
                 b008b = _read_block(tag, SVC_SUICA_INFO)
             except Exception:
                 pass
-            bal = suica_balance(b090f, b008b)
-            if bal is not None:
-                hist: List[bytes] = []
-                try:
-                    sc = tt3.ServiceCode(SVC_SUICA_HIST >> 6, SVC_SUICA_HIST & 0x3F)
-                    bcs = [tt3.BlockCode(i, service=0) for i in range(5)]
-                    bl = tag.read_without_encryption([sc], bcs)
-                    hist = [bytes(x) for x in bl] if bl else []
-                except Exception:
-                    pass
+            bal = suica_balance(hist[0] if hist else None, b008b)
+            if bal is not None or hist:
                 card_holder[0] = FelicaCard(
                     brand=FelicaBrand.SUICA_FAMILY.value,
                     brand_label=brand_label(FelicaBrand.SUICA_FAMILY),

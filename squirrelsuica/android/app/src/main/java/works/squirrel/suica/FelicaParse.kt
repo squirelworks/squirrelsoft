@@ -15,10 +15,13 @@ package works.squirrel.suica
  */
 object FelicaParse {
 
-    /** Suica/PASMO family: service 0x090f block0 bytes 0–1 LE uint16. */
+    /**
+     * Suica/PASMO family: service 0x090f history block balance at bytes 10–11 LE.
+     * (Older code wrongly read bytes 0–1 = terminal/process, producing ~10× inflated balances.)
+     */
     fun suicaBalance090f(block: ByteArray): Int {
-        require(block.size >= 2)
-        return u16le(block, 0)
+        require(block.size >= 12)
+        return u16le(block, 10)
     }
 
     /**
@@ -32,11 +35,11 @@ object FelicaParse {
 
     /**
      * Pick a Suica-family balance from candidate blocks.
-     * Uses 0x090f when sane; if 0x008b disagrees by >2× (common mis-parse),
-     * prefer the smaller card-info value.
+     * Prefers a sane 0x090f history-block balance; falls back to 0x008b.
+     * If both disagree by >2×, prefer the smaller card-info value (legacy mis-parse guard).
      */
     fun suicaBalance(block090f: ByteArray?, block008b: ByteArray?): Int? {
-        val a = block090f?.takeIf { it.size >= 2 }?.let { suicaBalance090f(it) }
+        val a = block090f?.takeIf { it.size >= 12 }?.let { suicaBalance090f(it) }
         val b = block008b?.takeIf { it.size >= 13 }?.let { suicaBalance008b(it) }
         fun ok(v: Int) = v in 0..50_000
         return when {
@@ -171,6 +174,173 @@ object FelicaParse {
         }
     }
 
+    /**
+     * nanaco history service 0x564f — 5×16-byte records, newest first.
+     * byte0 type; 1–4 amount BE; 5–8 balance BE; 9–12 packed datetime;
+     * 13–14 sequence. Types: 0x47 pay, 0x5c/0x6f/0x70 charge, …
+     */
+    fun nanacoHistoryEntry(block: ByteArray): HistoryEntry? {
+        if (block.size < 16) return null
+        if (block.all { it == 0.toByte() }) return null
+        val type = block[0].toInt() and 0xff
+        if (type == 0) return null
+        val amount = u32be(block, 1)
+        val bal = u32be(block, 5).coerceIn(0, 500_000)
+        val packed =
+            ((block[9].toLong() and 0xff) shl 24) or
+                ((block[10].toLong() and 0xff) shl 16) or
+                ((block[11].toLong() and 0xff) shl 8) or
+                (block[12].toLong() and 0xff)
+        // year(11 from 2000) month(4) day(5) hour(6) minute(6) = 32 bits
+        val year = 2000 + ((packed shr 21) and 0x7ff).toInt()
+        val month = ((packed shr 17) and 0xf).toInt()
+        val day = ((packed shr 12) and 0x1f).toInt()
+        val hour = ((packed shr 6) and 0x3f).toInt()
+        val minute = (packed and 0x3f).toInt()
+        val date = if (year in 2000..2099 && month in 1..12 && day in 1..31) {
+            "%04d-%02d-%02d".format(year, month, day)
+        } else {
+            "????-??-??"
+        }
+        val timeOk = hour in 0..23 && minute in 0..59
+        val (kind, baseNote) = when (type) {
+            0x47 -> "sale" to "支払"
+            0x5c, 0x6f, 0x70 -> "charge" to "チャージ"
+            0x83 -> "other" to "ポイント交換"
+            0x35 -> "other" to "転送"
+            else -> "other" to "type=0x%02x".format(type)
+        }
+        val note = if (timeOk) {
+            "%s · %02d:%02d · ¥%d".format(baseNote, hour, minute, amount)
+        } else {
+            "%s · ¥%d".format(baseNote, amount)
+        }
+        return HistoryEntry(
+            date = date,
+            kind = kind,
+            fareYen = if (kind == "sale" && amount in 1..100_000) amount else 0,
+            balanceYen = bal,
+            note = note,
+            rawHex = block.joinToString("") { "%02x".format(it) },
+            terminal = type,
+            process = type
+        )
+    }
+
+    fun nanacoHistoryEntries(blocks: List<ByteArray>): List<HistoryEntry> =
+        blocks.mapNotNull { nanacoHistoryEntry(it) }
+
+    /**
+     * Edy history service 0x170f — 6×16-byte records.
+     * byte0 type (0x20 pay, 0x02 charge, 0x04 gift); 1–3 seq;
+     * 4–7 timestamp (15-bit days since 2000-01-01 + 17-bit seconds);
+     * 8–11 amount BE; 12–15 balance BE.
+     */
+    fun edyHistoryEntry(block: ByteArray): HistoryEntry? {
+        if (block.size < 16) return null
+        if (block.all { it == 0.toByte() }) return null
+        val type = block[0].toInt() and 0xff
+        if (type == 0) return null
+        val ts = u32be(block, 4).toLong() and 0xffffffffL
+        val days = (ts shr 17).toInt()
+        val seconds = (ts and 0x1ffff).toInt()
+        val date = edyDaysToDate(days)
+        val hour = seconds / 3600
+        val minute = (seconds % 3600) / 60
+        val amount = u32be(block, 8)
+        val bal = u32be(block, 12).coerceIn(0, 500_000)
+        val (kind, baseNote) = when (type) {
+            0x20 -> "sale" to "支払"
+            0x02 -> "charge" to "チャージ"
+            0x04 -> "charge" to "ギフト"
+            else -> "other" to "type=0x%02x".format(type)
+        }
+        val note = "%s · %02d:%02d · ¥%d".format(baseNote, hour.coerceIn(0, 23), minute.coerceIn(0, 59), amount)
+        return HistoryEntry(
+            date = date,
+            kind = kind,
+            fareYen = if (kind == "sale" && amount in 1..100_000) amount else 0,
+            balanceYen = bal,
+            note = note,
+            rawHex = block.joinToString("") { "%02x".format(it) },
+            terminal = type,
+            process = type
+        )
+    }
+
+    fun edyHistoryEntries(blocks: List<ByteArray>): List<HistoryEntry> =
+        blocks.mapNotNull { edyHistoryEntry(it) }
+
+    /**
+     * WAON history service 0x680b — three 32-byte records in blocks 0–5.
+     * type at byte 17; from byte 18 MSB-first: year5(+2005) month4 day5 hour5
+     * minute6 balance18 usage18 charge17.
+     */
+    fun waonHistoryEntry(record32: ByteArray): HistoryEntry? {
+        if (record32.size < 32) return null
+        if (record32.all { it == 0.toByte() }) return null
+        val type = record32[17].toInt() and 0xff
+        if (type == 0) return null
+        // Pack bytes 18.. from MSB.
+        var bit = 0
+        fun take(n: Int): Int {
+            var v = 0
+            repeat(n) {
+                val byteIndex = 18 + (bit / 8)
+                val bitIndex = 7 - (bit % 8)
+                val b = record32[byteIndex].toInt() and 0xff
+                v = (v shl 1) or ((b shr bitIndex) and 1)
+                bit++
+            }
+            return v
+        }
+        val year = 2005 + take(5)
+        val month = take(4)
+        val day = take(5)
+        val hour = take(5)
+        val minute = take(6)
+        val bal = take(18).coerceIn(0, 500_000)
+        val usage = take(18)
+        val charge = take(17)
+        val date = if (year in 2005..2099 && month in 1..12 && day in 1..31) {
+            "%04d-%02d-%02d".format(year, month, day)
+        } else {
+            "????-??-??"
+        }
+        val (kind, baseNote, fare) = when (type) {
+            0x04 -> Triple("sale", "支払", usage)
+            0x0c, 0x10 -> Triple("charge", "チャージ", charge)
+            else -> Triple("other", "type=0x%02x".format(type), usage)
+        }
+        val note = "%s · %02d:%02d · ¥%d".format(
+            baseNote,
+            hour.coerceIn(0, 23),
+            minute.coerceIn(0, 59),
+            fare
+        )
+        return HistoryEntry(
+            date = date,
+            kind = kind,
+            fareYen = if (kind == "sale" && fare in 1..100_000) fare else 0,
+            balanceYen = bal,
+            note = note,
+            rawHex = record32.joinToString("") { "%02x".format(it) },
+            terminal = type,
+            process = type
+        )
+    }
+
+    fun waonHistoryEntries(blocks: List<ByteArray>): List<HistoryEntry> {
+        val out = ArrayList<HistoryEntry>(3)
+        var i = 0
+        while (i + 1 < blocks.size) {
+            val rec = blocks[i] + blocks[i + 1]
+            waonHistoryEntry(rec)?.let { out.add(it) }
+            i += 2
+        }
+        return out
+    }
+
     fun brandLabel(brand: FelicaBrand): String = when (brand) {
         FelicaBrand.SUICA_FAMILY -> "Suica / PASMO"
         FelicaBrand.NANACO -> "nanaco"
@@ -179,16 +349,15 @@ object FelicaParse {
         FelicaBrand.UNKNOWN -> "Unknown FeliCa"
     }
 
-    /** Realistic demo balances (~few thousand yen), not inflated samples. */
+    /** Fixture helpers for unit tests (not exposed in the UI). */
     fun demoSuica(): FelicaCard {
-        val bal090f = byteArrayOf(0xB0.toByte(), 0x09) + ByteArray(14) // ¥2480
         return FelicaCard(
             brand = FelicaBrand.SUICA_FAMILY,
             brandLabel = brandLabel(FelicaBrand.SUICA_FAMILY),
             idm = "0101020304050607",
             pmm = "0000000000000000",
             systemCode = "0003",
-            balanceYen = suicaBalance090f(bal090f),
+            balanceYen = 2480,
             history = historyEntries(
                 listOf(
                     // 乃木坂 → 代々木上原 (Tokyo Metro Chiyoda), bal ¥2480
@@ -223,27 +392,34 @@ object FelicaParse {
                     )
                 )
             ),
-            note = "Demo Suica (synthetic)"
+            note = "Fixture Suica (synthetic)"
         )
     }
 
     fun demoNanaco(): FelicaCard {
-        // ¥5200 as LE u32
-        val block = byteArrayOf(0x50, 0x14, 0x00, 0x00) + ByteArray(12)
+        val balBlock = byteArrayOf(0x50, 0x14, 0x00, 0x00) + ByteArray(12)
+        val hist = listOf(
+            histNanaco(type = 0x47, amount = 480, bal = 5200, y = 2026, m = 10, d = 28, hh = 18, mm = 42),
+            histNanaco(type = 0x6f, amount = 3000, bal = 5680, y = 2026, m = 10, d = 27, hh = 12, mm = 5)
+        )
         return FelicaCard(
             brand = FelicaBrand.NANACO,
             brandLabel = brandLabel(FelicaBrand.NANACO),
             idm = "02fe0004c7000001",
             pmm = "0000000000000000",
             systemCode = "fe00",
-            balanceYen = nanacoBalance(block),
-            history = emptyList(),
-            note = "Demo nanaco (synthetic) — no physical card required"
+            balanceYen = nanacoBalance(balBlock),
+            history = nanacoHistoryEntries(hist),
+            note = "Fixture nanaco (synthetic)"
         )
     }
 
     fun demoEdy(): FelicaCard {
         val block = byteArrayOf(0x1C, 0x0C, 0x00, 0x00) + ByteArray(12) // ¥3100
+        val hist = listOf(
+            histEdy(type = 0x20, amount = 350, bal = 3100, days = 9800, seconds = 14 * 3600 + 22 * 60),
+            histEdy(type = 0x02, amount = 2000, bal = 3450, days = 9799, seconds = 10 * 3600)
+        )
         return FelicaCard(
             brand = FelicaBrand.EDY,
             brandLabel = brandLabel(FelicaBrand.EDY),
@@ -251,13 +427,18 @@ object FelicaParse {
             pmm = "0000000000000000",
             systemCode = "fe00",
             balanceYen = edyBalance(block),
-            history = emptyList(),
-            note = "Demo Edy (synthetic)"
+            history = edyHistoryEntries(hist),
+            note = "Fixture Edy (synthetic)"
         )
     }
 
     fun demoWaon(): FelicaCard {
         val block = byteArrayOf(0xE8.toByte(), 0x11) + ByteArray(14) // ¥4584
+        val rec = histWaon(
+            type = 0x04,
+            y = 2026, m = 10, d = 28, hh = 19, mm = 10,
+            bal = 4584, usage = 620, charge = 0
+        )
         return FelicaCard(
             brand = FelicaBrand.WAON,
             brandLabel = brandLabel(FelicaBrand.WAON),
@@ -265,8 +446,8 @@ object FelicaParse {
             pmm = "0000000000000000",
             systemCode = "fe00",
             balanceYen = waonBalance(block),
-            history = emptyList(),
-            note = "Demo WAON (synthetic)"
+            history = waonHistoryEntries(listOf(rec.copyOfRange(0, 16), rec.copyOfRange(16, 32))),
+            note = "Fixture WAON (synthetic)"
         )
     }
 
@@ -305,6 +486,84 @@ object FelicaParse {
         )
     }
 
+    fun histNanaco(
+        type: Int,
+        amount: Int,
+        bal: Int,
+        y: Int,
+        m: Int,
+        d: Int,
+        hh: Int,
+        mm: Int
+    ): ByteArray {
+        val packed =
+            (((y - 2000) and 0x7ff) shl 21) or
+                ((m and 0xf) shl 17) or
+                ((d and 0x1f) shl 12) or
+                ((hh and 0x3f) shl 6) or
+                (mm and 0x3f)
+        val out = ByteArray(16)
+        out[0] = type.toByte()
+        putU32be(out, 1, amount)
+        putU32be(out, 5, bal)
+        out[9] = ((packed shr 24) and 0xff).toByte()
+        out[10] = ((packed shr 16) and 0xff).toByte()
+        out[11] = ((packed shr 8) and 0xff).toByte()
+        out[12] = (packed and 0xff).toByte()
+        return out
+    }
+
+    fun histEdy(type: Int, amount: Int, bal: Int, days: Int, seconds: Int): ByteArray {
+        val out = ByteArray(16)
+        out[0] = type.toByte()
+        val ts = ((days and 0x7fff) shl 17) or (seconds and 0x1ffff)
+        putU32be(out, 4, ts)
+        putU32be(out, 8, amount)
+        putU32be(out, 12, bal)
+        return out
+    }
+
+    fun histWaon(
+        type: Int,
+        y: Int,
+        m: Int,
+        d: Int,
+        hh: Int,
+        mm: Int,
+        bal: Int,
+        usage: Int,
+        charge: Int
+    ): ByteArray {
+        val out = ByteArray(32)
+        out[17] = type.toByte()
+        val fields = intArrayOf(
+            (y - 2005) and 0x1f, 5,
+            m and 0xf, 4,
+            d and 0x1f, 5,
+            hh and 0x1f, 5,
+            mm and 0x3f, 6,
+            bal and 0x3ffff, 18,
+            usage and 0x3ffff, 18,
+            charge and 0x1ffff, 17
+        )
+        var bit = 0
+        var i = 0
+        while (i < fields.size) {
+            val value = fields[i]
+            val width = fields[i + 1]
+            for (b in (width - 1) downTo 0) {
+                val byteIndex = 18 + (bit / 8)
+                val bitIndex = 7 - (bit % 8)
+                if (((value shr b) and 1) == 1) {
+                    out[byteIndex] = (out[byteIndex].toInt() or (1 shl bitIndex)).toByte()
+                }
+                bit++
+            }
+            i += 2
+        }
+        return out
+    }
+
     private fun processLabel(process: Int): String = when (process) {
         0x01 -> "運賃支払"
         0x02 -> "チャージ"
@@ -321,6 +580,35 @@ object FelicaParse {
         else -> "proc=0x%02x".format(process)
     }
 
+    private fun edyDaysToDate(days: Int): String {
+        // Approximate civil date from days since 2000-01-01 (no TZ).
+        if (days < 0 || days > 40000) return "????-??-??"
+        var rem = days
+        var year = 2000
+        while (true) {
+            val diy = if (isLeap(year)) 366 else 365
+            if (rem < diy) break
+            rem -= diy
+            year++
+        }
+        val md = if (isLeap(year)) {
+            intArrayOf(31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31)
+        } else {
+            intArrayOf(31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31)
+        }
+        var month = 1
+        for (len in md) {
+            if (rem < len) break
+            rem -= len
+            month++
+        }
+        val day = rem + 1
+        return "%04d-%02d-%02d".format(year, month, day)
+    }
+
+    private fun isLeap(y: Int): Boolean =
+        (y % 4 == 0 && y % 100 != 0) || (y % 400 == 0)
+
     private fun u16le(b: ByteArray, off: Int): Int =
         (b[off].toInt() and 0xff) or ((b[off + 1].toInt() and 0xff) shl 8)
 
@@ -329,6 +617,19 @@ object FelicaParse {
             ((b[off + 1].toInt() and 0xff) shl 8) or
             ((b[off + 2].toInt() and 0xff) shl 16) or
             ((b[off + 3].toInt() and 0xff) shl 24)
+
+    private fun u32be(b: ByteArray, off: Int): Int =
+        ((b[off].toInt() and 0xff) shl 24) or
+            ((b[off + 1].toInt() and 0xff) shl 16) or
+            ((b[off + 2].toInt() and 0xff) shl 8) or
+            (b[off + 3].toInt() and 0xff)
+
+    private fun putU32be(b: ByteArray, off: Int, v: Int) {
+        b[off] = ((v ushr 24) and 0xff).toByte()
+        b[off + 1] = ((v ushr 16) and 0xff).toByte()
+        b[off + 2] = ((v ushr 8) and 0xff).toByte()
+        b[off + 3] = (v and 0xff).toByte()
+    }
 
     private fun bcd(v: Byte): Int {
         val x = v.toInt() and 0xff
