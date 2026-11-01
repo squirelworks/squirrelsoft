@@ -10,12 +10,11 @@ Via Android Publisher API this script can:
   - edits.images: icon, featureGraphic, phoneScreenshots
   - applications.dataSafety: import a "no data collected" CSV
 
-Cannot set via this API (Play Console UI required):
-  - Privacy policy URL (Policy → App content → Privacy policy)
-  - App category / tags
-  - Content rating (IARC) questionnaire
-  - Target audience / Designed for families
-  - Ads declaration / Advertising ID declaration
+Cannot set via this API (Play Console UI required — see
+docs/play-app-content-checklist.md for exact answers):
+  - Privacy policy URL, App access / sign-in, Ads, Advertising ID
+  - Content rating (IARC), Target audience, Government, Financial, Health
+  - App category / tags; Data safety Console Submit if still draft
   - Email-list testers (API only supports Google Groups)
   - Countries for the internal track (N/A; production only)
 
@@ -81,24 +80,29 @@ PRIVACY_CDN_TMPL = (
 REPO_GRAPHICS_DIR = _REPO_ROOT / "docs" / "play-graphics"
 ARTIFACTS_GRAPHICS_DIR = Path("/opt/cursor/artifacts/play-graphics")
 
+# Exact Console answers: docs/play-app-content-checklist.md
 BLOCKED_CONSOLE_STEPS = [
     {
         "item": "Privacy policy URL",
         "path": "Play Console → App → Policy and programs → App content → Privacy policy → Manage",
         "action": (
             "Paste the jsDelivr @main privacy HTML URL for that package (see "
-            "docs/README.md), Save. API cannot set this field."
+            "docs/README.md / docs/play-app-content-checklist.md), Save. "
+            "API cannot set this field for Play-hosted apps."
         ),
     },
     {
-        "item": "App category",
-        "path": "Play Console → App → Grow users → Store presence → Store settings → App category",
-        "action": "Suica/QR → Tools; Sound → Music & Audio. Add optional tags if offered.",
+        "item": "Sign-in details / App access",
+        "path": "Play Console → App → Policy and programs → App content → App access",
+        "action": (
+            "All functionality available without special access; no accounts / "
+            "sign-in / restricted sections. Do not add test credentials."
+        ),
     },
     {
         "item": "Ads declaration",
         "path": "Play Console → App → Policy and programs → App content → Ads",
-        "action": "Select No — this app does not contain ads.",
+        "action": "Select No — this app does not contain ads. Advertising ID: not used.",
     },
     {
         "item": "Content rating (IARC)",
@@ -113,12 +117,41 @@ BLOCKED_CONSOLE_STEPS = [
     {
         "item": "Target audience",
         "path": "Play Console → App → Policy and programs → App content → Target audience and content",
-        "action": "Age groups 18+ only (or 13+ if offered without children). Not Designed for Families. No appeal to children.",
+        "action": (
+            "Age groups 18+ only (or consecutive 13+ bands without under-13). "
+            "Not Designed for Families. No appeal to children."
+        ),
     },
     {
-        "item": "News / COVID / Data safety review submit",
-        "path": "Play Console → App content remaining cards",
-        "action": "News app = No. Government = No. Confirm Data safety shows 'No data collected' after API import; Submit if still draft.",
+        "item": "Government apps",
+        "path": "Play Console → App → Policy and programs → App content → Government apps",
+        "action": "No — not developed by or on behalf of a government.",
+    },
+    {
+        "item": "Financial features",
+        "path": "Play Console → App → Policy and programs → App content → Financial features",
+        "action": (
+            "None / does not provide financial features. Suica is read-only on-device "
+            "NFC card display (does not move money or process payments)."
+        ),
+    },
+    {
+        "item": "Health",
+        "path": "Play Console → App → Policy and programs → App content → Health",
+        "action": "The app does not have any health features.",
+    },
+    {
+        "item": "Data safety Console submit",
+        "path": "Play Console → App content → Data safety",
+        "action": (
+            "API already imports no-data CSV; open Data safety and Submit/confirm "
+            "if still draft."
+        ),
+    },
+    {
+        "item": "App category",
+        "path": "Play Console → App → Grow users → Store presence → Store settings → App category",
+        "action": "Suica/QR → Tools; Sound → Music & Audio. Add optional tags if offered.",
     },
     {
         "item": "Internal testers (email list)",
