@@ -12,6 +12,9 @@ What this can set via API:
 Related: scripts/play_formup.py also sets contact details, phone screenshots,
 and applications.dataSafety. Privacy policy URL / category / IARC / ads /
 target audience / email-list testers still need Play Console UI.
+
+Graphics: default docs/play-graphics/ (repo), else PLAY_GRAPHICS_DIR /
+--graphics-dir, else /opt/cursor/artifacts/play-graphics/. Missing dir fails.
 """
 
 from __future__ import annotations
@@ -29,6 +32,17 @@ from googleapiclient.errors import HttpError
 from googleapiclient.http import MediaFileUpload
 
 SCOPES = ["https://www.googleapis.com/auth/androidpublisher"]
+
+_SCRIPTS = Path(__file__).resolve().parent
+_REPO_ROOT = _SCRIPTS.parent
+REPO_GRAPHICS_DIR = _REPO_ROOT / "docs" / "play-graphics"
+ARTIFACTS_GRAPHICS_DIR = Path("/opt/cursor/artifacts/play-graphics")
+CONTACT_WEBSITE = "https://github.com/squirelworks/squirrelsoft"
+PRIVACY_URLS = {
+    "works.squirrel.suica": "https://cdn.jsdelivr.net/gh/squirelworks/squirrelsoft@main/docs/privacy-suica.html",
+    "works.squirrel.sound": "https://cdn.jsdelivr.net/gh/squirelworks/squirrelsoft@main/docs/privacy-sound.html",
+    "works.squirrel.qr": "https://cdn.jsdelivr.net/gh/squirelworks/squirrelsoft@main/docs/privacy-qr.html",
+}
 
 LISTINGS = {
     "works.squirrel.suica": {
@@ -84,8 +98,8 @@ LISTINGS = {
 }
 
 MANUAL_CONSOLE_STEPS = [
-    "Privacy policy URL (Policy and programs → App content → Privacy policy)",
-    "App category (Store settings) — contact email is set via edits.details",
+    "Privacy policy URL (Policy and programs → App content → Privacy policy) — paste @main jsDelivr URLs from docs/README.md",
+    "App category (Store settings) — contact email/website (repo URL) via edits.details / play_formup.py",
     "Content rating questionnaire (IARC)",
     "Target audience / Designed for families answers",
     "Ads / Advertising ID declaration",
@@ -98,6 +112,44 @@ MANUAL_CONSOLE_STEPS = [
 def die(msg: str, code: int = 1) -> None:
     print(f"ERROR: {msg}", file=sys.stderr)
     raise SystemExit(code)
+
+
+def resolve_graphics_dir(explicit: Path | None) -> Path:
+    """Resolve store-graphics directory; fail loudly when nothing usable exists."""
+    if explicit is not None:
+        path = explicit.expanduser()
+        source = "--graphics-dir"
+    elif os.environ.get("PLAY_GRAPHICS_DIR"):
+        path = Path(os.environ["PLAY_GRAPHICS_DIR"]).expanduser()
+        source = "PLAY_GRAPHICS_DIR"
+    elif REPO_GRAPHICS_DIR.is_dir():
+        path = REPO_GRAPHICS_DIR
+        source = "repo docs/play-graphics"
+    elif ARTIFACTS_GRAPHICS_DIR.is_dir():
+        path = ARTIFACTS_GRAPHICS_DIR
+        source = "artifacts fallback"
+        print(
+            f"WARNING: graphics dir missing at {REPO_GRAPHICS_DIR}; "
+            f"falling back to {path}. Prefer committing icons under "
+            f"docs/play-graphics/ or set PLAY_GRAPHICS_DIR / --graphics-dir.",
+            file=sys.stderr,
+        )
+    else:
+        die(
+            "Graphics directory not found.\n"
+            f"  Expected repo path: {REPO_GRAPHICS_DIR}\n"
+            f"  Or cloud artifacts:  {ARTIFACTS_GRAPHICS_DIR}\n"
+            "  Or set --graphics-dir / PLAY_GRAPHICS_DIR.\n"
+            "  Required files: {suica,sound,qr}-icon-512.png, *-feature-1024x500.png"
+        )
+
+    if not path.is_dir():
+        die(
+            f"Graphics directory from {source} does not exist: {path}\n"
+            f"Populate {REPO_GRAPHICS_DIR} or set PLAY_GRAPHICS_DIR / --graphics-dir."
+        )
+    print(f"graphics dir ({source}): {path}")
+    return path
 
 
 def load_credentials(key_path: Path):
@@ -175,6 +227,9 @@ def update_package(
             up = upload_image(service, edit_id, package, "icon", icon)
             print(f"icon uploaded: {up.get('image', {}).get('url', up)}")
             result["icon"] = True
+        elif icon is not None:
+            print(f"WARNING: missing icon {icon} — skipping", file=sys.stderr)
+            result["icon"] = False
         if feature and feature.is_file():
             try:
                 service.edits().images().deleteall(
@@ -188,6 +243,9 @@ def update_package(
             up = upload_image(service, edit_id, package, "featureGraphic", feature)
             print(f"featureGraphic uploaded: {up.get('image', {}).get('url', up)}")
             result["featureGraphic"] = True
+        elif feature is not None:
+            print(f"WARNING: missing feature graphic {feature} — skipping", file=sys.stderr)
+            result["featureGraphic"] = False
 
         if version_code is not None:
             # Attach release notes to the internal track release that already has this VC.
@@ -259,8 +317,12 @@ def main() -> int:
     ap.add_argument(
         "--graphics-dir",
         type=Path,
-        default=Path("/opt/cursor/artifacts/play-graphics"),
-        help="Directory with {suica,sound,qr}-icon-512.png and *-feature-1024x500.png",
+        default=None,
+        help=(
+            "Directory with {suica,sound,qr}-icon-512.png and *-feature-1024x500.png. "
+            "Default: docs/play-graphics/, else PLAY_GRAPHICS_DIR, else "
+            "/opt/cursor/artifacts/play-graphics/."
+        ),
     )
     ap.add_argument("--track", default="internal")
     ap.add_argument("--json-out", type=Path)
@@ -269,6 +331,8 @@ def main() -> int:
     key = os.environ.get("GOOGLE_PLAY_SERVICE_ACCOUNT_JSON")
     if not key:
         die("Set GOOGLE_PLAY_SERVICE_ACCOUNT_JSON")
+
+    graphics_dir = resolve_graphics_dir(args.graphics_dir)
 
     creds = load_credentials(Path(key))
     service = build("androidpublisher", "v3", credentials=creds, cache_discovery=False)
@@ -290,14 +354,14 @@ def main() -> int:
         if package not in LISTINGS:
             die(f"unknown package (add to LISTINGS): {package}")
         s = stem[package]
-        icon = args.graphics_dir / f"{s}-icon-512.png"
-        feature = args.graphics_dir / f"{s}-feature-1024x500.png"
+        icon = graphics_dir / f"{s}-icon-512.png"
+        feature = graphics_dir / f"{s}-feature-1024x500.png"
         results.append(
             update_package(
                 service,
                 package=package,
-                icon=icon if icon.is_file() else None,
-                feature=feature if feature.is_file() else None,
+                icon=icon,
+                feature=feature,
                 version_code=version_code,
                 track=args.track,
             )
@@ -305,11 +369,19 @@ def main() -> int:
 
     summary = {
         "results": results,
+        "contactWebsite": CONTACT_WEBSITE,
+        "privacyUrlsForConsolePaste": PRIVACY_URLS,
+        "graphicsDir": str(graphics_dir),
         "manualConsoleStepsStillRequired": MANUAL_CONSOLE_STEPS,
     }
     if args.json_out:
         args.json_out.write_text(json.dumps(summary, indent=2) + "\n")
         print(f"\nwrote {args.json_out}")
+
+    print("\n=== privacy URLs (Console paste; contactWebsite = repo URL) ===")
+    for pkg, url in PRIVACY_URLS.items():
+        print(f"- {pkg}: {url}")
+    print(f"contactWebsite: {CONTACT_WEBSITE}")
 
     print("\n=== manual Console steps still required ===")
     for step in MANUAL_CONSOLE_STEPS:
