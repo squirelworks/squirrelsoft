@@ -37,7 +37,7 @@ int wav_read(const char *path, WavBuffer *out) {
         uint32_t sz = rd_u32(ch + 4);
         if (!memcmp(ch, "fmt ", 4)) {
             unsigned char fmt[40];
-            if (sz > sizeof(fmt) || fread(fmt, 1, sz, f) != sz) {
+            if (sz < 16 || sz > sizeof(fmt) || fread(fmt, 1, sz, f) != sz) {
                 fclose(f);
                 return -1;
             }

@@ -1,6 +1,7 @@
 #include "sqnr.h"
 
 #include <math.h>
+#include <stdlib.h>
 #include <string.h>
 
 #ifndef M_PI
@@ -9,118 +10,200 @@
 
 int sqnr_is_pow2(size_t n) { return n && !(n & (n - 1)); }
 
+/*
+ * Complex radix-2 FFT — original 0-based iterative Cooley–Tukey.
+ * Layout: data[2*k]=Re, data[2*k+1]=Im for k = 0 .. nn-1.
+ * isign > 0 → forward (e^{-2πi}), isign < 0 → inverse (no 1/nn scale).
+ */
 void sqnr_four1(double *data, size_t nn, int isign) {
-    /* Cooley–Tukey radix-2, iterative, bit-reversal permutation. */
-    size_t n = nn << 1;
-    size_t j = 1;
-    for (size_t i = 1; i < n; i += 2) {
-        if (j > i) {
-            double tr = data[j - 1];
-            double ti = data[j];
-            data[j - 1] = data[i - 1];
-            data[j] = data[i];
-            data[i - 1] = tr;
-            data[i] = ti;
+    if (nn < 2 || !sqnr_is_pow2(nn)) return;
+
+    /* Bit-reversal permutation (0-based complex indices). */
+    size_t j = 0;
+    for (size_t i = 1; i < nn; i++) {
+        size_t bit = nn >> 1;
+        for (; j & bit; bit >>= 1) j ^= bit;
+        j ^= bit;
+        if (i < j) {
+            size_t ia = i << 1, ja = j << 1;
+            double tr = data[ia], ti = data[ia + 1];
+            data[ia] = data[ja];
+            data[ia + 1] = data[ja + 1];
+            data[ja] = tr;
+            data[ja + 1] = ti;
         }
-        size_t m = nn;
-        while (m >= 2 && j > m) {
-            j -= m;
-            m >>= 1;
-        }
-        j += m;
     }
-    for (size_t mmax = 2; n > mmax; mmax <<= 1) {
-        size_t istep = mmax << 1;
-        double theta = isign * (2.0 * M_PI / (double)mmax);
-        double wtemp = sin(0.5 * theta);
-        double wpr = -2.0 * wtemp * wtemp;
-        double wpi = sin(theta);
-        double wr = 1.0;
-        double wi = 0.0;
-        for (size_t m = 1; m < mmax; m += 2) {
-            for (size_t i = m; i <= n; i += istep) {
-                j = i + mmax;
-                double tempr = wr * data[j - 1] - wi * data[j];
-                double tempi = wr * data[j] + wi * data[j - 1];
-                data[j - 1] = data[i - 1] - tempr;
-                data[j] = data[i] - tempi;
-                data[i - 1] += tempr;
-                data[i] += tempi;
+
+    /* Precompute unit-stride twiddles for the largest stage, reuse by stride. */
+    double *tw_re = (double *)malloc(nn * sizeof(double));
+    double *tw_im = (double *)malloc(nn * sizeof(double));
+    if (!tw_re || !tw_im) {
+        free(tw_re);
+        free(tw_im);
+        return;
+    }
+    {
+        double sign = (isign >= 0) ? -1.0 : 1.0;
+        for (size_t k = 0; k < nn; k++) {
+            double ang = sign * 2.0 * M_PI * (double)k / (double)nn;
+            tw_re[k] = cos(ang);
+            tw_im[k] = sin(ang);
+        }
+    }
+
+    for (size_t len = 2; len <= nn; len <<= 1) {
+        size_t half = len >> 1;
+        size_t tw_stride = nn / len;
+        for (size_t start = 0; start < nn; start += len) {
+            for (size_t k = 0; k < half; k++) {
+                size_t tix = k * tw_stride;
+                size_t u = (start + k) << 1;
+                size_t v = (start + k + half) << 1;
+                double wr = tw_re[tix], wi = tw_im[tix];
+                double vr = data[v] * wr - data[v + 1] * wi;
+                double vi = data[v] * wi + data[v + 1] * wr;
+                double ur = data[u], ui = data[u + 1];
+                data[u] = ur + vr;
+                data[u + 1] = ui + vi;
+                data[v] = ur - vr;
+                data[v + 1] = ui - vi;
             }
-            wtemp = wr;
-            wr = wr * wpr - wi * wpi + wr;
-            wi = wi * wpr + wtemp * wpi + wi;
         }
     }
+    free(tw_re);
+    free(tw_im);
 }
 
+/*
+ * Real FFT packing (our convention, matches callers):
+ *   data[0]       = Re F[0]
+ *   data[1]       = Re F[n/2]
+ *   data[2*k]     = Re F[k]
+ *   data[2*k + 1] = Im F[k]   for k = 1 .. n/2-1
+ *
+ * Forward uses a length-n/2 complex FFT on even/odd split; inverse undoes it.
+ * After inverse, divide by (n/2) to recover the original real sequence.
+ */
 void sqnr_realft(double *data, size_t n, int isign) {
-    /* Real FFT via complex half-length transform + packing identities. */
-    size_t i, i1, i2, i3, i4;
-    double c1 = 0.5, c2, h1r, h1i, h2r, h2i;
-    double wr, wi, wpr, wpi, wtemp, theta;
-    theta = M_PI / (double)(n >> 1);
-    if (isign == 1) {
-        c2 = -0.5;
-        sqnr_four1(data, n >> 1, 1);
+    if (n < 4 || !sqnr_is_pow2(n)) return;
+    const size_t half = n >> 1;
+    const size_t quarter = n >> 2;
+
+    if (isign >= 0) {
+        /* Even/odd split → complex vector of length half, then FFT. */
+        sqnr_four1(data, half, 1);
+
+        double *re = (double *)malloc(half * sizeof(double));
+        double *im = (double *)malloc(half * sizeof(double));
+        if (!re || !im) {
+            free(re);
+            free(im);
+            return;
+        }
+        for (size_t k = 0; k < half; k++) {
+            re[k] = data[2 * k];
+            im[k] = data[2 * k + 1];
+        }
+
+        /* DC / Nyquist from even-odd FFT (C[0]). */
+        double dc = re[0] + im[0];
+        double nyq = re[0] - im[0];
+        data[0] = dc;
+        data[1] = nyq;
+
+        for (size_t k = 1; k < quarter; k++) {
+            size_t rk = half - k;
+            double even_re = 0.5 * (re[k] + re[rk]);
+            double even_im = 0.5 * (im[k] - im[rk]);
+            double odd_re = 0.5 * (im[k] + im[rk]);
+            double odd_im = -0.5 * (re[k] - re[rk]);
+            double ang = -2.0 * M_PI * (double)k / (double)n;
+            double wr = cos(ang), wi = sin(ang);
+            double tw_re = odd_re * wr - odd_im * wi;
+            double tw_im = odd_re * wi + odd_im * wr;
+            data[2 * k] = even_re + tw_re;
+            data[2 * k + 1] = even_im + tw_im;
+            data[2 * rk] = even_re - tw_re;
+            data[2 * rk + 1] = -(even_im - tw_im);
+        }
+        if (quarter > 0) {
+            /* k = n/4: angle -π/2, odd branch only. */
+            double even_re = re[quarter];
+            double odd_im = -im[quarter];
+            data[2 * quarter] = even_re;
+            data[2 * quarter + 1] = odd_im;
+        }
+        free(re);
+        free(im);
     } else {
-        c2 = 0.5;
-        theta = -theta;
-    }
-    wtemp = sin(0.5 * theta);
-    wpr = -2.0 * wtemp * wtemp;
-    wpi = sin(theta);
-    wr = 1.0 + wpr;
-    wi = wpi;
-    for (i = 1; i < (n >> 2); i++) {
-        i2 = 1 + (i1 = i + i);
-        i4 = 1 + (i3 = n - i1);
-        h1r = c1 * (data[i1] + data[i3]);
-        h1i = c1 * (data[i2] - data[i4]);
-        h2r = -c2 * (data[i2] + data[i4]);
-        h2i = c2 * (data[i1] - data[i3]);
-        data[i1] = h1r + wr * h2r - wi * h2i;
-        data[i2] = h1i + wr * h2i + wi * h2r;
-        data[i3] = h1r - wr * h2r + wi * h2i;
-        data[i4] = -h1i + wr * h2i + wi * h2r;
-        wtemp = wr;
-        wr = wr * wpr - wi * wpi + wr;
-        wi = wi * wpr + wtemp * wpi + wi;
-    }
-    if (isign == 1) {
-        h1r = data[0];
-        data[0] = h1r + data[1];
-        data[1] = h1r - data[1];
-    } else {
-        h1r = data[0];
-        data[0] = c1 * (h1r + data[1]);
-        data[1] = c1 * (h1r - data[1]);
-        sqnr_four1(data, n >> 1, -1);
+        /* Unpack packed spectrum → length-half complex, inverse FFT. */
+        double *re = (double *)malloc(half * sizeof(double));
+        double *im = (double *)malloc(half * sizeof(double));
+        if (!re || !im) {
+            free(re);
+            free(im);
+            return;
+        }
+        double dc = data[0];
+        double nyq = data[1];
+        re[0] = 0.5 * (dc + nyq);
+        im[0] = 0.5 * (dc - nyq);
+
+        for (size_t k = 1; k < quarter; k++) {
+            size_t rk = half - k;
+            double fk_re = data[2 * k];
+            double fk_im = data[2 * k + 1];
+            double fr_re = data[2 * rk];
+            double fr_im = data[2 * rk + 1];
+            double even_re = 0.5 * (fk_re + fr_re);
+            double even_im = 0.5 * (fk_im - fr_im);
+            double ang = 2.0 * M_PI * (double)k / (double)n;
+            double wr = cos(ang), wi = sin(ang);
+            double diff_re = 0.5 * (fk_re - fr_re);
+            double diff_im = 0.5 * (fk_im + fr_im);
+            /* Undo forward twiddle on odd part. */
+            double odd_re = diff_re * wr - diff_im * wi;
+            double odd_im = diff_re * wi + diff_im * wr;
+            /* Reconstruct C[k] = even + i*odd  (matching forward split). */
+            re[k] = even_re - odd_im;
+            im[k] = even_im + odd_re;
+            re[rk] = even_re + odd_im;
+            im[rk] = -even_im + odd_re;
+        }
+        if (quarter > 0) {
+            re[quarter] = data[2 * quarter];
+            im[quarter] = -data[2 * quarter + 1];
+        }
+
+        for (size_t k = 0; k < half; k++) {
+            data[2 * k] = re[k];
+            data[2 * k + 1] = im[k];
+        }
+        free(re);
+        free(im);
+        sqnr_four1(data, half, -1);
     }
 }
 
-static double bessel_i0(double x) {
-    double ax = fabs(x), y, ans;
-    if (ax < 3.75) {
-        y = x / 3.75;
-        y *= y;
-        ans = 1.0 + y * (3.5156229 +
-                         y * (3.0899424 +
-                              y * (1.2067492 +
-                                   y * (0.2659732 + y * (0.0360768 + y * 0.0045813)))));
-    } else {
-        y = 3.75 / ax;
-        ans = (exp(ax) / sqrt(ax)) *
-              (0.39894228 +
-               y * (0.01328592 +
-                    y * (0.00225319 +
-                         y * (-0.00157565 +
-                              y * (0.00916281 +
-                                   y * (-0.02057706 +
-                                        y * (0.02635537 +
-                                             y * (-0.01647633 + y * 0.00392377))))))));
+/* Modified Bessel I0 from its power series / asymptotic — not NR bessi0. */
+static double modified_bessel_i0(double x) {
+    double ax = fabs(x);
+    if (ax < 15.0) {
+        /* I0(x) = Σ ((x/2)^{2k} / (k!)^2) */
+        double sum = 1.0;
+        double term = 1.0;
+        double half = ax * 0.5;
+        for (int k = 1; k < 64; k++) {
+            term *= (half / (double)k) * (half / (double)k);
+            sum += term;
+            if (term < sum * 1e-18) break;
+        }
+        return sum;
     }
-    return ans;
+    /* Large-|x|: I0(x) ~ e^{|x|} / sqrt(2 π |x|) * (1 + 1/(8|x|) + …) */
+    double inv = 1.0 / ax;
+    double series = 1.0 + inv * (0.125 + inv * (0.0703125 + inv * 0.0732421875));
+    return exp(ax) * series / sqrt(2.0 * M_PI * ax);
 }
 
 void sqnr_window(double *w, size_t n, SqnrWindow kind, double kaiser_beta) {
@@ -144,8 +227,8 @@ void sqnr_window(double *w, size_t n, SqnrWindow kind, double kaiser_beta) {
             break;
         case SQNR_WIN_KAISER: {
             double beta = kaiser_beta > 0 ? kaiser_beta : 8.6;
-            double a = bessel_i0(beta);
-            w[i] = bessel_i0(beta * sqrt(1.0 - t * t)) / a;
+            double a = modified_bessel_i0(beta);
+            w[i] = modified_bessel_i0(beta * sqrt(1.0 - t * t)) / a;
             break;
         }
         case SQNR_WIN_FLATTOP:

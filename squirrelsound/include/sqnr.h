@@ -1,7 +1,7 @@
 /*
- * sqnr — Squirrel Numerical Recipes–style DSP primitives.
- * Original implementations of classic spectral algorithms.
- * Not derived from Numerical Recipes book source code.
+ * sqnr — Squirrel spectral DSP primitives (NR-inspired feature set only).
+ * Clean-room radix-2 FFT / real packing / windows — not Numerical Recipes
+ * book source, and not a transcription of four1/realft/bessi0.
  */
 #ifndef SQNR_H
 #define SQNR_H
