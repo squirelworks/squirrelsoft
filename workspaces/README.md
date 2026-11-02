@@ -1,24 +1,29 @@
-# Play-ready AABs (workspace downloads)
+# Play-ready AABs (local / artifacts only — NOT in git)
 
-Upload-key–signed release App Bundle for SquirrelSound with Basic/Advanced
-spectrum UX (`cursor/sound-spectrum-ux-dc64` → release branch
-`cursor/sound-aab-008-dc64`). Download from the repo workspace (or this PR) and
-upload in Play Console — nothing is pushed to Play from the agent.
+Signed release App Bundles are **not committed to GitHub**. Build and sign
+locally, or use copies left on the cloud agent VM under:
+
+- `/opt/cursor/artifacts/`
+- `/agent/repos/squirrelsoft/workspaces/` (untracked; gitignored)
+- `/agent/repos/squirrelsoft/.local-aabs/` (untracked; gitignored)
+
+Do **not** force-add `*.aab` files. Root `.gitignore` ignores `*.aab` and
+`workspaces/*.aab` with no exceptions.
+
+## SquirrelSound 0.0.8 (this branch family)
 
 | File | Package | versionName | versionCode |
 |------|---------|-------------|-------------|
 | `SquirrelSound-0.0.8.aab` | `works.squirrel.sound` | 0.0.8 | 8 |
 
-Absolute paths on the cloud agent VM:
+Expected local paths:
 
-- `/agent/repos/squirrelsoft/workspaces/SquirrelSound-0.0.8.aab`
+- `/opt/cursor/artifacts/SquirrelSound-0.0.8.aab`
+- `/agent/repos/squirrelsoft/workspaces/SquirrelSound-0.0.8.aab` (if present locally)
+- `/agent/repos/squirrelsoft/.local-aabs/SquirrelSound-0.0.8.aab`
 
-Copy also under `/opt/cursor/artifacts/SquirrelSound-0.0.8.aab`.
-SHA-256: `SHA256SUMS.txt` in this directory.
-
-GitHub raw (after push):
-
-- https://github.com/squirelworks/squirrelsoft/raw/cursor/sound-aab-008-dc64/workspaces/SquirrelSound-0.0.8.aab
+SHA-256 reference: `SHA256SUMS.txt` in this directory (checksums of local/artifact
+files only — the binaries are not in the repository).
 
 Signed with the squirrel upload keystore (`CN=Squirrel Works Upload`). Play
 already has versionCode 7 for this package — upload **8** next.
@@ -29,6 +34,6 @@ already has versionCode 7 for this package — upload **8** next.
    (`works.squirrel.sound`).
 2. **Testing → Internal testing** (or closed/open/production as needed) →
    **Create new release**.
-3. Upload `workspaces/SquirrelSound-0.0.8.aab`.
+3. Upload the local/artifact `SquirrelSound-0.0.8.aab` (not a GitHub raw URL).
 4. Add release notes (spectrum Basic/Advanced UX, range, zoom/scroll), review,
    roll out.
