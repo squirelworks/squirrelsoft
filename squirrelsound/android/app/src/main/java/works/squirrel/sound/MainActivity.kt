@@ -9,6 +9,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
+import com.google.android.material.tabs.TabLayout
 import works.squirrel.sound.databinding.ActivityMainBinding
 
 class MainActivity : AppCompatActivity() {
@@ -20,6 +21,7 @@ class MainActivity : AppCompatActivity() {
     private var awaitingPermission = false
     /** Prevents overlapping startEngine from permission + onResume races. */
     private var starting = false
+    private var activePreset: SpectrumControls.RangePreset = SpectrumControls.RangePreset.HUMAN
 
     private val micPermission =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
@@ -47,11 +49,36 @@ class MainActivity : AppCompatActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        val sizes = listOf("1024", "2048", "4096", "8192")
-        binding.fftSize.adapter =
-            ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, sizes)
-        binding.fftSize.setSelection(1)
+        setupTabs()
+        setupBasicControls()
+        setupAdvancedControls()
 
+        binding.spectrum.applyPreset(SpectrumControls.RangePreset.HUMAN)
+        syncAdvancedFieldsFromView()
+
+        binding.btnStop.isEnabled = false
+        // Spectroid-style: start the mic as soon as the app opens.
+        binding.root.post { if (wantLive && !isFinishing) requestStart() }
+    }
+
+    private fun setupTabs() {
+        binding.tabs.addTab(binding.tabs.newTab().setText(R.string.tab_basic))
+        binding.tabs.addTab(binding.tabs.newTab().setText(R.string.tab_advanced))
+        binding.tabs.addOnTabSelectedListener(object : TabLayout.OnTabSelectedListener {
+            override fun onTabSelected(tab: TabLayout.Tab) {
+                val advanced = tab.position == 1
+                binding.panelBasic.visibility = if (advanced) android.view.View.GONE else android.view.View.VISIBLE
+                binding.panelAdvanced.visibility = if (advanced) android.view.View.VISIBLE else android.view.View.GONE
+                if (advanced) syncAdvancedFieldsFromView()
+            }
+
+            override fun onTabUnselected(tab: TabLayout.Tab) {}
+            override fun onTabReselected(tab: TabLayout.Tab) {}
+        })
+        binding.tabs.getTabAt(0)?.select()
+    }
+
+    private fun setupBasicControls() {
         binding.btnStart.setOnClickListener {
             wantLive = true
             requestStart()
@@ -68,14 +95,123 @@ class MainActivity : AppCompatActivity() {
         binding.btnReset.setOnClickListener {
             binding.spectrum.resetHold()
             binding.spectrum.clearWaterfall()
-            binding.spectrum.fMin = 20f
-            binding.spectrum.fMax = 8000f
+            applyPreset(activePreset, toast = false)
             binding.spectrum.invalidate()
         }
 
-        binding.btnStop.isEnabled = false
-        // Spectroid-style: start the mic as soon as the app opens.
-        binding.root.post { if (wantLive && !isFinishing) requestStart() }
+        binding.btnZoomIn.setOnClickListener {
+            binding.spectrum.zoomBy(1.35f)
+            syncAdvancedFieldsFromView()
+        }
+        binding.btnZoomOut.setOnClickListener {
+            binding.spectrum.zoomBy(1f / 1.35f)
+            syncAdvancedFieldsFromView()
+        }
+
+        binding.rangePresets.setOnCheckedStateChangeListener { _, checkedIds ->
+            if (checkedIds.isEmpty()) return@setOnCheckedStateChangeListener
+            val preset = when (checkedIds[0]) {
+                R.id.chipMusic -> SpectrumControls.RangePreset.MUSIC
+                R.id.chipBass -> SpectrumControls.RangePreset.BASS
+                R.id.chipSpeech -> SpectrumControls.RangePreset.SPEECH
+                R.id.chipFull -> SpectrumControls.RangePreset.FULL
+                else -> SpectrumControls.RangePreset.HUMAN
+            }
+            applyPreset(preset, toast = true)
+        }
+
+        val scrollLabels = listOf(
+            getString(R.string.scroll_slow),
+            getString(R.string.scroll_normal),
+            getString(R.string.scroll_fast)
+        )
+        binding.scrollSpeed.adapter =
+            ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, scrollLabels)
+        binding.scrollSpeed.setSelection(1) // Normal
+        binding.scrollSpeed.onItemSelectedListener = simpleItemSelected {
+            applyScrollSpeed(selectedScrollSpeed())
+        }
+    }
+
+    private fun setupAdvancedControls() {
+        val sizes = listOf("1024", "2048", "4096", "8192")
+        binding.fftSize.adapter =
+            ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, sizes)
+        binding.fftSize.setSelection(1)
+
+        val smoothLabels = listOf(
+            getString(R.string.smooth_off),
+            getString(R.string.smooth_light),
+            getString(R.string.smooth_medium),
+            getString(R.string.smooth_heavy)
+        )
+        binding.smoothAmount.adapter =
+            ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, smoothLabels)
+        binding.smoothAmount.setSelection(2) // Medium ≈ 0.30
+        binding.smoothAmount.onItemSelectedListener = simpleItemSelected {
+            engine?.smooth = selectedSmooth()
+        }
+
+        binding.btnApplyRange.setOnClickListener { applyCustomRangeFromFields() }
+    }
+
+    private fun applyPreset(preset: SpectrumControls.RangePreset, toast: Boolean) {
+        activePreset = preset
+        binding.spectrum.applyPreset(preset)
+        syncAdvancedFieldsFromView()
+        if (toast) {
+            Toast.makeText(
+                applicationContext,
+                getString(
+                    R.string.range_applied,
+                    binding.spectrum.fMin,
+                    binding.spectrum.fMax
+                ),
+                Toast.LENGTH_SHORT
+            ).show()
+        }
+    }
+
+    private fun applyCustomRangeFromFields() {
+        val lo = binding.editFmin.text?.toString()?.toFloatOrNull()
+        val hi = binding.editFmax.text?.toString()?.toFloatOrNull()
+        if (lo == null || hi == null || hi <= lo) {
+            Toast.makeText(applicationContext, R.string.range_invalid, Toast.LENGTH_SHORT).show()
+            return
+        }
+        binding.spectrum.setFrequencyRange(lo, hi)
+        syncAdvancedFieldsFromView()
+        Toast.makeText(
+            applicationContext,
+            getString(R.string.range_applied, binding.spectrum.fMin, binding.spectrum.fMax),
+            Toast.LENGTH_SHORT
+        ).show()
+    }
+
+    private fun syncAdvancedFieldsFromView() {
+        if (!::binding.isInitialized) return
+        binding.editFmin.setText(binding.spectrum.fMin.toInt().toString())
+        binding.editFmax.setText(binding.spectrum.fMax.toInt().toString())
+    }
+
+    private fun selectedScrollSpeed(): SpectrumControls.ScrollSpeed =
+        when (binding.scrollSpeed.selectedItemPosition) {
+            0 -> SpectrumControls.ScrollSpeed.SLOW
+            2 -> SpectrumControls.ScrollSpeed.FAST
+            else -> SpectrumControls.ScrollSpeed.NORMAL
+        }
+
+    private fun selectedSmooth(): Float =
+        when (binding.smoothAmount.selectedItemPosition) {
+            0 -> 0f
+            1 -> 0.15f
+            3 -> 0.55f
+            else -> 0.30f
+        }
+
+    private fun applyScrollSpeed(speed: SpectrumControls.ScrollSpeed) {
+        val hop = SpectrumControls.hopMsForScroll(speed)
+        engine?.hopMs = hop
     }
 
     private fun uiAlive(): Boolean =
@@ -137,6 +273,8 @@ class MainActivity : AppCompatActivity() {
             } catch (_: Exception) {
                 2048
             }
+            val hop = SpectrumControls.hopMsForScroll(selectedScrollSpeed())
+            val smooth = selectedSmooth()
             val eng = AudioEngine(
                 appContext = applicationContext,
                 onFrame = { frame ->
@@ -173,8 +311,8 @@ class MainActivity : AppCompatActivity() {
                 }
             )
             eng.fftSize = fft
-            eng.hopMs = 20
-            eng.smooth = 0.30f
+            eng.hopMs = hop
+            eng.smooth = smooth
             eng.source = source
             try {
                 eng.start()
@@ -268,4 +406,18 @@ class MainActivity : AppCompatActivity() {
         engine = null
         super.onDestroy()
     }
+
+    private fun simpleItemSelected(onSelected: () -> Unit) =
+        object : android.widget.AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(
+                parent: android.widget.AdapterView<*>?,
+                view: android.view.View?,
+                position: Int,
+                id: Long
+            ) {
+                onSelected()
+            }
+
+            override fun onNothingSelected(parent: android.widget.AdapterView<*>?) {}
+        }
 }

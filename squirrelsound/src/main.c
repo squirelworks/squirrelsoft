@@ -279,8 +279,12 @@ int main(int argc, char **argv) {
         ecfg.max_hold = has_flag(argc, argv, "--max-hold");
         ecfg.db_min = -90;
         ecfg.db_max = 0;
-        ecfg.f_min_hz = 0;
-        ecfg.f_max_hz = ecfg.sample_rate * 0.5;
+        /* Default = human hearing (phone-friendly top); Full Nyquist via UI key 5. */
+        ecfg.f_min_hz = 20;
+        {
+            double nyq = ecfg.sample_rate * 0.5;
+            ecfg.f_max_hz = nyq < 16000.0 ? nyq : 16000.0;
+        }
 
         LiveEngine engine;
         if (live_engine_init(&engine, &ecfg) != 0) {

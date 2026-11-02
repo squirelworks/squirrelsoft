@@ -62,9 +62,9 @@ class SpectrumView @JvmOverloads constructor(
 
     private val spectrumPath = Path()
 
-    /** Visible frequency window (Hz). */
-    var fMin = 20f
-    var fMax = 8000f
+    /** Visible frequency window (Hz). Defaults = human hearing (phone-friendly). */
+    var fMin = SpectrumControls.DEFAULT_FMIN_HZ
+    var fMax = SpectrumControls.DEFAULT_FMAX_HZ
 
     /** dBFS display range (Spectroid-style negative full-scale). */
     var dbMin = -90f
@@ -73,6 +73,12 @@ class SpectrumView @JvmOverloads constructor(
     private var pinchStartSpan = 0f
     private var pinchStartMin = 0f
     private var pinchStartMax = 0f
+    private var panStartX = 0f
+    private var panStartMin = 0f
+    private var panStartMax = 0f
+    private var panning = false
+
+    fun nyquist(): Float = (sampleRate / 2f).coerceAtLeast(SpectrumControls.MIN_SPAN_HZ + 1f)
 
     fun setMaxHold(on: Boolean) {
         maxHoldEnabled = on
@@ -92,6 +98,28 @@ class SpectrumView @JvmOverloads constructor(
         invalidate()
     }
 
+    fun setFrequencyRange(minHz: Float, maxHz: Float) {
+        val (lo, hi) = SpectrumControls.clampRange(minHz, maxHz, nyquist())
+        fMin = lo
+        fMax = hi
+        invalidate()
+    }
+
+    fun applyPreset(preset: SpectrumControls.RangePreset) {
+        val (lo, hi) = preset.resolve(nyquist())
+        fMin = lo
+        fMax = hi
+        invalidate()
+    }
+
+    /** Zoom about midpoint; factor &gt;1 zooms in. */
+    fun zoomBy(factor: Float) {
+        val (lo, hi) = SpectrumControls.zoom(fMin, fMax, factor, nyquist())
+        fMin = lo
+        fMax = hi
+        invalidate()
+    }
+
     fun update(frame: SpectrumFrame) {
         if (frame.db.size < 2 || frame.sampleRate <= 0) return
         sampleRate = frame.sampleRate
@@ -99,6 +127,10 @@ class SpectrumView @JvmOverloads constructor(
         peakDb = frame.peakDb
         rmsDb = frame.rmsDb
         db = frame.db
+        // Keep fMax from exceeding Nyquist after sample-rate changes.
+        val (lo, hi) = SpectrumControls.clampRange(fMin, fMax, nyquist())
+        fMin = lo
+        fMax = hi
         if (maxHoldEnabled) {
             val h = hold
             if (h == null || h.size != frame.db.size) {
@@ -145,7 +177,7 @@ class SpectrumView @JvmOverloads constructor(
         if (w <= 0) return
         val n = frame.size
         if (n < 2) return
-        val ny = sampleRate / 2f
+        val ny = nyquist()
         if (ny <= 0f) return
         ensureWaterfall(w)
         val pix = wfPixels ?: return
@@ -178,7 +210,7 @@ class SpectrumView @JvmOverloads constructor(
         val data = db ?: return
         val n = data.size
         if (n < 2) return
-        val ny = sampleRate / 2f
+        val ny = nyquist()
         if (ny <= 0f) return
         val lo = max(0f, fMin)
         val hi = min(ny, fMax).coerceAtLeast(lo + 1f)
@@ -226,13 +258,18 @@ class SpectrumView @JvmOverloads constructor(
             textPaint
         )
 
-        val ticks = floatArrayOf(100f, 250f, 500f, 1000f, 2000f, 4000f, 8000f)
+        val ticks = floatArrayOf(
+            20f, 50f, 100f, 250f, 500f, 1000f, 2000f, 4000f, 8000f, 16000f, 20000f
+        )
         for (hz in ticks) {
             if (hz < lo || hz > hi) continue
             val bin = ((hz / ny) * n).toInt().coerceIn(b0, b1)
             val x = xOf(bin)
             canvas.drawLine(x, spectrumH - 6f, x, spectrumH, gridPaint)
-            val label = if (hz >= 1000f) "${(hz / 1000f).toInt()}k" else "${hz.toInt()}"
+            val label = when {
+                hz >= 1000f -> "${(hz / 1000f).let { if (it == it.toInt().toFloat()) it.toInt().toString() else "%.1f".format(it) }}k"
+                else -> "${hz.toInt()}"
+            }
             canvas.drawText(label, x + 2f, spectrumH - 8f, axisPaint)
         }
 
@@ -247,8 +284,15 @@ class SpectrumView @JvmOverloads constructor(
     override fun onTouchEvent(event: MotionEvent): Boolean {
         try {
             when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    panStartX = event.x
+                    panStartMin = fMin
+                    panStartMax = fMax
+                    panning = true
+                }
                 MotionEvent.ACTION_POINTER_DOWN -> {
                     if (event.pointerCount >= 2) {
+                        panning = false
                         pinchStartSpan = span(event)
                         pinchStartMin = fMin
                         pinchStartMax = fMax
@@ -258,14 +302,33 @@ class SpectrumView @JvmOverloads constructor(
                     if (event.pointerCount >= 2 && pinchStartSpan > 1f) {
                         val s = span(event) / pinchStartSpan
                         if (s > 0.01f) {
-                            val mid = (pinchStartMin + pinchStartMax) / 2f
-                            val half = ((pinchStartMax - pinchStartMin) / 2f) / s
-                            val ny = (sampleRate / 2f).coerceAtLeast(40f)
-                            fMin = max(20f, mid - half)
-                            fMax = min(ny, mid + half).coerceAtLeast(fMin + 1f)
+                            val (lo, hi) = SpectrumControls.zoom(
+                                pinchStartMin,
+                                pinchStartMax,
+                                s,
+                                nyquist()
+                            )
+                            fMin = lo
+                            fMax = hi
                             invalidate()
                         }
+                    } else if (panning && event.pointerCount == 1 && width > 0) {
+                        val dx = event.x - panStartX
+                        val frac = -dx / width.toFloat()
+                        val (lo, hi) = SpectrumControls.pan(
+                            panStartMin,
+                            panStartMax,
+                            frac,
+                            nyquist()
+                        )
+                        fMin = lo
+                        fMax = hi
+                        invalidate()
                     }
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    panning = false
+                    pinchStartSpan = 0f
                 }
             }
         } catch (_: Exception) {

@@ -1,14 +1,42 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">SquirrelSound</string>
-    <string name="tagline">Live mic spectrum + waterfall · Spectroid-style analyzer</string>
+    <string name="tagline">Live mic spectrum + waterfall</string>
+    <string name="tab_basic">Basic</string>
+    <string name="tab_advanced">Advanced</string>
     <string name="start">Start</string>
     <string name="stop">Stop</string>
     <string name="hold">Max-hold</string>
     <string name="hold_on">Hold ✓</string>
-    <string name="reset">Reset zoom</string>
-    <string name="fft">FFT</string>
+    <string name="reset">Reset</string>
+    <string name="fft">FFT size</string>
+    <string name="fft_help">Larger FFT = finer frequency detail, slower response. Change applies on next Start.</string>
+    <string name="smooth_label">Smooth</string>
     <string name="demo_tone">Demo 440 Hz</string>
+    <string name="range_label">Frequency range</string>
+    <string name="range_human">Human 20–16k</string>
+    <string name="range_music">Music 20–4k</string>
+    <string name="range_bass">Bass 20–250</string>
+    <string name="range_speech">Speech 100–8k</string>
+    <string name="range_full">Full Nyquist</string>
+    <string name="zoom_label">Zoom</string>
+    <string name="zoom_in">＋</string>
+    <string name="zoom_out">－</string>
+    <string name="scroll_label">Scroll</string>
+    <string name="scroll_slow">Slow</string>
+    <string name="scroll_normal">Normal</string>
+    <string name="scroll_fast">Fast</string>
+    <string name="advanced_hint">Technical controls for FFT resolution, smoothing, and a custom Hz window.</string>
+    <string name="fmin_label">fMin</string>
+    <string name="fmax_label">fMax</string>
+    <string name="fmin_hint">Hz</string>
+    <string name="fmax_hint">Hz</string>
+    <string name="apply_range">Apply</string>
+    <string name="custom_range_help">Custom window overrides the Basic range chips until you pick a preset again. Pinch or drag on the plot also zooms/pans.</string>
+    <string name="smooth_off">Off</string>
+    <string name="smooth_light">Light</string>
+    <string name="smooth_medium">Medium</string>
+    <string name="smooth_heavy">Heavy</string>
     <string name="status_idle">Idle — Start mic or enable Demo tone</string>
     <string name="status_need_mic">Waiting for microphone permission…</string>
     <string name="status_mic_denied">Microphone permission denied — enable Demo tone or grant mic access</string>
@@ -18,4 +46,6 @@
     <string name="status_start_failed">Could not start capture: %1$s</string>
     <string name="status_perm_error">Permission request failed: %1$s</string>
     <string name="mic_permission">Microphone permission required for live spectrum</string>
+    <string name="range_applied">Range %1$.0f–%2$.0f Hz</string>
+    <string name="range_invalid">Enter valid fMin / fMax (Hz)</string>
 </resources>
