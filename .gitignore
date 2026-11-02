@@ -24,3 +24,8 @@
 *.ap_
 *.dex
 dist/
+
+# Play-ready AABs staged for workspace download (committed on purpose)
+!workspaces/
+!workspaces/**
+!workspaces/*.aab
