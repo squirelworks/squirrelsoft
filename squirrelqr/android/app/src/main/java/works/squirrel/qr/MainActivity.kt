@@ -132,15 +132,9 @@ class MainActivity : AppCompatActivity() {
             val analysis = ImageAnalysis.Builder()
                 .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                 .build()
+            // Product scope: QR codes only (no 1D / Aztec / PDF417 / etc.).
             val options = BarcodeScannerOptions.Builder()
-                .setBarcodeFormats(
-                    Barcode.FORMAT_QR_CODE,
-                    Barcode.FORMAT_AZTEC,
-                    Barcode.FORMAT_DATA_MATRIX,
-                    Barcode.FORMAT_PDF417,
-                    Barcode.FORMAT_CODE_128,
-                    Barcode.FORMAT_EAN_13
-                )
+                .setBarcodeFormats(Barcode.FORMAT_QR_CODE)
                 .build()
             val scanner = BarcodeScanning.getClient(options)
             analysis.setAnalyzer(executor) { proxy ->
@@ -308,11 +302,6 @@ class MainActivity : AppCompatActivity() {
 
     private fun formatName(format: Int): String = when (format) {
         Barcode.FORMAT_QR_CODE -> "QR"
-        Barcode.FORMAT_AZTEC -> "Aztec"
-        Barcode.FORMAT_DATA_MATRIX -> "DataMatrix"
-        Barcode.FORMAT_PDF417 -> "PDF417"
-        Barcode.FORMAT_CODE_128 -> "Code128"
-        Barcode.FORMAT_EAN_13 -> "EAN-13"
-        else -> "code"
+        else -> "QR"
     }
 }
