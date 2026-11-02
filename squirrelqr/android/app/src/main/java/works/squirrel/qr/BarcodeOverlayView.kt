@@ -9,8 +9,8 @@ import android.view.View
 import androidx.core.content.ContextCompat
 
 /**
- * Draws a bounding box + crosshair over the camera preview where ML Kit
- * reports a barcode. Coordinates are already mapped into view space.
+ * Camera overlay: always-on viewfinder crosshair, plus a bounding box when ML Kit
+ * reports a QR. Coordinates for [setTarget] are already mapped into view space.
  */
 class BarcodeOverlayView @JvmOverloads constructor(
     context: Context,
@@ -37,6 +37,13 @@ class BarcodeOverlayView @JvmOverloads constructor(
         color = ContextCompat.getColor(context, R.color.warm)
     }
 
+    private val guidePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeWidth = resources.displayMetrics.density * 1.25f
+        color = ContextCompat.getColor(context, R.color.muted)
+        alpha = 180
+    }
+
     private var target: RectF? = null
 
     fun setTarget(rect: RectF?) {
@@ -45,14 +52,20 @@ class BarcodeOverlayView @JvmOverloads constructor(
     }
 
     fun clear() {
-        if (target != null) {
-            target = null
-            invalidate()
-        }
+        target = null
+        invalidate()
     }
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
+
+        // Always-on viewfinder crosshair (product: camera + crosshair).
+        val viewCx = width / 2f
+        val viewCy = height / 2f
+        val guideArm = minOf(width, height) * 0.08f
+        canvas.drawLine(viewCx - guideArm, viewCy, viewCx + guideArm, viewCy, guidePaint)
+        canvas.drawLine(viewCx, viewCy - guideArm, viewCx, viewCy + guideArm, guidePaint)
+
         val r = target ?: return
         if (r.width() < 4f || r.height() < 4f) return
 

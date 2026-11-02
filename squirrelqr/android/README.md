@@ -2,7 +2,8 @@
 
 **QR code reader** (`works.squirrel.qr`).
 
-- CameraX + ML Kit continuous scan with bounding-box crosshair overlay
+- CameraX + ML Kit continuous **QR-only** scan (no 1D / Aztec / PDF417)
+- Always-on viewfinder crosshair + bounding box when a QR is detected
 - Bottom half: last result, scan history, open URL / copy, clear history
 - WindowInsets padding so controls clear the system nav / home gesture area
 - No spectrum (see **SquirrelSound**)
