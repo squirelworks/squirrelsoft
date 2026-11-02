@@ -20,7 +20,7 @@ echo "sdk.dir=$ANDROID_HOME" > local.properties
 ```
 
 APK: `app/build/outputs/apk/debug/app-debug.apk`  
-Package: `works.squirrel.qr` — version `0.1.4`
+Package: `works.squirrel.qr` — version `0.1.5`
 
 ## Play Console
 
