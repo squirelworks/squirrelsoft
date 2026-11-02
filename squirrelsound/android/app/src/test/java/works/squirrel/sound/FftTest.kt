@@ -51,6 +51,35 @@ class FftTest {
     }
 }
 
+class SpectrumBoundsTest {
+    /** Mirrors SpectrumView bin window math; empty/short frames must not throw. */
+    private fun binRange(n: Int, sampleRate: Int, fMin: Float, fMax: Float): Pair<Int, Int>? {
+        if (n < 2 || sampleRate <= 0) return null
+        val ny = sampleRate / 2f
+        if (ny <= 0f) return null
+        val lo = maxOf(0f, fMin)
+        val hi = minOf(ny, fMax).coerceAtLeast(lo + 1f)
+        val b0 = ((lo / ny) * n).toInt().coerceIn(0, n - 2)
+        val b1 = ((hi / ny) * n).toInt().coerceIn(b0 + 1, n)
+        return b0 to b1
+    }
+
+    @Test
+    fun shortFramesAreRejected() {
+        assertEquals(null, binRange(0, 44100, 20f, 8000f))
+        assertEquals(null, binRange(1, 44100, 20f, 8000f))
+        assertEquals(null, binRange(16, 0, 20f, 8000f))
+    }
+
+    @Test
+    fun normalFrameProducesValidBins() {
+        val (b0, b1) = binRange(1024, 44100, 20f, 8000f)!!
+        assertTrue(b0 >= 0)
+        assertTrue(b1 > b0)
+        assertTrue(b1 <= 1024)
+    }
+}
+
 class RingBufferTest {
     @Test
     fun hopKeepsOverlapAndDropsBacklog() {
