@@ -8,6 +8,7 @@ import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
 import works.squirrel.sound.databinding.ActivityMainBinding
 
 class MainActivity : AppCompatActivity() {
@@ -17,16 +18,27 @@ class MainActivity : AppCompatActivity() {
     /** User intends live capture (auto-start / Start). Cleared only by Stop. */
     private var wantLive = true
     private var awaitingPermission = false
+    /** Prevents overlapping startEngine from permission + onResume races. */
+    private var starting = false
 
     private val micPermission =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
             awaitingPermission = false
             if (ok) {
-                startEngine(AudioEngine.Source.MIC)
+                if (wantLive && !isFinishing && !isDestroyed) {
+                    startEngine(AudioEngine.Source.MIC)
+                }
             } else {
                 wantLive = false
-                binding.status.setText(R.string.status_mic_denied)
-                Toast.makeText(this, R.string.mic_permission, Toast.LENGTH_LONG).show()
+                safeUi {
+                    binding.status.setTextColor(ContextCompat.getColor(this, R.color.warm))
+                    binding.status.setText(R.string.status_mic_denied)
+                }
+                Toast.makeText(
+                    applicationContext,
+                    R.string.mic_permission,
+                    Toast.LENGTH_LONG
+                ).show()
             }
         }
 
@@ -46,7 +58,7 @@ class MainActivity : AppCompatActivity() {
         }
         binding.btnStop.setOnClickListener {
             wantLive = false
-            stopEngine()
+            stopEngine(showIdle = true)
         }
         binding.btnHold.setOnClickListener {
             maxHold = !maxHold
@@ -63,10 +75,26 @@ class MainActivity : AppCompatActivity() {
 
         binding.btnStop.isEnabled = false
         // Spectroid-style: start the mic as soon as the app opens.
-        binding.root.post { if (wantLive) requestStart() }
+        binding.root.post { if (wantLive && !isFinishing) requestStart() }
+    }
+
+    private fun uiAlive(): Boolean =
+        ::binding.isInitialized &&
+            !isDestroyed &&
+            !isFinishing &&
+            lifecycle.currentState.isAtLeast(Lifecycle.State.CREATED)
+
+    private inline fun safeUi(block: () -> Unit) {
+        if (!uiAlive()) return
+        try {
+            block()
+        } catch (_: Exception) {
+            // View hierarchy may be tearing down; never crash from a status paint.
+        }
     }
 
     private fun requestStart() {
+        if (isFinishing || isDestroyed) return
         if (binding.demoTone.isChecked) {
             startEngine(AudioEngine.Source.DEMO)
             return
@@ -76,77 +104,141 @@ class MainActivity : AppCompatActivity() {
                 PackageManager.PERMISSION_GRANTED -> startEngine(AudioEngine.Source.MIC)
             else -> {
                 awaitingPermission = true
-                binding.status.setText(R.string.status_need_mic)
-                micPermission.launch(Manifest.permission.RECORD_AUDIO)
+                safeUi {
+                    binding.status.setTextColor(ContextCompat.getColor(this, R.color.warm))
+                    binding.status.setText(R.string.status_need_mic)
+                }
+                try {
+                    micPermission.launch(Manifest.permission.RECORD_AUDIO)
+                } catch (e: Exception) {
+                    awaitingPermission = false
+                    wantLive = false
+                    safeUi {
+                        binding.status.setText(R.string.status_mic_denied)
+                    }
+                    Toast.makeText(
+                        applicationContext,
+                        getString(R.string.status_perm_error, e.message ?: "error"),
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
             }
         }
     }
 
     private fun startEngine(source: AudioEngine.Source) {
-        stopEngine()
-        val fft = binding.fftSize.selectedItem.toString().toInt()
-        val eng = AudioEngine(
-            appContext = applicationContext,
-            onFrame = { frame ->
-                binding.spectrum.update(frame)
-                val ok = !frame.sourceLabel.startsWith("mic-failed")
-                binding.status.setTextColor(
-                    ContextCompat.getColor(this, if (ok) R.color.ok else R.color.warm)
-                )
-                binding.status.text = getString(
-                    R.string.status_live,
-                    frame.sourceLabel,
-                    frame.sampleRate,
-                    frame.fftSize,
-                    frame.peakHz,
-                    frame.peakDb,
-                    frame.rmsDb
-                )
-            },
-            onStatus = { msg ->
-                // Avoid toast spam on transient focus / restart notices.
-                binding.status.setTextColor(ContextCompat.getColor(this, R.color.warm))
-                binding.status.text = msg
-                if (msg.contains("denied", ignoreCase = true) ||
-                    msg.contains("unavailable", ignoreCase = true)
-                ) {
-                    Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
-                }
+        if (isFinishing || isDestroyed) return
+        if (starting) return
+        starting = true
+        try {
+            stopEngine(showIdle = false)
+            val fft = try {
+                binding.fftSize.selectedItem?.toString()?.toIntOrNull() ?: 2048
+            } catch (_: Exception) {
+                2048
             }
-        )
-        eng.fftSize = fft
-        eng.hopMs = 20
-        eng.smooth = 0.30f
-        eng.source = source
-        eng.start()
-        engine = eng
-        binding.btnStart.isEnabled = false
-        binding.btnStop.isEnabled = true
-        binding.fftSize.isEnabled = false
-        binding.demoTone.isEnabled = false
-        binding.status.setTextColor(ContextCompat.getColor(this, R.color.ok))
-        binding.status.text = getString(
-            if (source == AudioEngine.Source.DEMO) R.string.status_starting_demo
-            else R.string.status_starting_mic
-        )
+            val eng = AudioEngine(
+                appContext = applicationContext,
+                onFrame = { frame ->
+                    safeUi {
+                        binding.spectrum.update(frame)
+                        val ok = !frame.sourceLabel.startsWith("mic-failed") &&
+                            !frame.sourceLabel.startsWith("mic-denied") &&
+                            frame.sourceLabel != "error"
+                        binding.status.setTextColor(
+                            ContextCompat.getColor(this, if (ok) R.color.ok else R.color.warm)
+                        )
+                        binding.status.text = getString(
+                            R.string.status_live,
+                            frame.sourceLabel,
+                            frame.sampleRate,
+                            frame.fftSize,
+                            frame.peakHz,
+                            frame.peakDb,
+                            frame.rmsDb
+                        )
+                    }
+                },
+                onStatus = { msg ->
+                    safeUi {
+                        binding.status.setTextColor(ContextCompat.getColor(this, R.color.warm))
+                        binding.status.text = msg
+                    }
+                    if (msg.contains("denied", ignoreCase = true) ||
+                        msg.contains("unavailable", ignoreCase = true) ||
+                        msg.contains("crashed", ignoreCase = true)
+                    ) {
+                        Toast.makeText(applicationContext, msg, Toast.LENGTH_SHORT).show()
+                    }
+                }
+            )
+            eng.fftSize = fft
+            eng.hopMs = 20
+            eng.smooth = 0.30f
+            eng.source = source
+            try {
+                eng.start()
+            } catch (e: Exception) {
+                safeUi {
+                    binding.status.setTextColor(ContextCompat.getColor(this, R.color.warm))
+                    binding.status.text = getString(
+                        R.string.status_start_failed,
+                        e.message ?: e.javaClass.simpleName
+                    )
+                }
+                Toast.makeText(
+                    applicationContext,
+                    getString(R.string.status_start_failed, e.message ?: "error"),
+                    Toast.LENGTH_LONG
+                ).show()
+                wantLive = source == AudioEngine.Source.DEMO
+                return
+            }
+            engine = eng
+            safeUi {
+                binding.btnStart.isEnabled = false
+                binding.btnStop.isEnabled = true
+                binding.fftSize.isEnabled = false
+                binding.demoTone.isEnabled = false
+                binding.status.setTextColor(ContextCompat.getColor(this, R.color.ok))
+                binding.status.text = getString(
+                    if (source == AudioEngine.Source.DEMO) R.string.status_starting_demo
+                    else R.string.status_starting_mic
+                )
+            }
+        } finally {
+            starting = false
+        }
     }
 
-    private fun stopEngine() {
-        engine?.stop()
+    private fun stopEngine(showIdle: Boolean) {
+        val eng = engine
         engine = null
-        binding.btnStart.isEnabled = true
-        binding.btnStop.isEnabled = false
-        binding.fftSize.isEnabled = true
-        binding.demoTone.isEnabled = true
-        binding.status.setTextColor(ContextCompat.getColor(this, R.color.ok))
-        binding.status.setText(R.string.status_idle)
+        try {
+            eng?.stop()
+        } catch (_: Exception) {
+        }
+        safeUi {
+            binding.btnStart.isEnabled = true
+            binding.btnStop.isEnabled = false
+            binding.fftSize.isEnabled = true
+            binding.demoTone.isEnabled = true
+            if (showIdle) {
+                binding.status.setTextColor(ContextCompat.getColor(this, R.color.ok))
+                binding.status.setText(R.string.status_idle)
+            }
+        }
     }
 
     override fun onResume() {
         super.onResume()
         // Keep / restart capture while the spectrum screen is visible.
-        if (wantLive && engine == null && !isFinishing && !awaitingPermission) {
-            binding.root.post { if (wantLive && engine == null) requestStart() }
+        if (wantLive && engine == null && !isFinishing && !awaitingPermission && !starting) {
+            binding.root.post {
+                if (wantLive && engine == null && !isFinishing && !awaitingPermission) {
+                    requestStart()
+                }
+            }
         }
     }
 
@@ -162,18 +254,17 @@ class MainActivity : AppCompatActivity() {
         // Leaving the app (home / another activity): release mic + wake lock.
         // Remember wantLive so onResume restarts when we come back.
         if (!awaitingPermission) {
-            engine?.stop()
-            engine = null
-            binding.btnStart.isEnabled = true
-            binding.btnStop.isEnabled = false
-            binding.fftSize.isEnabled = true
-            binding.demoTone.isEnabled = true
+            stopEngine(showIdle = false)
         }
     }
 
     override fun onDestroy() {
         wantLive = false
-        engine?.stop()
+        awaitingPermission = false
+        try {
+            engine?.stop()
+        } catch (_: Exception) {
+        }
         engine = null
         super.onDestroy()
     }

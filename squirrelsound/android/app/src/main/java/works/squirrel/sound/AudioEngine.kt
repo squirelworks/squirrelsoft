@@ -11,6 +11,8 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.PowerManager
+import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicReference
 import kotlin.math.PI
 import kotlin.math.log10
 import kotlin.math.sin
@@ -26,6 +28,11 @@ import kotlin.math.sqrt
  * Prefers [MediaRecorder.AudioSource.UNPROCESSED] then MIC so the graph is not
  * stuck on a voice-recognition AGC path. Transient AudioRecord failures restart
  * capture instead of permanently stopping the UI feed.
+ *
+ * [start]/[stop] are session-scoped: an old capture thread that outlives
+ * [stop]'s join cannot keep posting frames after a restart, and [stop] releases
+ * the active [AudioRecord] so blocking reads unblock promptly (avoids ANR /
+ * double-start races on the UI thread).
  */
 class AudioEngine(
     private val appContext: Context,
@@ -37,6 +44,9 @@ class AudioEngine(
     @Volatile private var running = false
     private var thread: Thread? = null
     private val main = Handler(Looper.getMainLooper())
+    private val sessionGen = AtomicInteger(0)
+    private val activeRecorder = AtomicReference<AudioRecord?>(null)
+    private val startStopLock = Any()
 
     var fftSize: Int = 2048
     /** Target analysis hop in milliseconds (Spectroid default interval ≈ 20 ms). */
@@ -72,27 +82,58 @@ class AudioEngine(
     }
 
     fun start() {
-        stop()
-        lastError = null
-        running = true
-        acquireKeepAlive()
-        val size = fftSize
-        val hop = hopMs
-        thread = Thread({ loop(size, hop) }, "sq-sound-fft").also {
-            it.priority = Thread.NORM_PRIORITY + 1
-            it.start()
+        synchronized(startStopLock) {
+            stopLocked()
+            lastError = null
+            val session = sessionGen.incrementAndGet()
+            running = true
+            acquireKeepAlive()
+            val size = fftSize.coerceIn(256, 16384).takeHighestOneBit().coerceAtLeast(256)
+            fftSize = size
+            val hop = hopMs.coerceIn(5, 200)
+            thread = Thread({ loop(size, hop, session) }, "sq-sound-fft").also {
+                it.priority = Thread.NORM_PRIORITY + 1
+                it.isDaemon = true
+                it.uncaughtExceptionHandler = Thread.UncaughtExceptionHandler { _, e ->
+                    lastError = "Capture crashed: ${e.javaClass.simpleName}: ${e.message}"
+                    postStatus(lastError!!)
+                    activeLabel = "error"
+                    running = false
+                    releaseKeepAlive()
+                    activeRecorder.getAndSet(null)?.let { releaseRecorder(it) }
+                }
+                it.start()
+            }
         }
     }
 
     fun stop() {
+        synchronized(startStopLock) {
+            stopLocked()
+        }
+    }
+
+    private fun stopLocked() {
         running = false
+        sessionGen.incrementAndGet() // invalidate any lingering loop
+        // Unblock AudioRecord.READ_BLOCKING so join does not stall the UI thread.
+        activeRecorder.getAndSet(null)?.let { releaseRecorder(it) }
         val t = thread
         thread = null
         if (t != null) {
-            t.join(750)
+            t.interrupt()
+            try {
+                t.join(400)
+            } catch (_: InterruptedException) {
+                Thread.currentThread().interrupt()
+            }
             if (t.isAlive) {
-                t.interrupt()
-                t.join(250)
+                // Last resort: wait a bit more; session id already invalidates work.
+                try {
+                    t.join(200)
+                } catch (_: InterruptedException) {
+                    Thread.currentThread().interrupt()
+                }
             }
         }
         releaseKeepAlive()
@@ -195,6 +236,11 @@ class AudioEngine(
                 }
                 lastError = "RECORD_AUDIO denied"
                 return null
+            } catch (_: IllegalArgumentException) {
+                try {
+                    rec?.release()
+                } catch (_: Exception) {
+                }
             } catch (_: Exception) {
                 try {
                     rec?.release()
@@ -208,7 +254,10 @@ class AudioEngine(
     private fun releaseRecorder(rec: AudioRecord?) {
         if (rec == null) return
         try {
-            rec.stop()
+            if (rec.recordingState == AudioRecord.RECORDSTATE_RECORDING) {
+                rec.stop()
+            }
+        } catch (_: IllegalStateException) {
         } catch (_: Exception) {
         }
         try {
@@ -220,11 +269,15 @@ class AudioEngine(
     /** Open + startRecording; returns null if all candidates fail. */
     private fun startMicSession(): Triple<AudioRecord, String, Int>? {
         for (sr in intArrayOf(48000, 44100, 16000)) {
-            val min = AudioRecord.getMinBufferSize(
-                sr,
-                AudioFormat.CHANNEL_IN_MONO,
-                AudioFormat.ENCODING_PCM_16BIT
-            )
+            val min = try {
+                AudioRecord.getMinBufferSize(
+                    sr,
+                    AudioFormat.CHANNEL_IN_MONO,
+                    AudioFormat.ENCODING_PCM_16BIT
+                )
+            } catch (_: Exception) {
+                continue
+            }
             if (min <= 0) continue
             val opened = openMic(sr, maxOf(min * 2, fftSize * 8))
             if (opened != null) {
@@ -235,20 +288,52 @@ class AudioEngine(
                         throw IllegalStateException("recordingState=${rec.recordingState}")
                     }
                     return Triple(rec, label, sr)
+                } catch (e: IllegalStateException) {
+                    releaseRecorder(rec)
+                    lastError = "Mic start failed: ${e.message}"
+                } catch (e: SecurityException) {
+                    releaseRecorder(rec)
+                    lastError = "RECORD_AUDIO denied"
+                    return null
                 } catch (e: Exception) {
                     releaseRecorder(rec)
                     lastError = "Mic start failed: ${e.message}"
                 }
+            } else if (lastError == "RECORD_AUDIO denied") {
+                return null
             }
+        }
+        if (lastError == null) {
+            lastError = "Microphone unavailable (busy or unsupported)"
         }
         return null
     }
 
     private fun postStatus(msg: String) {
-        main.post { onStatus(msg) }
+        main.post {
+            try {
+                onStatus(msg)
+            } catch (_: Exception) {
+                // Activity may be gone; never crash the process from a status post.
+            }
+        }
     }
 
-    private fun loop(size: Int, hopMsCfg: Int) {
+    private fun postFrame(session: Int, frame: SpectrumFrame) {
+        main.post {
+            if (!running || sessionGen.get() != session) return@post
+            try {
+                onFrame(frame)
+            } catch (_: Exception) {
+                // Swallow UI-side failures (destroyed view hierarchy, etc.).
+            }
+        }
+    }
+
+    private fun stillActive(session: Int): Boolean =
+        running && sessionGen.get() == session && !Thread.currentThread().isInterrupted
+
+    private fun loop(size: Int, hopMsCfg: Int, session: Int) {
         val re = FloatArray(size)
         val im = FloatArray(size)
         val window = Fft.hann(size)
@@ -266,23 +351,31 @@ class AudioEngine(
         var consecutiveRestarts = 0
         val maxRestartsBeforeBackoff = 8
 
+        fun adoptRecorder(rec: AudioRecord, label: String, sr: Int) {
+            recorder = rec
+            activeRecorder.set(rec)
+            activeLabel = label
+            sampleRate = sr
+        }
+
+        fun dropRecorder() {
+            val r = recorder
+            recorder = null
+            activeRecorder.compareAndSet(r, null)
+            releaseRecorder(r)
+        }
+
         try {
             if (useMic) {
-                val session = startMicSession()
-                if (session == null) {
+                val sessionOpen = startMicSession()
+                if (sessionOpen == null) {
                     useMic = false
                     activeLabel = "mic-failed"
                     lastError = lastError ?: "Microphone unavailable"
                     postStatus(lastError!!)
-                    if (!wantMic) {
-                        // Demo was not requested either — nothing to do.
-                        return
-                    }
                     // Keep the capture thread alive and retry; do not fall back to demo.
                 } else {
-                    recorder = session.first
-                    activeLabel = session.second
-                    sampleRate = session.third
+                    adoptRecorder(sessionOpen.first, sessionOpen.second, sessionOpen.third)
                     consecutiveRestarts = 0
                     postStatus("Capturing via $activeLabel @ ${sampleRate} Hz")
                 }
@@ -291,15 +384,54 @@ class AudioEngine(
                 postStatus("Demo tone 440 Hz")
             }
 
+            if (!stillActive(session)) return
+
             var hop = ((sampleRate * hopMsCfg) / 1000).coerceIn(size / 16, size)
             val demoScratch = FloatArray(size.coerceAtLeast(64))
 
-            while (running) {
+            while (stillActive(session)) {
                 if (useMic && recorder != null) {
-                    val n = if (Build.VERSION.SDK_INT >= 23) {
-                        recorder.read(shortBuf, 0, shortBuf.size, AudioRecord.READ_BLOCKING)
-                    } else {
-                        recorder.read(shortBuf, 0, shortBuf.size)
+                    val n = try {
+                        if (Build.VERSION.SDK_INT >= 23) {
+                            recorder!!.read(shortBuf, 0, shortBuf.size, AudioRecord.READ_BLOCKING)
+                        } else {
+                            recorder!!.read(shortBuf, 0, shortBuf.size)
+                        }
+                    } catch (e: IllegalStateException) {
+                        lastError = "Mic read IllegalState — restarting"
+                        postStatus(lastError!!)
+                        dropRecorder()
+                        consecutiveRestarts++
+                        sleepQuiet((50L * consecutiveRestarts).coerceAtMost(1500L))
+                        if (!stillActive(session)) break
+                        val opened = startMicSession()
+                        if (opened == null) {
+                            activeLabel = "mic-failed"
+                            lastError = lastError ?: "Microphone unavailable after restart"
+                            postStatus(lastError!!)
+                            useMic = false
+                            continue
+                        }
+                        adoptRecorder(opened.first, opened.second, opened.third)
+                        hop = ((sampleRate * hopMsCfg) / 1000).coerceIn(size / 16, size)
+                        ring.clear()
+                        continue
+                    } catch (e: SecurityException) {
+                        lastError = "RECORD_AUDIO denied"
+                        activeLabel = "mic-denied"
+                        postStatus(lastError!!)
+                        dropRecorder()
+                        useMic = false
+                        // Stay alive so UI can show the error; user must Stop / re-grant.
+                        sleepQuiet(1000)
+                        continue
+                    } catch (e: Exception) {
+                        lastError = "Mic read error: ${e.message}"
+                        postStatus(lastError!!)
+                        dropRecorder()
+                        consecutiveRestarts++
+                        sleepQuiet(200)
+                        continue
                     }
                     when {
                         n == AudioRecord.ERROR_INVALID_OPERATION ||
@@ -308,35 +440,23 @@ class AudioEngine(
                             n == AudioRecord.ERROR -> {
                             lastError = "Mic read error ($n) — restarting"
                             postStatus(lastError!!)
-                            releaseRecorder(recorder)
-                            recorder = null
+                            dropRecorder()
                             consecutiveRestarts++
-                            val backoffMs = (50L * consecutiveRestarts).coerceAtMost(1500L)
-                            try {
-                                Thread.sleep(backoffMs)
-                            } catch (_: InterruptedException) {
-                                break
-                            }
-                            if (!running) break
-                            val session = startMicSession()
-                            if (session == null) {
+                            sleepQuiet((50L * consecutiveRestarts).coerceAtMost(1500L))
+                            if (!stillActive(session)) break
+                            val opened = startMicSession()
+                            if (opened == null) {
                                 activeLabel = "mic-failed"
                                 lastError = lastError ?: "Microphone unavailable after restart"
                                 postStatus(lastError!!)
-                                // Keep trying while the engine is supposed to run.
                                 if (consecutiveRestarts >= maxRestartsBeforeBackoff) {
-                                    try {
-                                        Thread.sleep(2000)
-                                    } catch (_: InterruptedException) {
-                                        break
-                                    }
+                                    sleepQuiet(2000)
                                     consecutiveRestarts = maxRestartsBeforeBackoff / 2
                                 }
+                                useMic = false
                                 continue
                             }
-                            recorder = session.first
-                            activeLabel = session.second
-                            sampleRate = session.third
+                            adoptRecorder(opened.first, opened.second, opened.third)
                             hop = ((sampleRate * hopMsCfg) / 1000).coerceIn(size / 16, size)
                             ring.clear()
                             if (consecutiveRestarts <= 2) {
@@ -346,34 +466,29 @@ class AudioEngine(
                         }
                         n <= 0 -> {
                             // Spurious empty / short read — brief yield, do not FFT zeros.
-                            try {
-                                Thread.sleep(2)
-                            } catch (_: InterruptedException) {
-                                break
-                            }
+                            sleepQuiet(2)
                             continue
                         }
                         else -> {
                             consecutiveRestarts = 0
-                            for (i in 0 until n) {
+                            val count = n.coerceAtMost(shortBuf.size)
+                            for (i in 0 until count) {
                                 floatChunk[i] = shortBuf[i] / 32768f
                             }
-                            ring.write(floatChunk, 0, n)
+                            ring.write(floatChunk, 0, count)
                         }
                     }
                 } else if (wantMic && !useMic) {
-                    // Waiting to recover a failed initial open.
-                    try {
-                        Thread.sleep(500)
-                    } catch (_: InterruptedException) {
-                        break
+                    // Waiting to recover a failed open, or after permission denial.
+                    if (lastError == "RECORD_AUDIO denied") {
+                        sleepQuiet(1000)
+                        continue
                     }
-                    if (!running) break
-                    val session = startMicSession()
-                    if (session != null) {
-                        recorder = session.first
-                        activeLabel = session.second
-                        sampleRate = session.third
+                    sleepQuiet(500)
+                    if (!stillActive(session)) break
+                    val opened = startMicSession()
+                    if (opened != null) {
+                        adoptRecorder(opened.first, opened.second, opened.third)
                         hop = ((sampleRate * hopMsCfg) / 1000).coerceIn(size / 16, size)
                         useMic = true
                         ring.clear()
@@ -391,65 +506,81 @@ class AudioEngine(
                         if (phase > 2.0 * PI) phase -= 2.0 * PI
                     }
                     ring.write(demoScratch, 0, count)
-                    try {
-                        Thread.sleep((1000L * count / sampleRate).coerceAtLeast(4L))
-                    } catch (_: InterruptedException) {
-                        break
-                    }
+                    sleepQuiet((1000L * count / sampleRate).coerceAtLeast(4L))
                 }
 
                 // Emit as many hopped frames as the ring allows (usually 0–1 per read).
-                while (running && ring.available >= size) {
+                while (stillActive(session) && ring.available >= size) {
                     if (!ring.takeWindow(re, size, hop)) break
-                    var sumSq = 0.0
-                    for (i in 0 until size) {
-                        val s = re[i]
-                        sumSq += (s * s).toDouble()
-                        re[i] = s * window[i]
-                        im[i] = 0f
-                    }
-                    val rms = sqrt(sumSq / size).toFloat()
-                    val rmsDb = if (rms > 1e-12f) 20f * log10(rms) else -90f
-
-                    Fft.forward(re, im)
-                    Fft.magnitudeDb(re, im, mags)
-
-                    val a = smooth.coerceIn(0f, 0.95f)
-                    if (!smoothInit || a <= 0f) {
-                        for (i in mags.indices) smoothed[i] = mags[i]
-                        smoothInit = true
-                    } else {
-                        val keep = 1f - a
-                        for (i in mags.indices) {
-                            smoothed[i] = smoothed[i] * keep + mags[i] * a
+                    try {
+                        var sumSq = 0.0
+                        for (i in 0 until size) {
+                            val s = re[i]
+                            sumSq += (s * s).toDouble()
+                            re[i] = s * window[i]
+                            im[i] = 0f
                         }
-                    }
+                        val rms = sqrt(sumSq / size).toFloat()
+                        val rmsDb = if (rms > 1e-12f) 20f * log10(rms) else -90f
 
-                    var peakBin = 0
-                    var peakDb = -999f
-                    for (i in 1 until smoothed.size) {
-                        if (smoothed[i] > peakDb) {
-                            peakDb = smoothed[i]
-                            peakBin = i
+                        Fft.forward(re, im)
+                        Fft.magnitudeDb(re, im, mags)
+
+                        val a = smooth.coerceIn(0f, 0.95f)
+                        if (!smoothInit || a <= 0f) {
+                            for (i in mags.indices) smoothed[i] = mags[i]
+                            smoothInit = true
+                        } else {
+                            val keep = 1f - a
+                            for (i in mags.indices) {
+                                smoothed[i] = smoothed[i] * keep + mags[i] * a
+                            }
                         }
-                    }
-                    val peakHz = peakBin * sampleRate.toFloat() / size
-                    val frame = SpectrumFrame(
-                        db = smoothed.copyOf(),
-                        sampleRate = sampleRate,
-                        fftSize = size,
-                        peakHz = peakHz,
-                        peakDb = peakDb,
-                        rmsDb = rmsDb,
-                        sourceLabel = activeLabel
-                    )
-                    main.post {
-                        if (running) onFrame(frame)
+
+                        var peakBin = 0
+                        var peakDb = -999f
+                        for (i in 1 until smoothed.size) {
+                            if (smoothed[i] > peakDb) {
+                                peakDb = smoothed[i]
+                                peakBin = i
+                            }
+                        }
+                        val peakHz = peakBin * sampleRate.toFloat() / size
+                        val frame = SpectrumFrame(
+                            db = smoothed.copyOf(),
+                            sampleRate = sampleRate,
+                            fftSize = size,
+                            peakHz = peakHz,
+                            peakDb = peakDb,
+                            rmsDb = rmsDb,
+                            sourceLabel = activeLabel
+                        )
+                        postFrame(session, frame)
+                    } catch (e: Exception) {
+                        lastError = "FFT error: ${e.message}"
+                        postStatus(lastError!!)
+                        // Skip this hop; keep capturing.
+                        break
                     }
                 }
             }
+        } catch (e: Exception) {
+            lastError = "Capture loop error: ${e.message}"
+            postStatus(lastError!!)
         } finally {
-            releaseRecorder(recorder)
+            val r = recorder
+            recorder = null
+            activeRecorder.compareAndSet(r, null)
+            releaseRecorder(r)
+        }
+    }
+
+    private fun sleepQuiet(ms: Long) {
+        if (ms <= 0) return
+        try {
+            Thread.sleep(ms)
+        } catch (_: InterruptedException) {
+            Thread.currentThread().interrupt()
         }
     }
 }

@@ -93,6 +93,7 @@ class SpectrumView @JvmOverloads constructor(
     }
 
     fun update(frame: SpectrumFrame) {
+        if (frame.db.size < 2 || frame.sampleRate <= 0) return
         sampleRate = frame.sampleRate
         peakHz = frame.peakHz
         peakDb = frame.peakDb
@@ -106,7 +107,11 @@ class SpectrumView @JvmOverloads constructor(
                 for (i in frame.db.indices) if (frame.db[i] > h[i]) h[i] = frame.db[i]
             }
         }
-        pushWaterfallRow(frame.db)
+        try {
+            pushWaterfallRow(frame.db)
+        } catch (_: Exception) {
+            // Bitmap / size races during layout — skip this row.
+        }
         invalidate()
     }
 
@@ -138,15 +143,18 @@ class SpectrumView @JvmOverloads constructor(
     private fun pushWaterfallRow(frame: FloatArray) {
         val w = width
         if (w <= 0) return
+        val n = frame.size
+        if (n < 2) return
+        val ny = sampleRate / 2f
+        if (ny <= 0f) return
         ensureWaterfall(w)
         val pix = wfPixels ?: return
         val bmp = wfBitmap ?: return
+        if (wfWidth <= 0 || pix.size < wfWidth * wfRows) return
         // Scroll existing rows down by one.
         System.arraycopy(pix, 0, pix, wfWidth, wfWidth * (wfRows - 1))
-        val ny = sampleRate / 2f
         val lo = max(0f, fMin)
-        val hi = min(ny, fMax)
-        val n = frame.size
+        val hi = min(ny, fMax).coerceAtLeast(lo + 1f)
         val b0 = ((lo / ny) * n).toInt().coerceIn(0, n - 2)
         val b1 = ((hi / ny) * n).toInt().coerceIn(b0 + 1, n)
         for (x in 0 until wfWidth) {
@@ -168,10 +176,12 @@ class SpectrumView @JvmOverloads constructor(
         canvas.drawColor(Color.parseColor("#0B1020"))
         val spectrumH = h / 3f
         val data = db ?: return
-        val ny = sampleRate / 2f
-        val lo = max(0f, fMin)
-        val hi = min(ny, fMax)
         val n = data.size
+        if (n < 2) return
+        val ny = sampleRate / 2f
+        if (ny <= 0f) return
+        val lo = max(0f, fMin)
+        val hi = min(ny, fMax).coerceAtLeast(lo + 1f)
         val b0 = ((lo / ny) * n).toInt().coerceIn(0, n - 2)
         val b1 = ((hi / ny) * n).toInt().coerceIn(b0 + 1, n)
         val span = (dbMax - dbMin).coerceAtLeast(1f)
@@ -235,29 +245,37 @@ class SpectrumView @JvmOverloads constructor(
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
-        when (event.actionMasked) {
-            MotionEvent.ACTION_POINTER_DOWN -> {
-                if (event.pointerCount >= 2) {
-                    pinchStartSpan = span(event)
-                    pinchStartMin = fMin
-                    pinchStartMax = fMax
+        try {
+            when (event.actionMasked) {
+                MotionEvent.ACTION_POINTER_DOWN -> {
+                    if (event.pointerCount >= 2) {
+                        pinchStartSpan = span(event)
+                        pinchStartMin = fMin
+                        pinchStartMax = fMax
+                    }
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    if (event.pointerCount >= 2 && pinchStartSpan > 1f) {
+                        val s = span(event) / pinchStartSpan
+                        if (s > 0.01f) {
+                            val mid = (pinchStartMin + pinchStartMax) / 2f
+                            val half = ((pinchStartMax - pinchStartMin) / 2f) / s
+                            val ny = (sampleRate / 2f).coerceAtLeast(40f)
+                            fMin = max(20f, mid - half)
+                            fMax = min(ny, mid + half).coerceAtLeast(fMin + 1f)
+                            invalidate()
+                        }
+                    }
                 }
             }
-            MotionEvent.ACTION_MOVE -> {
-                if (event.pointerCount >= 2 && pinchStartSpan > 1f) {
-                    val s = span(event) / pinchStartSpan
-                    val mid = (pinchStartMin + pinchStartMax) / 2f
-                    val half = ((pinchStartMax - pinchStartMin) / 2f) / s
-                    fMin = max(20f, mid - half)
-                    fMax = min(sampleRate / 2f, mid + half)
-                    invalidate()
-                }
-            }
+        } catch (_: Exception) {
+            // Pointer index races — ignore the gesture frame.
         }
         return true
     }
 
     private fun span(e: MotionEvent): Float {
+        if (e.pointerCount < 2) return 0f
         val dx = e.getX(0) - e.getX(1)
         val dy = e.getY(0) - e.getY(1)
         return kotlin.math.sqrt(dx * dx + dy * dy)
