@@ -80,6 +80,85 @@ class SpectrumBoundsTest {
     }
 }
 
+class SpectrumControlsTest {
+    @Test
+    fun humanDefaultIsPhoneFriendlyHearing() {
+        val (lo, hi) = SpectrumControls.RangePreset.HUMAN.resolve(22_050f)
+        assertEquals(20f, lo, 0.01f)
+        assertEquals(16_000f, hi, 0.01f)
+    }
+
+    @Test
+    fun musicKeepsBassInFrame() {
+        val (lo, hi) = SpectrumControls.RangePreset.MUSIC.resolve(22_050f)
+        assertEquals(20f, lo, 0.01f)
+        assertTrue("music top should leave bass visible across most of the plot", hi <= 5_000f)
+        assertTrue(hi > 1_000f)
+    }
+
+    @Test
+    fun bassPresetIsLowEnd() {
+        val (lo, hi) = SpectrumControls.RangePreset.BASS.resolve(24_000f)
+        assertEquals(20f, lo, 0.01f)
+        assertEquals(250f, hi, 0.01f)
+    }
+
+    @Test
+    fun fullUsesNyquist() {
+        val (lo, hi) = SpectrumControls.RangePreset.FULL.resolve(24_000f)
+        assertEquals(20f, lo, 0.01f)
+        assertEquals(24_000f, hi, 0.01f)
+    }
+
+    @Test
+    fun fullClampsWhenNyquistBelowHumanTop() {
+        val (lo, hi) = SpectrumControls.RangePreset.HUMAN.resolve(8_000f)
+        assertEquals(20f, lo, 0.01f)
+        assertEquals(8_000f, hi, 0.01f)
+    }
+
+    @Test
+    fun zoomInNarrowsSpan() {
+        val (lo, hi) = SpectrumControls.zoom(20f, 16_000f, 2f, 22_050f)
+        assertTrue(hi - lo < 16_000f - 20f)
+        assertTrue(hi - lo >= SpectrumControls.MIN_SPAN_HZ)
+    }
+
+    @Test
+    fun zoomOutWidensButStaysInNyquist() {
+        val (lo, hi) = SpectrumControls.zoom(1_000f, 2_000f, 0.5f, 22_050f)
+        assertTrue(hi - lo > 1_000f)
+        assertTrue(hi <= 22_050f)
+        assertTrue(lo >= 0f)
+    }
+
+    @Test
+    fun panShiftsWindow() {
+        val (lo, hi) = SpectrumControls.pan(100f, 1_100f, 0.5f, 22_050f)
+        assertEquals(600f, lo, 0.5f)
+        assertEquals(1_600f, hi, 0.5f)
+    }
+
+    @Test
+    fun scrollSpeedMapsToHopMs() {
+        assertEquals(50, SpectrumControls.hopMsForScroll(SpectrumControls.ScrollSpeed.SLOW))
+        assertEquals(20, SpectrumControls.hopMsForScroll(SpectrumControls.ScrollSpeed.NORMAL))
+        assertEquals(10, SpectrumControls.hopMsForScroll(SpectrumControls.ScrollSpeed.FAST))
+        assertEquals(
+            SpectrumControls.ScrollSpeed.SLOW,
+            SpectrumControls.ScrollSpeed.fromHopMs(50)
+        )
+        assertEquals(
+            SpectrumControls.ScrollSpeed.FAST,
+            SpectrumControls.ScrollSpeed.fromHopMs(10)
+        )
+        assertEquals(
+            SpectrumControls.ScrollSpeed.NORMAL,
+            SpectrumControls.ScrollSpeed.fromHopMs(20)
+        )
+    }
+}
+
 class RingBufferTest {
     @Test
     fun hopKeepsOverlapAndDropsBacklog() {

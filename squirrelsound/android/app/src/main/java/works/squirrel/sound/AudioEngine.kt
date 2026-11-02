@@ -49,12 +49,15 @@ class AudioEngine(
     private val startStopLock = Any()
 
     var fftSize: Int = 2048
-    /** Target analysis hop in milliseconds (Spectroid default interval ≈ 20 ms). */
-    var hopMs: Int = 20
+    /**
+     * Target analysis hop in milliseconds (Spectroid default interval ≈ 20 ms).
+     * Re-read live so Basic “Scroll” speed can change without restarting capture.
+     */
+    @Volatile var hopMs: Int = 20
     var source: Source = Source.MIC
     var demoHz: Float = 440f
     /** Exponential smoothing 0..1 (0 = off). Spectroid-like default ≈ 0.3. */
-    var smooth: Float = 0.30f
+    @Volatile var smooth: Float = 0.30f
 
     @Volatile var activeLabel: String = "idle"
         private set
@@ -90,8 +93,9 @@ class AudioEngine(
             acquireKeepAlive()
             val size = fftSize.coerceIn(256, 16384).takeHighestOneBit().coerceAtLeast(256)
             fftSize = size
-            val hop = hopMs.coerceIn(5, 200)
-            thread = Thread({ loop(size, hop, session) }, "sq-sound-fft").also {
+            // hopMs is read live inside the capture loop (Scroll speed).
+            hopMs = hopMs.coerceIn(5, 200)
+            thread = Thread({ loop(size, session) }, "sq-sound-fft").also {
                 it.priority = Thread.NORM_PRIORITY + 1
                 it.isDaemon = true
                 it.uncaughtExceptionHandler = Thread.UncaughtExceptionHandler { _, e ->
@@ -333,7 +337,7 @@ class AudioEngine(
     private fun stillActive(session: Int): Boolean =
         running && sessionGen.get() == session && !Thread.currentThread().isInterrupted
 
-    private fun loop(size: Int, hopMsCfg: Int, session: Int) {
+    private fun loop(size: Int, session: Int) {
         val re = FloatArray(size)
         val im = FloatArray(size)
         val window = Fft.hann(size)
@@ -386,10 +390,14 @@ class AudioEngine(
 
             if (!stillActive(session)) return
 
-            var hop = ((sampleRate * hopMsCfg) / 1000).coerceIn(size / 16, size)
+            fun hopSamples(): Int {
+                val ms = hopMs.coerceIn(5, 200)
+                return ((sampleRate * ms) / 1000).coerceIn(size / 16, size)
+            }
             val demoScratch = FloatArray(size.coerceAtLeast(64))
 
             while (stillActive(session)) {
+                val hop = hopSamples()
                 if (useMic && recorder != null) {
                     val n = try {
                         if (Build.VERSION.SDK_INT >= 23) {
@@ -413,7 +421,6 @@ class AudioEngine(
                             continue
                         }
                         adoptRecorder(opened.first, opened.second, opened.third)
-                        hop = ((sampleRate * hopMsCfg) / 1000).coerceIn(size / 16, size)
                         ring.clear()
                         continue
                     } catch (e: SecurityException) {
@@ -457,7 +464,6 @@ class AudioEngine(
                                 continue
                             }
                             adoptRecorder(opened.first, opened.second, opened.third)
-                            hop = ((sampleRate * hopMsCfg) / 1000).coerceIn(size / 16, size)
                             ring.clear()
                             if (consecutiveRestarts <= 2) {
                                 postStatus("Mic restarted via $activeLabel @ ${sampleRate} Hz")
@@ -489,7 +495,6 @@ class AudioEngine(
                     val opened = startMicSession()
                     if (opened != null) {
                         adoptRecorder(opened.first, opened.second, opened.third)
-                        hop = ((sampleRate * hopMsCfg) / 1000).coerceIn(size / 16, size)
                         useMic = true
                         ring.clear()
                         postStatus("Mic recovered via $activeLabel @ ${sampleRate} Hz")

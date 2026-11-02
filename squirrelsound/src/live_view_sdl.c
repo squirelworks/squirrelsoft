@@ -65,9 +65,19 @@ int live_view_sdl_run(LiveAudio *audio, LiveEngine *engine) {
     double zoom_fmax = engine->cfg.f_max_hz;
     Uint32 last_print = 0;
 
+    /* Match Android Basic presets: Human / Music / Bass / Speech / Full. */
+    double nyq = engine->cfg.sample_rate * 0.5;
+    live_engine_set_freq_range(engine, 20.0, nyq < 16000.0 ? nyq : 16000.0);
+    zoom_fmin = engine->cfg.f_min_hz;
+    zoom_fmax = engine->cfg.f_max_hz;
+    int scroll_skip = 1; /* 1=fast, 2=normal, 4=slow (frames between waterfall pushes) */
+    int scroll_phase = 0;
+
     printf("SquirrelSound Live UI\n");
     printf("  q/Esc quit | space pause | m max-hold | r reset hold\n");
     printf("  [/] zoom | arrows pan | wheel zoom\n");
+    printf("  1 Human 20-16k | 2 Music 20-4k | 3 Bass 20-250 | 4 Speech | 5 Full\n");
+    printf("  8/9/0 scroll Slow/Normal/Fast\n");
     printf("  source=%s  fft=%zu  fs=%.0f\n", live_audio_kind_name(live_audio_kind(audio)),
            nfft, engine->cfg.sample_rate);
 
@@ -84,6 +94,34 @@ int live_view_sdl_run(LiveAudio *audio, LiveEngine *engine) {
                     if (!engine->cfg.max_hold) live_engine_reset_hold(engine);
                 }
                 if (k == SDLK_r) live_engine_reset_hold(engine);
+                if (k == SDLK_1) { /* Human */
+                    live_engine_set_freq_range(engine, 20.0, nyq < 16000.0 ? nyq : 16000.0);
+                    zoom_fmin = engine->cfg.f_min_hz;
+                    zoom_fmax = engine->cfg.f_max_hz;
+                }
+                if (k == SDLK_2) { /* Music (bass-friendly) */
+                    live_engine_set_freq_range(engine, 20.0, 4000.0);
+                    zoom_fmin = engine->cfg.f_min_hz;
+                    zoom_fmax = engine->cfg.f_max_hz;
+                }
+                if (k == SDLK_3) { /* Bass */
+                    live_engine_set_freq_range(engine, 20.0, 250.0);
+                    zoom_fmin = engine->cfg.f_min_hz;
+                    zoom_fmax = engine->cfg.f_max_hz;
+                }
+                if (k == SDLK_4) { /* Speech */
+                    live_engine_set_freq_range(engine, 100.0, 8000.0);
+                    zoom_fmin = engine->cfg.f_min_hz;
+                    zoom_fmax = engine->cfg.f_max_hz;
+                }
+                if (k == SDLK_5) { /* Full Nyquist */
+                    live_engine_set_freq_range(engine, 20.0, nyq);
+                    zoom_fmin = engine->cfg.f_min_hz;
+                    zoom_fmax = engine->cfg.f_max_hz;
+                }
+                if (k == SDLK_8) scroll_skip = 4; /* Slow */
+                if (k == SDLK_9) scroll_skip = 2; /* Normal */
+                if (k == SDLK_0) scroll_skip = 1; /* Fast */
                 if (k == SDLK_LEFTBRACKET || k == SDLK_RIGHTBRACKET) {
                     double mid = 0.5 * (zoom_fmin + zoom_fmax);
                     double half = 0.5 * (zoom_fmax - zoom_fmin);
@@ -133,8 +171,13 @@ int live_view_sdl_run(LiveAudio *audio, LiveEngine *engine) {
 
         if (!paused) {
             for (int i = 0; i < 4; i++) live_audio_poll(audio);
-            if (live_audio_read(audio, buf, nfft) >= nfft)
-                live_engine_process(engine, buf);
+            if (live_audio_read(audio, buf, nfft) >= nfft) {
+                scroll_phase++;
+                if (scroll_phase >= scroll_skip) {
+                    scroll_phase = 0;
+                    live_engine_process(engine, buf);
+                }
+            }
         }
 
         size_t b0 = live_engine_hz_to_bin(engine, engine->cfg.f_min_hz);
