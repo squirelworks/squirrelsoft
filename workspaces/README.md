@@ -10,12 +10,12 @@ locally, or use copies left on the cloud agent VM under:
 Do **not** force-add `*.aab` files. Root `.gitignore` ignores `*.aab` and
 `workspaces/*.aab` with no exceptions.
 
-## Version bumps on this branch
+## Current versions
 
 | File | Package | versionName | versionCode |
 |------|---------|-------------|-------------|
 | `SquirrelSuica-0.0.8.aab` | `works.squirrel.suica` | 0.0.8 | 8 |
-| `SquirrelSound-0.0.7.aab` | `works.squirrel.sound` | 0.0.7 | 7 |
+| `SquirrelSound-0.0.8.aab` | `works.squirrel.sound` | 0.0.8 | 8 |
 | `SquirrelQR-0.1.5.aab` | `works.squirrel.qr` | 0.1.5 | 8 |
 
 Expected local paths (same filenames under each root):
