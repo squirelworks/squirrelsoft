@@ -24,3 +24,9 @@
 *.ap_
 *.dex
 dist/
+
+# App Bundles must NEVER be committed to GitHub.
+# Keep signed AABs only under /opt/cursor/artifacts/ or untracked local paths
+# (e.g. workspaces/*.aab, .local-aabs/). Build/sign locally for Play upload.
+workspaces/*.aab
+.local-aabs/
