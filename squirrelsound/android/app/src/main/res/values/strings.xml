@@ -15,5 +15,7 @@
     <string name="status_starting_mic">Starting microphone capture…</string>
     <string name="status_starting_demo">Starting demo tone…</string>
     <string name="status_live">%1$s · fs=%2$d · fft=%3$d · peak %4$.1f Hz (%5$.0f dB) · rms %6$.0f dB</string>
+    <string name="status_start_failed">Could not start capture: %1$s</string>
+    <string name="status_perm_error">Permission request failed: %1$s</string>
     <string name="mic_permission">Microphone permission required for live spectrum</string>
 </resources>

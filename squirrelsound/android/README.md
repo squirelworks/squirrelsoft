@@ -23,9 +23,11 @@ echo "sdk.dir=$ANDROID_HOME" > local.properties
 ```
 
 APK: `app/build/outputs/apk/debug/app-debug.apk`  
-Package: `works.squirrel.sound` — version `0.0.6`
+Package: `works.squirrel.sound` — version `0.0.7`
 
 Capture stays alive through transient `onPause` (notification shade); the mic is
 released in `onStop` when leaving the app. AudioRecord read errors restart the
 session; a partial wake lock + media audio focus reduce OEM mic kill while the
-spectrum screen is visible.
+spectrum screen is visible. Capture sessions are generation-scoped so stop/restart
+cannot leave a stuck READ_BLOCKING thread double-writing the UI, and permission /
+mic-busy failures surface as status text instead of crashing.
