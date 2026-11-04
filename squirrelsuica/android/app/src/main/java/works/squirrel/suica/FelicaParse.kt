@@ -14,6 +14,7 @@ package works.squirrel.suica
  * 15 region (bits 7–6 enter area, 5–4 exit area for private railways).
  */
 object FelicaParse {
+    private val SALE_PROCESSES = setOf(0x46, 0x49, 0x4a, 0x4b, 0xc6, 0xcb)
 
     /**
      * Suica/PASMO family: service 0x090f history block balance at bytes 10–11 LE.
@@ -91,15 +92,16 @@ object FelicaParse {
             "????-??-??"
         }
 
-        val isProduct = terminal == 0xc7 || terminal == 0xc8
+        // Shop sales carry a time and terminal ID in bytes 6-9, not stations: terminal
+        // types C7/C8, and any non-bus sale process (real dumps show CA with process 46).
         val isBus = terminal == 0x05 || process in setOf(0x0d, 0x0f, 0x1f, 0x23)
+        val isProduct = terminal == 0xc7 || terminal == 0xc8 || (process in SALE_PROCESSES && !isBus)
         val isCharge = process == 0x02 || process == 0x48
 
         val (kind, baseNote) = when {
             isCharge -> "charge" to "チャージ"
             isBus -> "bus" to processLabel(process)
-            isProduct || process in setOf(0x46, 0x49, 0x4a, 0x4b, 0xc6, 0xcb) ->
-                "sale" to processLabel(process)
+            isProduct -> "sale" to processLabel(process)
             process in setOf(0x01, 0x03, 0x04, 0x05, 0x06, 0x08, 0x13, 0x14, 0x15, 0x84, 0x85) ->
                 "train" to processLabel(process)
             else -> "other" to "proc=0x%02x".format(process)
