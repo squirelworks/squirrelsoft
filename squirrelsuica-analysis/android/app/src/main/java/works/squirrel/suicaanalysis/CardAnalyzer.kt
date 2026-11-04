@@ -109,21 +109,19 @@ class CardAnalyzer(
         var pmm: ByteArray? = null
         var error: String? = null
         try {
-            for (sc in listOf(0xffff, 0x0003, 0xfe00)) {
-                for (rc in listOf(FelicaProtocol.RC_SYSTEM_CODE, FelicaProtocol.RC_COMM_PERFORMANCE)) {
-                    val resp = exchange("polling %04x rc=%d".format(sc, rc), FelicaProtocol.polling(sc, rc))
-                    val p = resp?.let { FelicaProtocol.parsePolling(it) }
-                    polls.add(PollDump(sc, rc, p?.idm?.toHex(), p?.pmm?.toHex(), p?.requestData))
-                    if (p != null && pmm == null) {
-                        idm = p.idm
-                        pmm = p.pmm
-                    }
-                }
-            }
+            // Wildcard polling first: every card answers 0xFFFF, and rc=1 names its system 0.
+            pollBoth(0xffff, polls)?.let { (i, p) -> idm = i; pmm = p }
             val cardIdm = idm ?: throw IOException("no IDm: card did not answer polling")
             exchange("request system code", FelicaProtocol.requestSystemCode(cardIdm))
                 ?.let { FelicaProtocol.parseSystemCodes(it) }
                 ?.let { systemCodes.addAll(it) }
+            // Only poll system codes the card says it has. A card ignores Polling for a
+            // code it lacks, and Android's NfcF reports that silence as a lost tag, which
+            // ends the session (nanaco: system 0x04C7 only, died on Polling 0x0003).
+            val advertised = systemCodes.ifEmpty {
+                listOfNotNull(polls.firstOrNull { it.requestCode == FelicaProtocol.RC_SYSTEM_CODE }?.requestData)
+            }
+            for (sc in advertised.filter { it != 0xffff }) pollBoth(sc, polls)
             val toWalk = if (systemCodes.isEmpty()) listOf(0xffff) else systemCodes
             for (sc in toWalk) systems.add(walkSystem(sc, cardIdm))
         } catch (e: IOException) {
@@ -140,6 +138,18 @@ class CardAnalyzer(
             log = log.toList(),
             error = error
         )
+    }
+
+    /** Polling [sc] with request codes 1 and 2; returns the first reply's IDm and PMm. */
+    private fun pollBoth(sc: Int, polls: MutableList<PollDump>): Pair<ByteArray, ByteArray>? {
+        var first: Pair<ByteArray, ByteArray>? = null
+        for (rc in listOf(FelicaProtocol.RC_SYSTEM_CODE, FelicaProtocol.RC_COMM_PERFORMANCE)) {
+            val resp = exchange("polling %04x rc=%d".format(sc, rc), FelicaProtocol.polling(sc, rc))
+            val p = resp?.let { FelicaProtocol.parsePolling(it) }
+            polls.add(PollDump(sc, rc, p?.idm?.toHex(), p?.pmm?.toHex(), p?.requestData))
+            if (p != null && first == null) first = p.idm to p.pmm
+        }
+        return first
     }
 
     private fun walkSystem(systemCode: Int, fallbackIdm: ByteArray): SystemDump {

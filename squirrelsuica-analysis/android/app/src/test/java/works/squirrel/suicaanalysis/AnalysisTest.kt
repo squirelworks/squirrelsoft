@@ -108,9 +108,14 @@ class FelicaProtocolTest {
 /**
  * Fake card: system 0x0003 with an area, history 0x090f (20 blocks, max 4 per
  * read), info 0x008b (1 block) and a keyed service 0x1008; IOException after
- * [loseAfter] commands to simulate a lost tag.
+ * [loseAfter] commands to simulate a lost tag. [systemCodes] are the systems the
+ * card advertises (system 0 first); like a real card behind Android NfcF, Polling
+ * for any other code gets no answer, which surfaces as a lost tag.
  */
-class FakeCard(private val loseAfter: Int = Int.MAX_VALUE) : Transceiver {
+class FakeCard(
+    private val loseAfter: Int = Int.MAX_VALUE,
+    private val systemCodes: List<Int> = listOf(0x0003)
+) : Transceiver {
     val idm = byteArrayOf(0x01, 0x01, 0x12, 0x34, 0x56, 0x78, 0x9a.toByte(), 0xbc.toByte())
     val pmm = byteArrayOf(0x10, 0x0b, 0x4b, 0x42, 0x84.toByte(), 0x85.toByte(), 0x10, 0xff.toByte())
     private val nodes = listOf(intArrayOf(0x0000, 0xfffe), intArrayOf(0x090f), intArrayOf(0x008b), intArrayOf(0x1008))
@@ -130,13 +135,14 @@ class FakeCard(private val loseAfter: Int = Int.MAX_VALUE) : Transceiver {
         return when (c[1]) {
             0x00 -> {
                 val sc = (c[2] shl 8) or c[3]
-                if (sc != 0xffff && sc != 0x0003) return byteArrayOf()
-                val rd = when (c[4]) { 1 -> listOf(0x00, 0x03); 2 -> listOf(0x00, 0x83); else -> emptyList() }
+                if (sc != 0xffff && sc !in systemCodes) throw IOException("Tag was lost.")
+                val sys = if (sc == 0xffff) systemCodes[0] else sc
+                val rd = when (c[4]) { 1 -> listOf(sys shr 8, sys and 0xff); 2 -> listOf(0x00, 0x83); else -> emptyList() }
                 val b = (byteArrayOf(0, 0x01) + idm + pmm + rd.map { it.toByte() }.toByteArray())
                 b[0] = b.size.toByte()
                 b
             }
-            0x0c -> reply(0x0d, listOf(1, 0x00, 0x03))
+            0x0c -> reply(0x0d, listOf(systemCodes.size) + systemCodes.flatMap { listOf(it shr 8, it and 0xff) })
             0x04 -> reply(0x05, listOf(0))
             0x0a -> {
                 val idx = c[10] or (c[11] shl 8)
@@ -175,7 +181,8 @@ class CardAnalyzerTest {
         assertNull(dump.error)
         assertEquals(card.idm.toHex(), dump.idm)
         assertEquals(listOf(0x0003), dump.systemCodes)
-        assertEquals(6, dump.polls.size)
+        // Wildcard plus the one advertised system, rc=1 and rc=2 each; no blind 0xFE00.
+        assertEquals(listOf(0xffff, 0xffff, 0x0003, 0x0003), dump.polls.map { it.systemCode })
         assertEquals(0x0003, dump.polls.first { it.systemCode == 0xffff && it.requestCode == 1 }.requestData)
         val sys = dump.systems.single()
         assertEquals(listOf(AreaDump(0x0000, 0xfffe)), sys.areas)
@@ -200,6 +207,33 @@ class CardAnalyzerTest {
         val keyed = sys.services[2]
         assertFalse(keyed.readable)
         assertTrue(keyed.attempts.isEmpty())
+    }
+
+    @Test
+    fun nanacoOnlyCardIsNeverPolledForSuicaOrCommonArea() {
+        // Squirrel's nanaco dump: Polling 0xFFFF answers with system 0x04C7, and
+        // Polling 0x0003 was met with silence that Android reported as "Tag was lost."
+        val card = FakeCard(systemCodes = listOf(0x04c7))
+        val dump = CardAnalyzer(card, fixedClock, maxBlocks = 8).analyze(null, "t", "test")
+        assertNull(dump.error)
+        assertEquals(listOf(0x04c7), dump.systemCodes)
+        assertEquals(listOf(0xffff, 0xffff, 0x04c7, 0x04c7), dump.polls.map { it.systemCode })
+        assertTrue(dump.log.none { it.name.startsWith("polling 0003") || it.name.startsWith("polling fe00") })
+        assertEquals(listOf(0x04c7), dump.systems.map { it.systemCode })
+    }
+
+    @Test
+    fun noSystemCodeReplyFallsBackToWildcardSystemZero() {
+        // If Request System Code fails, only the code named by Polling 0xFFFF rc=1 is polled.
+        val card = object : Transceiver {
+            val inner = FakeCard(systemCodes = listOf(0x04c7))
+            override fun transceive(command: ByteArray): ByteArray =
+                if (command[1].toInt() == 0x0c) byteArrayOf() else inner.transceive(command)
+        }
+        val dump = CardAnalyzer(card, fixedClock, maxBlocks = 8).analyze(null, "t", "test")
+        assertNull(dump.error)
+        assertTrue(dump.systemCodes.isEmpty())
+        assertEquals(listOf(0xffff, 0xffff, 0x04c7, 0x04c7), dump.polls.map { it.systemCode })
     }
 
     @Test
