@@ -254,9 +254,8 @@ int qr_image_decode(const uint8_t *buf, size_t len, QrImage *img, char *err, siz
     img->gray = NULL;
     if (len >= 3 && buf[0] == 'P' && buf[1] >= '1' && buf[1] <= '6') return decode_pnm(buf, len, img, err, n);
     if (len >= 2 && buf[0] == 'B' && buf[1] == 'M') return decode_bmp(buf, len, img, err, n);
-    if (len >= 8 && memcmp(buf, "\x89PNG", 4) == 0)
-        return fail(err, n, "PNG is not supported yet; convert to PGM, PPM or BMP");
-    return fail(err, n, "unknown image format (expected PGM, PPM, PBM or BMP)");
+    if (len >= 8 && memcmp(buf, "\x89PNG", 4) == 0) return qr_png_decode(buf, len, img, err, n);
+    return fail(err, n, "unknown image format (expected PNG, PGM, PPM, PBM or BMP)");
 }
 
 int qr_image_load(const char *path, QrImage *img, char *err, size_t n) {

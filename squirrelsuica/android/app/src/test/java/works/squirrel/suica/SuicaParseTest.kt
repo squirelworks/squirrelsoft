@@ -30,6 +30,32 @@ class SuicaParseTest {
     }
 
     @Test
+    fun shopSaleOnTerminalCaHasTimeNotStations() {
+        // S1.3: a synthetic sale on terminal type CA (process 46), the layout real cards use;
+        // bytes 6-7 are the time and 8-9 a terminal ID, not stations.
+        val block = "ca460000326470a02a5cd00700012c00".chunked(2).map { it.toInt(16).toByte() }.toByteArray()
+        val e = SuicaParse.historyEntry(block)
+        assertNotNull(e)
+        assertEquals("sale", e!!.kind)
+        assertNull(e.enterCode)
+        assertNull(e.exitCode)
+        assertTrue(e.note, e.note.contains("14:05"))
+        assertEquals(2000, e.balanceYen)
+    }
+
+    @Test
+    fun busWithSaleProcessKeepsNoTime() {
+        // A bus record (terminal 05) with a sale-like process stays a bus with no time.
+        val block = FelicaParse.histRail(
+            terminal = 0x05, process = 0x46, y = 2026, m = 1, d = 2,
+            inLine = 0x69, inSta = 0x40, outLine = 0, outSta = 0, bal = 500, region = 0
+        )
+        val e = SuicaParse.historyEntry(block)!!
+        assertEquals("bus", e.kind)
+        assertTrue(e.note, !e.note.contains(":"))
+    }
+
+    @Test
     fun emptyHistory() {
         assertNull(SuicaParse.historyEntry(ByteArray(16)))
     }

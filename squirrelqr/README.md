@@ -30,7 +30,7 @@ desktops; Wayland, Windows and macOS capture come later in roadmap S3.4).
 
 ```bash
 make desktop                         # build/squirrelqr (X11 capture when libx11-dev is installed)
-build/squirrelqr code.pgm shot.bmp   # PGM/PPM/PBM and BMP files; one line of text per code
+build/squirrelqr shot.png code.pgm   # PNG, PGM/PPM/PBM and BMP files; one line of text per code
 build/squirrelqr --select            # drag a rectangle with the mouse; Esc cancels
 build/squirrelqr --screen --wait 10  # keep looking at the whole screen for up to 10 s
 build/squirrelqr --region 0,0,800,600 --json
@@ -41,8 +41,17 @@ make test-desktop                    # unit + CLI tests; the capture test runs u
 the corners in screen or image coordinates. Text follows the Android app's
 rules: an ECI wins, then UTF-8, then Shift JIS (through iconv), then
 ISO-8859-1. On-screen codes need about 3 pixels per module; small ones are
-also tried at 2x. PNG isn't read yet: convert first, e.g.
-`convert shot.png shot.ppm`.
+also tried at 2x.
+
+PNG files are read by SquirrelQR's own decoder (no libpng or zlib): every
+colour type and bit depth, interlaced files, and transparency, which is
+composited over white so a code saved on a transparent background reads like
+it does on a page.
+
+**Wayland:** the X11 capture only sees XWayland windows. Until the Wayland
+screenshot portal is supported, take a screenshot with the desktop's own tool
+(GNOME and KDE screenshot, or `grim -g "$(slurp)" shot.png` on wlroots
+compositors) and pass the PNG: `build/squirrelqr shot.png`.
 
 ## Web demo (`web-demo/`), not a product
 

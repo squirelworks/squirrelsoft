@@ -1,10 +1,10 @@
-# SquirrelSuica — Suica Reader
+# SquirrelSuica
 
-Read-only **FeliCa Suica Reader**: **Suica/PASMO family**, **nanaco**,
+Read-only **FeliCa card reader**: **Suica/PASMO family**, **nanaco**,
 **楽天Edy**, and **WAON**. Journey history shows **station names**
 (enter → exit) from the public Saibane station-code table. No writes, no cloning.
 
-On Android the launcher label is **Suica Reader** (package `works.squirrel.suica`)
+On Android the launcher label is **SquirrelSuica** (package `works.squirrel.suica`)
 so it is easy to find next to SquirrelQR / SquirrelSound.
 
 Parsers are covered by **fixture unit tests** (no physical card required).
@@ -13,7 +13,7 @@ Parsers are covered by **fixture unit tests** (no physical card required).
 
 | Path | When to use |
 |------|-------------|
-| **`android/`** | Phone app (NFC-F) — preferred Suica Reader |
+| **`android/`** | Phone app (NFC-F), the preferred reader |
 | `data/StationCode.csv` | Saibane region/line/station → name table |
 | `suica_read.py` | USB PaSoRi via `nfcpy`, or `--demo suica\|nanaco\|edy\|waon` |
 | `felica_parse.py` | Shared parsers + synthetic fixtures |
@@ -40,16 +40,29 @@ hex.
 
 `build/squirrelsuica` is the native desktop reader on the shared FeliCa core
 (`libs/sqfelica`), the same parsing as the apps. It reads balance and history
-with station names. For now it reads the JSON dumps SquirrelSuicaAnalysis
-exports, by replaying them through a simulated card. Live readers (PC/SC, Sony
-PaSoRi over USB) are the next step of roadmap S3.3.
+with station names, from a card on a PC/SC contactless reader or from a JSON
+dump SquirrelSuicaAnalysis exports (replayed through a simulated card).
+
+Live reads use the PC/SC Part 3 transparent exchange, which Sony's RC-S300 and
+other CCID contactless readers implement: pcsc-lite on Linux
+(`sudo apt install pcscd libpcsclite-dev` before building), the system PC/SC
+framework on macOS, winscard on Windows. A build without PC/SC headers still
+reads dumps. The RC-S380, which is not a CCID reader, needs the USB driver
+that is a later step of roadmap S3.3.
 
 ```bash
 make desktop
-build/squirrelsuica --dump felica-dump.json          # text
-build/squirrelsuica --dump felica-dump.json --json   # JSON, felica_parse field names
-make test-desktop                                    # C unit tests + parity with felica_parse.py
+build/squirrelsuica                                  # wait 10 s for a card on the first reader
+build/squirrelsuica --list-readers
+build/squirrelsuica --reader RC-S300 --wait 30 --json
+build/squirrelsuica --dump tests/fixtures/demo-suica.json          # made-up demo card, text
+build/squirrelsuica --dump felica-dump.json --json   # your own dump, JSON with felica_parse field names
+make test-desktop                                    # C unit tests, parity with felica_parse.py, PC/SC test
 ```
+
+Exit status: 0 read, 1 no card (or it did not answer), 2 reader or file error.
+`make test-pcsc` reads a made-up card through pcscd and the vpcd virtual reader
+(`sudo apt install pcscd vsmartcard-vpcd`); it is skipped when they are missing.
 
 ## Desktop / USB (Python, nfcpy)
 

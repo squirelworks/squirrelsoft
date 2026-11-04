@@ -1,8 +1,9 @@
 /* SquirrelSuica desktop: show a FeliCa e-money card's balance and history with
- * station names, using the shared C core (libs/sqfelica). This step reads
- * squirrel-felica-dump/1 files from SquirrelSuicaAnalysis; live readers
- * (PC/SC, PaSoRi over USB) plug into the same SqsTransport next. */
+ * station names, using the shared C core (libs/sqfelica). Cards are read live
+ * from a PC/SC contactless reader (Sony RC-S300 and other CCID readers), or
+ * replayed from squirrel-felica-dump/1 files from SquirrelSuicaAnalysis. */
 #include "sqcard.h"
+#include "sqpcsc.h"
 #include "sqfelica.h"
 #include "sqjson.h"
 
@@ -18,14 +19,19 @@ static void usage(FILE *f) {
     fprintf(f,
             "SquirrelSuica desktop %s: FeliCa balance and history (Suica/PASMO, nanaco, Edy, WAON).\n"
             "\n"
-            "usage: squirrelsuica [options] --dump FILE   read a SquirrelSuicaAnalysis dump (.json)\n"
+            "usage: squirrelsuica [options]               read the card on a PC/SC reader\n"
+            "       squirrelsuica [options] --dump FILE   read a SquirrelSuicaAnalysis dump (.json)\n"
+            "       squirrelsuica --list-readers\n"
             "\n"
             "options:\n"
             "  --json            print JSON instead of text\n"
+            "  --reader NAME     use the reader whose name contains NAME (default: the first with a card)\n"
+            "  --wait SECS       how long to wait for a card (default 10)\n"
             "  --stations CSV    station table (default: data/StationCode.csv next to the program\n"
             "                    or its parent, or $SQUIRRELSUICA_STATIONS)\n"
             "\n"
-            "Live card readers (PC/SC, Sony PaSoRi over USB) are the next step of roadmap S3.3.\n"
+            "PC/SC readers need pcscd on Linux (sudo apt install pcscd). Sony PaSoRi RC-S380 over\n"
+            "USB without PC/SC is a later step of roadmap S3.3.\n"
             "Read-only: plain FeliCa reads, no keys, no writes.\n",
             SQS_VERSION);
 }
@@ -211,9 +217,57 @@ static void print_text(const SqsCard *c, const Stations *st) {
     }
 }
 
+static int read_live(const char *reader, int wait_s, SqsCard *card) {
+    char err[256] = "";
+    int no_card = 0;
+    if (wait_s > 0) fprintf(stderr, "Hold the card on the reader...\n");
+    SqsPcsc *p = sqs_pcsc_open(reader, wait_s * 1000, &no_card, err, sizeof err);
+    if (!p) {
+        fprintf(stderr, "%s\n", err);
+        return no_card ? 1 : 2;
+    }
+    SqsTransport t = sqs_pcsc_transport(p);
+    int rc = sqs_read_card(&t, card);
+    sqs_pcsc_close(p);
+    if (rc != 0) {
+        fprintf(stderr, "%s\n", rc > 0 ? "the card did not answer FeliCa polling" : "reader error while reading the card");
+        return rc > 0 ? 1 : 2;
+    }
+    return 0;
+}
+
+static int read_dump(const char *path, SqsCard *card) {
+    size_t len;
+    char *text = slurp(path, &len), err[160] = "";
+    if (!text) {
+        perror(path);
+        return 2;
+    }
+    SqjValue *doc = sqj_parse(text, len, err, sizeof err);
+    free(text);
+    if (!doc) {
+        fprintf(stderr, "%s: %s\n", path, err);
+        return 2;
+    }
+    SqsVirtualCard *vc = sqs_virtual_card_new(doc, err, sizeof err);
+    sqj_free(doc);
+    if (!vc) {
+        fprintf(stderr, "%s: %s\n", path, err);
+        return 2;
+    }
+    SqsTransport t = sqs_virtual_transport(vc);
+    int rc = sqs_read_card(&t, card);
+    sqs_virtual_card_free(vc);
+    if (rc != 0) {
+        fprintf(stderr, "%s: %s\n", path, rc > 0 ? "no card in the dump answered" : "read error");
+        return 1;
+    }
+    return 0;
+}
+
 int main(int argc, char **argv) {
-    const char *dump_path = NULL, *stations_path = NULL;
-    int json = 0;
+    const char *dump_path = NULL, *stations_path = NULL, *reader = NULL;
+    int json = 0, list = 0, wait_s = 10;
     for (int i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "--help") || !strcmp(argv[i], "-h")) {
             usage(stdout);
@@ -223,46 +277,45 @@ int main(int argc, char **argv) {
             return 0;
         } else if (!strcmp(argv[i], "--json")) {
             json = 1;
+        } else if (!strcmp(argv[i], "--list-readers")) {
+            list = 1;
         } else if (!strcmp(argv[i], "--dump") && i + 1 < argc) {
             dump_path = argv[++i];
         } else if (!strcmp(argv[i], "--stations") && i + 1 < argc) {
             stations_path = argv[++i];
+        } else if (!strcmp(argv[i], "--reader") && i + 1 < argc) {
+            reader = argv[++i];
+        } else if (!strcmp(argv[i], "--wait") && i + 1 < argc) {
+            char *end;
+            long v = strtol(argv[++i], &end, 10);
+            if (*end || v < 0 || v > 3600) {
+                fprintf(stderr, "--wait wants seconds (0..3600)\n");
+                return 2;
+            }
+            wait_s = (int)v;
         } else {
             fprintf(stderr, "unknown argument %s\n\n", argv[i]);
             usage(stderr);
             return 2;
         }
     }
-    if (!dump_path) {
-        fprintf(stderr, "no live reader back end in this build yet; use --dump FILE (see --help)\n");
-        return 2;
+    if (list) {
+        char names[4096], err[256] = "";
+        int n = sqs_pcsc_list(names, sizeof names, err, sizeof err);
+        if (n < 0) {
+            fprintf(stderr, "%s\n", err);
+            return 2;
+        }
+        if (n == 0) fprintf(stderr, "no card readers\n");
+        for (const char *q = names; n > 0 && *q; q += strlen(q) + 1) puts(q);
+        return 0;
     }
-    size_t len;
-    char *text = slurp(dump_path, &len), err[160] = "";
-    if (!text) {
-        perror(dump_path);
-        return 2;
-    }
-    SqjValue *doc = sqj_parse(text, len, err, sizeof err);
-    free(text);
-    if (!doc) {
-        fprintf(stderr, "%s: %s\n", dump_path, err);
-        return 2;
-    }
-    SqsVirtualCard *vc = sqs_virtual_card_new(doc, err, sizeof err);
-    sqj_free(doc);
-    if (!vc) {
-        fprintf(stderr, "%s: %s\n", dump_path, err);
-        return 2;
-    }
-    SqsTransport t = sqs_virtual_transport(vc);
     SqsCard *card = malloc(sizeof *card);
-    int rc = card ? sqs_read_card(&t, card) : -1;
-    sqs_virtual_card_free(vc);
+    if (!card) return 2;
+    int rc = dump_path ? read_dump(dump_path, card) : read_live(reader, wait_s, card);
     if (rc != 0) {
-        fprintf(stderr, "%s: %s\n", dump_path, rc > 0 ? "no card in the dump answered" : "read error");
         free(card);
-        return 1;
+        return rc;
     }
     Stations st = {NULL, NULL, 0};
     load_stations(&st, stations_path, argv[0]);

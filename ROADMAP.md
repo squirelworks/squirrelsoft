@@ -17,7 +17,8 @@ Principles: original code only; each app = portable core + thin native front-end
 - S1.1 Raw explorer: polling all system codes (Request System Code), Request Service/Search Service Code enumeration, Request Response, PMm decode (max response time), per-service block reads with chunk sizes 1..15, timings, status flags.
 - S1.2 Export JSON/hex dump, share intent, redact IDm option. Python desktop twin `suica_analyze.py` producing the same JSON. S1.1 and S1.2 **in review:** #39.
 - Parsed balances and history: Android History tab through `libs/sqfelica` (JNI); desktop `suica_analyze.py --history`, which also reads a dump exported from the phone (`-i dump.json`).
-- S1.3 Findings fed back into SquirrelSuica parsers (fixture tests built from exported dumps).
+- S1.3 Findings fed back into SquirrelSuica parsers (synthetic fixture tests for what exported dumps show; the dumps themselves stay local).
+  - **In review:** checks on real cards (SquirrelSuicaAnalysis 0.0.3) showed shop sales on terminal type `CA` (process `46`) decoded as station codes; Python, C (`sqfelica`) and Kotlin now treat any non-bus sale record as time + terminal ID. Real card data never goes into the repo in any form: dumps are local test input only, and every committed fixture is synthetic.
 
 ## S2 — Shared-core architecture (issue 09)
 - **Done:** `docs/architecture.md`; `sqdsp` moved to `libs/sqdsp` with its own tests and a Kotlin/C FFT parity fixture.
@@ -37,9 +38,11 @@ Principles: original code only; each app = portable core + thin native front-end
 - S3.2 SquirrelSound desktop: SDL2 GUI with the same split view; sources: mic (ALSA/PulseAudio/PipeWire, WASAPI, CoreAudio) **and system audio loopback** (PipeWire/Pulse monitor source, WASAPI loopback, macOS via ScreenCaptureKit audio or a virtual device).
   - **In review:** step 1, capture sources: `--source mic` through SDL2 audio capture (PulseAudio/PipeWire, ALSA, WASAPI, CoreAudio) with `--device` by name, `--source loopback` from the default sink's PulseAudio/PipeWire monitor source, and `squirrelsound devices`; tested in CI with SDL's disk driver and a PulseAudio null sink. Next: WASAPI loopback on Windows, macOS system audio, the split-view GUI.
 - S3.3 SquirrelSuica desktop: PaSoRi RC-S380/RC-S300 over libusb (original driver) or PC/SC on Windows; same `sqfelica` parsing; GUI with balance + history.
-  - **In review:** step 1, `squirrelsuica/desktop/`: a C reader on `sqfelica` that runs the card-reading steps (transit, then the nanaco/Edy/WAON purses, chunked reads with a one-block fallback) over a transport interface, shows balance and history with station names, and replays SquirrelSuicaAnalysis dumps through a simulated card. Next: the PC/SC transport (RC-S300 and other CCID readers), then the PaSoRi USB driver and a GUI window.
+  - **Done:** step 1, `squirrelsuica/desktop/`: a C reader on `sqfelica` that runs the card-reading steps (transit, then the nanaco/Edy/WAON purses, chunked reads with a one-block fallback) over a transport interface, shows balance and history with station names, and replays SquirrelSuicaAnalysis dumps through a simulated card.
+  - **In review:** step 2, the PC/SC transport: live reads on the RC-S300 and other CCID readers through the PC/SC Part 3 transparent exchange (pcsc-lite, macOS PCSC, winscard), `--reader`/`--wait`/`--list-readers`, tested end to end in CI through pcscd and a virtual reader. Next: the PaSoRi RC-S380 USB driver and a GUI window.
 - S3.4 SquirrelQR desktop: drag a rectangle on screen → capture (X11/XShm, Wayland portal, Windows Graphics Capture/GDI, macOS ScreenCaptureKit) → `sqqr` decode; also webcam.
-  - **In review:** step 1, `squirrelqr/desktop/`: a command-line reader on `sqqr` that decodes image files (PGM/PPM/PBM, BMP) and, on X11, the whole screen, a fixed rectangle or one dragged with the mouse (`--select`); text uses the Android app's charset rules; tested under Xvfb in CI. Next: PNG input, the Wayland portal, Windows and macOS capture, a small GUI window, webcam.
+  - **Done:** step 1, `squirrelqr/desktop/`: a command-line reader on `sqqr` that decodes image files (PGM/PPM/PBM, BMP) and, on X11, the whole screen, a fixed rectangle or one dragged with the mouse (`--select`); text uses the Android app's charset rules; tested under Xvfb in CI.
+  - **In review:** step 2, PNG input with SquirrelQR's own PNG and zlib decoder (all colour types and depths, interlacing, transparency), and a Wayland note: screenshot with the desktop's tool, then pass the PNG. Next: the Wayland portal, Windows and macOS capture, a small GUI window, webcam.
 - S3.5 Windows/macOS/Linux packaging (MSI/zip, .app, AppImage/deb) built in CI.
 
 ## S4 — CI
