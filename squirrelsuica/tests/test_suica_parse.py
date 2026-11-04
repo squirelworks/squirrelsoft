@@ -71,9 +71,9 @@ def main() -> int:
     expect(card.history[2].fare_yen == 2000, f"demo charge amount {card.history[2].fare_yen}")
     expect(len(parse_history_blocks([block])) == 1, "history list")
 
-    # S1.3: a shop sale on terminal type CA (process 46) modelled on a real Suica dump,
+    # S1.3: a synthetic shop sale on terminal type CA (process 46), the layout real cards use;
     # bytes 6-7 are the time and 8-9 a terminal ID, not stations.
-    ca = bytes.fromhex("ca4600003264" "70a0" "2a5c" "d007" "000243" "00")
+    ca = bytes.fromhex("ca4600003264" "70a0" "2a5c" "d007" "00012c" "00")
     e = parse_history_block(ca)
     expect(e is not None and e.kind == "sale", f"CA sale kind {e.kind if e else None}")
     expect(e.enter_code is None and e.exit_code is None, f"CA sale codes {e.enter_code} {e.exit_code}")

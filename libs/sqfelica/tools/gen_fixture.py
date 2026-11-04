@@ -116,18 +116,18 @@ def main():
         # BCD date fallback (month 0 in the packed word).
         bytes([0x16, 0x01, 0, 0, 0x26, 0x10, 0x28, 0x00, 0x25, 0x02, 0x10, 0x00, 0, 0, 0, 0]),
     ])
-    # Shop sales on terminal type CA (process 46), the layout seen in real Suica
-    # dumps (S1.3): bytes 6-7 are the time and 8-9 a terminal ID, not stations.
+    # Synthetic shop sales on terminal type CA (process 46), the layout real Suica
+    # cards use (S1.3): bytes 6-7 are the time and 8-9 a terminal ID, not stations.
     def sale_ca(y, m, d, hh, mm, tid, bal, terminal=0xCA, process=0x46):
         b = bytearray(suica_product(terminal, process, y, m, d, hh, mm, bal))
         b[8], b[9], b[15] = tid >> 8, tid & 0xFF, 0
         return bytes(b)
     group(out, "suica", [
-        fp.hist_rail(0x16, 0x01, 2025, 3, 4, 0x01, 0x02, 0x01, 0x05, 1793),
-        sale_ca(2025, 3, 4, 14, 5, 0x2A5C, 2000),
-        sale_ca(2025, 3, 4, 10, 47, 0x0B71, 3300),
-        sale_ca(2025, 3, 3, 8, 31, 0x6E03, 3575, process=0x4A),
-        sale_ca(2025, 3, 3, 21, 2, 0x44C8, 3823, terminal=0xC9),
+        fp.hist_rail(0x16, 0x01, 2025, 3, 4, 0x01, 0x02, 0x01, 0x05, 4120),
+        sale_ca(2025, 3, 4, 14, 5, 0x2A5C, 4300),
+        sale_ca(2025, 3, 4, 10, 47, 0x0B71, 5180),
+        sale_ca(2025, 3, 3, 8, 31, 0x6E03, 5330, process=0x4A),
+        sale_ca(2025, 3, 3, 21, 2, 0x44C8, 6000, terminal=0xC9),
     ])
     group(out, "nanaco", [
         nanaco_block(0x47, 480, 5200, 2026, 10, 28, 18, 42),

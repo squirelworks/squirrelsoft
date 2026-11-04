@@ -31,9 +31,9 @@ class SuicaParseTest {
 
     @Test
     fun shopSaleOnTerminalCaHasTimeNotStations() {
-        // S1.3: a sale on terminal type CA (process 46), modelled on a real Suica dump;
+        // S1.3: a synthetic sale on terminal type CA (process 46), the layout real cards use;
         // bytes 6-7 are the time and 8-9 a terminal ID, not stations.
-        val block = "ca460000326470a02a5cd00700024300".chunked(2).map { it.toInt(16).toByte() }.toByteArray()
+        val block = "ca460000326470a02a5cd00700012c00".chunked(2).map { it.toInt(16).toByte() }.toByteArray()
         val e = SuicaParse.historyEntry(block)
         assertNotNull(e)
         assertEquals("sale", e!!.kind)
