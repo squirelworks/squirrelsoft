@@ -1,6 +1,6 @@
 # SquirrelSound
 
-Spectral sound analyzer with an original DSP core (`sqdsp`): radix-2 FFT,
+Spectral sound analyzer with an original DSP core (`sqdsp`, in `../libs/sqdsp`): radix-2 FFT,
 packed real FFT, windowed periodograms, Welch PSD, autocorrelation, peak
 picking, THD, and SNR estimates.
 
