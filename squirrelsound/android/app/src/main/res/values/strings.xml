@@ -22,6 +22,10 @@
     <string name="zoom_label">Zoom</string>
     <string name="zoom_in">＋</string>
     <string name="zoom_out">－</string>
+    <string name="split_label">Split (spectrum / waterfall)</string>
+    <string name="split_50_50">50 / 50</string>
+    <string name="split_40_60">40 / 60</string>
+    <string name="split_60_40">60 / 40</string>
     <string name="scroll_label">Span</string>
     <string name="span_5s">5 s</string>
     <string name="span_15s">15 s</string>

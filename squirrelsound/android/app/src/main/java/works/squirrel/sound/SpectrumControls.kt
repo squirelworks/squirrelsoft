@@ -39,7 +39,50 @@ object SpectrumControls {
         }
     }
 
-    /** Rows in the LOFARgram (waterfall) bitmap. */
+    /** How the view's height is shared between the live spectrum and the LOFARgram. */
+    enum class SplitRatio(val id: String, val spectrumFraction: Float) {
+        EVEN("50_50", 0.5f),
+        SPECTRUM_SMALL("40_60", 0.4f),
+        SPECTRUM_LARGE("60_40", 0.6f);
+
+        companion object {
+            val DEFAULT = EVEN
+
+            fun fromId(id: String?): SplitRatio = values().firstOrNull { it.id == id } ?: DEFAULT
+        }
+    }
+
+    /** Pixel layout of the split view: spectrum on top, LOFARgram below a gap. */
+    data class SplitLayout(val spectrumHeight: Int, val waterfallTop: Int, val waterfallHeight: Int)
+
+    const val SPLIT_GAP_PX = 8
+    /** Bitmap rows are capped so a very tall view cannot exhaust memory. */
+    const val MAX_WATERFALL_ROWS = 2048
+    const val MIN_WATERFALL_ROWS = 16
+
+    fun splitLayout(heightPx: Int, ratio: SplitRatio, gapPx: Int = SPLIT_GAP_PX): SplitLayout {
+        val h = heightPx.coerceAtLeast(0)
+        val spec = (h * ratio.spectrumFraction).roundToInt()
+        val top = (spec + gapPx).coerceAtMost(h)
+        return SplitLayout(spec, top, (h - top).coerceAtLeast(0))
+    }
+
+    /** One LOFARgram row per screen pixel of the waterfall area, within the caps. */
+    fun waterfallRowsFor(waterfallHeightPx: Int): Int =
+        waterfallHeightPx.coerceIn(MIN_WATERFALL_ROWS, MAX_WATERFALL_ROWS)
+
+    /**
+     * Ring-buffer bitmap rows: the newest row is at [head] and age increases with
+     * the index (wrapping). Returns the two source row ranges, oldest-last, that
+     * together give the rows newest to oldest: [head, rows) then [0, head).
+     */
+    fun ringSegments(head: Int, rows: Int): List<IntRange> {
+        require(rows > 0)
+        val h = Math.floorMod(head, rows)
+        return if (h == 0) listOf(0 until rows) else listOf(h until rows, 0 until h)
+    }
+
+    /** Rows the LOFARgram starts with, before the view knows its pixel height. */
     const val WATERFALL_ROWS = 160
 
     /** How much time the visible LOFARgram covers, top to bottom. */
