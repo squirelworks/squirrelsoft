@@ -1,12 +1,12 @@
 # Top-level squirrelsoft build
 LIBS = libs/sqdsp libs/sqfelica libs/sqqr
-PROGRAMS = squirrelstation squirrelcad squirrelgnss squirrelsound squirrelqr
-PY_PROGRAMS = squirrelsuica squirrelsuica-analysis
+PROGRAMS = squirrelstation squirrelcad squirrelgnss squirrelsound squirrelqr squirrelsuica
+PY_PROGRAMS = squirrelsuica-analysis
 
 .PHONY: all test clean $(PROGRAMS) $(PY_PROGRAMS)
 
 all: $(PROGRAMS)
-	@echo "Also: squirrelsuica (python) — run make test"
+	@echo "Also: squirrelsuica-analysis (python) — run make test"
 
 $(PROGRAMS):
 	$(MAKE) -C $@

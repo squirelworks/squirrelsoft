@@ -36,7 +36,22 @@ History rows show date, kind, fare (from balance delta), balance, and
 **station names** when the codes resolve. Unknown codes fall back to `LINE/STA`
 hex.
 
-## Desktop / USB
+## Desktop reader in C (`desktop/`)
+
+`build/squirrelsuica` is the native desktop reader on the shared FeliCa core
+(`libs/sqfelica`), the same parsing as the apps. It reads balance and history
+with station names. For now it reads the JSON dumps SquirrelSuicaAnalysis
+exports, by replaying them through a simulated card. Live readers (PC/SC, Sony
+PaSoRi over USB) are the next step of roadmap S3.3.
+
+```bash
+make desktop
+build/squirrelsuica --dump felica-dump.json          # text
+build/squirrelsuica --dump felica-dump.json --json   # JSON, felica_parse field names
+make test-desktop                                    # C unit tests + parity with felica_parse.py
+```
+
+## Desktop / USB (Python, nfcpy)
 
 ```bash
 python3 -m pip install --user nfcpy
