@@ -30,3 +30,7 @@ dist/
 # (e.g. workspaces/*.aab, .local-aabs/). Build/sign locally for Play upload.
 workspaces/*.aab
 .local-aabs/
+
+# Release builds for the human (APK + AAB + SHA256SUMS). Never committed;
+# AABs never go to GitHub at all. See the release-artifacts rules.
+release-out/
