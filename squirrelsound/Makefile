@@ -1,5 +1,7 @@
 CC ?= gcc
-CFLAGS ?= -std=c11 -Wall -Wextra -O2 -Iinclude -D_POSIX_C_SOURCE=200809L
+SQDSP = ../libs/sqdsp
+CFLAGS ?= -std=c11 -Wall -Wextra -O2 -D_POSIX_C_SOURCE=200809L
+CFLAGS += -Iinclude -I$(SQDSP)/include
 LDFLAGS ?= -lm
 BUILD = build
 
@@ -16,7 +18,7 @@ CFLAGS += -DSQSOUND_HAS_ALSA $(shell pkg-config --cflags alsa)
 LDFLAGS += $(shell pkg-config --libs alsa)
 endif
 
-LIB_OBJ = $(BUILD)/sqdsp.o $(BUILD)/wavio.o $(BUILD)/synth.o $(BUILD)/spectrogram.o \
+LIB_OBJ = $(BUILD)/wavio.o $(BUILD)/synth.o $(BUILD)/spectrogram.o \
 	$(BUILD)/live_audio.o $(BUILD)/live_engine.o $(BUILD)/live_prefs.o \
 	$(BUILD)/live_view_headless.o $(BUILD)/live_view_sdl.o
 
@@ -33,8 +35,11 @@ android-test:
 $(BUILD):
 	mkdir -p $(BUILD)
 
-$(BUILD)/sqdsp.o: src/sqdsp.c include/sqdsp.h | $(BUILD)
-	$(CC) $(CFLAGS) -c src/sqdsp.c -o $@
+# Shared DSP core (libs/sqdsp); always delegate so its own deps are honoured.
+SQDSP_LIB = $(SQDSP)/build/libsqdsp.a
+.PHONY: $(SQDSP_LIB)
+$(SQDSP_LIB):
+	$(MAKE) -C $(SQDSP)
 
 $(BUILD)/wavio.o: src/wavio.c include/wavio.h | $(BUILD)
 	$(CC) $(CFLAGS) -c src/wavio.c -o $@
@@ -42,7 +47,7 @@ $(BUILD)/wavio.o: src/wavio.c include/wavio.h | $(BUILD)
 $(BUILD)/synth.o: src/synth.c include/synth.h | $(BUILD)
 	$(CC) $(CFLAGS) -c src/synth.c -o $@
 
-$(BUILD)/spectrogram.o: src/spectrogram.c include/spectrogram.h include/sqdsp.h | $(BUILD)
+$(BUILD)/spectrogram.o: src/spectrogram.c include/spectrogram.h $(SQDSP)/include/sqdsp.h | $(BUILD)
 	$(CC) $(CFLAGS) -c src/spectrogram.c -o $@
 
 $(BUILD)/live_audio.o: src/live_audio.c include/live_audio.h | $(BUILD)
@@ -60,14 +65,14 @@ $(BUILD)/live_view_headless.o: src/live_view_headless.c include/live_view.h | $(
 $(BUILD)/live_view_sdl.o: src/live_view_sdl.c include/live_view.h include/live_prefs.h | $(BUILD)
 	$(CC) $(CFLAGS) -c src/live_view_sdl.c -o $@
 
-$(BUILD)/squirrelsound: src/main.c $(LIB_OBJ) | $(BUILD)
-	$(CC) $(CFLAGS) src/main.c $(LIB_OBJ) -o $@ $(LDFLAGS)
+$(BUILD)/squirrelsound: src/main.c $(LIB_OBJ) $(SQDSP_LIB) | $(BUILD)
+	$(CC) $(CFLAGS) src/main.c $(LIB_OBJ) $(SQDSP_LIB) -o $@ $(LDFLAGS)
 
-$(BUILD)/test_sqdsp: tests/test_sqdsp.c $(LIB_OBJ) | $(BUILD)
-	$(CC) $(CFLAGS) tests/test_sqdsp.c $(LIB_OBJ) -o $@ $(LDFLAGS)
+$(BUILD)/test_sqdsp: tests/test_sqdsp.c $(LIB_OBJ) $(SQDSP_LIB) | $(BUILD)
+	$(CC) $(CFLAGS) tests/test_sqdsp.c $(LIB_OBJ) $(SQDSP_LIB) -o $@ $(LDFLAGS)
 
-$(BUILD)/test_live: tests/test_live.c $(LIB_OBJ) | $(BUILD)
-	$(CC) $(CFLAGS) tests/test_live.c $(LIB_OBJ) -o $@ $(LDFLAGS)
+$(BUILD)/test_live: tests/test_live.c $(LIB_OBJ) $(SQDSP_LIB) | $(BUILD)
+	$(CC) $(CFLAGS) tests/test_live.c $(LIB_OBJ) $(SQDSP_LIB) -o $@ $(LDFLAGS)
 
 test: $(BUILD)/test_sqdsp $(BUILD)/test_live $(BUILD)/squirrelsound
 	$(BUILD)/test_sqdsp
