@@ -46,8 +46,8 @@ PaSoRi over USB) are the next step of roadmap S3.3.
 
 ```bash
 make desktop
-build/squirrelsuica --dump felica-dump.json          # text
-build/squirrelsuica --dump felica-dump.json --json   # JSON, felica_parse field names
+build/squirrelsuica --dump tests/fixtures/demo-suica.json          # made-up demo card, text
+build/squirrelsuica --dump felica-dump.json --json   # your own dump, JSON with felica_parse field names
 make test-desktop                                    # C unit tests + parity with felica_parse.py
 ```
 

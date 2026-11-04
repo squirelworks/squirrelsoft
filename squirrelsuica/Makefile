@@ -38,6 +38,7 @@ test-desktop: $(BUILD)/test_units $(BUILD)/squirrelsuica
 	python3 -I desktop/tests/test_desktop.py $(BUILD)/squirrelsuica
 
 test: test-desktop
+	python3 -I tests/fixtures/make_demo_dumps.py --check
 	python3 tests/test_suica_parse.py
 	python3 suica_read.py --demo | grep -q 'Balance'
 	python3 suica_read.py --demo --json | grep -q balance_yen

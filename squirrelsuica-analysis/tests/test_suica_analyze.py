@@ -82,6 +82,12 @@ def main() -> int:
         schema = json.load(f)
     validate(json.loads(json.dumps(dump)), schema)
 
+    # The made-up debugging dumps in squirrelsuica/tests/fixtures follow the schema too.
+    fixtures = os.path.join(os.path.dirname(ROOT), "squirrelsuica", "tests", "fixtures")
+    for name in ("demo-suica.json", "demo-nanaco.json"):
+        with open(os.path.join(fixtures, name), encoding="utf-8") as f:
+            validate(json.load(f), schema, name)
+
     red = sa.redact(dump)
     text = json.dumps(red)
     expect(dump["idm"] not in text, "IDm removed everywhere")

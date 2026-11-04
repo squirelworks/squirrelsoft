@@ -11,6 +11,7 @@ from felica_parse import (
     nanaco_balance,
     parse_history_block,
     parse_history_blocks,
+    parse_nanaco_history_blocks,
     suica_balance,
     suica_balance_090f,
 )
@@ -117,6 +118,38 @@ def main() -> int:
     expect(split_blocks(bytearray(32)) == [bytes(16), bytes(16)], "split 2 blocks")
     expect(split_blocks([b"\x01" * 16]) == [b"\x01" * 16], "list passes through")
     expect(split_blocks(None) == [], "empty read")
+
+    # Made-up debugging dumps (tests/fixtures/make_demo_dumps.py; no real card data).
+    import json
+    fx = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures")
+
+    def service_blocks(name, system, code):
+        with open(os.path.join(fx, name), encoding="utf-8") as f:
+            d = json.load(f)
+        sy = next(x for x in d["systems"] if x["system_code"] == system)
+        return [bytes.fromhex(b) for b in next(v for v in sy["services"] if v["code"] == code)["blocks"]]
+
+    hist = service_blocks("demo-suica.json", "0x0003", "0x090f")
+    attrs = service_blocks("demo-suica.json", "0x0003", "0x008b")
+    entries = parse_history_blocks(hist)
+    expect(len(entries) == 20, f"demo suica: {len(entries)} entries")
+    expect(suica_balance(hist[0], attrs[0]) == entries[0].balance_yen == 5456, "demo suica balance")
+    kinds = [e.kind for e in entries]
+    expect((kinds.count("train"), kinds.count("sale"), kinds.count("bus"), kinds.count("charge")) == (9, 6, 2, 3),
+           f"demo suica kinds {kinds}")
+    rides = [e for e in entries if e.kind == "train"]
+    expect(all(e.enter_station and e.exit_station and "/" not in e.enter_station + e.exit_station for e in rides),
+           "demo suica: every ride resolves to station names (JR and private line)")
+    for newer, older in zip(entries, entries[1:]):
+        if newer.fare_yen:
+            expect(abs(older.balance_yen - newer.balance_yen) == newer.fare_yen, f"demo suica chain at {newer.date}")
+    expect(all(e.enter_code is None for e in entries if e.kind == "bus"), "demo suica: buses carry no rail codes")
+
+    nh = service_blocks("demo-nanaco.json", "0xfe00", "0x564f")
+    nb = service_blocks("demo-nanaco.json", "0xfe00", "0x5597")
+    ne = parse_nanaco_history_blocks(nh)
+    expect(nanaco_balance(nb[0]) == ne[0].balance_yen == 3030, f"demo nanaco balance {nanaco_balance(nb[0])}")
+    expect([e.kind for e in ne] == ["sale", "other", "sale", "sale", "charge"], f"demo nanaco kinds {[e.kind for e in ne]}")
 
     if fails:
         print(fails, "failure(s)")

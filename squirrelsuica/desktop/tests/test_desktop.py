@@ -127,6 +127,23 @@ ana = subprocess.run([sys.executable, "-I", str(APP.parent / "squirrelsuica-anal
 p = run(json.loads(ana.stdout), "--json")
 check(p.returncode == 0 and json.loads(p.stdout)["brand"] == "suica_family", "analysis demo dump")
 
+# The made-up debugging dumps (tests/fixtures), against felica_parse.
+FIX = APP / "tests" / "fixtures"
+
+
+def blocks_of(d, system, code):
+    sy = next(s for s in d["systems"] if s["system_code"] == system)
+    return [bytes.fromhex(b) for b in next(v for v in sy["services"] if v["code"] == code)["blocks"]]
+
+
+demo = json.loads((FIX / "demo-suica.json").read_text(encoding="utf-8"))
+hist = blocks_of(demo, "0x0003", "0x090f")
+compare("demo suica", demo, "suica_family",
+        fp.suica_balance(hist[0], blocks_of(demo, "0x0003", "0x008b")[0]), fp.parse_history_blocks(hist))
+demo = json.loads((FIX / "demo-nanaco.json").read_text(encoding="utf-8"))
+compare("demo nanaco", demo, "nanaco", fp.nanaco_balance(blocks_of(demo, "0xfe00", "0x5597")[0]),
+        fp.parse_nanaco_history_blocks(blocks_of(demo, "0xfe00", "0x564f")))
+
 # Errors: not a dump, bad JSON, bad block hex, no file.
 check(run({"schema": "something-else"}).returncode == 2, "wrong schema")
 bad = dump([system(0x0003, "0101020304050607", [service(0x090F, [])])])
