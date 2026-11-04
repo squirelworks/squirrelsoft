@@ -59,19 +59,41 @@ object FelicaReader {
             }
 
             val idmTag = nfc.tag.id ?: throw IOException("missing IDm")
-            val idmHex = idmTag.joinToString("") { "%02x".format(it) }
-            val tx = Transceiver { nfc.transceive(it) }
+            return readCard(Transceiver { nfc.transceive(it) }, idmTag)
+        } finally {
+            try {
+                nfc.close()
+            } catch (_: Exception) {
+            }
+        }
+    }
 
-            // 1) Transit IC (Suica/PASMO/…)
-            readTransit(nfc, tx, idmTag)?.let { return it }
+    /**
+     * Identify and read the card behind [tx]. [tagIdm] is the IDm Android discovered.
+     *
+     * Only system codes the card advertises are polled. A FeliCa card stays silent
+     * when polled for a system it does not have, and Android's NfcF turns that
+     * silence into a lost tag, after which every later command fails. A nanaco card
+     * (system 0x04C7 only) used to die on the first Polling(0x0003) this way.
+     */
+    internal fun readCard(tx: Transceiver, tagIdm: ByteArray): FelicaCard {
+        val idmHex = tagIdm.joinToString("") { "%02x".format(it) }
+        val systems = advertisedSystems(tx, tagIdm)
+        fun has(sc: Int) = systems == null || sc in systems
 
-            // 2) Common area (Edy / WAON / nanaco)
-            tryPoll(nfc, SYS_COMMON)?.let { (idm, pmm) ->
+        // 1) Transit IC (Suica/PASMO/…)
+        if (has(SYS_TRANSIT)) readTransit(tx, tagIdm)?.let { return it }
+
+        // 2) Common area (Edy / WAON / nanaco)
+        if (has(SYS_COMMON)) {
+            tryPoll(tx, SYS_COMMON)?.let { (idm, pmm) ->
                 purseFromCommon(tx, idm, pmm, SYS_COMMON)?.let { return it }
             }
+        }
 
-            // 3) Dedicated nanaco system
-            tryPoll(nfc, SYS_NANACO)?.let { (idm, pmm) ->
+        // 3) Dedicated nanaco system
+        if (has(SYS_NANACO)) {
+            tryPoll(tx, SYS_NANACO)?.let { (idm, pmm) ->
                 val blocks = readBlocks(tx, idm, SVC_NANACO_BAL, intArrayOf(0))
                 if (blocks.isNotEmpty()) {
                     val hist = readServiceRange(tx, idm, SVC_NANACO_HIST, 0, 5)
@@ -89,25 +111,37 @@ object FelicaReader {
                     )
                 }
             }
+        }
 
-            return FelicaCard(
-                brand = FelicaBrand.UNKNOWN,
-                brandLabel = FelicaParse.brandLabel(FelicaBrand.UNKNOWN),
-                idm = idmHex,
-                pmm = "",
-                systemCode = "????",
-                balanceYen = null,
-                history = emptyList(),
-                note = "FeliCa seen, but no supported purse (Suica/nanaco/Edy/WAON). " +
-                    "Fixture tests cover layouts — physical samples welcome.",
-                historyStatus = HistoryStatus.EMPTY_CARD,
-                historyMessage = "No supported purse history on this tag."
-            )
-        } finally {
-            try {
-                nfc.close()
-            } catch (_: Exception) {
-            }
+        return FelicaCard(
+            brand = FelicaBrand.UNKNOWN,
+            brandLabel = FelicaParse.brandLabel(FelicaBrand.UNKNOWN),
+            idm = idmHex,
+            pmm = "",
+            systemCode = systems?.firstOrNull()?.let { "%04x".format(it) } ?: "????",
+            balanceYen = null,
+            history = emptyList(),
+            note = "FeliCa seen, but no supported purse (Suica/nanaco/Edy/WAON). " +
+                "Fixture tests cover layouts — physical samples welcome.",
+            historyStatus = HistoryStatus.EMPTY_CARD,
+            historyMessage = "No supported purse history on this tag."
+        )
+    }
+
+    /**
+     * The card's system codes: Request System Code on [idm], else the system 0 code
+     * from a wildcard Polling(0xFFFF, rc=1), which every card answers. Null only if
+     * both fail; callers then probe every system as before.
+     */
+    internal fun advertisedSystems(tx: Transceiver, idm: ByteArray): Set<Int>? {
+        try {
+            parseSystemCodes(tx.transceive(requestSystemCodeCommand(idm)))?.let { return it.toSet() }
+        } catch (_: Exception) {
+        }
+        return try {
+            parsePollingSystemCode(tx.transceive(pollingCommand(0xFFFF)))?.let { setOf(it) }
+        } catch (_: Exception) {
+            null
         }
     }
 
@@ -115,8 +149,8 @@ object FelicaReader {
      * Transit read path: prefer Polling(0x0003); if that fails (some stacks already
      * selected the system), fall back to the discovery IDm from [Tag.getId].
      */
-    private fun readTransit(nfc: NfcF, tx: Transceiver, tagIdm: ByteArray): FelicaCard? {
-        val polled = tryPoll(nfc, SYS_TRANSIT)
+    private fun readTransit(tx: Transceiver, tagIdm: ByteArray): FelicaCard? {
+        val polled = tryPoll(tx, SYS_TRANSIT)
         val idm = polled?.first ?: tagIdm
         val pmm = polled?.second ?: ByteArray(0)
 
@@ -241,9 +275,9 @@ object FelicaReader {
         else -> HistoryStatus.EMPTY_CARD
     }
 
-    private fun tryPoll(nfc: NfcF, systemCode: Int): Pair<ByteArray, ByteArray>? {
+    private fun tryPoll(tx: Transceiver, systemCode: Int): Pair<ByteArray, ByteArray>? {
         return try {
-            val poll = nfc.transceive(pollingCommand(systemCode))
+            val poll = tx.transceive(pollingCommand(systemCode))
             if (poll.size < 10) return null
             var off = 0
             if ((poll[0].toInt() and 0xff) == poll.size || (poll[0].toInt() and 0xff) + 1 == poll.size) {
@@ -375,6 +409,45 @@ object FelicaReader {
         val scHi = ((systemCode shr 8) and 0xff).toByte()
         val scLo = (systemCode and 0xff).toByte()
         return byteArrayOf(0x06, 0x00, scHi, scLo, 0x01, 0x0f)
+    }
+
+    /** Request System Code (0x0C) for [idm]. */
+    fun requestSystemCodeCommand(idm: ByteArray): ByteArray {
+        require(idm.size == 8)
+        return byteArrayOf(10, 0x0C) + idm
+    }
+
+    /** System codes (big-endian) from a Request System Code response, or null if malformed. */
+    fun parseSystemCodes(resp: ByteArray): List<Int>? {
+        var off = 0
+        if (resp.isNotEmpty() &&
+            ((resp[0].toInt() and 0xff) == resp.size || (resp[0].toInt() and 0xff) + 1 == resp.size)
+        ) {
+            off = 1
+        }
+        if (off >= resp.size || (resp[off].toInt() and 0xff) != 0x0D) return null
+        off += 1 + 8
+        if (off >= resp.size) return null
+        val n = resp[off].toInt() and 0xff
+        off += 1
+        if (n == 0 || off + 2 * n > resp.size) return null
+        return (0 until n).map {
+            ((resp[off + 2 * it].toInt() and 0xff) shl 8) or (resp[off + 2 * it + 1].toInt() and 0xff)
+        }
+    }
+
+    /** System code from a Polling (request code 1) response, or null if absent. */
+    fun parsePollingSystemCode(resp: ByteArray): Int? {
+        var off = 0
+        if (resp.isNotEmpty() &&
+            ((resp[0].toInt() and 0xff) == resp.size || (resp[0].toInt() and 0xff) + 1 == resp.size)
+        ) {
+            off = 1
+        }
+        if (off >= resp.size || (resp[off].toInt() and 0xff) != 0x01) return null
+        off += 1 + 8 + 8
+        if (off + 2 > resp.size) return null
+        return ((resp[off].toInt() and 0xff) shl 8) or (resp[off + 1].toInt() and 0xff)
     }
 
     fun readWithoutEncryption(idm: ByteArray, serviceCode: Int, blocks: IntArray): ByteArray {
