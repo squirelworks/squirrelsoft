@@ -129,6 +129,15 @@ def main():
         sale_ca(2025, 3, 3, 8, 31, 0x6E03, 5330, process=0x4A),
         sale_ca(2025, 3, 3, 21, 2, 0x44C8, 6000, terminal=0xC9),
     ])
+    # The made-up debugging dumps in squirrelsuica/tests/fixtures.
+    import json
+    fixtures = PARSER.parent / "tests" / "fixtures"
+    for name, brand, system, code in (("demo-suica.json", "suica", "0x0003", "0x090f"),
+                                      ("demo-nanaco.json", "nanaco", "0xfe00", "0x564f")):
+        d = json.loads((fixtures / name).read_text(encoding="utf-8"))
+        sy = next(s for s in d["systems"] if s["system_code"] == system)
+        svc = next(v for v in sy["services"] if v["code"] == code)
+        group(out, brand, [bytes.fromhex(b) for b in svc["blocks"]])
     group(out, "nanaco", [
         nanaco_block(0x47, 480, 5200, 2026, 10, 28, 18, 42),
         nanaco_block(0x6F, 3000, 5680, 2026, 10, 27, 12, 5),
