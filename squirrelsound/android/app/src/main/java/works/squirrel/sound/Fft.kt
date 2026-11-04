@@ -53,15 +53,35 @@ object Fft {
         }
     }
 
-    fun magnitudeDb(re: FloatArray, im: FloatArray, outDb: FloatArray, floorDb: Float = -90f) {
+    /**
+     * One-sided magnitude spectrum in dBFS. [windowSum] is the sum of the window
+     * coefficients applied before [forward]; bins are scaled by 2/windowSum (DC by
+     * 1/windowSum) so a full-scale sine reads 0 dBFS whatever the window or size.
+     */
+    fun magnitudeDb(
+        re: FloatArray,
+        im: FloatArray,
+        outDb: FloatArray,
+        windowSum: Float,
+        floorDb: Float = Levels.FLOOR_DB
+    ) {
         val n = outDb.size
         require(n <= re.size / 2 + 1)
-        val scale = 1f / re.size
+        require(windowSum > 0f) { "windowSum must be > 0" }
+        val half = re.size / 2
         for (i in 0 until n) {
+            val scale = if (i == 0 || i == half) 1f / windowSum else 2f / windowSum
             val mag = sqrt(re[i] * re[i] + im[i] * im[i]) * scale
             val db = if (mag > 1e-12f) (20f * kotlin.math.log10(mag)) else floorDb
             outDb[i] = db.coerceAtLeast(floorDb)
         }
+    }
+
+    /** Sum of window coefficients (coherent gain × N), for [magnitudeDb]. */
+    fun windowSum(w: FloatArray): Float {
+        var s = 0.0
+        for (v in w) s += v
+        return s.toFloat()
     }
 
     fun hann(n: Int): FloatArray {

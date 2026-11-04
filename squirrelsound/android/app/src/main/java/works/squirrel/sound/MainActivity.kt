@@ -185,6 +185,76 @@ class MainActivity : AppCompatActivity() {
         }
 
         binding.btnApplyRange.setOnClickListener { applyCustomRangeFromFields() }
+
+        setupLevelControls()
+    }
+
+    /**
+     * Display range (dBFS): two sliders over FLOOR_DB..0 plus Auto, which follows
+     * the noise floor and recent peaks. Moving a slider turns Auto off. All three
+     * are remembered between sessions.
+     */
+    private fun setupLevelControls() {
+        val floor = Levels.FLOOR_DB.toInt()
+        fun dbOf(progress: Int) = (floor + progress).toFloat()
+        fun progressOf(db: Float) = (db.toInt() - floor).coerceIn(0, -floor)
+
+        binding.spectrum.setDbRange(
+            prefs.getFloat(KEY_LEVEL_MIN, Levels.DEFAULT_MIN_DB),
+            prefs.getFloat(KEY_LEVEL_MAX, Levels.DEFAULT_MAX_DB)
+        )
+        binding.spectrum.autoRange = prefs.getBoolean(KEY_AUTO_RANGE, false)
+        binding.autoRange.isChecked = binding.spectrum.autoRange
+        binding.levelMin.progress = progressOf(binding.spectrum.dbMin)
+        binding.levelMax.progress = progressOf(binding.spectrum.dbMax)
+        updateLevelLabel()
+
+        val listener = object : android.widget.SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(bar: android.widget.SeekBar?, p: Int, fromUser: Boolean) {
+                if (!fromUser) return
+                if (binding.autoRange.isChecked) binding.autoRange.isChecked = false
+                binding.spectrum.setDbRange(
+                    dbOf(binding.levelMin.progress),
+                    dbOf(binding.levelMax.progress)
+                )
+                updateLevelLabel()
+            }
+
+            override fun onStartTrackingTouch(bar: android.widget.SeekBar?) {}
+
+            override fun onStopTrackingTouch(bar: android.widget.SeekBar?) {
+                // Show the clamped range (min span) on the sliders and save it.
+                binding.levelMin.progress = progressOf(binding.spectrum.dbMin)
+                binding.levelMax.progress = progressOf(binding.spectrum.dbMax)
+                prefs.edit()
+                    .putFloat(KEY_LEVEL_MIN, binding.spectrum.dbMin)
+                    .putFloat(KEY_LEVEL_MAX, binding.spectrum.dbMax)
+                    .apply()
+            }
+        }
+        binding.levelMin.setOnSeekBarChangeListener(listener)
+        binding.levelMax.setOnSeekBarChangeListener(listener)
+
+        binding.autoRange.setOnCheckedChangeListener { _, on ->
+            binding.spectrum.autoRange = on
+            if (!on) {
+                // Back to the manual range on the sliders.
+                binding.spectrum.setDbRange(
+                    dbOf(binding.levelMin.progress),
+                    dbOf(binding.levelMax.progress)
+                )
+            }
+            updateLevelLabel()
+            prefs.edit().putBoolean(KEY_AUTO_RANGE, on).apply()
+        }
+    }
+
+    private fun updateLevelLabel() {
+        binding.levelRangeLabel.text = getString(
+            R.string.level_range,
+            binding.spectrum.dbMin.toInt(),
+            binding.spectrum.dbMax.toInt()
+        )
     }
 
     private fun applyPreset(preset: SpectrumControls.RangePreset, toast: Boolean) {
@@ -310,6 +380,11 @@ class MainActivity : AppCompatActivity() {
                 onFrame = { frame ->
                     safeUi {
                         binding.spectrum.update(frame)
+                        if (binding.spectrum.autoRange &&
+                            binding.panelAdvanced.visibility == android.view.View.VISIBLE
+                        ) {
+                            updateLevelLabel()
+                        }
                         val ok = !frame.sourceLabel.startsWith("mic-failed") &&
                             !frame.sourceLabel.startsWith("mic-denied") &&
                             frame.sourceLabel != "error"
@@ -441,6 +516,9 @@ class MainActivity : AppCompatActivity() {
     private companion object {
         const val PREFS = "squirrelsound"
         const val KEY_DIRECTION = "waterfall_direction"
+        const val KEY_LEVEL_MIN = "level_min_db"
+        const val KEY_LEVEL_MAX = "level_max_db"
+        const val KEY_AUTO_RANGE = "auto_range"
     }
 
     private fun simpleItemSelected(onSelected: () -> Unit) =
