@@ -20,10 +20,11 @@ Principles: original code only; each app = portable core + thin native front-end
 
 ## S2 — Shared-core architecture (issue 09)
 - **Done:** `docs/architecture.md`; `sqdsp` moved to `libs/sqdsp` with its own tests and a Kotlin/C FFT parity fixture.
-- **In review:** `libs/sqfelica`: FeliCa command builders and response parsers, Suica/nanaco/Edy history and balances in C, with a parity fixture generated from `felica_parse.py`. Station DB loader still to come.
+- **Done:** `libs/sqfelica`: FeliCa command builders and response parsers, Suica/nanaco/Edy history and balances in C, with a parity fixture generated from `felica_parse.py`. Station DB loader still to come.
 - `libs/sqdsp` (exists) becomes the SquirrelSound core used by Android via JNI/NDK and by desktop.
 - `libs/sqfelica` (C): FeliCa command builder/parser, Suica/PASMO/nanaco/Edy/WAON history parsing, station DB loader.
 - `libs/sqqr` (C): original QR decoder (finder patterns, perspective, Reed–Solomon) so desktop and Squirrel OS/2 don't depend on ML Kit.
+  - **In review:** step 1, decoding a sampled module grid: format/version information, unmasking, block de-interleaving, Reed–Solomon error correction and all data modes (numeric, alphanumeric, byte, Kanji, ECI), tested against symbols from an independent encoder. Next: finding and sampling a symbol in an image.
 - `libs/sqmath` (C): expression engine/CAS core for the calculator suite.
 - `libs/sqgui` (C): tiny immediate-mode widget layer over SDL2 for desktop, designed to port to Squirrel OS/2's wm/gfx.
 - Test: each lib has `make test` unit tests; Android apps get JNI smoke tests.
