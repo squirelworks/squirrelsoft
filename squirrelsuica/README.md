@@ -17,7 +17,6 @@ Parsers are covered by **fixture unit tests** (no physical card required).
 | `data/StationCode.csv` | Saibane region/line/station → name table |
 | `suica_read.py` | USB PaSoRi via `nfcpy`, or `--demo suica\|nanaco\|edy\|waon` |
 | `felica_parse.py` | Shared parsers + synthetic fixtures |
-| `../squirrelqr/web/` | QR code reader PWA (not the Suica Reader) |
 
 ## Android
 

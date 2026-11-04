@@ -11,7 +11,7 @@
 
 # generated analysis artifacts (keep web icons)
 *.svg
-!squirrelqr/web/icon.svg
+!squirrelqr/web-demo/icon.svg
 !squirrelqr/android/app/src/main/assets/web/icon.svg
 !docs/play-graphics/src/*.svg
 

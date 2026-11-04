@@ -26,7 +26,6 @@ static void usage(void) {
     puts("                     [--fft N] [--window name] [--freq Hz] [--headless]");
     puts("                     [--frames N] [--max-hold] [--direction waterfall|fountain]");
     puts("  squirrelsound help");
-    puts("Phone QR reader PWA: see ../squirrelqr/web/");
 }
 
 static const char *get_opt(int argc, char **argv, const char *key, const char *def) {
