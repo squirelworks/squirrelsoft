@@ -394,6 +394,22 @@ static Pt model_apply(const Model *md, double u, double v) {
     return (Pt){p.x + rx / sw, p.y + ry / sw};
 }
 
+static int sample_and_decode(const Scan *s, const Model *md, int n, uint8_t *grid, SqqrResult *out);
+
+/* Decode, and on success record where the symbol's outer corners are. */
+static int decode_at(const Scan *s, const Model *md, int n, uint8_t *grid, SqqrResult *out) {
+    int rc = sample_and_decode(s, md, n, grid, out);
+    if (rc == SQQR_OK) {
+        const double uv[4][2] = {{0, 0}, {n, 0}, {n, n}, {0, n}};
+        for (int i = 0; i < 4; i++) {
+            Pt p = model_apply(md, uv[i][0], uv[i][1]);
+            out->corners[2 * i] = p.x;
+            out->corners[2 * i + 1] = p.y;
+        }
+    }
+    return rc;
+}
+
 static int sample_and_decode(const Scan *s, const Model *md, int n, uint8_t *grid, SqqrResult *out) {
     /* Vote over the module centre and four points a quarter module away, so one
      * noisy pixel or a slightly-off centre doesn't flip a module. */
@@ -530,7 +546,7 @@ static int try_triple(const Scan *s, const Triple *t, uint8_t *grid, SqqrResult 
         Model md;
         int used = fit_symbol(s, tl, tr, bl, n, &md);
         if (used < 0) continue;
-        int r = sample_and_decode(s, &md, n, grid, out);
+        int r = decode_at(s, &md, n, grid, out);
         DBG("    n %d: %d alignment patterns -> %d\n", n, used, r);
         if (r == SQQR_OK) return r;
         if (used == 0 && n <= 45) {
@@ -550,7 +566,7 @@ static int try_triple(const Scan *s, const Triple *t, uint8_t *grid, SqqrResult 
                                     {tr.x + bl.x - tl.x + ux.x * fx + uy.x * fy,
                                      tr.y + bl.y - tl.y + ux.y * fx + uy.y * fy}};
                         md.k = 0; /* plain homography */
-                        if (fit_h(s4, d4, 4, md.hm)) r = sample_and_decode(s, &md, n, grid, out);
+                        if (fit_h(s4, d4, 4, md.hm)) r = decode_at(s, &md, n, grid, out);
                     }
             if (r == SQQR_OK) return r;
         }

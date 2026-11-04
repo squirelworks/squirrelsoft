@@ -3,6 +3,9 @@
 **QR code reader** (`works.squirrel.qr`).
 
 - CameraX + ML Kit continuous **QR-only** scan (no 1D / Aztec / PDF417)
+- When ML Kit finds nothing, every other frame also goes to Squirrel's own decoder
+  (`libs/sqqr`, C, through JNI in `app/src/main/cpp`), which reads light-on-dark
+  codes too. The build compiles it with the NDK (CMake).
 - Always-on viewfinder crosshair + bounding box when a QR is detected
 - Bottom half: last result, scan history, open URL / copy, clear history
 - WindowInsets padding so controls clear the system nav / home gesture area

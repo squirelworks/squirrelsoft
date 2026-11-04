@@ -6,6 +6,7 @@ import android.content.ClipboardManager
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.RectF
+import android.media.Image
 import android.net.Uri
 import android.os.Bundle
 import android.view.LayoutInflater
@@ -35,6 +36,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.concurrent.Executors
+import java.util.concurrent.RejectedExecutionException
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
 
@@ -48,6 +50,7 @@ class MainActivity : AppCompatActivity() {
     private val executor = Executors.newSingleThreadExecutor()
     private val lastPublished = AtomicReference("")
     private val lastOverlayMs = AtomicLong(0L)
+    private val sqqrFrames = AtomicLong(0L)
     private var history: MutableList<ScanEntry> = mutableListOf()
     private var cameraBound = false
     @Volatile private var scanMode = ScanMode.DEFAULT
@@ -179,46 +182,39 @@ class MainActivity : AppCompatActivity() {
                 scanner.process(image)
                     .addOnSuccessListener { codes ->
                         val hit = codes.firstOrNull { !it.rawValue.isNullOrBlank() }
-                        if (hit == null) {
+                        if (hit != null) {
+                            val box = hit.boundingBox?.let { intArrayOf(it.left, it.top, it.right, it.bottom) }
+                            handleCode(hit.rawValue ?: return@addOnSuccessListener, box, bufW, bufH, rotation)
+                            return@addOnSuccessListener
+                        }
+                        // ML Kit found nothing: every other such frame, try Squirrel's own
+                        // decoder (libs/sqqr), which also reads light-on-dark codes. The
+                        // luminance plane is copied here, while the frame is still open,
+                        // and decoded off the main thread.
+                        val gray = if (SqQr.available && sqqrFrames.incrementAndGet() % 2L == 0L) {
+                            lumaCopy(media)
+                        } else {
+                            null
+                        }
+                        if (gray == null) {
                             maybeClearOverlay()
                             return@addOnSuccessListener
                         }
-                        val text = hit.rawValue ?: return@addOnSuccessListener
-                        val box = hit.boundingBox
-                        val viewW = binding.overlay.width
-                        val viewH = binding.overlay.height
-                        val mapped = box?.let {
-                            PreviewMapper.mapBoxForBuffer(
-                                it.left, it.top, it.right, it.bottom,
-                                bufW, bufH, rotation, viewW, viewH
-                            )
-                        }
-                        lastOverlayMs.set(System.currentTimeMillis())
-                        if (scanMode == ScanMode.FIXED_GUIDE) {
-                            val guide = ScanGuide.guideBox(viewW, viewH)
-                            val inside = mapped != null && guide != null &&
-                                ScanGuide.isInside(mapped, guide)
+                        val task = Runnable {
+                            val found = SqQr.decode(gray, bufW, bufH)
                             runOnUiThread {
-                                binding.overlay.guideHit = inside
-                                if (!inside) binding.qrHint.setText(R.string.qr_move_into_frame)
-                            }
-                            if (!inside) return@addOnSuccessListener
-                        } else {
-                            runOnUiThread {
-                                if (mapped != null) {
-                                    binding.overlay.setTarget(
-                                        RectF(mapped.left, mapped.top, mapped.right, mapped.bottom)
-                                    )
+                                if (found == null) {
+                                    maybeClearOverlay()
+                                } else {
+                                    val box = PreviewMapper.uprightBounds(found.corners, bufW, bufH, rotation)
+                                    handleCode(found.text, box, bufW, bufH, rotation)
                                 }
                             }
                         }
-                        val prev = lastPublished.get()
-                        if (text == prev) return@addOnSuccessListener
-                        lastPublished.set(text)
-                        val fmt = formatName(hit.format)
-                        val entry = ScanEntry(text, fmt, System.currentTimeMillis())
-                        runOnUiThread {
-                            publishScan(entry)
+                        try {
+                            executor.execute(task)
+                        } catch (_: RejectedExecutionException) {
+                            // The activity is being destroyed.
                         }
                     }
                     .addOnCompleteListener { proxy.close() }
@@ -236,6 +232,50 @@ class MainActivity : AppCompatActivity() {
                 Toast.makeText(this, "Camera bind failed: ${e.message}", Toast.LENGTH_LONG).show()
             }
         }, ContextCompat.getMainExecutor(this))
+    }
+
+    /**
+     * A decoded code with its upright box (left, top, right, bottom in the rotated
+     * frame, or null). Runs on the main thread.
+     */
+    private fun handleCode(text: String, box: IntArray?, bufW: Int, bufH: Int, rotation: Int) {
+        if (text.isBlank()) return
+        val viewW = binding.overlay.width
+        val viewH = binding.overlay.height
+        val mapped = box?.let {
+            PreviewMapper.mapBoxForBuffer(it[0], it[1], it[2], it[3], bufW, bufH, rotation, viewW, viewH)
+        }
+        lastOverlayMs.set(System.currentTimeMillis())
+        if (scanMode == ScanMode.FIXED_GUIDE) {
+            val guide = ScanGuide.guideBox(viewW, viewH)
+            val inside = mapped != null && guide != null && ScanGuide.isInside(mapped, guide)
+            binding.overlay.guideHit = inside
+            if (!inside) {
+                binding.qrHint.setText(R.string.qr_move_into_frame)
+                return
+            }
+        } else if (mapped != null) {
+            binding.overlay.setTarget(RectF(mapped.left, mapped.top, mapped.right, mapped.bottom))
+        }
+        if (text == lastPublished.get()) return
+        lastPublished.set(text)
+        publishScan(ScanEntry(text, "QR", System.currentTimeMillis()))
+    }
+
+    /** The Y (luminance) plane as a tightly packed width×height array. */
+    private fun lumaCopy(media: Image): ByteArray? {
+        val plane = media.planes.firstOrNull() ?: return null
+        if (plane.pixelStride != 1) return null
+        val w = media.width
+        val h = media.height
+        val out = ByteArray(w * h)
+        val buf = plane.buffer.duplicate()
+        val stride = plane.rowStride
+        for (y in 0 until h) {
+            buf.position(y * stride)
+            buf.get(out, y * w, w)
+        }
+        return out
     }
 
     private fun maybeClearOverlay() {
@@ -353,11 +393,6 @@ class MainActivity : AppCompatActivity() {
 
     private fun dp(value: Int): Int =
         (value * resources.displayMetrics.density).toInt()
-
-    private fun formatName(format: Int): String = when (format) {
-        Barcode.FORMAT_QR_CODE -> "QR"
-        else -> "QR"
-    }
 
     companion object {
         private const val PREFS = "squirrelqr"

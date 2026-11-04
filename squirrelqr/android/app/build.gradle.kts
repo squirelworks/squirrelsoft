@@ -78,6 +78,12 @@ android {
     buildFeatures {
         viewBinding = true
     }
+    // Squirrel's own QR decoder (libs/sqqr) through JNI, used when ML Kit finds nothing.
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
+        }
+    }
 }
 
 dependencies {
