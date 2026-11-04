@@ -36,6 +36,12 @@
     <string name="auto_range">Auto</string>
     <string name="level_min">Min</string>
     <string name="level_max">Max</string>
+    <string name="mic_source_label">Mic</string>
+    <string name="mic_source_mic">Default (MIC)</string>
+    <string name="mic_source_unprocessed">Unprocessed</string>
+    <string name="mic_source_camcorder">Camcorder</string>
+    <string name="mic_source_voice">Voice recognition</string>
+    <string name="gain_label">Gain +%1$d dB</string>
     <string name="advanced_hint">Technical controls for FFT resolution, smoothing, and a custom Hz window.</string>
     <string name="fmin_label">fMin</string>
     <string name="fmax_label">fMax</string>

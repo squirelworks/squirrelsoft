@@ -401,3 +401,62 @@ class RingBufferTest {
         }
     }
 }
+
+class MicSettingsTest {
+    @Test
+    fun micIsTheDefaultAndUnprocessedIsOnlyTriedWhenPicked() {
+        assertEquals(MicSettings.Source.MIC, MicSettings.Source.fromId(null))
+        assertEquals(MicSettings.Source.MIC, MicSettings.Source.fromId("bogus"))
+        val def = MicSettings.candidateOrder(MicSettings.Source.MIC, 34)
+        assertEquals(MicSettings.Source.MIC, def.first())
+        assertFalse(MicSettings.Source.UNPROCESSED in def)
+        val un = MicSettings.candidateOrder(MicSettings.Source.UNPROCESSED, 34)
+        assertEquals(MicSettings.Source.UNPROCESSED, un.first())
+        assertEquals(MicSettings.Source.MIC, un[1])
+    }
+
+    @Test
+    fun candidateOrderHasNoRepeatsAndRespectsSdk() {
+        for (s in MicSettings.Source.PICKABLE) {
+            val order = MicSettings.candidateOrder(s, 34)
+            assertEquals(order.size, order.toSet().size)
+            assertEquals(MicSettings.Source.DEFAULT, order.last())
+            assertEquals(s.id, MicSettings.Source.fromId(s.id).id)
+        }
+        assertFalse(MicSettings.Source.UNPROCESSED in MicSettings.candidateOrder(MicSettings.Source.UNPROCESSED, 23))
+    }
+
+    @Test
+    fun gainFactorAndPcmConversion() {
+        assertEquals(1f, MicSettings.gainFactor(0f), 1e-6f)
+        assertEquals(10f, MicSettings.gainFactor(20f), 1e-4f)
+        assertEquals(MicSettings.gainFactor(30f), MicSettings.gainFactor(99f), 0f)
+        assertEquals(1f, MicSettings.gainFactor(-5f), 0f)
+        val src = shortArrayOf(16384, -32768, 0)
+        val dst = FloatArray(3)
+        MicSettings.pcmToFloat(src, dst, 3, 1f)
+        assertEquals(0.5f, dst[0], 1e-6f)
+        assertEquals(-1f, dst[1], 1e-6f)
+        MicSettings.pcmToFloat(src, dst, 3, MicSettings.gainFactor(20f))
+        assertEquals(5f, dst[0], 1e-3f) // boosted, not clipped
+    }
+
+    @Test
+    fun twentyDbGainRaisesASineByTwentyDb() {
+        val n = 2048
+        val w = Fft.hann(n)
+        val pcm = ShortArray(n) { i -> (3276.8 * sin(2.0 * PI * 128 * i / n)).toInt().toShort() }
+        fun peak(gainDb: Float): Float {
+            val x = FloatArray(n)
+            MicSettings.pcmToFloat(pcm, x, n, MicSettings.gainFactor(gainDb))
+            val re = FloatArray(n) { x[it] * w[it] }
+            val im = FloatArray(n)
+            Fft.forward(re, im)
+            val mags = FloatArray(n / 2)
+            Fft.magnitudeDb(re, im, mags, Fft.windowSum(w))
+            return mags.maxOrNull()!!
+        }
+        assertEquals(-20f, peak(0f), 0.5f)
+        assertEquals(20f, peak(20f) - peak(0f), 0.05f)
+    }
+}

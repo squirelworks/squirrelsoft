@@ -187,6 +187,7 @@ class MainActivity : AppCompatActivity() {
         binding.btnApplyRange.setOnClickListener { applyCustomRangeFromFields() }
 
         setupLevelControls()
+        setupMicControls()
     }
 
     /**
@@ -247,6 +248,61 @@ class MainActivity : AppCompatActivity() {
             updateLevelLabel()
             prefs.edit().putBoolean(KEY_AUTO_RANGE, on).apply()
         }
+    }
+
+    /**
+     * Mic source (restarts live mic capture so it takes effect) and digital gain
+     * 0..30 dB (applies live). Both are remembered between sessions.
+     */
+    private fun setupMicControls() {
+        val sources = MicSettings.Source.PICKABLE
+        val labels = sources.map {
+            getString(
+                when (it) {
+                    MicSettings.Source.UNPROCESSED -> R.string.mic_source_unprocessed
+                    MicSettings.Source.CAMCORDER -> R.string.mic_source_camcorder
+                    MicSettings.Source.VOICE_RECOGNITION -> R.string.mic_source_voice
+                    else -> R.string.mic_source_mic
+                }
+            )
+        }
+        binding.micSource.adapter =
+            ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, labels)
+        val saved = MicSettings.Source.fromId(prefs.getString(KEY_MIC_SOURCE, null))
+        binding.micSource.setSelection(sources.indexOf(saved))
+        binding.micSource.onItemSelectedListener = simpleItemSelected {
+            val chosen = selectedMicSource()
+            val current = prefs.getString(KEY_MIC_SOURCE, MicSettings.Source.PREFERRED.id)
+            if (current == chosen.id) return@simpleItemSelected
+            prefs.edit().putString(KEY_MIC_SOURCE, chosen.id).apply()
+            val eng = engine
+            if (eng != null && eng.source == AudioEngine.Source.MIC) {
+                startEngine(AudioEngine.Source.MIC)
+            }
+        }
+
+        binding.gain.progress = prefs.getInt(KEY_GAIN_DB, 0).coerceIn(0, MicSettings.MAX_GAIN_DB.toInt())
+        updateGainLabel()
+        binding.gain.setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(bar: android.widget.SeekBar?, p: Int, fromUser: Boolean) {
+                engine?.gainDb = p.toFloat()
+                updateGainLabel()
+            }
+
+            override fun onStartTrackingTouch(bar: android.widget.SeekBar?) {}
+
+            override fun onStopTrackingTouch(bar: android.widget.SeekBar?) {
+                prefs.edit().putInt(KEY_GAIN_DB, binding.gain.progress).apply()
+            }
+        })
+    }
+
+    private fun selectedMicSource(): MicSettings.Source =
+        MicSettings.Source.PICKABLE.getOrNull(binding.micSource.selectedItemPosition)
+            ?: MicSettings.Source.PREFERRED
+
+    private fun updateGainLabel() {
+        binding.gainLabel.text = getString(R.string.gain_label, binding.gain.progress)
     }
 
     private fun updateLevelLabel() {
@@ -419,6 +475,8 @@ class MainActivity : AppCompatActivity() {
             eng.waterfallSeconds = span.seconds
             binding.spectrum.waterfallSeconds = span.seconds
             eng.smooth = smooth
+            eng.micSource = selectedMicSource()
+            eng.gainDb = binding.gain.progress.toFloat()
             eng.source = source
             try {
                 eng.start()
@@ -519,6 +577,8 @@ class MainActivity : AppCompatActivity() {
         const val KEY_LEVEL_MIN = "level_min_db"
         const val KEY_LEVEL_MAX = "level_max_db"
         const val KEY_AUTO_RANGE = "auto_range"
+        const val KEY_MIC_SOURCE = "mic_source"
+        const val KEY_GAIN_DB = "gain_db"
     }
 
     private fun simpleItemSelected(onSelected: () -> Unit) =

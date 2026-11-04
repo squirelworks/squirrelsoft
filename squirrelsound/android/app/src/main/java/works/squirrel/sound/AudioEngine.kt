@@ -25,8 +25,8 @@ import kotlin.math.sqrt
  * fixed transform interval / hop, dBFS scaling, live spectrum + waterfall feed.
  * Implementation is original — no Spectroid source was used.
  *
- * Prefers [MediaRecorder.AudioSource.UNPROCESSED] then MIC so the graph is not
- * stuck on a voice-recognition AGC path. Transient AudioRecord failures restart
+ * Opens the chosen [micSource] first (MIC by default) and falls back through the
+ * other capture paths; [gainDb] boosts the signal digitally. Transient AudioRecord failures restart
  * capture instead of permanently stopping the UI feed.
  *
  * [start]/[stop] are session-scoped: an old capture thread that outlives
@@ -58,6 +58,10 @@ class AudioEngine(
     @Volatile var waterfallRows: Int = SpectrumControls.WATERFALL_ROWS
     var source: Source = Source.MIC
     var demoHz: Float = 440f
+    /** Capture path tried first; takes effect at the next [start]. */
+    @Volatile var micSource: MicSettings.Source = MicSettings.Source.PREFERRED
+    /** Digital gain 0..30 dB applied to mic samples; read live. */
+    @Volatile var gainDb: Float = 0f
     /** Exponential smoothing 0..1 (0 = off). Spectroid-like default ≈ 0.3. */
     @Volatile var smooth: Float = 0.30f
 
@@ -212,14 +216,8 @@ class AudioEngine(
     }
 
     private fun openMic(sampleRate: Int, bufBytes: Int): Pair<AudioRecord, String>? {
-        val candidates = mutableListOf<Pair<Int, String>>()
-        if (Build.VERSION.SDK_INT >= 24) {
-            candidates += MediaRecorder.AudioSource.UNPROCESSED to "mic-unprocessed"
-        }
-        candidates += MediaRecorder.AudioSource.MIC to "mic"
-        candidates += MediaRecorder.AudioSource.CAMCORDER to "mic-camcorder"
-        candidates += MediaRecorder.AudioSource.VOICE_RECOGNITION to "mic-voice"
-        candidates += MediaRecorder.AudioSource.DEFAULT to "mic-default"
+        val candidates = MicSettings.candidateOrder(micSource, Build.VERSION.SDK_INT)
+            .map { audioSourceOf(it) to it.label }
 
         for ((src, label) in candidates) {
             var rec: AudioRecord? = null
@@ -255,6 +253,14 @@ class AudioEngine(
             }
         }
         return null
+    }
+
+    private fun audioSourceOf(s: MicSettings.Source): Int = when (s) {
+        MicSettings.Source.MIC -> MediaRecorder.AudioSource.MIC
+        MicSettings.Source.UNPROCESSED -> MediaRecorder.AudioSource.UNPROCESSED
+        MicSettings.Source.CAMCORDER -> MediaRecorder.AudioSource.CAMCORDER
+        MicSettings.Source.VOICE_RECOGNITION -> MediaRecorder.AudioSource.VOICE_RECOGNITION
+        MicSettings.Source.DEFAULT -> MediaRecorder.AudioSource.DEFAULT
     }
 
     private fun releaseRecorder(rec: AudioRecord?) {
@@ -481,9 +487,12 @@ class AudioEngine(
                         else -> {
                             consecutiveRestarts = 0
                             val count = n.coerceAtMost(shortBuf.size)
-                            for (i in 0 until count) {
-                                floatChunk[i] = shortBuf[i] / 32768f
-                            }
+                            MicSettings.pcmToFloat(
+                                shortBuf,
+                                floatChunk,
+                                count,
+                                MicSettings.gainFactor(gainDb)
+                            )
                             ring.write(floatChunk, 0, count)
                         }
                     }
