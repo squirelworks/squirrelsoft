@@ -25,8 +25,12 @@ The Android app shows a Summary tab, a History tab and a raw Command log tab. Hi
 ```
 python3 suica_analyze.py --redact -o dump.json   # live, first USB reader
 python3 suica_analyze.py --demo                  # built-in fake card
+python3 suica_analyze.py --history               # balances and history instead of JSON
+python3 suica_analyze.py -i dump.json --history  # the same for a saved dump, e.g. one shared from the phone
 make test
 ```
+
+`--history` is the desktop twin of the History tab. It parses the same services with SquirrelSuica's reference parser (`../squirrelsuica/felica_parse.py`, shipped in the release zip at that path), shows the raw line/station codes like the app, and adds station names where SquirrelSuica's station table knows them.
 
 ## Build (Android)
 
