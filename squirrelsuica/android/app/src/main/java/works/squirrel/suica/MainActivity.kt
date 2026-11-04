@@ -1,6 +1,5 @@
 package works.squirrel.suica
 
-import android.app.PendingIntent
 import android.content.Intent
 import android.nfc.NfcAdapter
 import android.nfc.Tag
@@ -10,10 +9,17 @@ import android.view.View
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import works.squirrel.suica.databinding.ActivityMainBinding
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicBoolean
 
 class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
     private var nfcAdapter: NfcAdapter? = null
+
+    /** All FeliCa I/O runs here; transceive blocks for up to the NFC timeout. */
+    private val nfcExecutor: ExecutorService = Executors.newSingleThreadExecutor()
+    private val reading = AtomicBoolean(false)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -31,24 +37,24 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         val adapter = nfcAdapter ?: return
-        val intent = Intent(this, javaClass).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
-        val flags = if (Build.VERSION.SDK_INT >= 31) {
-            PendingIntent.FLAG_MUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-        } else {
-            PendingIntent.FLAG_UPDATE_CURRENT
-        }
-        val pi = PendingIntent.getActivity(this, 0, intent, flags)
-        adapter.enableForegroundDispatch(
+        // Reader mode: FeliCa only, no NDEF probe (which could lose the tag before
+        // our reads), callback off the UI thread.
+        adapter.enableReaderMode(
             this,
-            pi,
-            null,
-            arrayOf(arrayOf(android.nfc.tech.NfcF::class.java.name))
+            { tag -> readTagAsync(tag) },
+            NfcAdapter.FLAG_READER_NFC_F or NfcAdapter.FLAG_READER_SKIP_NDEF_CHECK,
+            null
         )
     }
 
     override fun onPause() {
         super.onPause()
-        nfcAdapter?.disableForegroundDispatch(this)
+        nfcAdapter?.disableReaderMode(this)
+    }
+
+    override fun onDestroy() {
+        nfcExecutor.shutdownNow()
+        super.onDestroy()
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -66,29 +72,54 @@ class MainActivity : AppCompatActivity() {
             intent.getParcelableExtra(NfcAdapter.EXTRA_TAG)
         }
         if (tag == null) return
+        readTagAsync(tag)
+    }
+
+    /** Read [tag] on [nfcExecutor] and post the result to the UI; one read at a time. */
+    private fun readTagAsync(tag: Tag) {
+        if (!reading.compareAndSet(false, true)) return
+        runOnUiThread { binding.status.setText(R.string.reading) }
         try {
-            val card = FelicaReader.read(tag)
-            showCard(card)
-            val msg = if (card.balanceYen != null) {
-                "${card.brandLabel} ¥${card.balanceYen}"
-            } else {
-                card.brandLabel
+            nfcExecutor.execute {
+                try {
+                    val result = runCatching { FelicaReader.read(tag) }
+                    runOnUiThread {
+                        if (isFinishing || isDestroyed) return@runOnUiThread
+                        result.fold(::onCardRead, ::onReadFailed)
+                    }
+                } finally {
+                    reading.set(false)
+                }
             }
-            Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
         } catch (e: Exception) {
-            clearCardValues()
-            val tip = if (e.message?.contains("lost", ignoreCase = true) == true) {
-                "Tag was lost — hold the card still on the NFC spot and try again."
-            } else {
-                "Read failed: ${e.message}"
-            }
-            binding.status.text = tip
-            binding.history.text = HistoryFormat.emptyMessage(
-                HistoryStatus.READ_FAILED,
-                tip
-            )
-            Toast.makeText(this, tip, Toast.LENGTH_LONG).show()
+            // Executor shut down (activity finishing).
+            reading.set(false)
         }
+    }
+
+    private fun onCardRead(card: FelicaCard) {
+        showCard(card)
+        val msg = if (card.balanceYen != null) {
+            "${card.brandLabel} ¥${card.balanceYen}"
+        } else {
+            card.brandLabel
+        }
+        Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
+    }
+
+    private fun onReadFailed(e: Throwable) {
+        clearCardValues()
+        val tip = if (e.message?.contains("lost", ignoreCase = true) == true) {
+            "Tag was lost — hold the card still on the NFC spot and try again."
+        } else {
+            "Read failed: ${e.message}"
+        }
+        binding.status.text = tip
+        binding.history.text = HistoryFormat.emptyMessage(
+            HistoryStatus.READ_FAILED,
+            tip
+        )
+        Toast.makeText(this, tip, Toast.LENGTH_LONG).show()
     }
 
     private fun showCard(card: FelicaCard) {
