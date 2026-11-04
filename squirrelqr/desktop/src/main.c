@@ -18,7 +18,7 @@ static void usage(FILE *f) {
     fprintf(f,
             "SquirrelQR desktop %s: read QR codes with Squirrel's own decoder (sqqr).\n"
             "\n"
-            "usage: squirrelqr [options] IMAGE...      decode image files (PGM, PPM, PBM, BMP)\n"
+            "usage: squirrelqr [options] IMAGE...      decode image files (PNG, PGM, PPM, PBM, BMP)\n"
             "       squirrelqr [options] --select      drag a rectangle on the screen, then decode it\n"
             "       squirrelqr [options] --screen      decode the whole screen\n"
             "       squirrelqr [options] --region X,Y,W,H\n"
@@ -148,7 +148,8 @@ static int do_screen(const Opts *o, QrRect r, SqqrResult *res) {
         if (elapsed >= o->wait) {
             fprintf(stderr, "screen: %s\n", sqqr_strerror(rc));
             if (getenv("WAYLAND_DISPLAY"))
-                fprintf(stderr, "note: under Wayland the X11 capture only sees XWayland windows\n");
+                fprintf(stderr, "note: under Wayland the X11 capture only sees XWayland windows;\n"
+                                "      take a screenshot with the desktop's tool and pass the PNG file\n");
             return 1;
         }
         nap(0.3);

@@ -25,7 +25,7 @@ CFLAGS += -DQR_HAS_ICONV
 LDLIBS += -liconv
 endif
 
-OBJ = $(BUILD)/qrimage.o $(BUILD)/qrtext.o $(BUILD)/capture_$(CAPTURE).o
+OBJ = $(BUILD)/qrimage.o $(BUILD)/qrpng.o $(BUILD)/qrtext.o $(BUILD)/capture_$(CAPTURE).o
 HDR = $(wildcard desktop/include/*.h) $(SQQR)/include/sqqr.h
 SQQR_LIB = $(SQQR)/build/libsqqr.a
 
@@ -57,6 +57,7 @@ test: test-desktop
 test-desktop: $(BUILD)/test_desktop $(BUILD)/squirrelqr
 	$(BUILD)/test_desktop $(SQQR)/fixtures/symbols.txt $(BUILD)
 	sh desktop/tests/cli_smoke.sh $(BUILD)
+	python3 -I desktop/tests/test_png.py $(BUILD)
 	@if [ "$(CAPTURE)" = x11 ] && command -v xvfb-run >/dev/null; then \
 		xvfb-run -a -s "-screen 0 800x600x24" $(BUILD)/test_desktop --x11 $(SQQR)/fixtures/symbols.txt $(BUILD); \
 	else echo "skipping the X11 capture test (no X11 build or no xvfb-run)"; fi
