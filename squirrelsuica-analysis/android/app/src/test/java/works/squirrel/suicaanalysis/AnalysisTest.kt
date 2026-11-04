@@ -114,12 +114,13 @@ class FelicaProtocolTest {
  */
 class FakeCard(
     private val loseAfter: Int = Int.MAX_VALUE,
-    private val systemCodes: List<Int> = listOf(0x0003)
+    private val systemCodes: List<Int> = listOf(0x0003),
+    private val nodes: List<IntArray> =
+        listOf(intArrayOf(0x0000, 0xfffe), intArrayOf(0x090f), intArrayOf(0x008b), intArrayOf(0x1008)),
+    private val sizes: Map<Int, Int> = mapOf(0x090f to 20, 0x008b to 1)
 ) : Transceiver {
     val idm = byteArrayOf(0x01, 0x01, 0x12, 0x34, 0x56, 0x78, 0x9a.toByte(), 0xbc.toByte())
     val pmm = byteArrayOf(0x10, 0x0b, 0x4b, 0x42, 0x84.toByte(), 0x85.toByte(), 0x10, 0xff.toByte())
-    private val nodes = listOf(intArrayOf(0x0000, 0xfffe), intArrayOf(0x090f), intArrayOf(0x008b), intArrayOf(0x1008))
-    private val sizes = mapOf(0x090f to 20, 0x008b to 1)
     var count = 0
 
     private fun reply(code: Int, data: List<Int>): ByteArray {
@@ -220,6 +221,26 @@ class CardAnalyzerTest {
         assertEquals(listOf(0xffff, 0xffff, 0x04c7, 0x04c7), dump.polls.map { it.systemCode })
         assertTrue(dump.log.none { it.name.startsWith("polling 0003") || it.name.startsWith("polling fe00") })
         assertEquals(listOf(0x04c7), dump.systems.map { it.systemCode })
+    }
+
+    @Test
+    fun nanacoPurseAndHistoryAreDumpedUnder04c7() {
+        // nanaco balance 0x5597 (purse, read-only) and history 0x564F (cyclic, read-only)
+        // need no key, so the dump must carry their blocks.
+        val card = FakeCard(
+            systemCodes = listOf(0x04c7),
+            nodes = listOf(intArrayOf(0x0000, 0xfffe), intArrayOf(0x5597), intArrayOf(0x564f)),
+            sizes = mapOf(0x5597 to 1, 0x564f to 5)
+        )
+        val sys = CardAnalyzer(card, fixedClock, maxBlocks = 8).analyze(null, "t", "test").systems.single()
+        assertEquals(0x04c7, sys.systemCode)
+        val bal = sys.services.single { it.code == 0x5597 }
+        assertEquals("purse-ro", bal.kind)
+        assertTrue(bal.readable)
+        assertEquals(1, bal.blocks.size)
+        val hist = sys.services.single { it.code == 0x564f }
+        assertEquals("cyclic-ro", hist.kind)
+        assertEquals(5, hist.blocks.size)
     }
 
     @Test
