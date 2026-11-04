@@ -3,11 +3,14 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include <stdio.h>
 
 typedef enum {
     LIVE_SRC_DEMO = 0,
     LIVE_SRC_WAV,
-    LIVE_SRC_ALSA
+    LIVE_SRC_ALSA,
+    LIVE_SRC_MIC,      /* SDL audio capture: ALSA/PulseAudio/PipeWire, WASAPI, CoreAudio */
+    LIVE_SRC_LOOPBACK  /* what the computer is playing: a PulseAudio/PipeWire monitor source */
 } LiveSourceKind;
 
 typedef struct LiveAudio LiveAudio;
@@ -17,6 +20,7 @@ typedef struct {
     double sample_rate;
     const char *wav_path;   /* LIVE_SRC_WAV */
     const char *alsa_dev;   /* LIVE_SRC_ALSA, e.g. "default" */
+    const char *device;     /* LIVE_SRC_MIC / LOOPBACK: part of the device name, NULL = default */
     double demo_freq_hz;
     int demo_harmonics;
 } LiveAudioConfig;
@@ -37,5 +41,18 @@ const char *live_audio_kind_name(LiveSourceKind k);
 
 /* Non-blocking poll: pull from device/demo into ring. Call from UI loop. */
 int live_audio_poll(LiveAudio *la);
+
+/* Name of the capture device the source opened (mic / loopback), or "". */
+const char *live_audio_device_name(const LiveAudio *la);
+
+/* Capture devices as listed by SDL (monitor sources included), one per line
+ * with "monitor" or "input" in front, written to out. Returns the count or -1. */
+int live_audio_list_devices(FILE *out);
+
+/* Pick the loopback device among capture device names: with want set, the
+ * first name containing it; otherwise the monitor of default_sink ("Monitor
+ * of <sink>", as PulseAudio and PipeWire name it), else the first monitor.
+ * Returns the index, or -1. Pure function, unit-tested. */
+int live_pick_loopback(const char *const *names, int n, const char *default_sink, const char *want);
 
 #endif

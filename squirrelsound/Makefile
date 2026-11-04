@@ -77,6 +77,7 @@ $(BUILD)/test_live: tests/test_live.c $(LIB_OBJ) $(SQDSP_LIB) | $(BUILD)
 test: $(BUILD)/test_sqdsp $(BUILD)/test_live $(BUILD)/squirrelsound
 	$(BUILD)/test_sqdsp
 	$(BUILD)/test_live
+	sh tests/test_capture.sh $(BUILD)
 	@tmp=/tmp/sqsound_a440.wav; svg=/tmp/sqsound_a440.svg; \
 	$(BUILD)/squirrelsound synth $$tmp --freq 440 --seconds 1.2 --harmonics 3 --rate 44100 && \
 	$(BUILD)/squirrelsound pitch $$tmp | tee /tmp/sqsound_pitch.txt | grep -E '44[0-9]\.' && \
