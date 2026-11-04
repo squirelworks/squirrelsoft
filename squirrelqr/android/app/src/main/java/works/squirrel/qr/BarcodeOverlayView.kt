@@ -44,7 +44,28 @@ class BarcodeOverlayView @JvmOverloads constructor(
         alpha = 180
     }
 
+    private val dimPaint = Paint().apply {
+        style = Paint.Style.FILL
+        color = 0x99000000.toInt()
+    }
+
     private var target: RectF? = null
+
+    /** Fixed guide (default) or tracking box; see [ScanMode]. */
+    var mode: ScanMode = ScanMode.DEFAULT
+        set(value) {
+            field = value
+            invalidate()
+        }
+
+    /** In fixed-guide mode: a code is currently inside the guide. */
+    var guideHit: Boolean = false
+        set(value) {
+            if (field != value) {
+                field = value
+                invalidate()
+            }
+        }
 
     fun setTarget(rect: RectF?) {
         target = rect
@@ -53,11 +74,16 @@ class BarcodeOverlayView @JvmOverloads constructor(
 
     fun clear() {
         target = null
+        guideHit = false
         invalidate()
     }
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
+        if (mode == ScanMode.FIXED_GUIDE) {
+            drawFixedGuide(canvas)
+            return
+        }
 
         // Always-on viewfinder crosshair (product: camera + crosshair).
         val viewCx = width / 2f
@@ -90,5 +116,26 @@ class BarcodeOverlayView @JvmOverloads constructor(
         // Bottom-right
         canvas.drawLine(r.right, r.bottom, r.right - len, r.bottom, cornerPaint)
         canvas.drawLine(r.right, r.bottom, r.right, r.bottom - len, cornerPaint)
+    }
+
+    private fun drawFixedGuide(canvas: Canvas) {
+        val g = ScanGuide.guideBox(width, height) ?: return
+        val w = width.toFloat()
+        val h = height.toFloat()
+        // Dim everything outside the guide.
+        canvas.drawRect(0f, 0f, w, g.top, dimPaint)
+        canvas.drawRect(0f, g.bottom, w, h, dimPaint)
+        canvas.drawRect(0f, g.top, g.left, g.bottom, dimPaint)
+        canvas.drawRect(g.right, g.top, w, g.bottom, dimPaint)
+        val paint = if (guideHit) crossPaint else cornerPaint
+        val len = (g.right - g.left) * 0.16f
+        canvas.drawLine(g.left, g.top, g.left + len, g.top, paint)
+        canvas.drawLine(g.left, g.top, g.left, g.top + len, paint)
+        canvas.drawLine(g.right, g.top, g.right - len, g.top, paint)
+        canvas.drawLine(g.right, g.top, g.right, g.top + len, paint)
+        canvas.drawLine(g.left, g.bottom, g.left + len, g.bottom, paint)
+        canvas.drawLine(g.left, g.bottom, g.left, g.bottom - len, paint)
+        canvas.drawLine(g.right, g.bottom, g.right - len, g.bottom, paint)
+        canvas.drawLine(g.right, g.bottom, g.right, g.bottom - len, paint)
     }
 }
