@@ -1,0 +1,221 @@
+# Release button: Actions > Release > Run workflow, pick the app.
+#
+# Builds the signed APK and the desktop builds for the version in the app's
+# build.gradle.kts, writes SHA256SUMS.txt, and creates a DRAFT GitHub Release.
+# The tag (<app>-v<version>) is only created when the owner presses Publish on
+# the draft. This workflow never publishes, never pushes a tag, and never
+# builds or uploads .aab files (AABs are built locally for Play, see
+# docs/RELEASING.md).
+#
+# On pull requests that touch the release tooling it does a dry run of every
+# build for every app, unsigned, and uploads nothing.
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      app:
+        description: App to release (version comes from its build.gradle.kts)
+        required: true
+        type: choice
+        options: [squirrelsound, squirrelsuica, squirrelqr, squirrelsuica-analysis]
+  pull_request:
+    paths:
+      - .github/workflows/release.yml
+      - scripts/release/**
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.event.inputs.app || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  meta:
+    name: Release metadata
+    runs-on: ubuntu-latest
+    outputs:
+      apps: ${{ steps.apps.outputs.apps }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Pick apps
+        id: apps
+        env:
+          APP: ${{ github.event.inputs.app }}
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
+            echo "apps=[\"$APP\"]" >> "$GITHUB_OUTPUT"
+          else
+            echo 'apps=["squirrelsound","squirrelsuica","squirrelqr","squirrelsuica-analysis"]' >> "$GITHUB_OUTPUT"
+          fi
+      - name: Check the release can be made
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          APP: ${{ github.event.inputs.app }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          [ "$GITHUB_REF" = refs/heads/main ] || { echo "::error::Run releases from main"; exit 1; }
+          eval "$(scripts/release/app_meta.sh "$APP")"
+          [ -f "$notes" ] || { echo "::error::Missing release notes $notes (merge the release-prep PR first)"; exit 1; }
+          if gh release view "$tag" >/dev/null 2>&1; then echo "::error::Release $tag already exists"; exit 1; fi
+          if git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null; then echo "::error::Tag $tag already exists"; exit 1; fi
+          echo "Releasing $name $version (versionCode $version_code) as $tag"
+
+  android:
+    name: APK ${{ matrix.app }}
+    needs: meta
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        app: ${{ fromJSON(needs.meta.outputs.apps) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Decode upload keystore
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          KEYSTORE_B64: ${{ secrets.SQUIRREL_UPLOAD_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.SQUIRREL_UPLOAD_STORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.SQUIRREL_UPLOAD_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.SQUIRREL_UPLOAD_KEY_PASSWORD }}
+        run: |
+          if [ -z "$KEYSTORE_B64" ] || [ -z "$STORE_PASSWORD" ] || [ -z "$KEY_ALIAS" ] || [ -z "$KEY_PASSWORD" ]; then
+            echo "::error::Signing secrets are missing. Add SQUIRREL_UPLOAD_KEYSTORE_BASE64, SQUIRREL_UPLOAD_STORE_PASSWORD, SQUIRREL_UPLOAD_KEY_ALIAS and SQUIRREL_UPLOAD_KEY_PASSWORD (see docs/RELEASING.md). No unsigned APK is released."
+            exit 1
+          fi
+          ks="$RUNNER_TEMP/upload.jks"
+          printf '%s' "$KEYSTORE_B64" | base64 -d > "$ks"
+          {
+            echo "SQUIRREL_UPLOAD_STORE_FILE=$ks"
+            echo "SQUIRREL_UPLOAD_STORE_PASSWORD=$STORE_PASSWORD"
+            echo "SQUIRREL_UPLOAD_KEY_ALIAS=$KEY_ALIAS"
+            echo "SQUIRREL_UPLOAD_KEY_PASSWORD=$KEY_PASSWORD"
+          } >> "$GITHUB_ENV"
+      - name: Build release APK
+        working-directory: ${{ matrix.app }}/android
+        run: ./gradlew --no-daemon :app:testReleaseUnitTest :app:assembleRelease
+      - name: Verify and name the APK
+        env:
+          APP: ${{ matrix.app }}
+        run: |
+          eval "$(scripts/release/app_meta.sh "$APP")"
+          mkdir -p dist
+          apksigner=$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -1)apksigner
+          if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
+            apk="$APP/android/app/build/outputs/apk/release/app-release.apk"
+            "$apksigner" verify --verbose --print-certs "$apk" | grep -E "Verified|Signer #1 certificate (DN|SHA-256)"
+            cp "$apk" "dist/$name-$version-android.apk"
+          else
+            ls "$APP"/android/app/build/outputs/apk/release/*.apk
+            echo "Dry run: release APK built unsigned, nothing uploaded."
+          fi
+          rm -f "$RUNNER_TEMP/upload.jks"
+          if find . -name '*.aab' -not -path './.git/*' | grep -q .; then echo "::error::An .aab was produced; refusing to continue"; exit 1; fi
+      - uses: actions/upload-artifact@v4
+        if: github.event_name == 'workflow_dispatch'
+        with:
+          name: apk-${{ matrix.app }}
+          path: dist/*.apk
+          if-no-files-found: error
+          retention-days: 7
+
+  desktop:
+    name: Desktop ${{ matrix.app }} ${{ matrix.platform }}
+    needs: meta
+    strategy:
+      fail-fast: false
+      matrix:
+        app: ${{ fromJSON(needs.meta.outputs.apps) }}
+        platform: [linux-x86_64, windows-x86_64, macos-arm64, any]
+        include:
+          - { platform: linux-x86_64, os: ubuntu-latest }
+          - { platform: windows-x86_64, os: windows-latest }
+          - { platform: macos-arm64, os: macos-latest }
+          - { platform: any, os: ubuntu-latest }
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: ${{ matrix.os == 'windows-latest' && 'msys2 {0}' || 'bash' }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Which build does this app have?
+        id: kind
+        shell: bash
+        env:
+          APP: ${{ matrix.app }}
+          PLATFORM: ${{ matrix.platform }}
+        run: |
+          eval "$(scripts/release/app_meta.sh "$APP")"
+          run=false
+          if [ "$desktop" = c ] && [ "$PLATFORM" != any ]; then run=true; fi
+          if [ "$desktop" = python ] && [ "$PLATFORM" = any ]; then run=true; fi
+          echo "run=$run" >> "$GITHUB_OUTPUT"
+          echo "$APP ($desktop) on $PLATFORM: run=$run"
+      - name: Install SDL2 / ALSA (Linux)
+        if: steps.kind.outputs.run == 'true' && matrix.platform == 'linux-x86_64'
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libsdl2-dev libasound2-dev
+      - name: Install SDL2 (macOS)
+        if: steps.kind.outputs.run == 'true' && matrix.platform == 'macos-arm64'
+        run: brew install sdl2 pkg-config
+      - uses: msys2/setup-msys2@v2
+        if: steps.kind.outputs.run == 'true' && matrix.platform == 'windows-x86_64'
+        with:
+          msystem: MINGW64
+          install: >-
+            make zip git
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-SDL2
+            mingw-w64-x86_64-pkgconf
+      - name: Build and package
+        if: steps.kind.outputs.run == 'true'
+        env:
+          APP: ${{ matrix.app }}
+          PLATFORM: ${{ matrix.platform }}
+          CC: ${{ matrix.os == 'macos-latest' && 'clang' || 'gcc' }}
+        run: scripts/release/package_desktop.sh "$APP" dist "$PLATFORM"
+      - uses: actions/upload-artifact@v4
+        if: steps.kind.outputs.run == 'true' && github.event_name == 'workflow_dispatch'
+        with:
+          name: desktop-${{ matrix.app }}-${{ matrix.platform }}
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 7
+
+  draft:
+    name: Draft release
+    if: github.event_name == 'workflow_dispatch'
+    needs: [meta, android, desktop]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Checksums and draft release
+        env:
+          APP: ${{ github.event.inputs.app }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          eval "$(scripts/release/app_meta.sh "$APP")"
+          cd dist
+          if ls *.aab >/dev/null 2>&1; then echo "::error::AABs never go to GitHub"; exit 1; fi
+          sha256sum -- * > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+          cd ..
+          gh release create "$tag" dist/* \
+            --draft \
+            --target "$GITHUB_SHA" \
+            --title "$name $version" \
+            --notes-file "$notes"
+          echo "Draft ready: $(gh release view "$tag" --json url -q .url)" >> "$GITHUB_STEP_SUMMARY"
