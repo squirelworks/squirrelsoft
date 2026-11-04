@@ -50,10 +50,12 @@ class AudioEngine(
 
     var fftSize: Int = 2048
     /**
-     * Target analysis hop in milliseconds (Spectroid default interval ≈ 20 ms).
-     * Re-read live so Basic “Scroll” speed can change without restarting capture.
+     * Time the visible LOFARgram covers, in seconds. Re-read live so the Basic
+     * "Span" setting changes the scroll rate without restarting capture.
      */
-    @Volatile var hopMs: Int = 20
+    @Volatile var waterfallSeconds: Float = SpectrumControls.WaterfallDuration.DEFAULT.seconds
+    /** Rows in the LOFARgram bitmap the frames are planned for. */
+    @Volatile var waterfallRows: Int = SpectrumControls.WATERFALL_ROWS
     var source: Source = Source.MIC
     var demoHz: Float = 440f
     /** Exponential smoothing 0..1 (0 = off). Spectroid-like default ≈ 0.3. */
@@ -350,6 +352,7 @@ class AudioEngine(
         val shortBuf = ShortArray(size)
         val floatChunk = FloatArray(size)
         val ring = RingBuffer(size * 8)
+        val rows = WaterfallRowAccumulator()
         val wantMic = source == Source.MIC
         var useMic = wantMic
         var consecutiveRestarts = 0
@@ -390,20 +393,17 @@ class AudioEngine(
 
             if (!stillActive(session)) return
 
-            fun hopSamples(): Int {
-                val ms = hopMs.coerceIn(5, 200)
-                return ((sampleRate * ms) / 1000).coerceIn(size / 16, size)
-            }
             val demoScratch = FloatArray(size.coerceAtLeast(64))
 
             while (stillActive(session)) {
-                val hop = hopSamples()
+                val plan = SpectrumControls.rowPlan(waterfallSeconds, waterfallRows, sampleRate, size)
+                val hop = plan.hopSamples
                 if (useMic && recorder != null) {
                     val n = try {
                         if (Build.VERSION.SDK_INT >= 23) {
-                            recorder!!.read(shortBuf, 0, shortBuf.size, AudioRecord.READ_BLOCKING)
+                            recorder!!.read(shortBuf, 0, hop, AudioRecord.READ_BLOCKING)
                         } else {
-                            recorder!!.read(shortBuf, 0, shortBuf.size)
+                            recorder!!.read(shortBuf, 0, hop)
                         }
                     } catch (e: IllegalStateException) {
                         lastError = "Mic read IllegalState — restarting"
@@ -422,6 +422,7 @@ class AudioEngine(
                         }
                         adoptRecorder(opened.first, opened.second, opened.third)
                         ring.clear()
+                        rows.reset()
                         continue
                     } catch (e: SecurityException) {
                         lastError = "RECORD_AUDIO denied"
@@ -465,6 +466,7 @@ class AudioEngine(
                             }
                             adoptRecorder(opened.first, opened.second, opened.third)
                             ring.clear()
+                            rows.reset()
                             if (consecutiveRestarts <= 2) {
                                 postStatus("Mic restarted via $activeLabel @ ${sampleRate} Hz")
                             }
@@ -497,6 +499,7 @@ class AudioEngine(
                         adoptRecorder(opened.first, opened.second, opened.third)
                         useMic = true
                         ring.clear()
+                        rows.reset()
                         postStatus("Mic recovered via $activeLabel @ ${sampleRate} Hz")
                     }
                     continue
@@ -514,7 +517,7 @@ class AudioEngine(
                     sleepQuiet((1000L * count / sampleRate).coerceAtLeast(4L))
                 }
 
-                // Emit as many hopped frames as the ring allows (usually 0–1 per read).
+                // One frame per hop of new samples; reads are hop-sized, so usually 1.
                 while (stillActive(session) && ring.available >= size) {
                     if (!ring.takeWindow(re, size, hop)) break
                     try {
@@ -551,6 +554,7 @@ class AudioEngine(
                             }
                         }
                         val peakHz = peakBin * sampleRate.toFloat() / size
+                        val row = rows.add(smoothed, plan.framesPerRow)
                         val frame = SpectrumFrame(
                             db = smoothed.copyOf(),
                             sampleRate = sampleRate,
@@ -558,7 +562,8 @@ class AudioEngine(
                             peakHz = peakHz,
                             peakDb = peakDb,
                             rmsDb = rmsDb,
-                            sourceLabel = activeLabel
+                            sourceLabel = activeLabel,
+                            waterfallRow = row
                         )
                         postFrame(session, frame)
                     } catch (e: Exception) {

@@ -22,10 +22,13 @@
     <string name="zoom_label">Zoom</string>
     <string name="zoom_in">＋</string>
     <string name="zoom_out">－</string>
-    <string name="scroll_label">Scroll</string>
-    <string name="scroll_slow">Slow</string>
-    <string name="scroll_normal">Normal</string>
-    <string name="scroll_fast">Fast</string>
+    <string name="scroll_label">Span</string>
+    <string name="span_5s">5 s</string>
+    <string name="span_15s">15 s</string>
+    <string name="span_30s">30 s</string>
+    <string name="span_60s">60 s</string>
+    <string name="span_2min">2 min</string>
+    <string name="span_5min">5 min</string>
     <string name="advanced_hint">Technical controls for FFT resolution, smoothing, and a custom Hz window.</string>
     <string name="fmin_label">fMin</string>
     <string name="fmax_label">fMax</string>

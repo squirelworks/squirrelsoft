@@ -1,7 +1,9 @@
 package works.squirrel.sound
 
+import kotlin.math.ceil
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.roundToInt
 
 /**
  * Frequency-window presets, zoom math, and waterfall scroll → hop mapping.
@@ -37,19 +39,53 @@ object SpectrumControls {
         }
     }
 
-    /** Waterfall / analysis hop. Smaller hop → faster scroll. */
-    enum class ScrollSpeed(val id: String, val hopMs: Int) {
-        SLOW("slow", 50),
-        NORMAL("normal", 20),
-        FAST("fast", 10);
+    /** Rows in the LOFARgram (waterfall) bitmap. */
+    const val WATERFALL_ROWS = 160
+
+    /** How much time the visible LOFARgram covers, top to bottom. */
+    enum class WaterfallDuration(val id: String, val seconds: Float) {
+        S5("5s", 5f),
+        S15("15s", 15f),
+        S30("30s", 30f),
+        S60("60s", 60f),
+        M2("2min", 120f),
+        M5("5min", 300f);
 
         companion object {
-            fun fromHopMs(hopMs: Int): ScrollSpeed = when {
-                hopMs >= 40 -> SLOW
-                hopMs <= 12 -> FAST
-                else -> NORMAL
-            }
+            val DEFAULT = S15
         }
+    }
+
+    /**
+     * Analysis hop (samples between FFT frames) and how many frames are averaged
+     * into one waterfall row.
+     */
+    data class RowPlan(val hopSamples: Int, val framesPerRow: Int) {
+        fun rowSeconds(sampleRate: Int): Float = hopSamples.toFloat() * framesPerRow / sampleRate
+    }
+
+    /**
+     * Plan the framing so [rows] rows span [durationS] seconds. The hop never
+     * exceeds [fftSize] (no samples skipped); long durations average several
+     * frames per row instead. Very short durations are limited by the minimum hop
+     * of fftSize / 16.
+     */
+    fun rowPlan(durationS: Float, rows: Int, sampleRate: Int, fftSize: Int): RowPlan {
+        require(sampleRate > 0 && fftSize > 0)
+        val rowSamples = durationS.coerceAtLeast(0.1f).toDouble() * sampleRate / rows.coerceAtLeast(1)
+        val frames = ceil(rowSamples / fftSize).toInt().coerceAtLeast(1)
+        val minHop = (fftSize / 16).coerceAtLeast(1)
+        val hop = (rowSamples / frames).roundToInt().coerceIn(minHop, fftSize)
+        return RowPlan(hop, frames)
+    }
+
+    /** Time-axis label for [seconds] ago on the LOFARgram. */
+    fun timeLabel(seconds: Float): String = when {
+        seconds <= 0f -> "now"
+        seconds >= 60f && seconds % 60f == 0f -> "-${(seconds / 60f).toInt()}m"
+        seconds >= 60f -> "-${"%.1f".format(seconds / 60f)}m"
+        seconds == seconds.toInt().toFloat() -> "-${seconds.toInt()}s"
+        else -> "-${"%.1f".format(seconds)}s"
     }
 
     fun clampRange(fMin: Float, fMax: Float, nyquistHz: Float): Pair<Float, Float> {
@@ -90,6 +126,4 @@ object SpectrumControls {
         val delta = span * fractionOfSpan
         return clampRange(fMin + delta, fMax + delta, nyquistHz)
     }
-
-    fun hopMsForScroll(speed: ScrollSpeed): Int = speed.hopMs.coerceIn(5, 200)
 }

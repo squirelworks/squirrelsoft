@@ -38,23 +38,25 @@ class RingBuffer(capacity: Int) {
     }
 
     /**
-     * Copy the most recent [fftSize] samples into [out] (oldest of the window first).
-     * Keeps [fftSize - hop] samples of overlap and drops any backlog so the live
-     * display stays near real time. Returns false if fewer than [fftSize] samples
-     * are buffered.
+     * Copy the oldest unconsumed [fftSize] samples into [out] (oldest first), then
+     * consume exactly [hop] samples, so frames per second = sampleRate / hop no
+     * matter how the reads are sized. If more than [maxBacklog] samples beyond one
+     * window are waiting (the UI fell behind), the oldest are dropped first to stay
+     * live. Returns false if fewer than [fftSize] samples are buffered.
      */
-    fun takeWindow(out: FloatArray, fftSize: Int, hop: Int): Boolean {
+    fun takeWindow(out: FloatArray, fftSize: Int, hop: Int, maxBacklog: Int = 4 * fftSize): Boolean {
         require(out.size >= fftSize)
         require(hop in 1..fftSize)
+        require(maxBacklog >= 0)
         if (size < fftSize) return false
+        if (size > fftSize + maxBacklog) size = fftSize + maxBacklog
         val cap = buf.size
-        val start = (write - fftSize + cap) % cap
-        var idx = start
+        var idx = (write - size + cap) % cap
         for (i in 0 until fftSize) {
             out[i] = buf[idx]
             idx = (idx + 1) % cap
         }
-        size = fftSize - hop
+        size -= hop
         return true
     }
 }
