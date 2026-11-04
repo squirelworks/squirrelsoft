@@ -1,5 +1,5 @@
 /* sqfelica unit tests plus the felica_parse.py parity fixture.
- * Usage: test_sqfelica fixtures/parity.txt */
+ * Usage: test_sqfelica fixtures/parity.txt [StationCode.csv] */
 #include "sqfelica.h"
 
 #include <math.h>
@@ -193,6 +193,60 @@ static void format_entry(const SqfHistory *h, char *buf, size_t cap) {
              (int)h->fare_yen, (int)h->balance_yen, h->terminal, h->process, en, ex);
 }
 
+static SqfStation stations[8192];
+static long nstations = -1;
+
+static void test_station_index(void) {
+    char csv[] = "\xEF\xBB\xBFline,area,station,company,line_name,station_name,extra\r\n"
+                 "e1, 0 ,01,JR東日本,山手線, 東京 ,x\r\n"
+                 "e1,0,01,dup,dup,later row loses,x\n"
+                 "zz,0,02,bad,bad,bad hex,x\n"
+                 "100,0,02,bad,bad,too big,x\n"
+                 "short,row\n"
+                 "\n"
+                 "e1,1,02,名鉄,名古屋本線,名鉄名古屋,x\n"
+                 "e1,0,03,c,l,,x\n"
+                 "e1,0,02,c,l,last line has no newline,x";
+    SqfStation rows[8];
+    long n = sqf_station_index(csv, sizeof csv - 1, rows, 8);
+    CHECK(n == 4);
+    const SqfStation *t = sqf_station_lookup(rows, (size_t)n, 0, 0xE1, 0x01);
+    CHECK(t && !strcmp(t->station_name, "東京") && !strcmp(t->company, "JR東日本"));
+    t = sqf_station_lookup(rows, (size_t)n, 0, 0xE1, 0x02);
+    CHECK(t && !strcmp(t->station_name, "last line has no newline"));
+    CHECK(sqf_station_lookup(rows, (size_t)n, 0, 0xE1, 0x04) == NULL);
+    /* region bits 7-6 = enter area 1; bits 5-4 = exit area 1 */
+    CHECK(!strcmp(sqf_station_resolve(rows, (size_t)n, 0x40, 0xE1, 0x02, 0), "名鉄名古屋"));
+    CHECK(!strcmp(sqf_station_resolve(rows, (size_t)n, 0x10, 0xE1, 0x02, 1), "名鉄名古屋"));
+    /* area 1 has no E1/01, so fall back to area 0 */
+    CHECK(!strcmp(sqf_station_resolve(rows, (size_t)n, 0x40, 0xE1, 0x01, 0), "東京"));
+    CHECK(sqf_station_resolve(rows, (size_t)n, 0, 0, 0, 0) == NULL);
+    CHECK(sqf_station_resolve(rows, (size_t)n, 0, 0xE1, 0x03, 0) == NULL); /* empty name */
+
+    char no_header[] = "area,line,station,company,line_name\n0,1,1,a,b\n";
+    CHECK(sqf_station_index(no_header, sizeof no_header - 1, rows, 8) == -1);
+    char too_many[] = "area,line,station,company,line_name,station_name\n0,1,1,a,b,c\n0,1,2,a,b,c\n";
+    CHECK(sqf_station_index(too_many, sizeof too_many - 1, rows, 1) == -1);
+    char empty[] = "";
+    CHECK(sqf_station_index(empty, 0, rows, 8) == -1);
+}
+
+static int load_stations(const char *path) {
+    FILE *f = fopen(path, "rb");
+    if (!f) {
+        perror(path);
+        return -1;
+    }
+    static char buf[1 << 20];
+    size_t len = fread(buf, 1, sizeof buf - 1, f);
+    int big = !feof(f);
+    fclose(f);
+    if (big) return -1;
+    nstations = sqf_station_index(buf, len, stations, sizeof stations / sizeof stations[0]);
+    printf("station table: %ld codes\n", nstations);
+    return nstations > 0 ? 0 : -1;
+}
+
 static int run_fixture(const char *path) {
     FILE *f = fopen(path, "r");
     if (!f) {
@@ -201,7 +255,7 @@ static int run_fixture(const char *path) {
     }
     char line[512], brand[16] = "";
     uint8_t blocks[32][SQF_BLOCK_LEN];
-    size_t nb = 0, ne = 0, groups = 0, balances = 0;
+    size_t nb = 0, ne = 0, groups = 0, balances = 0, names = 0;
     char expect[32][512];
     while (fgets(line, sizeof line, f)) {
         line[strcspn(line, "\r\n")] = 0;
@@ -259,11 +313,26 @@ static int run_fixture(const char *path) {
                 failures++;
             }
             balances++;
+        } else if (line[0] == 'R' && nstations > 0) {
+            unsigned region, ln, st;
+            int ex, off = 0;
+            if (sscanf(line + 2, "%x %x %x %d %n", &region, &ln, &st, &ex, &off) != 4 || !off) {
+                failures++;
+                continue;
+            }
+            const char *want = line + 2 + off;
+            const char *got = sqf_station_resolve(stations, (size_t)nstations, (uint8_t)region, (uint8_t)ln,
+                                                  (uint8_t)st, ex);
+            if (strcmp(got ? got : "-", want)) {
+                fprintf(stderr, "station mismatch: %s -> got %s\n", line, got ? got : "-");
+                failures++;
+            }
+            names++;
         }
     }
     fclose(f);
-    printf("fixture: %zu history groups, %zu balance checks\n", groups, balances);
-    return groups > 0 && balances > 0 ? 0 : -1;
+    printf("fixture: %zu history groups, %zu balance checks, %zu station names\n", groups, balances, names);
+    return groups > 0 && balances > 0 && (nstations < 0 || names > 0) ? 0 : -1;
 }
 
 int main(int argc, char **argv) {
@@ -271,6 +340,8 @@ int main(int argc, char **argv) {
     test_parsers();
     test_attributes();
     test_edy_dates();
+    test_station_index();
+    if (argc > 2 && load_stations(argv[2])) failures++;
     if (argc > 1 && run_fixture(argv[1])) failures++;
     if (failures) {
         fprintf(stderr, "%d failure(s)\n", failures);

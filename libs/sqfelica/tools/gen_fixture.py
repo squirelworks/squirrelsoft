@@ -13,6 +13,9 @@ Format, one record per line:
                        one expected entry; time/enter/exit are '-' when absent
   .                    end of group
   L <brand> <hex|-> [<hex|->] <balance|->   one balance check
+  R region line station exit name    resolve_rail on the shipped StationCode.csv
+                       (hex bytes, exit 0/1, name '-' when None; the name is the
+                       rest of the line and may contain spaces)
 """
 import importlib.util
 import random
@@ -160,6 +163,20 @@ def main():
                       ("waon", fp.waon_balance)):
         for b in (bytes([0x50, 0x14, 0, 0]) + bytes(12), bytes([0xff] * 16), r.randbytes(16)):
             out.append(f"L {brand} {b.hex()} {fn(b)}")
+
+    # Station names: every shipped code at its own area, plus random region
+    # bytes, the area-0 fallback, unknown codes and 00/00.
+    rs = random.Random(20261104)
+    keys = sorted(fp._station_table().keys())
+    picks = rs.sample(keys, 400) + [(0, 0, 0), (0, 0x7F, 0xFE), (3, 0xFF, 0xFF)]
+    for area, line, station in picks:
+        for _ in range(2):
+            region = rs.randrange(256)
+            exit_ = rs.randrange(2)
+            if rs.randrange(2) and line >= 0x80:  # encode the row's own area
+                region = (region & ~(0x3 << (4 if exit_ else 6))) | (area << (4 if exit_ else 6))
+            name = fp.resolve_rail(region, line, station, bool(exit_))
+            out.append(f"R {region:02x} {line:02x} {station:02x} {exit_} {name or '-'}")
 
     Path(sys.argv[1]).write_text("\n".join(out) + "\n", encoding="utf-8")
 

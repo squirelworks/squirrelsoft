@@ -148,6 +148,34 @@ size_t sqf_parse_edy_history(const uint8_t *blocks, size_t n,
 /* Station-table area (0..3) for a rail code, from the region byte. */
 int sqf_station_area(uint8_t region, uint8_t line, int for_exit);
 
+/* ---- Station table (squirrelsuica/data/StationCode.csv) ---- */
+
+typedef struct {
+    uint8_t area, line, station;
+    const char *company, *line_name, *station_name; /* UTF-8, inside the CSV buffer */
+} SqfStation;
+
+/* Index a StationCode.csv held in a caller-owned writable buffer of len + 1
+ * bytes (csv[len] is scratch). Field separators and line ends are overwritten
+ * with NULs, so the buffer must outlive rows. Columns are found by the header names area, line, station,
+ * company, line_name, station_name (any order; a UTF-8 BOM is skipped). Codes
+ * are hex 00..FF; rows with a bad code are skipped, and for a repeated code the
+ * first row wins, as in felica_parse.py. Fields are trimmed; quoting is not
+ * supported (the shipped table has none). rows ends up sorted by code.
+ * Returns the number of rows, or -1 if the header lacks a column or the table
+ * has more than cap rows. */
+long sqf_station_index(char *csv, size_t len, SqfStation *rows, size_t cap);
+
+/* Exact lookup in an indexed table; NULL if absent. */
+const SqfStation *sqf_station_lookup(const SqfStation *rows, size_t n, uint8_t area, uint8_t line,
+                                     uint8_t station);
+
+/* Station name for a history entry's rail code, like felica_parse.resolve_rail:
+ * the area comes from the region byte (sqf_station_area), falling back to area
+ * 0. NULL for code 00/00, an unknown code or an empty name. */
+const char *sqf_station_resolve(const SqfStation *rows, size_t n, uint8_t region, uint8_t line,
+                                uint8_t station, int for_exit);
+
 /* Balances. Suica: block 0x090F bytes 10-11 LE, block 0x008B bytes 11-12 LE,
  * choosing the plausible one as felica_parse.suica_balance does. Pass NULL for
  * a block that was not read. Returns -1 if neither is available. */
