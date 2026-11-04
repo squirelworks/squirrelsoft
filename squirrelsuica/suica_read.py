@@ -36,6 +36,38 @@ SVC_EDY_BAL = 0x1317
 SVC_WAON_BAL = 0x6817
 
 
+# Many cards cap Read Without Encryption below 20 blocks per command,
+# so read in chunks and drop to one block at a time when a chunk is refused.
+READ_CHUNK = 4
+
+
+def read_blocks_chunked(read_fn, count: int, chunk: int = READ_CHUNK) -> List[bytes]:
+    """Read blocks 0..count-1 with ``read_fn(indices) -> list of 16-byte blocks``.
+
+    ``read_fn`` raises (or returns fewer blocks) when the card refuses.
+    Tries ``chunk`` blocks per command, falls back to single blocks, and stops
+    at the first single block the card refuses (end of the service).
+    """
+    out: List[bytes] = []
+    i = 0
+    single = False
+    while i < count:
+        n = 1 if single else min(chunk, count - i)
+        idx = list(range(i, i + n))
+        try:
+            got = [bytes(b) for b in (read_fn(idx) or [])]
+        except Exception:
+            got = []
+        if len(got) == n:
+            out.extend(got)
+            i += n
+        elif n > 1:
+            single = True
+        else:
+            break
+    return out
+
+
 def _read_block(tag, service: int, index: int = 0):
     import nfc.tag.tt3 as tt3
 
@@ -75,9 +107,12 @@ def read_with_nfcpy(device: Optional[str] = None) -> FelicaCard:
             hist: List[bytes] = []
             try:
                 sc = tt3.ServiceCode(SVC_SUICA_HIST >> 6, SVC_SUICA_HIST & 0x3F)
-                bcs = [tt3.BlockCode(i, service=0) for i in range(20)]
-                bl = tag.read_without_encryption([sc], bcs)
-                hist = [bytes(x) for x in bl] if bl else []
+
+                def read_fn(idx):
+                    bcs = [tt3.BlockCode(i, service=0) for i in idx]
+                    return tag.read_without_encryption([sc], bcs)
+
+                hist = read_blocks_chunked(read_fn, 20)
             except Exception:
                 pass
             b008b = None

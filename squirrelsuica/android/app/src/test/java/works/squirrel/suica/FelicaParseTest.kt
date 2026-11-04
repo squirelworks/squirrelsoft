@@ -179,8 +179,107 @@ class FelicaParseTest {
         val idm = ByteArray(8) { (it + 1).toByte() }
         val cmd = FelicaReader.readWithoutEncryption(idm, 0x090f, intArrayOf(0, 1, 2, 3))
         assertEquals(4, cmd[13].toInt() and 0xff)
-        assertEquals(0x80, cmd[14].toInt() and 0xff)
-        assertEquals(0x83, cmd[20].toInt() and 0xff)
+        val elements = cmd.copyOfRange(14, 22).map { it.toInt() and 0xff }
+        assertEquals(listOf(0x80, 0x00, 0x80, 0x01, 0x80, 0x02, 0x80, 0x03), elements)
+        assertEquals(cmd.size, cmd[0].toInt() and 0xff)
+    }
+
+    @Test
+    fun blockListElementsKeepServiceOrderZeroForBlocks0To19() {
+        for (b in 0 until 20) {
+            val e = FelicaReader.blockListElement(b).map { it.toInt() and 0xff }
+            assertEquals("block $b", listOf(0x80, b), e)
+        }
+    }
+
+    @Test
+    fun blockListElementUsesThreeByteFormAbove255() {
+        val e = FelicaReader.blockListElement(0x012c).map { it.toInt() and 0xff }
+        assertEquals(listOf(0x00, 0x2c, 0x01), e)
+        val cmd = FelicaReader.readWithoutEncryption(ByteArray(8), 0x090f, intArrayOf(255, 300))
+        assertEquals(listOf(0x80, 0xff, 0x00, 0x2c, 0x01), cmd.copyOfRange(14, 19).map { it.toInt() and 0xff })
+        assertEquals(cmd.size, cmd[0].toInt() and 0xff)
+    }
+
+    @Test
+    fun statusFlagsAreReported() {
+        val resp = byteArrayOf(12, 0x07, 1, 2, 3, 4, 5, 6, 7, 8, 0x01, 0xA8.toByte())
+        assertEquals(0x01 to 0xA8, FelicaReader.statusFlags(resp))
+        assertTrue(FelicaReader.extractBlocks(resp).isEmpty())
+    }
+
+    @Test
+    fun fakeCardReturnsAllTwentyHistoryBlocks() {
+        val card = FakeFelicaCard(blockCount = 20, maxBlocksPerRead = 4)
+        val read = FelicaReader.readServiceRange(card, ByteArray(8) { 1 }, 0x090f, 0, 20)
+        assertEquals(HistoryStatus.OK, read.status)
+        assertEquals(20, read.blocks.size)
+        for (i in 0 until 20) assertEquals(i, read.blocks[i][0].toInt() and 0xff)
+    }
+
+    @Test
+    fun fakeCardWithOneBlockPerReadStillReturnsTwenty() {
+        val card = FakeFelicaCard(blockCount = 20, maxBlocksPerRead = 1)
+        val read = FelicaReader.readServiceRange(card, ByteArray(8) { 1 }, 0x090f, 0, 20)
+        assertEquals(HistoryStatus.OK, read.status)
+        assertEquals(20, read.blocks.size)
+    }
+
+    @Test
+    fun shortServiceEndsCleanlyOnCardRefusal() {
+        val card = FakeFelicaCard(blockCount = 6, maxBlocksPerRead = 4)
+        val read = FelicaReader.readServiceRange(card, ByteArray(8) { 1 }, 0x090f, 0, 20)
+        assertEquals(HistoryStatus.OK, read.status)
+        assertEquals(6, read.blocks.size)
+    }
+
+    /**
+     * Strict fake card: refuses (SF1=01, SF2=A1/A8) any element whose service-list
+     * order is not 0, any block past [blockCount], or more than [maxBlocksPerRead]
+     * blocks per command. Block i's first byte is i.
+     */
+    private class FakeFelicaCard(
+        private val blockCount: Int,
+        private val maxBlocksPerRead: Int
+    ) : FelicaReader.Transceiver {
+        override fun transceive(command: ByteArray): ByteArray {
+            val c = command.map { it.toInt() and 0xff }
+            require(c[0] == c.size && c[1] == 0x06)
+            val idm = command.copyOfRange(2, 10)
+            val nSvc = c[10]
+            var off = 11 + 2 * nSvc
+            val nBlk = c[off]
+            off += 1
+            val wanted = ArrayList<Int>()
+            var sf2 = 0
+            repeat(nBlk) {
+                val d0 = c[off]
+                if (d0 and 0x80 != 0) {
+                    if (d0 and 0x0f != 0) sf2 = 0xA1
+                    wanted.add(c[off + 1])
+                    off += 2
+                } else {
+                    if (d0 and 0x0f != 0) sf2 = 0xA1
+                    wanted.add(c[off + 1] or (c[off + 2] shl 8))
+                    off += 3
+                }
+            }
+            if (sf2 == 0 && nBlk > maxBlocksPerRead) sf2 = 0xA2
+            if (sf2 == 0 && wanted.any { it >= blockCount }) sf2 = 0xA8
+            val body = ArrayList<Byte>()
+            body.add(0x07)
+            idm.forEach { body.add(it) }
+            if (sf2 != 0) {
+                body.add(0x01); body.add(sf2.toByte())
+            } else {
+                body.add(0x00); body.add(0x00); body.add(wanted.size.toByte())
+                for (b in wanted) {
+                    body.add(b.toByte())
+                    repeat(15) { body.add(0) }
+                }
+            }
+            return (listOf((body.size + 1).toByte()) + body).toByteArray()
+        }
     }
 
     @Test
