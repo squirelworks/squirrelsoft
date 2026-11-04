@@ -10,7 +10,7 @@ Issue 09 / roadmap S2 and S6. SquirrelSoft is a set of apps that will later move
 ```
 libs/
   sqdsp/     FFT, windows, PSD, pitch/THD (SquirrelSound)       ← moved here (S2 first step)
-  sqfelica/  FeliCa command builder/parser, Suica/PASMO/... history, station DB loader
+  sqfelica/  FeliCa command builder/parser, Suica/PASMO/nanaco/Edy/WAON history  ← added (S2 second step)
   sqqr/      original QR decoder (finder patterns, perspective, Reed–Solomon)
   sqmath/    expression engine / CAS core (SquirrelCalc)
   sqgui/     tiny immediate-mode widgets over SDL2, portable to Squirrel OS/2 wm/gfx
@@ -38,7 +38,13 @@ Until the Android apps call the cores through JNI, Kotlin keeps its own implemen
 - `FftParityTest` in SquirrelSound's Android unit tests runs `Fft.hann` and `Fft.forward` on the same samples. They must agree within 1e-4 of the peak, and CI runs this test.
 - After an intentional change to the core, run `make -C libs/sqdsp fixture` and commit the result.
 
-`sqfelica` will follow the same pattern, with dumps from SquirrelSuicaAnalysis as fixtures shared by the Kotlin, Python and C parsers.
+`sqfelica` uses the same idea with Python as the reference, since `squirrelsuica/felica_parse.py` is the parser the desktop tool and its tests already trust:
+
+- `libs/sqfelica/tools/gen_fixture.py` runs `felica_parse.py` on synthetic history blocks (the demo cards, edge cases and seeded random blocks) and on balance blocks, and writes `libs/sqfelica/fixtures/parity.txt`.
+- `make -C libs/sqfelica test` regenerates the fixture into `build/`, diffs it against the committed copy, and then runs the C parser over the same blocks. Every field must match: kind, date, time, fare, balance, terminal, process and the entry/exit line/station codes.
+- So a change to either parser fails `make test` until the other side matches and `make -C libs/sqfelica fixture` is rerun.
+- Station names stay in the front-ends. The C core reports raw line/station codes plus `sqf_station_area`, and each front-end looks names up in its own copy of the station table.
+- Real card dumps from SquirrelSuicaAnalysis (S1.3) get added as fixture groups once they arrive, and the Kotlin parser joins the same fixture.
 
 ## Split checklist (S6, done by the owner)
 
@@ -54,6 +60,6 @@ The owner creates the new repositories and runs `git filter-repo` to keep histor
 
 ## Next steps
 
-- `libs/sqfelica`: port the FeliCa command builder and parser to C, with fixtures from real dumps (S1.3 feeds it).
+- `libs/sqfelica`: add real card dumps to the fixture (S1.3 feeds it), a Kotlin parity test, and a station table loader that takes a caller buffer.
 - JNI: SquirrelSound calls `sqdsp` through the NDK, keeping `Fft.kt` as the fallback until parity holds on devices.
 - `libs/sqgui` and `libs/sqmath` for SquirrelCalc and the Squirrel OS/2 apps (S5).
