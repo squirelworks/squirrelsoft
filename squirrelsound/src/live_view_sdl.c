@@ -1,4 +1,5 @@
 #include "live_view.h"
+#include "live_prefs.h"
 
 #include <math.h>
 #include <stdio.h>
@@ -18,7 +19,8 @@ static Uint32 db_to_rgb(float db, float dmin, float dmax) {
     return (Uint32)(0xFF000000u | ((Uint32)r << 16) | ((Uint32)g << 8) | (Uint32)b);
 }
 
-int live_view_sdl_run(LiveAudio *audio, LiveEngine *engine) {
+int live_view_sdl_run(LiveAudio *audio, LiveEngine *engine, LiveDirection direction,
+                      const char *prefs_path) {
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER) != 0) {
         fprintf(stderr, "SDL_Init: %s\n", SDL_GetError());
         return -1;
@@ -77,7 +79,8 @@ int live_view_sdl_run(LiveAudio *audio, LiveEngine *engine) {
     printf("  q/Esc quit | space pause | m max-hold | r reset hold\n");
     printf("  [/] zoom | arrows pan | wheel zoom\n");
     printf("  1 Human 20-16k | 2 Music 20-4k | 3 Bass 20-250 | 4 Speech | 5 Full\n");
-    printf("  8/9/0 scroll Slow/Normal/Fast\n");
+    printf("  8/9/0 scroll Slow/Normal/Fast | w waterfall/fountain\n");
+    printf("  direction=%s\n", live_direction_name(direction));
     printf("  source=%s  fft=%zu  fs=%.0f\n", live_audio_kind_name(live_audio_kind(audio)),
            nfft, engine->cfg.sample_rate);
 
@@ -122,6 +125,12 @@ int live_view_sdl_run(LiveAudio *audio, LiveEngine *engine) {
                 if (k == SDLK_8) scroll_skip = 4; /* Slow */
                 if (k == SDLK_9) scroll_skip = 2; /* Normal */
                 if (k == SDLK_0) scroll_skip = 1; /* Fast */
+                if (k == SDLK_w) {
+                    direction = (direction == LIVE_DIR_WATERFALL) ? LIVE_DIR_FOUNTAIN
+                                                                  : LIVE_DIR_WATERFALL;
+                    if (prefs_path && live_prefs_save_direction(prefs_path, direction) != 0)
+                        fprintf(stderr, "\nwarning: could not save %s\n", prefs_path);
+                }
                 if (k == SDLK_LEFTBRACKET || k == SDLK_RIGHTBRACKET) {
                     double mid = 0.5 * (zoom_fmin + zoom_fmax);
                     double half = 0.5 * (zoom_fmax - zoom_fmin);
@@ -233,8 +242,7 @@ int live_view_sdl_run(LiveAudio *audio, LiveEngine *engine) {
         }
 
         for (int y = 0; y < water_h; y++) {
-            size_t row = (size_t)((double)y / (double)water_h * (double)engine->wf_rows);
-            if (row >= engine->wf_rows) row = engine->wf_rows - 1;
+            size_t row = live_waterfall_row_for_y(y, water_h, engine->wf_rows, direction);
             for (int x = 0; x < W; x++) {
                 size_t k = b0 + (size_t)((double)x / (double)W * (double)(b1 - b0));
                 if (k >= engine->bins) k = engine->bins - 1;
@@ -272,9 +280,12 @@ int live_view_sdl_run(LiveAudio *audio, LiveEngine *engine) {
 
 #else /* !SQSOUND_HAS_SDL */
 
-int live_view_sdl_run(LiveAudio *audio, LiveEngine *engine) {
+int live_view_sdl_run(LiveAudio *audio, LiveEngine *engine, LiveDirection direction,
+                      const char *prefs_path) {
     (void)audio;
     (void)engine;
+    (void)direction;
+    (void)prefs_path;
     fprintf(stderr, "SDL UI not built into this binary. Rebuild with SDL2 or use "
                     "--headless / phone web UI.\n");
     return -1;

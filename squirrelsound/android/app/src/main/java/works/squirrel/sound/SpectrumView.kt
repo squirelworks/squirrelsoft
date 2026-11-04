@@ -67,6 +67,13 @@ class SpectrumView @JvmOverloads constructor(
             invalidate()
         }
 
+    /** Scroll direction of the LOFARgram; applies to rows already drawn too. */
+    var direction: SpectrumControls.WaterfallDirection = SpectrumControls.WaterfallDirection.DEFAULT
+        set(value) {
+            field = value
+            invalidate()
+        }
+
     private val spectrumPath = Path()
 
     /** Visible frequency window (Hz). Defaults = human hearing (phone-friendly). */
@@ -285,12 +292,21 @@ class SpectrumView @JvmOverloads constructor(
         val wfH = h - wfTop
         val bmp = wfBitmap
         if (bmp != null && wfH > 0f) {
+            // The bitmap always stores the newest row at the top; Fountain draws it
+            // mirrored so the newest row sits at the bottom.
+            val fountain = direction == SpectrumControls.WaterfallDirection.FOUNTAIN
+            if (fountain) {
+                canvas.save()
+                canvas.scale(1f, -1f, w / 2f, wfTop + wfH / 2f)
+            }
             canvas.drawBitmap(bmp, null, RectF(0f, wfTop, w, h), wfPaint)
-            // Time axis: newest row at the top, oldest (full span) at the bottom.
+            if (fountain) canvas.restore()
+            // Time axis: 0 at the newest edge, the full span at the oldest edge.
             for (k in 0..4) {
-                val y = wfTop + wfH * k / 4f
+                val frac = direction.yFraction(k / 4f)
+                val y = wfTop + wfH * frac
                 val label = SpectrumControls.timeLabel(waterfallSeconds * k / 4f)
-                val ty = (y + if (k == 0) 28f else -6f).coerceAtMost(h - 6f)
+                val ty = (y + if (frac == 0f) 28f else -6f).coerceAtMost(h - 6f)
                 canvas.drawLine(0f, y, 14f, y, gridPaint)
                 canvas.drawText(label, 18f, ty, axisPaint)
             }

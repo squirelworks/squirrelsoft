@@ -44,4 +44,12 @@ make android-test
 # live spectrum (demo source; use --source alsa for mic)
 ./build/squirrelsound live --source demo --freq 440
 ./build/squirrelsound live --source demo --headless --frames 30
+./build/squirrelsound live --source demo --direction fountain
 ```
+
+In the live window, `w` switches between **Waterfall** (newest row at the top,
+history scrolls down) and **Fountain** (newest row at the bottom, history
+scrolls up). The choice is saved to `~/.config/squirrelsound/live.conf`
+(`$XDG_CONFIG_HOME` is honoured; `%APPDATA%\squirrelsound\live.conf` on
+Windows) and used next time; `--direction` overrides it for one run. The
+Android app has the same setting under **Direction** and remembers it too.

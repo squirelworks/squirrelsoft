@@ -1,5 +1,6 @@
 #include "live_audio.h"
 #include "live_engine.h"
+#include "live_prefs.h"
 #include "live_view.h"
 #include "spectrogram.h"
 #include "sqdsp.h"
@@ -23,7 +24,7 @@ static void usage(void) {
     puts("  squirrelsound spectrogram <in.wav> <out.svg> [--fft N] [--overlap F]");
     puts("  squirrelsound live [--source demo|wav|alsa] [--file path] [--device name]");
     puts("                     [--fft N] [--window name] [--freq Hz] [--headless]");
-    puts("                     [--frames N] [--max-hold]");
+    puts("                     [--frames N] [--max-hold] [--direction waterfall|fountain]");
     puts("  squirrelsound help");
     puts("Phone QR reader PWA: see ../squirrelqr/web/");
 }
@@ -298,7 +299,13 @@ int main(int argc, char **argv) {
             int frames = atoi(get_opt(argc, argv, "--frames", "30"));
             rc = live_view_headless_run(audio, &engine, frames, 5);
         } else {
-            rc = live_view_sdl_run(audio, &engine);
+            /* --direction wins for this run; otherwise use the saved choice. */
+            char prefs[1024];
+            const char *prefs_path = live_prefs_path(prefs, sizeof prefs) == 0 ? prefs : NULL;
+            LiveDirection dir = LIVE_DIR_WATERFALL;
+            if (prefs_path) (void)live_prefs_load_direction(prefs_path, &dir);
+            dir = live_direction_parse(get_opt(argc, argv, "--direction", NULL), dir);
+            rc = live_view_sdl_run(audio, &engine, dir, prefs_path);
         }
         live_engine_free(&engine);
         live_audio_close(audio);

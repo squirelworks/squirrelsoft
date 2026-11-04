@@ -164,6 +164,33 @@ class SpectrumControlsTest {
     }
 
     @Test
+    fun waterfallPutsNewestAtTopFountainAtBottom() {
+        val wf = SpectrumControls.WaterfallDirection.WATERFALL
+        val fo = SpectrumControls.WaterfallDirection.FOUNTAIN
+        assertEquals(0f, wf.yFraction(0f), 0f)
+        assertEquals(1f, wf.yFraction(1f), 0f)
+        assertEquals(1f, fo.yFraction(0f), 0f)
+        assertEquals(0f, fo.yFraction(1f), 0f)
+        assertEquals(0.75f, fo.yFraction(0.25f), 1e-6f)
+        assertEquals(1f, fo.yFraction(-2f), 0f)
+    }
+
+    @Test
+    fun directionIdsRoundTripAndDefault() {
+        for (d in SpectrumControls.WaterfallDirection.values()) {
+            assertEquals(d, SpectrumControls.WaterfallDirection.fromId(d.id))
+        }
+        assertEquals(
+            SpectrumControls.WaterfallDirection.WATERFALL,
+            SpectrumControls.WaterfallDirection.fromId(null)
+        )
+        assertEquals(
+            SpectrumControls.WaterfallDirection.WATERFALL,
+            SpectrumControls.WaterfallDirection.fromId("sideways")
+        )
+    }
+
+    @Test
     fun timeLabels() {
         assertEquals("now", SpectrumControls.timeLabel(0f))
         assertEquals("-15s", SpectrumControls.timeLabel(15f))

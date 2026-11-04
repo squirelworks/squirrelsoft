@@ -109,3 +109,24 @@ int live_engine_process(LiveEngine *e, const double *samples) {
     for (size_t k = 0; k < e->bins; k++) e->waterfall[k] = (float)e->mag[k];
     return 0;
 }
+
+LiveDirection live_direction_parse(const char *s, LiveDirection fallback) {
+    if (!s) return fallback;
+    if (strcmp(s, "waterfall") == 0) return LIVE_DIR_WATERFALL;
+    if (strcmp(s, "fountain") == 0) return LIVE_DIR_FOUNTAIN;
+    return fallback;
+}
+
+const char *live_direction_name(LiveDirection d) {
+    return d == LIVE_DIR_FOUNTAIN ? "fountain" : "waterfall";
+}
+
+size_t live_waterfall_row_for_y(int y, int h, size_t rows, LiveDirection d) {
+    if (rows == 0 || h <= 0) return 0;
+    if (y < 0) y = 0;
+    if (y >= h) y = h - 1;
+    /* Distance from the newest edge, in screen rows. */
+    int from_newest = (d == LIVE_DIR_FOUNTAIN) ? (h - 1 - y) : y;
+    size_t row = (size_t)((double)from_newest / (double)h * (double)rows);
+    return row >= rows ? rows - 1 : row;
+}
