@@ -42,6 +42,7 @@ PRIVACY_URLS = {
     "works.squirrel.suica": "https://cdn.jsdelivr.net/gh/squirelworks/squirrelsoft@main/docs/privacy-suica.html",
     "works.squirrel.sound": "https://cdn.jsdelivr.net/gh/squirelworks/squirrelsoft@main/docs/privacy-sound.html",
     "works.squirrel.qr": "https://cdn.jsdelivr.net/gh/squirelworks/squirrelsoft@main/docs/privacy-qr.html",
+    "works.squirrel.suicaanalysis": "https://cdn.jsdelivr.net/gh/squirelworks/squirrelsoft@main/docs/privacy-suica-analysis.html",
 }
 
 LISTINGS = {
@@ -94,6 +95,28 @@ LISTINGS = {
             "Camera permission required. No account, no ads in this build."
         ),
         "releaseNotes": "Branded QR launcher icon. Internal testing build.",
+    },
+    "works.squirrel.suicaanalysis": {
+        "language": "en-US",
+        "title": "SquirrelSuicaAnalysis",
+        "shortDescription": "Read-only FeliCa debug dump: every service, block and raw command. No keys.",
+        "fullDescription": (
+            "SquirrelSuicaAnalysis is a read-only FeliCa debug reader that shows "
+            "exactly what a transit or e-money card answers.\n\n"
+            "• Walks every system, area and service the card lists, and reads every "
+            "block that needs no key\n"
+            "• Tries read sizes from 1 to 15 blocks and records where the card stops, "
+            "with status flags and latency\n"
+            "• Decodes the PMm into IC type and maximum response times\n"
+            "• Summary and raw Command log tabs; share or save the dump as JSON\n"
+            "• Redact IDm is on by default and removes the card ID from exports, "
+            "raw frames included\n"
+            "• No writes, no keys, no network permission\n\n"
+            "Hold the card still on the NFC spot with the app in the foreground. "
+            "Built to collect real card data for Suica Reader (SquirrelSuica).\n\n"
+            "Requires an NFC-F capable phone."
+        ),
+        "releaseNotes": "First internal testing build.",
     },
 }
 
@@ -319,7 +342,7 @@ def main() -> int:
         type=Path,
         default=None,
         help=(
-            "Directory with {suica,sound,qr}-icon-512.png and *-feature-1024x500.png. "
+            "Directory with {suica,sound,qr,suicaanalysis}-icon-512.png and *-feature-1024x500.png. "
             "Default: docs/play-graphics/, else PLAY_GRAPHICS_DIR, else "
             "/opt/cursor/artifacts/play-graphics/."
         ),
@@ -341,6 +364,7 @@ def main() -> int:
         "works.squirrel.suica": "suica",
         "works.squirrel.sound": "sound",
         "works.squirrel.qr": "qr",
+        "works.squirrel.suicaanalysis": "suicaanalysis",
     }
 
     results = []

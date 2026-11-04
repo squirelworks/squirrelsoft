@@ -5,6 +5,11 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
+// Play Store screenshots are rendered with Robolectric only when asked for
+// (-PstoreShots); normal builds and CI never pull it in. See
+// docs/play-graphics/suicaanalysis/README.md.
+val storeShots = project.hasProperty("storeShots")
+
 android {
     namespace = "works.squirrel.suicaanalysis"
     compileSdk = 36
@@ -78,6 +83,10 @@ android {
     buildFeatures {
         viewBinding = true
     }
+    if (storeShots) {
+        testOptions.unitTests.isIncludeAndroidResources = true
+        sourceSets["test"].java.srcDir("src/storeShots/java")
+    }
 }
 
 dependencies {
@@ -88,4 +97,7 @@ dependencies {
     implementation("androidx.activity:activity-ktx:1.9.1")
 
     testImplementation("junit:junit:4.13.2")
+    if (storeShots) {
+        testImplementation("org.robolectric:robolectric:4.13")
+    }
 }

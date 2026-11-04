@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="500" viewBox="0 0 1024 500">
+  <!-- SquirrelSuicaAnalysis feature graphic: same layout as the suica/sound/qr
+       feature graphics (ring mark left, title + subtitle right). -->
+  <rect width="1024" height="500" fill="#1A2440"/>
+  <circle cx="260" cy="250" r="162" fill="none" stroke="#0B1020" stroke-width="21"/>
+  <g transform="translate(260 250) scale(0.703) translate(-256 -256)">
+    <g>
+    <rect x="34" y="104" width="420" height="276" rx="22" fill="#E6F5EC" stroke="#FFFFFF" stroke-width="10"/>
+    <rect x="62" y="226" width="50" height="40" rx="8" fill="#00A040"/>
+    <!-- hex-dump rows: byte groups of a read block -->
+    <g fill="#00A040">
+      <rect x="150" y="162" width="44" height="18" rx="3"/><rect x="202" y="162" width="44" height="18" rx="3"/><rect x="254" y="162" width="44" height="18" rx="3"/><rect x="306" y="162" width="44" height="18" rx="3"/><rect x="358" y="162" width="44" height="18" rx="3"/>
+      <rect x="150" y="196" width="44" height="18" rx="3"/><rect x="202" y="196" width="44" height="18" rx="3"/><rect x="254" y="196" width="44" height="18" rx="3"/><rect x="306" y="196" width="44" height="18" rx="3"/>
+      <rect x="150" y="230" width="44" height="18" rx="3"/><rect x="202" y="230" width="44" height="18" rx="3"/>
+    </g>
+    <circle cx="352" cy="300" r="74" fill="#C9F4FF"/>
+    <rect x="312" y="282" width="80" height="36" rx="6" fill="#00A040"/>
+    <circle cx="352" cy="300" r="74" fill="none" stroke="#FFB43C" stroke-width="24"/>
+    <line x1="406" y1="354" x2="472" y2="420" stroke="#FFB43C" stroke-width="34" stroke-linecap="round"/>
+  </g>
+
+  </g>
+  <text x="480" y="230" font-family="DejaVu Sans, sans-serif" font-weight="bold" font-size="62" fill="#E8EEFC">Suica Analysis</text>
+  <text x="480" y="286" font-family="DejaVu Sans, sans-serif" font-size="26" fill="#9AA8C7">FeliCa debug dump · read-only</text>
+</svg>
