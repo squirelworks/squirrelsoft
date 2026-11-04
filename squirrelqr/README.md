@@ -22,17 +22,13 @@ make android-test
 `0.1.5`). The previous identity `works.squirrel.field` is abandoned — create a
 **new** Play app listing for `works.squirrel.qr`.
 
-## Progressive web app (`web/`)
+## Web demo (`web-demo/`), not a product
 
-Static QR PWA (BarcodeDetector / image upload):
+SquirrelQR ships as native apps: the Android app here and a desktop app
+(roadmap S3.4), both on Squirrel's own decoder in `libs/sqqr`. The old browser
+PWA is kept in `web-demo/` only as a demo of the browser's BarcodeDetector API.
+It isn't released, packaged or supported. See `web-demo/README.md`.
 
 ```bash
-make serve   # http://0.0.0.0:8765/
+make serve   # http://0.0.0.0:8765/ (HTTPS or localhost needed for the camera)
 ```
-
-| File | Purpose |
-|------|---------|
-| `web/index.html` | QR camera reader |
-| `web/qr.js` | Detection loop + clipboard |
-
-Use **HTTPS** or **localhost** so `getUserMedia` / `BarcodeDetector` work.

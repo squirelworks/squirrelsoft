@@ -32,7 +32,7 @@ Principles: original code only; each app = portable core + thin native front-end
 - Test: each lib has `make test` unit tests; Android apps get JNI smoke tests.
 
 ## S3 — Native front-ends, desktop parity (issues 07, 08)
-- S3.1 Retire the SquirrelQR PWA as a product (move to `squirrelqr/web-demo/` or delete); docs say "native apps".
+- S3.1 Retire the SquirrelQR PWA as a product (move to `squirrelqr/web-demo/` or delete); docs say "native apps". **In review:** moved to `squirrelqr/web-demo/` with a "not a product" README; docs and the SquirrelSound help text no longer point at it.
 - S3.2 SquirrelSound desktop: SDL2 GUI with the same split view; sources: mic (ALSA/PulseAudio/PipeWire, WASAPI, CoreAudio) **and system audio loopback** (PipeWire/Pulse monitor source, WASAPI loopback, macOS via ScreenCaptureKit audio or a virtual device).
 - S3.3 SquirrelSuica desktop: PaSoRi RC-S380/RC-S300 over libusb (original driver) or PC/SC on Windows; same `sqfelica` parsing; GUI with balance + history.
 - S3.4 SquirrelQR desktop: drag a rectangle on screen → capture (X11/XShm, Wayland portal, Windows Graphics Capture/GDI, macOS ScreenCaptureKit) → `sqqr` decode; also webcam.

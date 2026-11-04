@@ -27,11 +27,8 @@ make test       # C + QR/Suica smoke tests
 make clean
 ```
 
-QR code reader PWA:
-
-```bash
-make -C squirrelqr serve   # http://0.0.0.0:8765/
-```
+SquirrelQR is a native app (`squirrelqr/android/`); `squirrelqr/web-demo/` is an
+unsupported browser demo (`make -C squirrelqr serve`).
 
 Suica demo (no card reader required):
 
@@ -61,7 +58,7 @@ squirrelsoft/
 ├── squirrelcad/
 ├── squirrelgnss/
 ├── squirrelsound/     # FFT analyzer + live mic Spectroid UI (desktop + Android)
-├── squirrelqr/        # phone QR code reader (PWA + Android)
+├── squirrelqr/        # QR code reader (Android; desktop planned; web-demo/ unsupported)
 └── squirrelsuica/     # FeliCa reader only (nfcpy + Android NFC-F)
 ```
 
