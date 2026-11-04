@@ -7,9 +7,10 @@
  * block table is the standard's data, cross-checked against an independent
  * encoder by tools/gen_fixtures.py.
  *
- * This first layer decodes a sampled module grid (one byte per module, nonzero =
- * dark). Locating a symbol in a camera or screen image (finder patterns,
- * perspective sampling) is a separate layer that feeds this one.
+ * Two layers: sqqr_decode_grid decodes a sampled module grid (one byte per
+ * module, nonzero = dark), and sqqr_decode_image finds a symbol in a grayscale
+ * image (finder patterns, alignment pattern, perspective sampling) and feeds it
+ * to the grid decoder.
  */
 #ifndef SQQR_H
 #define SQQR_H
@@ -30,7 +31,8 @@ enum {
     SQQR_ERR_VERSION = -3,    /* version information doesn't decode or match the size */
     SQQR_ERR_ECC = -4,        /* a block has more errors than Reed-Solomon can fix */
     SQQR_ERR_DATA = -5,       /* the corrected bitstream is malformed */
-    SQQR_ERR_OVERFLOW = -6    /* the payload doesn't fit in SqqrResult */
+    SQQR_ERR_OVERFLOW = -6,   /* the payload doesn't fit in SqqrResult */
+    SQQR_ERR_NOT_FOUND = -7   /* no three finder patterns form a symbol in the image */
 };
 
 typedef struct {
@@ -48,6 +50,20 @@ typedef struct {
  * Returns SQQR_OK or a negative SQQR_ERR_* code. Reentrant; uses about 64 KB of
  * stack for its working buffers. */
 int sqqr_decode_grid(const uint8_t *grid, int size, SqqrResult *out);
+
+/* Workspace for sqqr_decode_image on a w x h image: the sampled grid, a binary
+ * copy of the image and per-8x8-block statistics. */
+#define SQQR_IMAGE_WORK(w, h)                                                         \
+    ((size_t)SQQR_MAX_SIZE * SQQR_MAX_SIZE + (size_t)(w) * (size_t)(h) +                \
+     3 * (((size_t)(w) + 7) / 8) * (((size_t)(h) + 7) / 8))
+
+/* Find and decode one QR symbol in an 8-bit grayscale image (0 = black), rows
+ * stride bytes apart. Handles rotation, moderate perspective, uneven lighting and
+ * light-on-dark symbols; mirrored symbols are not tried. work must hold
+ * SQQR_IMAGE_WORK(w, h) bytes. Returns SQQR_OK, SQQR_ERR_NOT_FOUND, or the grid
+ * decoder's error for the best candidate. Reentrant; no allocation. */
+int sqqr_decode_image(const uint8_t *gray, int w, int h, int stride, void *work, size_t work_size,
+                      SqqrResult *out);
 
 const char *sqqr_strerror(int code);
 

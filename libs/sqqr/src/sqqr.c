@@ -559,6 +559,7 @@ const char *sqqr_strerror(int code) {
         case SQQR_ERR_ECC: return "too many errors to correct";
         case SQQR_ERR_DATA: return "malformed data";
         case SQQR_ERR_OVERFLOW: return "payload too large";
+        case SQQR_ERR_NOT_FOUND: return "no QR symbol found in the image";
         default: return "unknown error";
     }
 }
