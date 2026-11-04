@@ -28,18 +28,18 @@
   <ul>
     <li>NFC / FeliCa card data is read and processed <strong>only on your device</strong>.</li>
     <li>The app does <strong>not</strong> upload card data to our servers. It has no network permission.</li>
-    <li>A dump leaves the device <strong>only when you tap Share</strong>, and only to the app you pick.</li>
+    <li>A dump is saved or leaves the app <strong>only when you tap Save JSON… or Share</strong>, and only to the place or app you pick.</li>
     <li>No accounts, no advertising, no sale of personal data.</li>
   </ul>
 
   <h2>Data the app processes on-device</h2>
-  <p>When you hold a compatible transit or e-money card to the phone, the app asks the card which systems and services it has, reads the services that need no key (for example balance and journey/purchase history), and records technical details such as response times and status flags. It also reads the card's IDm (card identifier) and PMm. The results are shown in the app and kept in app memory only. They are not saved to storage or transmitted by the app to Squirrel Works.</p>
+  <p>When you hold a compatible transit or e-money card to the phone, the app asks the card which systems and services it has, reads the services that need no key (for example balance and journey/purchase history), and records technical details such as response times and status flags. It also reads the card's IDm (card identifier) and PMm. The results are shown in the app and kept in app memory. The app does not save them by itself, and it never transmits them to Squirrel Works.</p>
 
-  <h2>Exporting a dump</h2>
-  <p>You can export the results as a JSON or text dump with the Share button. The dump goes to the app you choose in the Android share sheet (for example email or a file manager), and from then on that app's privacy policy applies. A dump can contain card history and the card identifier. The <strong>Redact IDm</strong> option removes the card identifier from the export. If you send a dump to Squirrel Works to help improve card support, we use it only for that purpose and you can ask us to delete it at any time.</p>
+  <h2>Saving and sharing a dump</h2>
+  <p>You can export the results as a JSON dump in two ways. <strong>Save JSON…</strong> opens the Android file picker, and the app writes the file only to the location you choose (for example Downloads or a cloud drive folder); the app has no access to that file afterwards, and you can delete it like any other file. <strong>Share</strong> sends the dump to the app you choose in the Android share sheet (for example email or a messaging app), and from then on that app's privacy policy applies. A dump can contain card history and the card identifier. The <strong>Redact IDm in exports</strong> option removes the card identifier from both saved and shared dumps. If you send a dump to Squirrel Works to help improve card support, we use it only for that purpose and you can ask us to delete it at any time.</p>
 
   <h2>Permissions</h2>
-  <p>The app uses NFC to communicate with FeliCa cards while it is open in the foreground. It does not request internet, location, contacts, or storage permissions, and it does not require an account.</p>
+  <p>The app uses NFC to communicate with FeliCa cards while it is open in the foreground. Saving goes through the system file picker, so it does not request internet, location, contacts, or storage permissions, and it does not require an account.</p>
 
   <h2>What we do not collect</h2>
   <ul>
