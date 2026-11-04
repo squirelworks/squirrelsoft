@@ -6,7 +6,7 @@ FeliCa commands and never uses keys. SquirrelSuica itself stays the consumer app
 
 | | |
 |---|---|
-| Android | `android/` · applicationId `works.squirrel.suicaanalysis` · version `0.0.2` (2) |
+| Android | `android/` · applicationId `works.squirrel.suicaanalysis` · version `0.0.3` (3) |
 | Desktop | `suica_analyze.py` (nfcpy + PaSoRi RC-S380/S300) |
 | Dump format | `schema/felica-dump.schema.json` (`squirrel-felica-dump/1`), the same for both |
 
