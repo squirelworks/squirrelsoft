@@ -17,7 +17,8 @@ Principles: original code only; each app = portable core + thin native front-end
 - S1.1 Raw explorer: polling all system codes (Request System Code), Request Service/Search Service Code enumeration, Request Response, PMm decode (max response time), per-service block reads with chunk sizes 1..15, timings, status flags.
 - S1.2 Export JSON/hex dump, share intent, redact IDm option. Python desktop twin `suica_analyze.py` producing the same JSON. S1.1 and S1.2 **in review:** #39.
 - Parsed balances and history: Android History tab through `libs/sqfelica` (JNI); desktop `suica_analyze.py --history`, which also reads a dump exported from the phone (`-i dump.json`).
-- S1.3 Findings fed back into SquirrelSuica parsers (fixture tests built from exported dumps).
+- S1.3 Findings fed back into SquirrelSuica parsers (synthetic fixture tests for what exported dumps show; the dumps themselves stay local).
+  - **In review:** checks on real cards (SquirrelSuicaAnalysis 0.0.3) showed shop sales on terminal type `CA` (process `46`) decoded as station codes; Python, C (`sqfelica`) and Kotlin now treat any non-bus sale record as time + terminal ID. Real card data never goes into the repo in any form: dumps are local test input only, and every committed fixture is synthetic.
 
 ## S2 — Shared-core architecture (issue 09)
 - **Done:** `docs/architecture.md`; `sqdsp` moved to `libs/sqdsp` with its own tests and a Kotlin/C FFT parity fixture.
