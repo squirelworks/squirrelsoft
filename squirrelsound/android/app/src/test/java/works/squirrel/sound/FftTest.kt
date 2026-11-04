@@ -2,6 +2,7 @@ package works.squirrel.sound
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import kotlin.math.PI
@@ -140,62 +141,117 @@ class SpectrumControlsTest {
     }
 
     @Test
-    fun scrollSpeedMapsToHopMs() {
-        assertEquals(50, SpectrumControls.hopMsForScroll(SpectrumControls.ScrollSpeed.SLOW))
-        assertEquals(20, SpectrumControls.hopMsForScroll(SpectrumControls.ScrollSpeed.NORMAL))
-        assertEquals(10, SpectrumControls.hopMsForScroll(SpectrumControls.ScrollSpeed.FAST))
-        assertEquals(
-            SpectrumControls.ScrollSpeed.SLOW,
-            SpectrumControls.ScrollSpeed.fromHopMs(50)
-        )
-        assertEquals(
-            SpectrumControls.ScrollSpeed.FAST,
-            SpectrumControls.ScrollSpeed.fromHopMs(10)
-        )
-        assertEquals(
-            SpectrumControls.ScrollSpeed.NORMAL,
-            SpectrumControls.ScrollSpeed.fromHopMs(20)
-        )
+    fun waterfallDurationPlansCoverTheSpan() {
+        for (sr in intArrayOf(44_100, 48_000)) {
+            for (fft in intArrayOf(1024, 2048, 4096)) {
+                for (d in SpectrumControls.WaterfallDuration.values()) {
+                    val plan = SpectrumControls.rowPlan(d.seconds, 160, sr, fft)
+                    assertTrue(plan.hopSamples in (fft / 16)..fft)
+                    assertTrue(plan.framesPerRow >= 1)
+                    val span = plan.rowSeconds(sr) * 160
+                    assertEquals("$d sr=$sr fft=$fft", d.seconds, span, d.seconds * 0.02f)
+                }
+            }
+        }
+    }
+
+    @Test
+    fun longerSpanScrollsSlower() {
+        val spans = SpectrumControls.WaterfallDuration.values().map {
+            SpectrumControls.rowPlan(it.seconds, 160, 48_000, 2048).rowSeconds(48_000)
+        }
+        for (i in 1 until spans.size) assertTrue(spans[i] > spans[i - 1])
+    }
+
+    @Test
+    fun timeLabels() {
+        assertEquals("now", SpectrumControls.timeLabel(0f))
+        assertEquals("-15s", SpectrumControls.timeLabel(15f))
+        assertEquals("-3.8s", SpectrumControls.timeLabel(3.75f))
+        assertEquals("-2m", SpectrumControls.timeLabel(120f))
+        assertEquals("-1.3m", SpectrumControls.timeLabel(75f))
+    }
+
+    @Test
+    fun rowAccumulatorAveragesFrames() {
+        val acc = WaterfallRowAccumulator()
+        assertNull(acc.add(floatArrayOf(-10f, -20f), 3))
+        assertNull(acc.add(floatArrayOf(-20f, -30f), 3))
+        val row = acc.add(floatArrayOf(-30f, -40f), 3)!!
+        assertEquals(-20f, row[0], 0.001f)
+        assertEquals(-30f, row[1], 0.001f)
+        // Starts fresh after each row.
+        val one = acc.add(floatArrayOf(-5f, -6f), 1)!!
+        assertEquals(-5f, one[0], 0.001f)
     }
 }
 
 class RingBufferTest {
     @Test
-    fun hopKeepsOverlapAndDropsBacklog() {
+    fun takeWindowConsumesExactlyOneHop() {
         val rb = RingBuffer(64)
-        val chunk = FloatArray(32) { it.toFloat() }
-        rb.write(chunk, 0, 32)
-        assertEquals(32, rb.available)
-
+        rb.write(FloatArray(32) { it.toFloat() }, 0, 32)
         val out = FloatArray(16)
         assertTrue(rb.takeWindow(out, fftSize = 16, hop = 4))
-        // Most recent 16 samples of the 32 written: values 16..31
-        assertEquals(16f, out[0], 0.001f)
-        assertEquals(31f, out[15], 0.001f)
-        // Overlap retained: fftSize - hop = 12
-        assertEquals(12, rb.available)
-
-        // Not enough for another full window yet.
-        assertFalse(rb.takeWindow(out, fftSize = 16, hop = 4))
-
-        val more = FloatArray(4) { (100 + it).toFloat() }
-        rb.write(more, 0, 4)
+        // Oldest unconsumed window first: 0..15, then 4 samples consumed.
+        assertEquals(0f, out[0], 0.001f)
+        assertEquals(15f, out[15], 0.001f)
+        assertEquals(28, rb.available)
         assertTrue(rb.takeWindow(out, fftSize = 16, hop = 4))
-        assertEquals(12, rb.available)
+        assertEquals(4f, out[0], 0.001f)
+        assertEquals(19f, out[15], 0.001f)
+        assertEquals(24, rb.available)
     }
 
     @Test
-    fun wrapAroundPreservesNewestWindow() {
+    fun backlogCapDropsOldestToStayLive() {
+        val rb = RingBuffer(128)
+        rb.write(FloatArray(100) { it.toFloat() }, 0, 100)
+        val out = FloatArray(16)
+        assertTrue(rb.takeWindow(out, fftSize = 16, hop = 4, maxBacklog = 16))
+        // Kept only the newest 32 samples (68..99) before taking the window.
+        assertEquals(68f, out[0], 0.001f)
+        assertEquals(28, rb.available)
+    }
+
+    @Test
+    fun wrapAroundReadsInOrder() {
         val rb = RingBuffer(8)
         rb.write(floatArrayOf(0f, 1f, 2f, 3f, 4f, 5f), 0, 6)
-        assertTrue(rb.takeWindow(FloatArray(4), 4, 2)) // size becomes 2
-        rb.write(floatArrayOf(6f, 7f, 8f, 9f), 0, 4) // wraps
+        assertTrue(rb.takeWindow(FloatArray(4), 4, 2)) // consumes 0,1
+        rb.write(floatArrayOf(6f, 7f, 8f, 9f), 0, 4) // wraps; ring holds 2..9
         val out = FloatArray(4)
         assertTrue(rb.takeWindow(out, 4, 2))
-        // Most recent four samples written into the ring ending at 9.
-        assertEquals(6f, out[0], 0.001f)
-        assertEquals(7f, out[1], 0.001f)
-        assertEquals(8f, out[2], 0.001f)
-        assertEquals(9f, out[3], 0.001f)
+        assertEquals(listOf(2f, 3f, 4f, 5f), out.toList())
+    }
+
+    /**
+     * The bug in #29: every hop setting produced one frame per FFT-sized read.
+     * Feed 10 s through hop-sized reads (as AudioEngine does) and through
+     * fixed FFT-sized reads; frames must follow 10 s / hop either way.
+     */
+    @Test
+    fun framesPerTenSecondsFollowHop() {
+        val sr = 48_000
+        val fft = 4096 // hop must not exceed the FFT size; 50 ms = 2400 samples
+        val total = sr * 10
+        for (hopMs in intArrayOf(10, 20, 50)) {
+            val hop = sr * hopMs / 1000
+            val expected = (total - fft) / hop + 1
+            for (readSize in intArrayOf(hop, fft, 480)) {
+                val rb = RingBuffer(fft * 8)
+                val chunk = FloatArray(readSize)
+                val out = FloatArray(fft)
+                var fed = 0
+                var frames = 0
+                while (fed < total) {
+                    val n = minOf(readSize, total - fed)
+                    rb.write(chunk, 0, n)
+                    fed += n
+                    while (rb.available >= fft && rb.takeWindow(out, fft, hop)) frames++
+                }
+                assertEquals("hop=$hopMs ms read=$readSize", expected.toFloat(), frames.toFloat(), 1f)
+            }
+        }
     }
 }

@@ -120,16 +120,22 @@ class MainActivity : AppCompatActivity() {
             applyPreset(preset, toast = true)
         }
 
-        val scrollLabels = listOf(
-            getString(R.string.scroll_slow),
-            getString(R.string.scroll_normal),
-            getString(R.string.scroll_fast)
+        val spanLabels = listOf(
+            getString(R.string.span_5s),
+            getString(R.string.span_15s),
+            getString(R.string.span_30s),
+            getString(R.string.span_60s),
+            getString(R.string.span_2min),
+            getString(R.string.span_5min)
         )
         binding.scrollSpeed.adapter =
-            ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, scrollLabels)
-        binding.scrollSpeed.setSelection(1) // Normal
+            ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, spanLabels)
+        binding.scrollSpeed.setSelection(
+            SpectrumControls.WaterfallDuration.values()
+                .indexOf(SpectrumControls.WaterfallDuration.DEFAULT)
+        )
         binding.scrollSpeed.onItemSelectedListener = simpleItemSelected {
-            applyScrollSpeed(selectedScrollSpeed())
+            applyWaterfallDuration(selectedWaterfallDuration())
         }
     }
 
@@ -194,12 +200,10 @@ class MainActivity : AppCompatActivity() {
         binding.editFmax.setText(binding.spectrum.fMax.toInt().toString())
     }
 
-    private fun selectedScrollSpeed(): SpectrumControls.ScrollSpeed =
-        when (binding.scrollSpeed.selectedItemPosition) {
-            0 -> SpectrumControls.ScrollSpeed.SLOW
-            2 -> SpectrumControls.ScrollSpeed.FAST
-            else -> SpectrumControls.ScrollSpeed.NORMAL
-        }
+    private fun selectedWaterfallDuration(): SpectrumControls.WaterfallDuration =
+        SpectrumControls.WaterfallDuration.values()
+            .getOrNull(binding.scrollSpeed.selectedItemPosition)
+            ?: SpectrumControls.WaterfallDuration.DEFAULT
 
     private fun selectedSmooth(): Float =
         when (binding.smoothAmount.selectedItemPosition) {
@@ -209,9 +213,9 @@ class MainActivity : AppCompatActivity() {
             else -> 0.30f
         }
 
-    private fun applyScrollSpeed(speed: SpectrumControls.ScrollSpeed) {
-        val hop = SpectrumControls.hopMsForScroll(speed)
-        engine?.hopMs = hop
+    private fun applyWaterfallDuration(span: SpectrumControls.WaterfallDuration) {
+        engine?.waterfallSeconds = span.seconds
+        binding.spectrum.waterfallSeconds = span.seconds
     }
 
     private fun uiAlive(): Boolean =
@@ -273,7 +277,7 @@ class MainActivity : AppCompatActivity() {
             } catch (_: Exception) {
                 2048
             }
-            val hop = SpectrumControls.hopMsForScroll(selectedScrollSpeed())
+            val span = selectedWaterfallDuration()
             val smooth = selectedSmooth()
             val eng = AudioEngine(
                 appContext = applicationContext,
@@ -311,7 +315,8 @@ class MainActivity : AppCompatActivity() {
                 }
             )
             eng.fftSize = fft
-            eng.hopMs = hop
+            eng.waterfallSeconds = span.seconds
+            binding.spectrum.waterfallSeconds = span.seconds
             eng.smooth = smooth
             eng.source = source
             try {

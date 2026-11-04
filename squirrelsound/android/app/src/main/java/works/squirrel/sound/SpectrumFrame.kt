@@ -9,4 +9,6 @@ data class SpectrumFrame(
     val peakDb: Float,
     val rmsDb: Float,
     val sourceLabel: String,
+    /** A finished LOFARgram row (dB) when this frame completes one, else null. */
+    val waterfallRow: FloatArray? = null,
 )

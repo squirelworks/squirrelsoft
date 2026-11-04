@@ -58,7 +58,14 @@ class SpectrumView @JvmOverloads constructor(
     private var wfBitmap: Bitmap? = null
     private var wfPixels: IntArray? = null
     private var wfWidth = 0
-    private val wfRows = 160
+    private val wfRows = SpectrumControls.WATERFALL_ROWS
+
+    /** Seconds the LOFARgram covers top to bottom; drives the time-axis labels. */
+    var waterfallSeconds: Float = SpectrumControls.WaterfallDuration.DEFAULT.seconds
+        set(value) {
+            field = value
+            invalidate()
+        }
 
     private val spectrumPath = Path()
 
@@ -140,7 +147,7 @@ class SpectrumView @JvmOverloads constructor(
             }
         }
         try {
-            pushWaterfallRow(frame.db)
+            frame.waterfallRow?.let { pushWaterfallRow(it) }
         } catch (_: Exception) {
             // Bitmap / size races during layout — skip this row.
         }
@@ -157,7 +164,8 @@ class SpectrumView @JvmOverloads constructor(
                 peakHz = peak,
                 peakDb = frame.maxOrNull() ?: -90f,
                 rmsDb = -90f,
-                sourceLabel = "legacy"
+                sourceLabel = "legacy",
+                waterfallRow = frame
             )
         )
     }
@@ -278,6 +286,14 @@ class SpectrumView @JvmOverloads constructor(
         val bmp = wfBitmap
         if (bmp != null && wfH > 0f) {
             canvas.drawBitmap(bmp, null, RectF(0f, wfTop, w, h), wfPaint)
+            // Time axis: newest row at the top, oldest (full span) at the bottom.
+            for (k in 0..4) {
+                val y = wfTop + wfH * k / 4f
+                val label = SpectrumControls.timeLabel(waterfallSeconds * k / 4f)
+                val ty = (y + if (k == 0) 28f else -6f).coerceAtMost(h - 6f)
+                canvas.drawLine(0f, y, 14f, y, gridPaint)
+                canvas.drawText(label, 18f, ty, axisPaint)
+            }
         }
     }
 
