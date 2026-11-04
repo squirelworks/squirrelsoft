@@ -20,7 +20,7 @@
               Launcher only. Do NOT register TECH_DISCOVERED here — that would
               auto-open the app whenever a FeliCa card brushes the phone (e.g. in
               a case flap). Reads happen only while this activity is resumed, via
-              NfcAdapter.enableForegroundDispatch in MainActivity.
+              NfcAdapter.enableReaderMode in MainActivity.
             -->
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
