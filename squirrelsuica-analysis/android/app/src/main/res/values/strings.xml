@@ -13,5 +13,6 @@
     <string name="saved">Saved</string>
     <string name="save_failed">Save failed</string>
     <string name="tab_summary">Summary</string>
+    <string name="tab_history">History</string>
     <string name="tab_log">Command log</string>
 </resources>

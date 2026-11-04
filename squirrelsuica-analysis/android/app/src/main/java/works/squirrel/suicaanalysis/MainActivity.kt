@@ -20,7 +20,8 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Debug/analysis FeliCa reader: dumps everything a card answers without keys,
- * shows a summary and the raw command log, and exports the JSON dump.
+ * shows a summary, the history parsed by the shared C core, and the raw
+ * command log, and exports the JSON dump.
  */
 class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
@@ -28,7 +29,7 @@ class MainActivity : AppCompatActivity() {
     private val nfcExecutor: ExecutorService = Executors.newSingleThreadExecutor()
     private val reading = AtomicBoolean(false)
     private var dump: CardDump? = null
-    private var showLog = false
+    private var selectedTab = 0
 
     private val saveLauncher =
         registerForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
@@ -49,10 +50,11 @@ class MainActivity : AppCompatActivity() {
         nfcAdapter = NfcAdapter.getDefaultAdapter(this)
 
         binding.tabs.addTab(binding.tabs.newTab().setText(R.string.tab_summary))
+        binding.tabs.addTab(binding.tabs.newTab().setText(R.string.tab_history))
         binding.tabs.addTab(binding.tabs.newTab().setText(R.string.tab_log))
         binding.tabs.addOnTabSelectedListener(object : TabLayout.OnTabSelectedListener {
             override fun onTabSelected(tab: TabLayout.Tab) {
-                showLog = tab.position == 1
+                selectedTab = tab.position
                 render()
             }
             override fun onTabUnselected(tab: TabLayout.Tab) {}
@@ -146,7 +148,11 @@ class MainActivity : AppCompatActivity() {
 
     private fun render() {
         val d = dump ?: return
-        binding.output.text = if (showLog) DumpText.log(d) else DumpText.summary(d)
+        binding.output.text = when (selectedTab) {
+            1 -> HistoryText.render(d)
+            2 -> DumpText.log(d)
+            else -> DumpText.summary(d)
+        }
         binding.scroll.scrollTo(0, 0)
     }
 
