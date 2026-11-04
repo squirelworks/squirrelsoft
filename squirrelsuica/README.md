@@ -40,16 +40,29 @@ hex.
 
 `build/squirrelsuica` is the native desktop reader on the shared FeliCa core
 (`libs/sqfelica`), the same parsing as the apps. It reads balance and history
-with station names. For now it reads the JSON dumps SquirrelSuicaAnalysis
-exports, by replaying them through a simulated card. Live readers (PC/SC, Sony
-PaSoRi over USB) are the next step of roadmap S3.3.
+with station names, from a card on a PC/SC contactless reader or from a JSON
+dump SquirrelSuicaAnalysis exports (replayed through a simulated card).
+
+Live reads use the PC/SC Part 3 transparent exchange, which Sony's RC-S300 and
+other CCID contactless readers implement: pcsc-lite on Linux
+(`sudo apt install pcscd libpcsclite-dev` before building), the system PC/SC
+framework on macOS, winscard on Windows. A build without PC/SC headers still
+reads dumps. The RC-S380, which is not a CCID reader, needs the USB driver
+that is a later step of roadmap S3.3.
 
 ```bash
 make desktop
+build/squirrelsuica                                  # wait 10 s for a card on the first reader
+build/squirrelsuica --list-readers
+build/squirrelsuica --reader RC-S300 --wait 30 --json
 build/squirrelsuica --dump tests/fixtures/demo-suica.json          # made-up demo card, text
 build/squirrelsuica --dump felica-dump.json --json   # your own dump, JSON with felica_parse field names
-make test-desktop                                    # C unit tests + parity with felica_parse.py
+make test-desktop                                    # C unit tests, parity with felica_parse.py, PC/SC test
 ```
+
+Exit status: 0 read, 1 no card (or it did not answer), 2 reader or file error.
+`make test-pcsc` reads a made-up card through pcscd and the vpcd virtual reader
+(`sudo apt install pcscd vsmartcard-vpcd`); it is skipped when they are missing.
 
 ## Desktop / USB (Python, nfcpy)
 

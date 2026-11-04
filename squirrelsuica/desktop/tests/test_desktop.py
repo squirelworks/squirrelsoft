@@ -154,7 +154,10 @@ with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as f:
     f.write('{"schema": "squirrel-felica-dump/1", "systems": [')
 check(subprocess.run([EXE, "--dump", f.name], capture_output=True).returncode == 2, "truncated JSON")
 Path(f.name).unlink()
-check(subprocess.run([EXE], capture_output=True).returncode == 2, "no arguments")
+# A live read with no such reader (or no PC/SC at all) is a reader error.
+check(subprocess.run([EXE, "--reader", "no-such-reader-zz", "--wait", "0"], capture_output=True).returncode == 2,
+      "missing reader")
+check(subprocess.run([EXE, "--wait", "x"], capture_output=True).returncode == 2, "bad --wait")
 check(subprocess.run([EXE, "--help"], capture_output=True).returncode == 0, "--help")
 
 print("squirrelsuica desktop:", "FAILED" if failures else "ok")

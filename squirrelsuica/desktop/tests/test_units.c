@@ -1,7 +1,9 @@
-/* Unit tests for the SquirrelSuica desktop pieces: the JSON reader and the
- * card reader's chunk fallback over a scripted transport. */
+/* Unit tests for the SquirrelSuica desktop pieces: the JSON reader, the
+ * card reader's chunk fallback over a scripted transport, and the PC/SC
+ * transparent exchange framing. */
 #include "sqcard.h"
 #include "sqjson.h"
+#include "sqpcsc.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -124,9 +126,53 @@ static void test_reader(void) {
     CHECK(sqs_read_card(&silent, &card) == 1);
 }
 
+static void test_pcsc_framing(void) {
+    /* Polling, wildcard system, as one FeliCa frame with its length byte. */
+    const uint8_t poll[6] = {0x06, 0x00, 0xFF, 0xFF, 0x01, 0x00};
+    uint8_t apdu[300];
+    int n = sqs_pcsc_wrap(poll, sizeof poll, 100000, apdu, sizeof apdu);
+    const uint8_t want[] = {0xFF, 0xC2, 0x00, 0x01, 0x0F, 0x5F, 0x46, 0x04, 0xA0, 0x86, 0x01, 0x00,
+                            0x95, 0x06, 0x06, 0x00, 0xFF, 0xFF, 0x01, 0x00, 0x00};
+    CHECK(n == (int)sizeof want && !memcmp(apdu, want, sizeof want));
+    n = sqs_pcsc_wrap(poll, sizeof poll, 0, apdu, sizeof apdu); /* no timer object */
+    CHECK(n == 14 && apdu[4] == 8 && apdu[5] == 0x95 && apdu[13] == 0x00);
+    CHECK(sqs_pcsc_wrap(poll, sizeof poll, 100000, apdu, 20) == -1); /* too small */
+    uint8_t big[250] = {0};
+    CHECK(sqs_pcsc_wrap(big, sizeof big, 100000, apdu, sizeof apdu) == -1); /* Lc over 255 */
+    CHECK(sqs_pcsc_wrap(big, 0, 0, apdu, sizeof apdu) == -1);
+
+    uint8_t f[64];
+    /* C0 03 00 90 00 (no error), 92 01 00 (protocol status), 96 02 00 00, 97 frame, SW 90 00 */
+    const uint8_t ok[] = {0xC0, 0x03, 0x00, 0x90, 0x00, 0x92, 0x01, 0x00, 0x96, 0x02, 0x00, 0x00,
+                          0x97, 0x04, 0x04, 0x01, 0xAA, 0xBB, 0x90, 0x00};
+    CHECK(sqs_pcsc_unwrap(ok, sizeof ok, f, sizeof f) == 4 && f[0] == 0x04 && f[3] == 0xBB);
+    CHECK(sqs_pcsc_unwrap(ok, sizeof ok, f, 3) == -1); /* frame does not fit */
+    /* Long-form length (81 xx) on the response object. */
+    uint8_t lf[140] = {0x97, 0x81, 0x80};
+    for (int i = 0; i < 128; i++) lf[3 + i] = (uint8_t)i;
+    lf[131] = 0x90;
+    lf[132] = 0x00;
+    uint8_t g[200];
+    CHECK(sqs_pcsc_unwrap(lf, 133, g, sizeof g) == 128 && g[127] == 127);
+    /* The card did not answer: C0 03 01 64 01 with SW 90 00, or SW 62 xx. */
+    const uint8_t mute[] = {0xC0, 0x03, 0x01, 0x64, 0x01, 0x90, 0x00};
+    CHECK(sqs_pcsc_unwrap(mute, sizeof mute, f, sizeof f) == 0);
+    const uint8_t mute2[] = {0xC0, 0x03, 0x01, 0x64, 0x01, 0x62, 0x82};
+    CHECK(sqs_pcsc_unwrap(mute2, sizeof mute2, f, sizeof f) == 0);
+    /* Reader errors: a failing status object, a bad SW, truncated data. */
+    const uint8_t bad[] = {0xC0, 0x03, 0x01, 0x6A, 0x81, 0x90, 0x00};
+    CHECK(sqs_pcsc_unwrap(bad, sizeof bad, f, sizeof f) == -1);
+    const uint8_t sw[] = {0x6A, 0x81};
+    CHECK(sqs_pcsc_unwrap(sw, sizeof sw, f, sizeof f) == -1);
+    const uint8_t cut[] = {0x97, 0x05, 0x01, 0x02, 0x90, 0x00};
+    CHECK(sqs_pcsc_unwrap(cut, sizeof cut, f, sizeof f) == -1);
+    CHECK(sqs_pcsc_unwrap(ok, 1, f, sizeof f) == -1);
+}
+
 int main(void) {
     test_json();
     test_reader();
+    test_pcsc_framing();
     printf("squirrelsuica desktop units: %s\n", failures ? "FAILED" : "ok");
     return failures ? 1 : 0;
 }
