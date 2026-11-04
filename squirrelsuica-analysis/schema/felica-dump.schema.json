@@ -1,0 +1,105 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "squirrel-felica-dump/1",
+  "title": "SquirrelSuicaAnalysis FeliCa dump",
+  "type": "object",
+  "required": ["schema", "tool", "created_at", "idm", "pmm", "pmm_decoded", "polls", "system_codes", "systems", "log", "error"],
+  "properties": {
+    "schema": {"type": "string", "const": "squirrel-felica-dump/1"},
+    "tool": {"type": "string"},
+    "created_at": {"type": "string"},
+    "idm": {"type": ["string", "null"]},
+    "pmm": {"type": ["string", "null"]},
+    "pmm_decoded": {
+      "type": ["object", "null"],
+      "required": ["rom_type", "ic_type", "max_response_ms"],
+      "properties": {
+        "rom_type": {"type": "integer"},
+        "ic_type": {"type": "integer"},
+        "max_response_ms": {
+          "type": "object",
+          "required": ["request_service", "request_response", "authenticate", "read", "write", "other"]
+        }
+      }
+    },
+    "polls": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["system_code", "request_code", "idm", "pmm", "request_data"],
+        "properties": {
+          "system_code": {"type": "string"},
+          "request_code": {"type": "integer"},
+          "idm": {"type": ["string", "null"]},
+          "pmm": {"type": ["string", "null"]},
+          "request_data": {"type": ["string", "null"]}
+        }
+      }
+    },
+    "system_codes": {"type": "array", "items": {"type": "string"}},
+    "systems": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["system_code", "idm", "pmm", "mode", "search_stopped_at", "areas", "services"],
+        "properties": {
+          "system_code": {"type": "string"},
+          "idm": {"type": ["string", "null"]},
+          "pmm": {"type": ["string", "null"]},
+          "mode": {"type": ["integer", "null"]},
+          "search_stopped_at": {"type": ["integer", "null"]},
+          "areas": {
+            "type": "array",
+            "items": {"type": "object", "required": ["code", "end_code"]}
+          },
+          "services": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["code", "kind", "readable", "key_version", "blocks", "attempts"],
+              "properties": {
+                "code": {"type": "string"},
+                "kind": {"type": "string"},
+                "readable": {"type": "boolean"},
+                "key_version": {"type": ["string", "null"]},
+                "blocks": {"type": "array", "items": {"type": "string"}},
+                "attempts": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": ["chunk_size", "blocks_read", "stopped_at", "sf1", "sf2", "error", "commands", "avg_ms"],
+                    "properties": {
+                      "chunk_size": {"type": "integer"},
+                      "blocks_read": {"type": "integer"},
+                      "stopped_at": {"type": ["integer", "null"]},
+                      "sf1": {"type": ["integer", "null"]},
+                      "sf2": {"type": ["integer", "null"]},
+                      "error": {"type": ["string", "null"]},
+                      "commands": {"type": "integer"},
+                      "avg_ms": {"type": "number"}
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "log": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "command", "response", "ms", "error"],
+        "properties": {
+          "name": {"type": "string"},
+          "command": {"type": "string"},
+          "response": {"type": ["string", "null"]},
+          "ms": {"type": "number"},
+          "error": {"type": ["string", "null"]}
+        }
+      }
+    },
+    "error": {"type": ["string", "null"]}
+  }
+}

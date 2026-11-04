@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Suica Analysis</string>
+    <string name="tagline">FeliCa debug dump · read-only, no keys</string>
+    <string name="hold_card">Hold a FeliCa card on the NFC spot and keep it still</string>
+    <string name="reading">Reading every service… keep the card still</string>
+    <string name="nfc_missing">This device has no NFC</string>
+    <string name="nfc_off">NFC is off: turn it on in Settings</string>
+    <string name="redact_idm">Redact IDm in exports</string>
+    <string name="share">Share JSON</string>
+    <string name="save">Save JSON…</string>
+    <string name="no_dump">Scan a card first</string>
+    <string name="saved">Saved</string>
+    <string name="save_failed">Save failed</string>
+    <string name="tab_summary">Summary</string>
+    <string name="tab_log">Command log</string>
+</resources>

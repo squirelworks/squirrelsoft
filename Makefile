@@ -1,6 +1,6 @@
 # Top-level squirrelsoft build
 PROGRAMS = squirrelstation squirrelcad squirrelgnss squirrelsound
-PY_PROGRAMS = squirrelqr squirrelsuica
+PY_PROGRAMS = squirrelqr squirrelsuica squirrelsuica-analysis
 
 .PHONY: all test clean $(PROGRAMS) $(PY_PROGRAMS)
 
