@@ -22,6 +22,7 @@ class MainActivity : AppCompatActivity() {
     /** Prevents overlapping startEngine from permission + onResume races. */
     private var starting = false
     private var activePreset: SpectrumControls.RangePreset = SpectrumControls.RangePreset.HUMAN
+    private val prefs by lazy { getSharedPreferences(PREFS, MODE_PRIVATE) }
 
     private val micPermission =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
@@ -136,6 +137,31 @@ class MainActivity : AppCompatActivity() {
         )
         binding.scrollSpeed.onItemSelectedListener = simpleItemSelected {
             applyWaterfallDuration(selectedWaterfallDuration())
+        }
+
+        // Waterfall / Fountain: applies live (also to rows already drawn) and is
+        // remembered between sessions.
+        val directions = SpectrumControls.WaterfallDirection.values()
+        val directionLabels = directions.map {
+            getString(
+                when (it) {
+                    SpectrumControls.WaterfallDirection.WATERFALL -> R.string.direction_waterfall
+                    SpectrumControls.WaterfallDirection.FOUNTAIN -> R.string.direction_fountain
+                }
+            )
+        }
+        binding.waterfallDirection.adapter =
+            ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, directionLabels)
+        val savedDirection = SpectrumControls.WaterfallDirection.fromId(
+            prefs.getString(KEY_DIRECTION, null)
+        )
+        binding.spectrum.direction = savedDirection
+        binding.waterfallDirection.setSelection(directions.indexOf(savedDirection))
+        binding.waterfallDirection.onItemSelectedListener = simpleItemSelected {
+            val d = directions.getOrNull(binding.waterfallDirection.selectedItemPosition)
+                ?: SpectrumControls.WaterfallDirection.DEFAULT
+            binding.spectrum.direction = d
+            prefs.edit().putString(KEY_DIRECTION, d.id).apply()
         }
     }
 
@@ -410,6 +436,11 @@ class MainActivity : AppCompatActivity() {
         }
         engine = null
         super.onDestroy()
+    }
+
+    private companion object {
+        const val PREFS = "squirrelsound"
+        const val KEY_DIRECTION = "waterfall_direction"
     }
 
     private fun simpleItemSelected(onSelected: () -> Unit) =

@@ -57,6 +57,32 @@ object SpectrumControls {
     }
 
     /**
+     * Which way the LOFARgram scrolls. WATERFALL puts the newest row at the top and
+     * history moves down; FOUNTAIN puts the newest row at the bottom and history
+     * moves up.
+     */
+    enum class WaterfallDirection(val id: String) {
+        WATERFALL("waterfall"),
+        FOUNTAIN("fountain");
+
+        /**
+         * Vertical position (0 = top, 1 = bottom of the LOFARgram) of a row whose
+         * age is [ageFraction] of the span (0 = newest, 1 = oldest).
+         */
+        fun yFraction(ageFraction: Float): Float {
+            val a = ageFraction.coerceIn(0f, 1f)
+            return if (this == FOUNTAIN) 1f - a else a
+        }
+
+        companion object {
+            val DEFAULT = WATERFALL
+
+            fun fromId(id: String?): WaterfallDirection =
+                values().firstOrNull { it.id == id } ?: DEFAULT
+        }
+    }
+
+    /**
      * Analysis hop (samples between FFT frames) and how many frames are averaged
      * into one waterfall row.
      */

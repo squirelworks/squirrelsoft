@@ -17,8 +17,8 @@ LDFLAGS += $(shell pkg-config --libs alsa)
 endif
 
 LIB_OBJ = $(BUILD)/sqdsp.o $(BUILD)/wavio.o $(BUILD)/synth.o $(BUILD)/spectrogram.o \
-	$(BUILD)/live_audio.o $(BUILD)/live_engine.o $(BUILD)/live_view_headless.o \
-	$(BUILD)/live_view_sdl.o
+	$(BUILD)/live_audio.o $(BUILD)/live_engine.o $(BUILD)/live_prefs.o \
+	$(BUILD)/live_view_headless.o $(BUILD)/live_view_sdl.o
 
 .PHONY: all test clean android android-test
 
@@ -51,10 +51,13 @@ $(BUILD)/live_audio.o: src/live_audio.c include/live_audio.h | $(BUILD)
 $(BUILD)/live_engine.o: src/live_engine.c include/live_engine.h | $(BUILD)
 	$(CC) $(CFLAGS) -c src/live_engine.c -o $@
 
+$(BUILD)/live_prefs.o: src/live_prefs.c include/live_prefs.h include/live_engine.h | $(BUILD)
+	$(CC) $(CFLAGS) -c src/live_prefs.c -o $@
+
 $(BUILD)/live_view_headless.o: src/live_view_headless.c include/live_view.h | $(BUILD)
 	$(CC) $(CFLAGS) -c src/live_view_headless.c -o $@
 
-$(BUILD)/live_view_sdl.o: src/live_view_sdl.c include/live_view.h | $(BUILD)
+$(BUILD)/live_view_sdl.o: src/live_view_sdl.c include/live_view.h include/live_prefs.h | $(BUILD)
 	$(CC) $(CFLAGS) -c src/live_view_sdl.c -o $@
 
 $(BUILD)/squirrelsound: src/main.c $(LIB_OBJ) | $(BUILD)

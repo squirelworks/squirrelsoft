@@ -29,6 +29,9 @@
     <string name="span_60s">60 s</string>
     <string name="span_2min">2 min</string>
     <string name="span_5min">5 min</string>
+    <string name="direction_label">Direction</string>
+    <string name="direction_waterfall">Waterfall ↓</string>
+    <string name="direction_fountain">Fountain ↑</string>
     <string name="advanced_hint">Technical controls for FFT resolution, smoothing, and a custom Hz window.</string>
     <string name="fmin_label">fMin</string>
     <string name="fmax_label">fMax</string>

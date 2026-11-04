@@ -46,4 +46,16 @@ void live_engine_set_freq_range(LiveEngine *e, double fmin, double fmax);
 /* Map frequency to bin index in current FFT. */
 size_t live_engine_hz_to_bin(const LiveEngine *e, double hz);
 
+/* Waterfall: newest row at the top, history scrolls down.
+ * Fountain:  newest row at the bottom, history scrolls up. */
+typedef enum { LIVE_DIR_WATERFALL = 0, LIVE_DIR_FOUNTAIN = 1 } LiveDirection;
+
+/* "waterfall" / "fountain" (case-sensitive); anything else returns fallback. */
+LiveDirection live_direction_parse(const char *s, LiveDirection fallback);
+const char *live_direction_name(LiveDirection d);
+
+/* Which stored waterfall row (0 = newest) to draw at screen row y of a
+ * height-h waterfall area, for the given direction. */
+size_t live_waterfall_row_for_y(int y, int h, size_t rows, LiveDirection d);
+
 #endif
