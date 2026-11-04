@@ -7,7 +7,7 @@ jsDelivr works without GitHub Pages. Use the **`main`** tip (stable while files 
 
 | App | File | Public URL |
 |-----|------|------------|
-| Suica Reader (`works.squirrel.suica`) | `privacy-suica.html` | https://cdn.jsdelivr.net/gh/squirelworks/squirrelsoft@main/docs/privacy-suica.html |
+| SquirrelSuica (`works.squirrel.suica`) | `privacy-suica.html` | https://cdn.jsdelivr.net/gh/squirelworks/squirrelsoft@main/docs/privacy-suica.html |
 | SquirrelSound (`works.squirrel.sound`) | `privacy-sound.html` | https://cdn.jsdelivr.net/gh/squirelworks/squirrelsoft@main/docs/privacy-sound.html |
 | SquirrelQR (`works.squirrel.qr`) | `privacy-qr.html` | https://cdn.jsdelivr.net/gh/squirelworks/squirrelsoft@main/docs/privacy-qr.html |
 | SquirrelSuicaAnalysis (`works.squirrel.suicaanalysis`) | `privacy-suica-analysis.html` | https://cdn.jsdelivr.net/gh/squirelworks/squirrelsoft@main/docs/privacy-suica-analysis.html |

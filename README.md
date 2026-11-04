@@ -14,7 +14,7 @@ libraries.
 | `squirrelgnss/` | **SquirrelGNSS** | Continuous satellite / GPS land surveying |
 | `squirrelsound/` | **SquirrelSound** | Spectral sound analyzer (`sqdsp`) + phone Spectroid UI |
 | `squirrelqr/` | **SquirrelQR** | Phone QR code reader only |
-| `squirrelsuica/` | **Suica Reader (SquirrelSuica)** | FeliCa Suica/PASMO reader with station-name history (USB + Android) |
+| `squirrelsuica/` | **SquirrelSuica** | FeliCa Suica/PASMO reader with station-name history (USB + Android) |
 
 ## Build
 

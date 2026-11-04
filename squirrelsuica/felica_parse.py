@@ -194,6 +194,9 @@ def _process_label(process: int) -> str:
     }.get(process, f"proc=0x{process:02x}")
 
 
+_SALE_PROCESSES = (0x46, 0x49, 0x4A, 0x4B, 0xC6, 0xCB)
+
+
 def parse_history_block(block: bytes) -> Optional[HistoryEntry]:
     if len(block) < 16 or all(x == 0 for x in block):
         return None
@@ -212,15 +215,17 @@ def parse_history_block(block: bytes) -> Optional[HistoryEntry]:
             year, month, day = 0, 0, 0
     date = f"{year:04d}-{month:02d}-{day:02d}" if year else "????-??-??"
 
-    is_product = terminal in (0xC7, 0xC8)
+    # Shop sales carry a time and a terminal ID in bytes 6-9, not stations. Seen
+    # on terminal types C7/C8 and, in real Suica dumps, CA with process 46 (S1.3).
     is_bus = terminal == 0x05 or process in (0x0D, 0x0F, 0x1F, 0x23)
+    is_product = terminal in (0xC7, 0xC8) or (process in _SALE_PROCESSES and not is_bus)
     is_charge = process in (0x02, 0x48)
 
     if is_charge:
         kind, base_note = "charge", "チャージ"
     elif is_bus:
         kind, base_note = "bus", _process_label(process)
-    elif is_product or process in (0x46, 0x49, 0x4A, 0x4B, 0xC6, 0xCB):
+    elif is_product:
         kind, base_note = "sale", _process_label(process)
     elif process in (0x01, 0x03, 0x04, 0x05, 0x06, 0x08, 0x13, 0x14, 0x15, 0x84, 0x85):
         kind, base_note = "train", _process_label(process)
