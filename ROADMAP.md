@@ -26,16 +26,17 @@ Principles: original code only; each app = portable core + thin native front-end
 - `libs/sqqr` (C): original QR decoder (finder patterns, perspective, Reed–Solomon) so desktop and Squirrel OS/2 don't depend on ML Kit.
   - **Done:** step 1, decoding a sampled module grid: format/version information, unmasking, block de-interleaving, Reed–Solomon error correction and all data modes (numeric, alphanumeric, byte, Kanji, ECI), tested against symbols from an independent encoder.
   - **Done:** step 2, finding a symbol in a grayscale image: local-threshold binarization, 1:1:3:1:1 finder search, version information read before sampling, alignment patterns found outwards from the top-left with a least-squares homography plus local residual correction, and light-on-dark symbols. Needs about 3 pixels per module. `build/sqqr_decode photo.pgm` decodes a file.
-  - **In review:** step 3, SquirrelQR on Android uses it through JNI on frames where ML Kit finds nothing; the decoder reports the symbol's corners for the overlay. Next: the desktop capture front-end (S3.4).
+  - **Done:** step 3, SquirrelQR on Android uses it through JNI on frames where ML Kit finds nothing; the decoder reports the symbol's corners for the overlay.
 - `libs/sqmath` (C): expression engine/CAS core for the calculator suite.
 - `libs/sqgui` (C): tiny immediate-mode widget layer over SDL2 for desktop, designed to port to Squirrel OS/2's wm/gfx.
 - Test: each lib has `make test` unit tests; Android apps get JNI smoke tests.
 
 ## S3 — Native front-ends, desktop parity (issues 07, 08)
-- S3.1 Retire the SquirrelQR PWA as a product (move to `squirrelqr/web-demo/` or delete); docs say "native apps". **In review:** moved to `squirrelqr/web-demo/` with a "not a product" README; docs and the SquirrelSound help text no longer point at it.
+- S3.1 Retire the SquirrelQR PWA as a product (move to `squirrelqr/web-demo/` or delete); docs say "native apps". **Done:** moved to `squirrelqr/web-demo/` with a "not a product" README; docs and the SquirrelSound help text no longer point at it.
 - S3.2 SquirrelSound desktop: SDL2 GUI with the same split view; sources: mic (ALSA/PulseAudio/PipeWire, WASAPI, CoreAudio) **and system audio loopback** (PipeWire/Pulse monitor source, WASAPI loopback, macOS via ScreenCaptureKit audio or a virtual device).
 - S3.3 SquirrelSuica desktop: PaSoRi RC-S380/RC-S300 over libusb (original driver) or PC/SC on Windows; same `sqfelica` parsing; GUI with balance + history.
 - S3.4 SquirrelQR desktop: drag a rectangle on screen → capture (X11/XShm, Wayland portal, Windows Graphics Capture/GDI, macOS ScreenCaptureKit) → `sqqr` decode; also webcam.
+  - **In review:** step 1, `squirrelqr/desktop/`: a command-line reader on `sqqr` that decodes image files (PGM/PPM/PBM, BMP) and, on X11, the whole screen, a fixed rectangle or one dragged with the mouse (`--select`); text uses the Android app's charset rules; tested under Xvfb in CI. Next: PNG input, the Wayland portal, Windows and macOS capture, a small GUI window, webcam.
 - S3.5 Windows/macOS/Linux packaging (MSI/zip, .app, AppImage/deb) built in CI.
 
 ## S4 — CI
