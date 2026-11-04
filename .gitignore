@@ -13,6 +13,7 @@
 *.svg
 !squirrelqr/web/icon.svg
 !squirrelqr/android/app/src/main/assets/web/icon.svg
+!docs/play-graphics/src/*.svg
 
 # Android local machine config / build junk
 **/android/local.properties

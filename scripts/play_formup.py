@@ -64,6 +64,11 @@ PACKAGES = {
         "category_hint": "TOOLS",
         "privacy_path": "docs/privacy-qr.html",
     },
+    "works.squirrel.suicaanalysis": {
+        "stem": "suicaanalysis",
+        "category_hint": "TOOLS",
+        "privacy_path": "docs/privacy-suica-analysis.html",
+    },
 }
 
 CONTACT_EMAIL = "squirelworks@gmail.com"
@@ -151,7 +156,7 @@ BLOCKED_CONSOLE_STEPS = [
     {
         "item": "App category",
         "path": "Play Console → App → Grow users → Store presence → Store settings → App category",
-        "action": "Suica/QR → Tools; Sound → Music & Audio. Add optional tags if offered.",
+        "action": "Suica/QR/SuicaAnalysis → Tools; Sound → Music & Audio. Add optional tags if offered.",
     },
     {
         "item": "Internal testers (email list)",
@@ -205,7 +210,7 @@ def resolve_graphics_dir(explicit: Path | None) -> Path:
             f"  Expected repo path: {REPO_GRAPHICS_DIR}\n"
             f"  Or cloud artifacts:  {ARTIFACTS_GRAPHICS_DIR}\n"
             "  Or set --graphics-dir / PLAY_GRAPHICS_DIR.\n"
-            "  Required files: {suica,sound,qr}-icon-512.png, "
+            "  Required files: {suica,sound,qr,suicaanalysis}-icon-512.png, "
             "*-feature-1024x500.png; optional *-phone-*.png"
         )
 
@@ -439,14 +444,14 @@ def main() -> int:
         "--package",
         action="append",
         dest="packages",
-        help="Package name (repeatable). Default: all three.",
+        help="Package name (repeatable). Default: all packages in PACKAGES.",
     )
     ap.add_argument(
         "--graphics-dir",
         type=Path,
         default=None,
         help=(
-            "Directory with {suica,sound,qr}-icon-512.png and *-feature-1024x500.png. "
+            "Directory with {suica,sound,qr,suicaanalysis}-icon-512.png and *-feature-1024x500.png. "
             "Default: docs/play-graphics/, else PLAY_GRAPHICS_DIR, else "
             "/opt/cursor/artifacts/play-graphics/."
         ),
