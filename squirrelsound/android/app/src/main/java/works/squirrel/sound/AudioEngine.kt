@@ -541,8 +541,8 @@ class AudioEngine(
                         val rms = sqrt(sumSq / size).toFloat()
                         val rmsDb = if (rms > 1e-12f) (20f * log10(rms)).coerceAtLeast(Levels.FLOOR_DB) else Levels.FLOOR_DB
 
-                        Fft.forward(re, im)
-                        Fft.magnitudeDb(re, im, mags, windowSum)
+                        // The shared C core (libs/sqdsp) when it's loaded, else Fft.kt.
+                        SqDsp.spectrumDbOrKotlin(re, im, windowSum, mags)
 
                         val a = smooth.coerceIn(0f, 0.95f)
                         if (!smoothInit || a <= 0f) {

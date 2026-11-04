@@ -9,6 +9,11 @@ exponential smoothing and dBFS scaling. Status shows mic path, peak Hz/dB, and
 RMS so a live mic is visually distinct from silence or failure (no silent demo
 fallback when the mic was requested).
 
+Each frame's FFT and dBFS spectrum come from the shared C core `libs/sqdsp`
+(the same code as the desktop SquirrelSound) through JNI in `app/src/main/cpp`,
+built with the NDK (CMake). `Fft.kt` is the fallback if the native library
+can't load, and the reference that `FftParityTest` checks the C core against.
+
 No QR. No NFC. No multi-tool hub. This APK is the Spectroid-class sound tool.
 
 Pairs with the desktop `squirrelsound live` CLI (SDL/ALSA).

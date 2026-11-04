@@ -78,6 +78,12 @@ android {
     buildFeatures {
         viewBinding = true
     }
+    // Spectrum frames use the shared C DSP core (libs/sqdsp) through JNI.
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
+        }
+    }
 }
 
 dependencies {
