@@ -10,13 +10,9 @@
 #include <SDL2/SDL.h>
 
 static Uint32 db_to_rgb(float db, float dmin, float dmax) {
-    float t = (db - dmin) / (dmax - dmin);
-    if (t < 0) t = 0;
-    if (t > 1) t = 1;
-    int r = (int)(20 + 235 * t);
-    int g = (int)(30 + 200 * t * t);
-    int b = (int)(90 + 140 * (1.0f - t));
-    return (Uint32)(0xFF000000u | ((Uint32)r << 16) | ((Uint32)g << 8) | (Uint32)b);
+    float span = dmax - dmin;
+    if (span < 1.0f) span = 1.0f;
+    return (Uint32)live_color_argb((db - dmin) / span);
 }
 
 int live_view_sdl_run(LiveAudio *audio, LiveEngine *engine, LiveDirection direction,

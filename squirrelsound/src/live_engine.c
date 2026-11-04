@@ -12,8 +12,8 @@ int live_engine_init(LiveEngine *e, const LiveEngineConfig *cfg) {
         return -1;
     e->cfg = *cfg;
     if (e->cfg.db_max <= e->cfg.db_min) {
-        e->cfg.db_min = -90;
-        e->cfg.db_max = 0;
+        e->cfg.db_min = LIVE_DB_DEFAULT_MIN;
+        e->cfg.db_max = LIVE_DB_DEFAULT_MAX;
     }
     if (e->cfg.f_max_hz <= 0) e->cfg.f_max_hz = cfg->sample_rate * 0.5;
     e->bins = cfg->fft_size / 2 + 1;
@@ -31,6 +31,10 @@ int live_engine_init(LiveEngine *e, const LiveEngineConfig *cfg) {
         return -1;
     }
     sqdsp_window(e->window, cfg->fft_size, cfg->window, 8.6);
+    e->window_sum = 0.0;
+    for (size_t i = 0; i < cfg->fft_size; i++) e->window_sum += e->window[i];
+    if (e->window_sum <= 0.0) e->window_sum = (double)cfg->fft_size;
+    for (size_t i = 0; i < e->wf_rows * e->bins; i++) e->waterfall[i] = (float)LIVE_DB_FLOOR;
     for (size_t k = 0; k < e->bins; k++)
         e->freq[k] = cfg->sample_rate * (double)k / (double)cfg->fft_size;
     live_engine_reset_hold(e);
@@ -78,12 +82,16 @@ int live_engine_process(LiveEngine *e, const double *samples) {
     size_t nb = sqdsp_magnitude_spectrum(e->frame, e->cfg.fft_size, e->mag, e->scratch);
     if (nb != e->bins) return -1;
 
-    /* Convert to dBFS-ish relative to fft size */
-    double norm = (double)e->cfg.fft_size;
+    /* dBFS: one-sided bins scale by 2/sum(w), DC and Nyquist by 1/sum(w), so a
+     * full-scale sine reads 0 dBFS whatever the window. */
+    double half = (double)e->cfg.fft_size / 2.0;
     size_t peak_i = 1;
     double peak_db = -1e300;
     for (size_t k = 0; k < e->bins; k++) {
-        double db = 20.0 * log10(e->mag[k] / norm + 1e-20);
+        double scale = (k == 0 || (double)k == half) ? 1.0 / e->window_sum
+                                                     : 2.0 / e->window_sum;
+        double db = 20.0 * log10(e->mag[k] * scale + 1e-20);
+        if (db < LIVE_DB_FLOOR) db = LIVE_DB_FLOOR;
         e->mag[k] = db;
         if (e->cfg.max_hold) {
             if (db > e->mag_hold[k]) e->mag_hold[k] = db;
@@ -129,4 +137,23 @@ size_t live_waterfall_row_for_y(int y, int h, size_t rows, LiveDirection d) {
     int from_newest = (d == LIVE_DIR_FOUNTAIN) ? (h - 1 - y) : y;
     size_t row = (size_t)((double)from_newest / (double)h * (double)rows);
     return row >= rows ? rows - 1 : row;
+}
+
+unsigned int live_color_argb(float t) {
+    static const unsigned char stops[7][3] = {
+        {0, 0, 0}, {0, 0, 200}, {0, 190, 255}, {0, 210, 60},
+        {255, 230, 0}, {255, 30, 0}, {255, 255, 255},
+    };
+    if (!(t > 0.0f)) t = 0.0f; /* also catches NaN */
+    if (t > 1.0f) t = 1.0f;
+    float x = t * 6.0f;
+    int i = (int)x;
+    if (i > 5) i = 5;
+    float f = x - (float)i;
+    unsigned int c = 0xFF000000u;
+    for (int ch = 0; ch < 3; ch++) {
+        float v = stops[i][ch] + (stops[i + 1][ch] - stops[i][ch]) * f;
+        c |= (unsigned int)(v + 0.5f) << (16 - 8 * ch);
+    }
+    return c;
 }

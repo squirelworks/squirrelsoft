@@ -278,8 +278,8 @@ int main(int argc, char **argv) {
         ecfg.window = sqdsp_window_parse(get_opt(argc, argv, "--window", "hann"));
         ecfg.sample_rate = live_audio_sample_rate(audio);
         ecfg.max_hold = has_flag(argc, argv, "--max-hold");
-        ecfg.db_min = -90;
-        ecfg.db_max = 0;
+        ecfg.db_min = LIVE_DB_DEFAULT_MIN;
+        ecfg.db_max = LIVE_DB_DEFAULT_MAX;
         /* Default = human hearing (phone-friendly top); Full Nyquist via UI key 5. */
         ecfg.f_min_hz = 20;
         {

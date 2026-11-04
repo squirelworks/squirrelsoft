@@ -7,6 +7,10 @@
 #include <stdlib.h>
 #include <string.h>
 
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
+
 #ifdef _WIN32
 #include <windows.h>
 static void sleep_ms(int ms) { Sleep((DWORD)ms); }
@@ -43,6 +47,44 @@ static void test_direction(void) {
     expect(live_direction_parse("waterfall", LIVE_DIR_FOUNTAIN) == LIVE_DIR_WATERFALL, "parse waterfall");
     expect(live_direction_parse("sideways", LIVE_DIR_FOUNTAIN) == LIVE_DIR_FOUNTAIN, "unknown keeps fallback");
     expect(live_direction_parse(NULL, LIVE_DIR_FOUNTAIN) == LIVE_DIR_FOUNTAIN, "NULL keeps fallback");
+}
+
+static void test_dbfs_and_colour(void) {
+    LiveEngineConfig c;
+    memset(&c, 0, sizeof(c));
+    c.fft_size = 2048;
+    c.window = SQDSP_WIN_HANN;
+    c.sample_rate = 48000;
+    c.f_max_hz = 24000;
+    LiveEngine e;
+    expect(live_engine_init(&e, &c) == 0, "dbfs engine init");
+    expect(e.cfg.db_min == LIVE_DB_DEFAULT_MIN && e.cfg.db_max == LIVE_DB_DEFAULT_MAX,
+           "default range -120..-20");
+    expect(e.waterfall[0] == (float)LIVE_DB_FLOOR, "empty waterfall at floor");
+    double x[2048];
+    const double amps[3] = {1.0, 0.1, 0.001};
+    const double want[3] = {0.0, -20.0, -60.0};
+    for (int a = 0; a < 3; a++) {
+        for (int i = 0; i < 2048; i++) x[i] = amps[a] * sin(2.0 * M_PI * 256.0 * i / 2048.0);
+        live_engine_process(&e, x);
+        if (fabs(e.peak_db - want[a]) > 0.5) {
+            fprintf(stderr, "  amp %g -> %.2f dBFS (want %.0f)\n", amps[a], e.peak_db, want[a]);
+            expect(0, "sine reads true dBFS");
+        }
+    }
+    memset(x, 0, sizeof x);
+    live_engine_process(&e, x);
+    expect(e.mag[10] == LIVE_DB_FLOOR, "silence clamps to floor");
+    live_engine_free(&e);
+
+    expect(live_color_argb(0.0f) == 0xFF000000u, "colour floor black");
+    expect(live_color_argb(1.0f) == 0xFFFFFFFFu, "colour top white");
+    expect(live_color_argb(-1.0f) == 0xFF000000u && live_color_argb(9.0f) == 0xFFFFFFFFu,
+           "colour clamps");
+    expect(live_color_argb(NAN) == 0xFF000000u, "colour NaN is floor");
+    unsigned int y = live_color_argb(4.0f / 6.0f);
+    expect(((y >> 16) & 0xFF) > 200 && ((y >> 8) & 0xFF) > 200 && (y & 0xFF) < 50,
+           "yellow stop");
 }
 
 static void test_prefs(void) {
@@ -101,6 +143,7 @@ static void expect(int c, const char *m) {
 
 int main(void) {
     test_direction();
+    test_dbfs_and_colour();
 #ifndef _WIN32
     test_prefs();
 #endif
@@ -119,8 +162,8 @@ int main(void) {
     ecfg.fft_size = 2048;
     ecfg.window = SQDSP_WIN_HANN;
     ecfg.sample_rate = 44100;
-    ecfg.db_min = -90;
-    ecfg.db_max = 0;
+    ecfg.db_min = LIVE_DB_DEFAULT_MIN;
+    ecfg.db_max = LIVE_DB_DEFAULT_MAX;
     ecfg.f_max_hz = 22050;
     LiveEngine e;
     expect(live_engine_init(&e, &ecfg) == 0, "engine init");

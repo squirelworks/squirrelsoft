@@ -8,6 +8,11 @@
 #define LIVE_MAX_FFT 8192
 #define LIVE_WATERFALL_ROWS 240
 
+/* dBFS: analysis floor and default display range (matches the Android app). */
+#define LIVE_DB_FLOOR (-140.0)
+#define LIVE_DB_DEFAULT_MIN (-120.0)
+#define LIVE_DB_DEFAULT_MAX (-20.0)
+
 typedef struct {
     size_t fft_size;
     SqdspWindow window;
@@ -28,6 +33,7 @@ typedef struct {
     double *mag_hold;
     double *freq;
     float *waterfall; /* rows * bins, newest at row 0 after scroll */
+    double window_sum; /* sum of window coefficients, for dBFS scaling */
     size_t bins;
     size_t wf_rows;
     double peak_hz;
@@ -42,6 +48,10 @@ int live_engine_process(LiveEngine *e, const double *samples);
 
 void live_engine_reset_hold(LiveEngine *e);
 void live_engine_set_freq_range(LiveEngine *e, double fmin, double fmax);
+
+/* Opaque 0xAARRGGBB colour for t in 0..1: black > blue > cyan > green >
+ * yellow > red > white, black at the floor. Out-of-range t is clamped. */
+unsigned int live_color_argb(float t);
 
 /* Map frequency to bin index in current FFT. */
 size_t live_engine_hz_to_bin(const LiveEngine *e, double hz);
