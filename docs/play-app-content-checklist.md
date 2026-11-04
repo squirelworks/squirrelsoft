@@ -23,6 +23,7 @@ Path: **App content → Privacy policy → Start / Manage**
 | Suica | https://cdn.jsdelivr.net/gh/squirelworks/squirrelsoft@main/docs/privacy-suica.html |
 | Sound | https://cdn.jsdelivr.net/gh/squirelworks/squirrelsoft@main/docs/privacy-sound.html |
 | QR | https://cdn.jsdelivr.net/gh/squirelworks/squirrelsoft@main/docs/privacy-qr.html |
+| SuicaAnalysis | https://cdn.jsdelivr.net/gh/squirelworks/squirrelsoft@main/docs/privacy-suica-analysis.html |
 
 Use `@main` only (not a feature-branch tip).
 
