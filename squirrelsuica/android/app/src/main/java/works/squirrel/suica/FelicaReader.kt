@@ -38,7 +38,12 @@ object FelicaReader {
     private const val SUICA_HIST_BLOCKS = 20
     private const val NFC_TIMEOUT_MS = 5000
 
-    private data class BlockRead(
+    /** One FeliCa command/response exchange; [NfcF.transceive] in production, a fake in tests. */
+    fun interface Transceiver {
+        fun transceive(command: ByteArray): ByteArray
+    }
+
+    internal data class BlockRead(
         val blocks: List<ByteArray>,
         val status: HistoryStatus,
         val message: String = ""
@@ -55,20 +60,21 @@ object FelicaReader {
 
             val idmTag = nfc.tag.id ?: throw IOException("missing IDm")
             val idmHex = idmTag.joinToString("") { "%02x".format(it) }
+            val tx = Transceiver { nfc.transceive(it) }
 
             // 1) Transit IC (Suica/PASMO/…)
-            readTransit(nfc, idmTag)?.let { return it }
+            readTransit(nfc, tx, idmTag)?.let { return it }
 
             // 2) Common area (Edy / WAON / nanaco)
             tryPoll(nfc, SYS_COMMON)?.let { (idm, pmm) ->
-                purseFromCommon(nfc, idm, pmm, SYS_COMMON)?.let { return it }
+                purseFromCommon(tx, idm, pmm, SYS_COMMON)?.let { return it }
             }
 
             // 3) Dedicated nanaco system
             tryPoll(nfc, SYS_NANACO)?.let { (idm, pmm) ->
-                val blocks = readBlocks(nfc, idm, SVC_NANACO_BAL, intArrayOf(0))
+                val blocks = readBlocks(tx, idm, SVC_NANACO_BAL, intArrayOf(0))
                 if (blocks.isNotEmpty()) {
-                    val hist = readServiceRange(nfc, idm, SVC_NANACO_HIST, 0, 5)
+                    val hist = readServiceRange(tx, idm, SVC_NANACO_HIST, 0, 5)
                     return FelicaCard(
                         brand = FelicaBrand.NANACO,
                         brandLabel = FelicaParse.brandLabel(FelicaBrand.NANACO),
@@ -109,13 +115,13 @@ object FelicaReader {
      * Transit read path: prefer Polling(0x0003); if that fails (some stacks already
      * selected the system), fall back to the discovery IDm from [Tag.getId].
      */
-    private fun readTransit(nfc: NfcF, tagIdm: ByteArray): FelicaCard? {
+    private fun readTransit(nfc: NfcF, tx: Transceiver, tagIdm: ByteArray): FelicaCard? {
         val polled = tryPoll(nfc, SYS_TRANSIT)
         val idm = polled?.first ?: tagIdm
         val pmm = polled?.second ?: ByteArray(0)
 
-        val hist = readServiceRange(nfc, idm, SVC_SUICA_HIST, 0, SUICA_HIST_BLOCKS)
-        val b008b = readBlocks(nfc, idm, SVC_SUICA_INFO, intArrayOf(0)).getOrNull(0)
+        val hist = readServiceRange(tx, idm, SVC_SUICA_HIST, 0, SUICA_HIST_BLOCKS)
+        val b008b = readBlocks(tx, idm, SVC_SUICA_INFO, intArrayOf(0)).getOrNull(0)
         val bal = FelicaParse.suicaBalance(hist.blocks.firstOrNull(), b008b)
         val entries = FelicaParse.historyEntries(hist.blocks)
 
@@ -164,7 +170,7 @@ object FelicaReader {
     }
 
     private fun purseFromCommon(
-        nfc: NfcF,
+        tx: Transceiver,
         idm: ByteArray,
         pmm: ByteArray,
         systemCode: Int
@@ -173,8 +179,8 @@ object FelicaReader {
         val pmmHex = pmm.joinToString("") { "%02x".format(it) }
         val sys = "%04x".format(systemCode)
 
-        readBlocks(nfc, idm, SVC_NANACO_BAL, intArrayOf(0)).getOrNull(0)?.let { block ->
-            val hist = readServiceRange(nfc, idm, SVC_NANACO_HIST, 0, 5)
+        readBlocks(tx, idm, SVC_NANACO_BAL, intArrayOf(0)).getOrNull(0)?.let { block ->
+            val hist = readServiceRange(tx, idm, SVC_NANACO_HIST, 0, 5)
             val entries = FelicaParse.nanacoHistoryEntries(hist.blocks)
             return FelicaCard(
                 brand = FelicaBrand.NANACO,
@@ -189,8 +195,8 @@ object FelicaReader {
                 historyMessage = hist.message
             )
         }
-        readBlocks(nfc, idm, SVC_EDY_BAL, intArrayOf(0)).getOrNull(0)?.let { block ->
-            val hist = readServiceRange(nfc, idm, SVC_EDY_HIST, 0, 6)
+        readBlocks(tx, idm, SVC_EDY_BAL, intArrayOf(0)).getOrNull(0)?.let { block ->
+            val hist = readServiceRange(tx, idm, SVC_EDY_HIST, 0, 6)
             val entries = FelicaParse.edyHistoryEntries(hist.blocks)
             return FelicaCard(
                 brand = FelicaBrand.EDY,
@@ -205,8 +211,8 @@ object FelicaReader {
                 historyMessage = hist.message
             )
         }
-        readBlocks(nfc, idm, SVC_WAON_BAL, intArrayOf(0)).getOrNull(0)?.let { block ->
-            val histBlocks = readServiceRange(nfc, idm, SVC_WAON_HIST, 0, 6)
+        readBlocks(tx, idm, SVC_WAON_BAL, intArrayOf(0)).getOrNull(0)?.let { block ->
+            val histBlocks = readServiceRange(tx, idm, SVC_WAON_HIST, 0, 6)
             val entries = FelicaParse.waonHistoryEntries(histBlocks.blocks)
             return FelicaCard(
                 brand = FelicaBrand.WAON,
@@ -260,8 +266,8 @@ object FelicaReader {
      * Tries [CHUNK]-sized requests, then falls back to single-block reads
      * (the pattern used by nfcpy samples / many phone Suica readers).
      */
-    private fun readServiceRange(
-        nfc: NfcF,
+    internal fun readServiceRange(
+        tx: Transceiver,
         idm: ByteArray,
         service: Int,
         start: Int,
@@ -278,7 +284,7 @@ object FelicaReader {
             val remaining = end - i
             val n = if (usedFallback) 1 else min(CHUNK, remaining)
             val indices = IntArray(n) { i + it }
-            val result = readBlocksResult(nfc, idm, service, indices)
+            val result = readBlocksResult(tx, idm, service, indices)
             when {
                 result.blocks.isNotEmpty() -> {
                     out.addAll(result.blocks)
@@ -288,8 +294,8 @@ object FelicaReader {
                     i += result.blocks.size
                 }
                 n > 1 -> {
+                    // Some cards cap blocks per command below CHUNK: retry one at a time.
                     usedFallback = true
-                    hitIoFailure = hitIoFailure || result.failed
                     lastError = result.error ?: lastError
                     continue
                 }
@@ -326,22 +332,31 @@ object FelicaReader {
     )
 
     private fun readBlocks(
-        nfc: NfcF,
+        tx: Transceiver,
         idm: ByteArray,
         service: Int,
         blocks: IntArray
-    ): List<ByteArray> = readBlocksResult(nfc, idm, service, blocks).blocks
+    ): List<ByteArray> = readBlocksResult(tx, idm, service, blocks).blocks
 
     private fun readBlocksResult(
-        nfc: NfcF,
+        tx: Transceiver,
         idm: ByteArray,
         service: Int,
         blocks: IntArray
     ): BlocksResult {
         return try {
-            val resp = nfc.transceive(readWithoutEncryption(idm, service, blocks))
+            val resp = tx.transceive(readWithoutEncryption(idm, service, blocks))
             val got = extractBlocks(resp)
-            if (got.isEmpty()) {
+            val flags = statusFlags(resp)
+            if (got.isEmpty() && flags != null && (flags.first != 0 || flags.second != 0)) {
+                // The card answered and refused (e.g. block past the end of the service):
+                // not a lost tag, so a single-block refusal just ends the range.
+                BlocksResult(
+                    emptyList(),
+                    failed = false,
+                    error = "Card refused read: SF1=%02X SF2=%02X".format(flags.first, flags.second)
+                )
+            } else if (got.isEmpty()) {
                 BlocksResult(emptyList(), failed = true, error = "Empty/invalid FeliCa read response")
             } else {
                 BlocksResult(got, failed = false)
@@ -373,12 +388,38 @@ object FelicaReader {
         out.add((serviceCode and 0xff).toByte())
         out.add(((serviceCode shr 8) and 0xff).toByte())
         out.add(blocks.size.toByte())
-        for (b in blocks) {
-            out.add((0x80 or (b and 0xff)).toByte())
-            out.add(0x00)
-        }
+        for (b in blocks) blockListElement(b).forEach { out.add(it) }
         out[0] = out.size.toByte()
         return out.toByteArray()
+    }
+
+    /**
+     * One block-list element for service-code-list order 0, access mode 0
+     * (FeliCa Card User's Manual, "Block List"): 2-byte form `0x80, block` for
+     * block numbers 0..255, 3-byte form `0x00, lo, hi` above that.
+     * D0 low nibble is the service's index in the command's service list,
+     * never the block number.
+     */
+    fun blockListElement(block: Int): ByteArray {
+        require(block in 0..0xffff)
+        return if (block <= 0xff) {
+            byteArrayOf(0x80.toByte(), block.toByte())
+        } else {
+            byteArrayOf(0x00, (block and 0xff).toByte(), ((block shr 8) and 0xff).toByte())
+        }
+    }
+
+    /** Status flags (SF1, SF2) of a Read Without Encryption response, or null if malformed. */
+    fun statusFlags(resp: ByteArray): Pair<Int, Int>? {
+        if (resp.isEmpty()) return null
+        var off = 0
+        if ((resp[0].toInt() and 0xff) == resp.size || (resp[0].toInt() and 0xff) + 1 == resp.size) {
+            off = 1
+        }
+        if (off >= resp.size || (resp[off].toInt() and 0xff) != 0x07) return null
+        off += 1 + 8
+        if (off + 2 > resp.size) return null
+        return (resp[off].toInt() and 0xff) to (resp[off + 1].toInt() and 0xff)
     }
 
     fun extractBlocks(resp: ByteArray): List<ByteArray> {

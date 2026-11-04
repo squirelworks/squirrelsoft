@@ -78,6 +78,28 @@ def main() -> int:
     expect(nc.history[0].fare_yen == 480, f"nanaco fare {nc.history[0].fare_yen}")
     expect(nc.history[0].balance_yen == 5200, "nanaco hist bal")
 
+    # Chunked history read: a card that refuses >4 blocks or past block 19.
+    from suica_read import read_blocks_chunked
+
+    calls = []
+
+    def fake_card(limit, total):
+        def read_fn(idx):
+            calls.append(list(idx))
+            if len(idx) > limit or any(i >= total for i in idx):
+                raise IOError("card refused")
+            return [bytes([i]) + bytes(15) for i in idx]
+        return read_fn
+
+    got = read_blocks_chunked(fake_card(4, 20), 20)
+    expect(len(got) == 20, f"chunked read 20 blocks, got {len(got)}")
+    expect([b[0] for b in got] == list(range(20)), "chunked read order")
+    expect(max(len(c) for c in calls) <= 4, "chunks are <= 4 blocks")
+    got = read_blocks_chunked(fake_card(1, 20), 20)
+    expect(len(got) == 20, f"single-block fallback 20 blocks, got {len(got)}")
+    got = read_blocks_chunked(fake_card(4, 6), 20)
+    expect(len(got) == 6, f"short service stops at 6, got {len(got)}")
+
     if fails:
         print(fails, "failure(s)")
         return 1
