@@ -7,6 +7,7 @@ AR ?= ar
 PYTHON ?= python3
 BUILD = build
 FIXTURE = fixtures/parity.txt
+STATIONS = ../../squirrelsuica/data/StationCode.csv
 
 .PHONY: all test fixture check-fixture clean
 
@@ -35,7 +36,7 @@ check-fixture: | $(BUILD)
 	diff -u $(FIXTURE) $(BUILD)/parity.txt
 
 test: $(BUILD)/test_sqfelica check-fixture
-	$(BUILD)/test_sqfelica $(FIXTURE)
+	$(BUILD)/test_sqfelica $(FIXTURE) $(STATIONS)
 
 clean:
 	rm -rf $(BUILD)

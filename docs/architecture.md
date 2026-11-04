@@ -43,7 +43,7 @@ Until the Android apps call the cores through JNI, Kotlin keeps its own implemen
 - `libs/sqfelica/tools/gen_fixture.py` runs `felica_parse.py` on synthetic history blocks (the demo cards, edge cases and seeded random blocks) and on balance blocks, and writes `libs/sqfelica/fixtures/parity.txt`.
 - `make -C libs/sqfelica test` regenerates the fixture into `build/`, diffs it against the committed copy, and then runs the C parser over the same blocks. Every field must match: kind, date, time, fare, balance, terminal, process and the entry/exit line/station codes.
 - So a change to either parser fails `make test` until the other side matches and `make -C libs/sqfelica fixture` is rerun.
-- Station names stay in the front-ends. The C core reports raw line/station codes plus `sqf_station_area`, and each front-end looks names up in its own copy of the station table.
+- Station names: the C core reports raw line/station codes plus `sqf_station_area`. Native front-ends hand `sqf_station_index` the shipped `squirrelsuica/data/StationCode.csv` in a buffer they own and call `sqf_station_resolve`, which follows `felica_parse.resolve_rail` (region-byte area, then area 0). The parity fixture checks it against the Python on 806 codes. The Python and Kotlin apps keep their own loaders over the same CSV.
 - Real card dumps from SquirrelSuicaAnalysis (S1.3) get added as fixture groups once they arrive, and the Kotlin parser joins the same fixture.
 
 ## Split checklist (S6, done by the owner)
@@ -60,6 +60,6 @@ The owner creates the new repositories and runs `git filter-repo` to keep histor
 
 ## Next steps
 
-- `libs/sqfelica`: add real card dumps to the fixture (S1.3 feeds it), a Kotlin parity test, and a station table loader that takes a caller buffer.
+- `libs/sqfelica`: add real card dumps to the fixture (S1.3 feeds it), a Kotlin parity test.
 - JNI: SquirrelSound calls `sqdsp` through the NDK, keeping `Fft.kt` as the fallback until parity holds on devices.
 - `libs/sqgui` and `libs/sqmath` for SquirrelCalc and the Squirrel OS/2 apps (S5).

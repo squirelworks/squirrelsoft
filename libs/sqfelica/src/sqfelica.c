@@ -1,5 +1,6 @@
 #include "sqfelica.h"
 
+#include <stdlib.h>
 #include <string.h>
 
 /* ---------------------------------------------------------------- frames */
@@ -241,6 +242,133 @@ static void history_init(SqfHistory *h) {
 int sqf_station_area(uint8_t region, uint8_t line, int for_exit) {
     if (line < 0x80) return 0;
     return (region >> (for_exit ? 4 : 6)) & 0x3;
+}
+
+/* ---- station table ---- */
+
+enum { COL_AREA, COL_LINE, COL_STATION, COL_COMPANY, COL_LINE_NAME, COL_STATION_NAME, NCOLS };
+static const char *const station_cols[NCOLS] = {"area", "line", "station", "company", "line_name", "station_name"};
+
+static int is_space(char c) { return c == ' ' || c == '\t' || c == '\r'; }
+
+/* Split one line [p, end) at commas into NUL-terminated, trimmed fields. */
+static int split_fields(char *p, char *end, char **f, int max) {
+    int n = 0;
+    for (;;) {
+        char *start = p;
+        while (p < end && *p != ',') p++;
+        char *stop = p;
+        while (start < stop && is_space(*start)) start++;
+        while (stop > start && is_space(stop[-1])) stop--;
+        if (n < max) f[n] = start;
+        n++;
+        int last = p >= end;
+        *stop = 0; /* stop <= p, and p is a comma or the line's NUL */
+        if (last) return n;
+        p++;
+    }
+}
+
+static int hex_byte(const char *s) {
+    int v = 0;
+    if (!*s) return -1;
+    for (; *s; s++) {
+        int d = (*s >= '0' && *s <= '9') ? *s - '0'
+              : (*s >= 'a' && *s <= 'f') ? *s - 'a' + 10
+              : (*s >= 'A' && *s <= 'F') ? *s - 'A' + 10 : -1;
+        if (d < 0) return -1;
+        v = v * 16 + d;
+        if (v > 0xFF) return -1;
+    }
+    return v;
+}
+
+static uint32_t station_key(uint8_t area, uint8_t line, uint8_t station) {
+    return (uint32_t)area << 16 | (uint32_t)line << 8 | station;
+}
+
+static int cmp_station(const void *a, const void *b) {
+    const SqfStation *x = a, *y = b;
+    uint32_t kx = station_key(x->area, x->line, x->station), ky = station_key(y->area, y->line, y->station);
+    if (kx != ky) return kx < ky ? -1 : 1;
+    /* Same code: earlier in the file first. Fields point into one buffer in file order. */
+    return x->company < y->company ? -1 : x->company > y->company;
+}
+
+long sqf_station_index(char *csv, size_t len, SqfStation *rows, size_t cap) {
+    char *p = csv, *end = csv + len;
+    if (len >= 3 && (uint8_t)p[0] == 0xEF && (uint8_t)p[1] == 0xBB && (uint8_t)p[2] == 0xBF) p += 3;
+    int col[NCOLS], header = 1, ncol = 0;
+    size_t n = 0;
+    while (p < end) {
+        char *nl = p;
+        while (nl < end && *nl != '\n') nl++;
+        char *next = nl < end ? nl + 1 : end;
+        char *f[16];
+        *nl = 0; /* csv[len] is writable too, for a last line without a newline */
+        int nf = split_fields(p, nl, f, 16);
+        if (nf > 16) nf = 16;
+        if (header) {
+            for (int c = 0; c < NCOLS; c++) {
+                col[c] = -1;
+                for (int i = 0; i < nf; i++)
+                    if (strcmp(f[i], station_cols[c]) == 0) col[c] = i;
+                if (col[c] < 0) return -1;
+                if (col[c] + 1 > ncol) ncol = col[c] + 1;
+            }
+            header = 0;
+        } else if (nf >= ncol) {
+            int a = hex_byte(f[col[COL_AREA]]), l = hex_byte(f[col[COL_LINE]]), s = hex_byte(f[col[COL_STATION]]);
+            if (a >= 0 && l >= 0 && s >= 0) {
+                if (n >= cap) return -1;
+                rows[n].area = (uint8_t)a;
+                rows[n].line = (uint8_t)l;
+                rows[n].station = (uint8_t)s;
+                rows[n].company = f[col[COL_COMPANY]];
+                rows[n].line_name = f[col[COL_LINE_NAME]];
+                rows[n].station_name = f[col[COL_STATION_NAME]];
+                n++;
+            }
+        }
+        p = next;
+    }
+    if (header) return -1;
+    qsort(rows, n, sizeof *rows, cmp_station);
+    size_t w = 0;
+    for (size_t i = 0; i < n; i++) {
+        if (w && station_key(rows[w - 1].area, rows[w - 1].line, rows[w - 1].station) ==
+                     station_key(rows[i].area, rows[i].line, rows[i].station))
+            continue;
+        rows[w++] = rows[i];
+    }
+    return (long)w;
+}
+
+const SqfStation *sqf_station_lookup(const SqfStation *rows, size_t n, uint8_t area, uint8_t line,
+                                     uint8_t station) {
+    uint32_t key = station_key(area, line, station);
+    size_t lo = 0, hi = n;
+    while (lo < hi) {
+        size_t mid = lo + (hi - lo) / 2;
+        uint32_t k = station_key(rows[mid].area, rows[mid].line, rows[mid].station);
+        if (k == key) return &rows[mid];
+        if (k < key) lo = mid + 1;
+        else hi = mid;
+    }
+    return NULL;
+}
+
+const char *sqf_station_resolve(const SqfStation *rows, size_t n, uint8_t region, uint8_t line,
+                                uint8_t station, int for_exit) {
+    if (line == 0 && station == 0) return NULL;
+    int area = sqf_station_area(region, line, for_exit);
+    const SqfStation *r = sqf_station_lookup(rows, n, (uint8_t)area, line, station);
+    if (r && r->station_name[0]) return r->station_name;
+    if (area != 0) {
+        r = sqf_station_lookup(rows, n, 0, line, station);
+        if (r && r->station_name[0]) return r->station_name;
+    }
+    return NULL;
 }
 
 static int in_list(uint8_t v, const uint8_t *list, size_t n) {
