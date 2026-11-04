@@ -11,7 +11,7 @@ Issue 09 / roadmap S2 and S6. SquirrelSoft is a set of apps that will later move
 libs/
   sqdsp/     FFT, windows, PSD, pitch/THD (SquirrelSound)       ← moved here (S2 first step)
   sqfelica/  FeliCa command builder/parser, Suica/PASMO/nanaco/Edy/WAON history  ← added (S2 second step)
-  sqqr/      original QR decoder: grid decode + Reed–Solomon done; finder/perspective next
+  sqqr/      original QR decoder: image locate (finders, alignment, perspective) + grid decode + Reed–Solomon
   sqmath/    expression engine / CAS core (SquirrelCalc)
   sqgui/     tiny immediate-mode widgets over SDL2, portable to Squirrel OS/2 wm/gfx
 <app>/       today's per-app folders (squirrelsound/, squirrelsuica/, ...)

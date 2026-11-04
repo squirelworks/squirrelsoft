@@ -24,7 +24,8 @@ Principles: original code only; each app = portable core + thin native front-end
 - `libs/sqdsp` (exists) becomes the SquirrelSound core used by Android via JNI/NDK and by desktop.
 - `libs/sqfelica` (C): FeliCa command builder/parser, Suica/PASMO/nanaco/Edy/WAON history parsing, station DB loader.
 - `libs/sqqr` (C): original QR decoder (finder patterns, perspective, Reed–Solomon) so desktop and Squirrel OS/2 don't depend on ML Kit.
-  - **In review:** step 1, decoding a sampled module grid: format/version information, unmasking, block de-interleaving, Reed–Solomon error correction and all data modes (numeric, alphanumeric, byte, Kanji, ECI), tested against symbols from an independent encoder. Next: finding and sampling a symbol in an image.
+  - **Done:** step 1, decoding a sampled module grid: format/version information, unmasking, block de-interleaving, Reed–Solomon error correction and all data modes (numeric, alphanumeric, byte, Kanji, ECI), tested against symbols from an independent encoder.
+  - **In review:** step 2, finding a symbol in a grayscale image: local-threshold binarization, 1:1:3:1:1 finder search, version information read before sampling, alignment patterns found outwards from the top-left with a least-squares homography plus local residual correction, and light-on-dark symbols. Needs about 3 pixels per module. `build/sqqr_decode photo.pgm` decodes a file. Next: JNI for SquirrelQR and the desktop capture front-end (S3.4).
 - `libs/sqmath` (C): expression engine/CAS core for the calculator suite.
 - `libs/sqgui` (C): tiny immediate-mode widget layer over SDL2 for desktop, designed to port to Squirrel OS/2's wm/gfx.
 - Test: each lib has `make test` unit tests; Android apps get JNI smoke tests.
