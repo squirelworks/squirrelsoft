@@ -48,10 +48,10 @@ PRIVACY_URLS = {
 LISTINGS = {
     "works.squirrel.suica": {
         "language": "en-US",
-        "title": "Suica Reader",
+        "title": "SquirrelSuica",
         "shortDescription": "Read Suica, PASMO, nanaco, Edy & WAON balances and history over NFC.",
         "fullDescription": (
-            "Suica Reader (SquirrelSuica) is a read-only FeliCa helper for Japanese "
+            "SquirrelSuica is a read-only FeliCa helper for Japanese "
             "transit and e-money cards.\n\n"
             "• Suica / PASMO / ICOCA-class transit IC — balance and journey history "
             "with station names\n"
@@ -113,7 +113,7 @@ LISTINGS = {
             "raw frames included\n"
             "• No writes, no keys, no network permission\n\n"
             "Hold the card still on the NFC spot with the app in the foreground. "
-            "Built to collect real card data for Suica Reader (SquirrelSuica).\n\n"
+            "Built to collect real card data for SquirrelSuica.\n\n"
             "Requires an NFC-F capable phone."
         ),
         "releaseNotes": "First internal testing build.",
