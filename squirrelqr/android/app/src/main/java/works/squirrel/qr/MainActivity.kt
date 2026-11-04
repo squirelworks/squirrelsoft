@@ -5,6 +5,7 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.RectF
 import android.net.Uri
 import android.os.Bundle
 import android.view.LayoutInflater
@@ -16,6 +17,9 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.Preview
+import androidx.camera.core.UseCaseGroup
+import androidx.camera.core.resolutionselector.AspectRatioStrategy
+import androidx.camera.core.resolutionselector.ResolutionSelector
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
@@ -46,6 +50,7 @@ class MainActivity : AppCompatActivity() {
     private val lastOverlayMs = AtomicLong(0L)
     private var history: MutableList<ScanEntry> = mutableListOf()
     private var cameraBound = false
+    @Volatile private var scanMode = ScanMode.DEFAULT
 
     private val timeFmt = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
 
@@ -63,6 +68,10 @@ class MainActivity : AppCompatActivity() {
 
         historyStore = ScanHistoryStore(this)
         history = historyStore.load()
+        scanMode = ScanMode.fromId(
+            getSharedPreferences(PREFS, MODE_PRIVATE).getString(KEY_SCAN_MODE, null)
+        )
+        binding.overlay.mode = scanMode
 
         applySystemInsets()
         wireActions()
@@ -84,6 +93,17 @@ class MainActivity : AppCompatActivity() {
     private fun wireActions() {
         binding.btnCopy.isEnabled = false
         binding.btnOpen.isEnabled = false
+
+        renderModeToggle()
+        binding.modeToggle.setOnClickListener {
+            scanMode = if (scanMode == ScanMode.FIXED_GUIDE) ScanMode.TRACKING else ScanMode.FIXED_GUIDE
+            getSharedPreferences(PREFS, MODE_PRIVATE).edit()
+                .putString(KEY_SCAN_MODE, scanMode.id).apply()
+            binding.overlay.clear()
+            binding.overlay.mode = scanMode
+            binding.qrHint.setText(hintFor(scanMode))
+            renderModeToggle()
+        }
 
         binding.btnCopy.setOnClickListener {
             val text = lastPublished.get()
@@ -126,10 +146,18 @@ class MainActivity : AppCompatActivity() {
         providerFuture.addListener({
             if (isFinishing || isDestroyed) return@addListener
             val provider = providerFuture.get()
-            val previewUseCase = Preview.Builder().build().also { useCase ->
-                useCase.setSurfaceProvider(binding.preview.surfaceProvider)
-            }
+            // Same aspect ratio for preview and analysis so both see the same field of
+            // view; the PreviewView then crops both identically (FILL_CENTER).
+            val sameAspect = ResolutionSelector.Builder()
+                .setAspectRatioStrategy(AspectRatioStrategy.RATIO_4_3_FALLBACK_AUTO_STRATEGY)
+                .build()
+            val previewUseCase = Preview.Builder()
+                .setResolutionSelector(sameAspect)
+                .build().also { useCase ->
+                    useCase.setSurfaceProvider(binding.preview.surfaceProvider)
+                }
             val analysis = ImageAnalysis.Builder()
+                .setResolutionSelector(sameAspect)
                 .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                 .build()
             // Product scope: QR codes only (no 1D / Aztec / PDF417 / etc.).
@@ -145,8 +173,9 @@ class MainActivity : AppCompatActivity() {
                 }
                 val rotation = proxy.imageInfo.rotationDegrees
                 val image = InputImage.fromMediaImage(media, rotation)
-                val imgW = image.width
-                val imgH = image.height
+                // Unrotated buffer size; boxes come back upright (see PreviewMapper).
+                val bufW = image.width
+                val bufH = image.height
                 scanner.process(image)
                     .addOnSuccessListener { codes ->
                         val hit = codes.firstOrNull { !it.rawValue.isNullOrBlank() }
@@ -156,17 +185,31 @@ class MainActivity : AppCompatActivity() {
                         }
                         val text = hit.rawValue ?: return@addOnSuccessListener
                         val box = hit.boundingBox
+                        val viewW = binding.overlay.width
+                        val viewH = binding.overlay.height
+                        val mapped = box?.let {
+                            PreviewMapper.mapBoxForBuffer(
+                                it.left, it.top, it.right, it.bottom,
+                                bufW, bufH, rotation, viewW, viewH
+                            )
+                        }
                         lastOverlayMs.set(System.currentTimeMillis())
-                        runOnUiThread {
-                            if (box != null) {
-                                val mapped = PreviewMapper.mapRect(
-                                    box,
-                                    imgW,
-                                    imgH,
-                                    binding.overlay.width,
-                                    binding.overlay.height
-                                )
-                                binding.overlay.setTarget(mapped)
+                        if (scanMode == ScanMode.FIXED_GUIDE) {
+                            val guide = ScanGuide.guideBox(viewW, viewH)
+                            val inside = mapped != null && guide != null &&
+                                ScanGuide.isInside(mapped, guide)
+                            runOnUiThread {
+                                binding.overlay.guideHit = inside
+                                if (!inside) binding.qrHint.setText(R.string.qr_move_into_frame)
+                            }
+                            if (!inside) return@addOnSuccessListener
+                        } else {
+                            runOnUiThread {
+                                if (mapped != null) {
+                                    binding.overlay.setTarget(
+                                        RectF(mapped.left, mapped.top, mapped.right, mapped.bottom)
+                                    )
+                                }
                             }
                         }
                         val prev = lastPublished.get()
@@ -182,11 +225,13 @@ class MainActivity : AppCompatActivity() {
             }
             try {
                 provider.unbindAll()
-                provider.bindToLifecycle(
-                    this, CameraSelector.DEFAULT_BACK_CAMERA, previewUseCase, analysis
-                )
+                val group = UseCaseGroup.Builder()
+                    .addUseCase(previewUseCase)
+                    .addUseCase(analysis)
+                    .build()
+                provider.bindToLifecycle(this, CameraSelector.DEFAULT_BACK_CAMERA, group)
                 cameraBound = true
-                binding.qrHint.setText(R.string.qr_hint)
+                binding.qrHint.setText(hintFor(scanMode))
             } catch (e: Exception) {
                 Toast.makeText(this, "Camera bind failed: ${e.message}", Toast.LENGTH_LONG).show()
             }
@@ -198,6 +243,15 @@ class MainActivity : AppCompatActivity() {
         if (age > 450L) {
             runOnUiThread { binding.overlay.clear() }
         }
+    }
+
+    private fun hintFor(mode: ScanMode): Int =
+        if (mode == ScanMode.FIXED_GUIDE) R.string.qr_hint_fixed else R.string.qr_hint
+
+    private fun renderModeToggle() {
+        binding.modeToggle.setText(
+            if (scanMode == ScanMode.FIXED_GUIDE) R.string.mode_fixed else R.string.mode_tracking
+        )
     }
 
     private fun publishScan(entry: ScanEntry) {
@@ -303,5 +357,10 @@ class MainActivity : AppCompatActivity() {
     private fun formatName(format: Int): String = when (format) {
         Barcode.FORMAT_QR_CODE -> "QR"
         else -> "QR"
+    }
+
+    companion object {
+        private const val PREFS = "squirrelqr"
+        private const val KEY_SCAN_MODE = "scan_mode"
     }
 }
