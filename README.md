@@ -48,6 +48,8 @@ python3 squirrelsuica/suica_read.py --demo
 
 It builds debug only. It needs no signing secrets and never builds or uploads release bundles (`.aab`).
 
+`.github/workflows/release.yml` is the release button: run it from the Actions tab for one app, and it builds the signed APK and the desktop builds into a **draft** Release. Squirrel publishes the draft, which creates the tag. See [docs/RELEASING.md](docs/RELEASING.md).
+
 ## Layout
 
 ```
