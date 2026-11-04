@@ -39,6 +39,15 @@ Suica demo (no card reader required):
 python3 squirrelsuica/suica_read.py --demo
 ```
 
+## CI
+
+`.github/workflows/ci.yml` runs on every push to `main` and every pull request:
+
+- `make test` on Ubuntu, covering the C tools (with SDL2 and ALSA) and the Python smoke tests.
+- `./gradlew :app:assembleDebug :app:testDebugUnitTest` for each Android app, each in its own job.
+
+It builds debug only. It needs no signing secrets and never builds or uploads release bundles (`.aab`).
+
 ## Layout
 
 ```

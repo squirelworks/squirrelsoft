@@ -1,0 +1,60 @@
+# Build and test on every push to main and every pull request.
+# Debug builds only: no signing secrets and no release bundles. This workflow
+# must never build or upload .aab files or publish anything. AABs never go to
+# GitHub, and Play uploads are done by the owner by hand.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  host:
+    name: make test (C tools + Python)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install SDL2 / ALSA headers (optional live backends)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libsdl2-dev libasound2-dev
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: make test
+        run: make test
+
+  android:
+    name: Android ${{ matrix.app }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [squirrelsound, squirrelsuica, squirrelsuica-analysis, squirrelqr]
+    defaults:
+      run:
+        working-directory: ${{ matrix.app }}/android
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Assemble debug APK and run unit tests
+        run: ./gradlew --no-daemon :app:assembleDebug :app:testDebugUnitTest
+      - name: Upload unit test reports on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports-${{ matrix.app }}
+          path: ${{ matrix.app }}/android/app/build/reports/tests/
+          retention-days: 7
