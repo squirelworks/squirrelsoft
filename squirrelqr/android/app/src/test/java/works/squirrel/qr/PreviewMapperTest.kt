@@ -83,6 +83,26 @@ class PreviewMapperRotationTest {
             assertEquals(800f, b.bottom, 0.5f)
         }
     }
+
+    @Test
+    fun uprightPointFollowsClockwiseRotation() {
+        // 640x480 buffer; the point (100, 50) near the top-left corner.
+        assertEquals(100f to 50f, PreviewMapper.uprightPoint(100f, 50f, 640, 480, 0))
+        // 90: upright is 480x640 and the buffer's top edge becomes the right edge.
+        assertEquals(430f to 100f, PreviewMapper.uprightPoint(100f, 50f, 640, 480, 90))
+        assertEquals(540f to 430f, PreviewMapper.uprightPoint(100f, 50f, 640, 480, 180))
+        assertEquals(50f to 540f, PreviewMapper.uprightPoint(100f, 50f, 640, 480, 270))
+        assertEquals(430f to 100f, PreviewMapper.uprightPoint(100f, 50f, 640, 480, -270))
+    }
+
+    @Test
+    fun uprightBoundsOfRotatedQuad() {
+        // A tilted quad in a 640x480 buffer, rotated 90 into a 480x640 upright image.
+        val quad = floatArrayOf(100f, 50f, 200f, 60f, 190f, 160f, 90f, 150f)
+        val b = PreviewMapper.uprightBounds(quad, 640, 480, 90)
+        // x' = 480 - y spans 320..430, y' = x spans 90..200.
+        assertEquals(listOf(320, 90, 430, 200), b.toList())
+    }
 }
 
 class ScanGuideTest {

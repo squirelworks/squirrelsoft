@@ -26,6 +26,34 @@ object PreviewMapper {
             else -> bufferW to bufferH
         }
 
+    /**
+     * A point in the unrotated [bufferW]×[bufferH] buffer, in the upright image
+     * (the buffer turned clockwise by [rotationDegrees], as CameraX reports it).
+     */
+    fun uprightPoint(x: Float, y: Float, bufferW: Int, bufferH: Int, rotationDegrees: Int): Pair<Float, Float> =
+        when (((rotationDegrees % 360) + 360) % 360) {
+            90 -> (bufferH - y) to x
+            180 -> (bufferW - x) to (bufferH - y)
+            270 -> y to (bufferW - x)
+            else -> x to y
+        }
+
+    /** Upright bounding box (left, top, right, bottom) of buffer points given as x,y pairs. */
+    fun uprightBounds(points: FloatArray, bufferW: Int, bufferH: Int, rotationDegrees: Int): IntArray {
+        var l = Float.MAX_VALUE
+        var t = Float.MAX_VALUE
+        var r = -Float.MAX_VALUE
+        var b = -Float.MAX_VALUE
+        for (i in 0 until points.size / 2) {
+            val (x, y) = uprightPoint(points[2 * i], points[2 * i + 1], bufferW, bufferH, rotationDegrees)
+            l = minOf(l, x)
+            t = minOf(t, y)
+            r = maxOf(r, x)
+            b = maxOf(b, y)
+        }
+        return intArrayOf(l.toInt(), t.toInt(), kotlin.math.ceil(r).toInt(), kotlin.math.ceil(b).toInt())
+    }
+
     /** [mapBox] for a box from ML Kit on an unrotated buffer plus its rotation. */
     fun mapBoxForBuffer(
         left: Int,

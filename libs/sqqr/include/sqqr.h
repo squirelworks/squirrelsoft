@@ -42,6 +42,9 @@ typedef struct {
     int corrected;            /* codewords fixed by Reed-Solomon, all blocks */
     int eci;                  /* first ECI assignment number, or -1 if none */
     int has_kanji;            /* payload contains Kanji-mode text, emitted as Shift JIS */
+    double corners[8];        /* sqqr_decode_image only: the symbol's outer corners in the image,
+                                 x,y pairs in order top-left, top-right, bottom-right, bottom-left
+                                 (symbol orientation); all zero from sqqr_decode_grid */
     size_t len;               /* payload length in bytes */
     uint8_t data[SQQR_MAX_PAYLOAD + 1]; /* payload, NUL-terminated for convenience */
 } SqqrResult;

@@ -129,6 +129,8 @@ static int solve_h(double src[4][2], double dst[4][2], double hm[8]) {
     return 1;
 }
 
+static double truth_corners[8];
+
 /* Draw grid g (n x n, 4-module quiet zone) rotated by angle, with the top edge
  * shortened by tilt (perspective), uneven lighting and noise. */
 static int render(const uint8_t *g, int n, int scale, double angle, double tilt, int invert, int *wh) {
@@ -149,6 +151,15 @@ static int render(const uint8_t *g, int n, int scale, double angle, double tilt,
             double u = pts[i][0], v = pts[i][1], d = fw[6] * u + fw[7] * v + 1;
             fprintf(stderr, "  truth %d: (%.1f,%.1f)\n", i, (fw[0] * u + fw[1] * v + fw[2]) / d,
                     (fw[3] * u + fw[4] * v + fw[5]) / d);
+        }
+    }
+    {
+        double fw[8], uv[4][2] = {{0, 0}, {n, 0}, {n, n}, {0, n}};
+        if (!solve_h(src, dst, fw)) return 0; /* module space -> image: where the corners are */
+        for (int i = 0; i < 4; i++) {
+            double u = uv[i][0], v = uv[i][1], d = fw[6] * u + fw[7] * v + 1;
+            truth_corners[2 * i] = (fw[0] * u + fw[1] * v + fw[2]) / d;
+            truth_corners[2 * i + 1] = (fw[3] * u + fw[4] * v + fw[5]) / d;
         }
     }
     if (!solve_h(dst, src, hm)) return 0; /* image -> module space */
@@ -186,6 +197,15 @@ static void test_image(const uint8_t *g, int n, int idx, const uint8_t *want, si
     int rc = sqqr_decode_image(img, W, W, W, work, sizeof work, &res);
     if (rc == SQQR_OK && res.len == want_len && memcmp(res.data, want, want_len) == 0) {
         image_ok++;
+        /* The reported corners are the symbol's, within a module. */
+        for (int i = 0; i < 4; i++) {
+            double dx = res.corners[2 * i] - truth_corners[2 * i], dy = res.corners[2 * i + 1] - truth_corners[2 * i + 1];
+            if (dx * dx + dy * dy > (double)scale * scale) {
+                fprintf(stderr, "image of symbol %d: corner %d at (%.1f,%.1f), want (%.1f,%.1f)\n", idx, i,
+                        res.corners[2 * i], res.corners[2 * i + 1], truth_corners[2 * i], truth_corners[2 * i + 1]);
+                failures++;
+            }
+        }
         return;
     }
     if (getenv("SQQR_DEBUG")) {
@@ -241,6 +261,7 @@ static int run_fixture(const char *path) {
             failures++;
         }
         CHECK(res.corrected == 0);
+        CHECK(res.corners[0] == 0 && res.corners[7] == 0); /* the grid decoder has no image */
         test_image(grid, n, symbols, want, want_len);
         if (symbols == 4) test_image_stride(grid, n, want, want_len);
 
