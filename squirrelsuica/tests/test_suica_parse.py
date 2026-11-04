@@ -100,6 +100,24 @@ def main() -> int:
     got = read_blocks_chunked(fake_card(4, 6), 20)
     expect(len(got) == 6, f"short service stops at 6, got {len(got)}")
 
+    # nfcpy returns one bytearray of n*16 bytes, not a list of blocks.
+    from suica_read import split_blocks
+
+    def nfcpy_like(limit, total):
+        def read_fn(idx):
+            if len(idx) > limit or any(i >= total for i in idx):
+                raise IOError("card refused")
+            return bytearray(b"".join(bytes([i]) + bytes(15) for i in idx))
+        return read_fn
+
+    got = read_blocks_chunked(nfcpy_like(4, 20), 20)
+    expect(len(got) == 20, f"nfcpy bytearray read 20 blocks, got {len(got)}")
+    expect(all(len(b) == 16 for b in got), "nfcpy blocks are 16 bytes")
+    expect([b[0] for b in got] == list(range(20)), "nfcpy block order")
+    expect(split_blocks(bytearray(32)) == [bytes(16), bytes(16)], "split 2 blocks")
+    expect(split_blocks([b"\x01" * 16]) == [b"\x01" * 16], "list passes through")
+    expect(split_blocks(None) == [], "empty read")
+
     if fails:
         print(fails, "failure(s)")
         return 1

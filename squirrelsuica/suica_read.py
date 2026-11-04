@@ -39,6 +39,18 @@ SVC_WAON_BAL = 0x6817
 # Many cards cap Read Without Encryption below 20 blocks per command,
 # so read in chunks and drop to one block at a time when a chunk is refused.
 READ_CHUNK = 4
+BLOCK_SIZE = 16
+
+
+def split_blocks(data) -> List[bytes]:
+    """nfcpy's read_without_encryption returns one bytearray of n*16 bytes,
+    not a list of blocks. Split it (or pass a list of blocks through)."""
+    if not data:
+        return []
+    if isinstance(data, (bytes, bytearray, memoryview)):
+        raw = bytes(data)
+        return [raw[i:i + BLOCK_SIZE] for i in range(0, len(raw) - BLOCK_SIZE + 1, BLOCK_SIZE)]
+    return [bytes(b) for b in data]
 
 
 def read_blocks_chunked(read_fn, count: int, chunk: int = READ_CHUNK) -> List[bytes]:
@@ -55,7 +67,7 @@ def read_blocks_chunked(read_fn, count: int, chunk: int = READ_CHUNK) -> List[by
         n = 1 if single else min(chunk, count - i)
         idx = list(range(i, i + n))
         try:
-            got = [bytes(b) for b in (read_fn(idx) or [])]
+            got = split_blocks(read_fn(idx))
         except Exception:
             got = []
         if len(got) == n:
@@ -73,8 +85,8 @@ def _read_block(tag, service: int, index: int = 0):
 
     sc = tt3.ServiceCode(service >> 6, service & 0x3F)
     bc = tt3.BlockCode(index, service=0)
-    blocks = tag.read_without_encryption([sc], [bc])
-    return bytes(blocks[0]) if blocks else None
+    blocks = split_blocks(tag.read_without_encryption([sc], [bc]))
+    return blocks[0] if blocks else None
 
 
 def read_with_nfcpy(device: Optional[str] = None) -> FelicaCard:
