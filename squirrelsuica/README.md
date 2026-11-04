@@ -67,6 +67,12 @@ balance worked. Phone readers now follow the public SuicaReader-style path —
 NFC timeout, and actionable History errors when the tag is lost mid-read.
 Rows show date, process, **station names**, fare (balance delta), and balance.
 
+**Bug fixed in 0.0.11:** nanaco cards were dropped before anything was read.
+The reader polled Suica's system `0x0003` first; a nanaco card (system
+`0x04C7` only) stays silent, and Android reports that silence as a lost tag.
+The reader now asks the card for its system codes (Request System Code, or
+the system 0 code from a wildcard poll) and only polls systems it has.
+
 Station names come from the community SFCardFan サイバネ表 (see `data/README.md`).
 Clean-room parsers — study open FeliCa history layouts; do not copy proprietary apps.
 

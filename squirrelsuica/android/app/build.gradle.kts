@@ -13,8 +13,8 @@ android {
         applicationId = "works.squirrel.suica"
         minSdk = 26
         targetSdk = 36
-        versionCode = 10
-        versionName = "0.0.10"
+        versionCode = 11
+        versionName = "0.0.11"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
