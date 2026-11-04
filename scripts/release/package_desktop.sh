@@ -17,9 +17,12 @@ case "$meta_desktop" in
     echo "$app has no desktop build yet"; exit 0 ;;
   python)
     [ "$platform" = any ] || { echo "Python apps package once, as platform 'any'" >&2; exit 2; }
-    # Tracked files only, without the Android project.
+    # Tracked files only, without the Android project. SuicaAnalysis's --history
+    # loads SquirrelSuica's parser from ../squirrelsuica, so ship it alongside.
+    extra=()
+    [ "$app" = squirrelsuica-analysis ] && extra=(squirrelsuica/felica_parse.py squirrelsuica/data)
     (cd "$root" && git archive --format=zip --prefix="$stem/" -o "$out/$stem-python.zip" HEAD \
-        "$app" ":(exclude)$app/android")
+        "$app" ${extra[@]+"${extra[@]}"} ":(exclude)$app/android")
     echo "$out/$stem-python.zip" ;;
   c)
     make -C "$root/$app" clean >/dev/null 2>&1 || true

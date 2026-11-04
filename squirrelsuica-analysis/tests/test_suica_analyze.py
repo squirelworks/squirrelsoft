@@ -88,6 +88,37 @@ def main() -> int:
     expect(red["idm"] == sa.REDACTED, "idm field redacted")
     validate(red, schema)
 
+    # History: a dump with Suica history and balance, an unreadable nanaco and nothing else.
+    fp = sa.load_felica_parse()
+    expect(fp is not None, "felica_parse found next to the tool")
+    rail = [
+        fp.hist_rail(0x16, 0x01, 2026, 10, 30, 0xE3, 0x1D, 0xE3, 0x20, 1832),
+        fp.hist_rail(0x08, 0x02, 2026, 10, 29, 0xE3, 0x1D, 0, 0, 2000),
+        fp.hist_rail(0x16, 0x01, 2026, 10, 28, 0xE3, 0x1D, 0xE3, 0x20, 0),
+    ]
+
+    def svc(code, blocks, readable=True):
+        return {"code": sa.code4(code), "kind": "x", "readable": readable, "key_version": None,
+                "blocks": [b.hex() for b in blocks], "attempts": []}
+
+    info = bytes(11) + bytes([0x28, 0x07]) + bytes(3)
+    hdump = {"schema": sa.SCHEMA, "systems": [{"services": [
+        svc(0x090F, rail), svc(0x008B, [info]), svc(0x564F, [bytes(16)], readable=False)]}]}
+    text = sa.history_text(hdump, fp)
+    lines = text.splitlines()
+    expect(lines[0] == "== Suica / PASMO (svc 090f)", "suica header: %r" % lines[:1])
+    expect(lines[1] == "   Balance ¥1,832", "suica balance: %r" % lines[1:2])
+    expect(lines[2].startswith("   00 2026-10-30 train ") and "-¥168" in lines[2], "first row: %r" % lines[2:3])
+    expect("E3/1D → E3/20" in lines[2] and "t16 p01" in lines[2], "route codes: %r" % lines[2:3])
+    expect(lines[2].endswith("t16 p01  E3/1D → E3/20  · 運賃支払"), "no repeated route: %r" % lines[2:3])
+    expect(lines[3].startswith("   01 2026-10-29 charge") and "+¥2,000" in lines[3], "charge row: %r" % lines[3:4])
+    expect(len(lines) == 5 and "nanaco" not in text, "unreadable nanaco skipped: %r" % lines)
+    expect(sa.history_text({"systems": []}, fp).startswith("No Suica"), "empty dump")
+    waon = {"systems": [{"services": [svc(0x6817, [bytes([0x10, 0x27]) + bytes(14)])]}]}
+    expect(sa.history_text(waon, fp) == "== WAON (svc 6817)\n   Balance ¥10,000\n", "waon balance")
+    demo_hist = sa.history_text(dump, fp)
+    expect(demo_hist.startswith("== Suica / PASMO (svc 090f)"), "demo history")
+
     if fails:
         print(fails, "failure(s)")
         return 1

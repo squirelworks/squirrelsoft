@@ -7,6 +7,7 @@ schema/felica-dump.schema.json). Read-only: plain FeliCa commands, no keys.
   python3 suica_analyze.py                 # live, first USB reader
   python3 suica_analyze.py --redact -o d.json
   python3 suica_analyze.py --demo          # built-in fake card, no hardware
+  python3 suica_analyze.py -i d.json --history   # balances and history of a saved dump
 
 Original code written from the public FeliCa command descriptions.
 """
@@ -342,20 +343,136 @@ def analyze_with_nfcpy(device: str = "usb") -> Dict:
     return holder[0]
 
 
+# ---- history (desktop twin of the Android History tab) -------------------------
+
+SVC_SUICA_HIST, SVC_SUICA_INFO = 0x090F, 0x008B
+SVC_NANACO_BAL, SVC_NANACO_HIST = 0x5597, 0x564F
+SVC_EDY_BAL, SVC_EDY_HIST = 0x1317, 0x170F
+SVC_WAON_BAL = 0x6817
+
+
+def load_felica_parse():
+    """SquirrelSuica's reference parser (../squirrelsuica/felica_parse.py), or None.
+
+    Loaded by file path so nothing else from that folder is imported. The release
+    zip ships it at the same relative path.
+    """
+    import importlib.util
+    import os
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir, "squirrelsuica", "felica_parse.py")
+    if not os.path.isfile(path):
+        return None
+    spec = importlib.util.spec_from_file_location("squirrel_felica_parse", path)
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = mod  # dataclasses look the module up by name
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def blocks_of(dump: Dict, code: int) -> Optional[List[bytes]]:
+    """Raw blocks of the first readable service with this code, across all systems."""
+    want = code4(code)
+    for system in dump.get("systems") or []:
+        for svc in system.get("services") or []:
+            if (svc.get("code") or "").lower() == want and svc.get("readable") and svc.get("blocks"):
+                try:
+                    return [bytes.fromhex(b) for b in svc["blocks"]]
+                except ValueError:
+                    return None
+    return None
+
+
+def history_line(e) -> str:
+    fare = ""
+    if e.fare_yen:
+        fare = ("+" if e.kind == "charge" else "-") + "¥{:,}".format(e.fare_yen)
+    route = " → ".join(c for c in (e.enter_code, e.exit_code) if c)
+    out = "%s %-6s %8s  bal ¥{:,}".format(e.balance_yen) % (e.date, e.kind, fare)
+    out += "  t%02x p%02x" % (e.terminal & 0xFF, e.process & 0xFF)
+    note = e.note or ""
+    if route:
+        out += "  " + route
+        # The note repeats the route; keep its label and add names only if resolved.
+        names = e.station_summary()
+        note = note.split(" · ")[0] + (" · " + names if names and names != route else "")
+    if note:
+        out += "  · " + note
+    return out.rstrip()
+
+
+def history_text(dump: Dict, fp=None) -> str:
+    """Balances and history parsed from a dump's raw blocks, like the app's History tab.
+
+    Rail entries show the raw line/station codes (as on Android) plus SquirrelSuica's
+    note, which names the stations when its station table knows them.
+    """
+    fp = fp if fp is not None else load_felica_parse()
+    out: List[str] = []
+    if fp is None:
+        return "History needs ../squirrelsuica/felica_parse.py next to this tool.\n"
+
+    def first(code: int) -> Optional[bytes]:
+        b = blocks_of(dump, code)
+        return b[0] if b else None
+
+    def section(title: str, hist: Optional[List[bytes]], bal_blocks, balance, parse) -> None:
+        if hist is None and not any(b is not None for b in bal_blocks):
+            return
+        out.append("== " + title)
+        bal = None
+        try:
+            bal = balance(*bal_blocks)
+        except (ValueError, IndexError, TypeError):
+            bal = None
+        out.append("   Balance ¥{:,}".format(bal) if bal is not None else "   Balance: not readable")
+        if hist is not None:
+            rows = parse(hist)
+            if not rows:
+                out.append("   No history entries in %d block(s)" % len(hist))
+            for i, e in enumerate(rows):
+                out.append("   %02d %s" % (i, history_line(e)))
+        out.append("")
+
+    suica = blocks_of(dump, SVC_SUICA_HIST)
+    section("Suica / PASMO (svc 090f)", suica, (suica[0] if suica else None, first(SVC_SUICA_INFO)),
+            fp.suica_balance, fp.parse_history_blocks)
+    section("nanaco (svc 564f)", blocks_of(dump, SVC_NANACO_HIST), (first(SVC_NANACO_BAL),),
+            lambda b: fp.nanaco_balance(b) if b else None, fp.parse_nanaco_history_blocks)
+    section("Edy (svc 170f)", blocks_of(dump, SVC_EDY_HIST), (first(SVC_EDY_BAL),),
+            lambda b: fp.edy_balance(b) if b else None, fp.parse_edy_history_blocks)
+    section("WAON (svc 6817)", None, (first(SVC_WAON_BAL),),
+            lambda b: fp.waon_balance(b) if b else None, None)
+    if not out:
+        out.append("No Suica, nanaco, Edy or WAON services were readable on this card.")
+    return "\n".join(out).rstrip("\n") + "\n"
+
+
 def main(argv: Optional[List[str]] = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--demo", action="store_true", help="analyse the built-in fake card")
     ap.add_argument("--device", default="usb", help="nfcpy device path (default: usb)")
     ap.add_argument("--redact", action="store_true", help="replace the IDm everywhere")
     ap.add_argument("-o", "--output", help="write JSON here instead of stdout")
+    ap.add_argument("--history", action="store_true",
+                    help="print parsed balances and history instead of JSON")
+    ap.add_argument("-i", "--input", metavar="DUMP",
+                    help="read a saved dump (desktop or Android export) instead of scanning")
     a = ap.parse_args(argv)
-    if a.demo:
+    if a.input:
+        with open(a.input, encoding="utf-8") as f:
+            dump = json.load(f)
+        if dump.get("schema") != SCHEMA:
+            print("warning: %s is not a %s dump" % (a.input, SCHEMA), file=sys.stderr)
+    elif a.demo:
         dump = Analyzer(DemoCard(), max_blocks=24).analyze(None, "SquirrelSuicaAnalysis desktop (demo)")
     else:
         dump = analyze_with_nfcpy(a.device)
     if a.redact:
         dump = redact(dump)
-    text = json.dumps(dump, indent=2, ensure_ascii=False) + "\n"
+    if a.history:
+        text = history_text(dump)
+    else:
+        text = json.dumps(dump, indent=2, ensure_ascii=False) + "\n"
     if a.output:
         with open(a.output, "w", encoding="utf-8") as f:
             f.write(text)
