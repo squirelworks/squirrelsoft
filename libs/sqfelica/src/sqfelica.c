@@ -398,12 +398,14 @@ int sqf_parse_suica_block(const uint8_t *b, size_t len, SqfHistory *h) {
     static const uint8_t sale_proc[] = {0x46, 0x49, 0x4A, 0x4B, 0xC6, 0xCB};
     static const uint8_t train_proc[] = {0x01, 0x03, 0x04, 0x05, 0x06, 0x08,
                                          0x13, 0x14, 0x15, 0x84, 0x85};
-    int product = b[0] == 0xC7 || b[0] == 0xC8;
+    /* Shop sales carry a time and terminal ID in bytes 6-9, not stations: terminal
+      * types C7/C8, and any non-bus sale process (real dumps show CA with process 46). */
     int bus = b[0] == 0x05 || in_list(b[1], bus_proc, sizeof bus_proc);
+    int product = b[0] == 0xC7 || b[0] == 0xC8 || (in_list(b[1], sale_proc, sizeof sale_proc) && !bus);
     int charge = b[1] == 0x02 || b[1] == 0x48;
     if (charge) h->kind = SQF_KIND_CHARGE;
     else if (bus) h->kind = SQF_KIND_BUS;
-    else if (product || in_list(b[1], sale_proc, sizeof sale_proc)) h->kind = SQF_KIND_SALE;
+    else if (product) h->kind = SQF_KIND_SALE;
     else if (in_list(b[1], train_proc, sizeof train_proc)) h->kind = SQF_KIND_TRAIN;
     else h->kind = SQF_KIND_OTHER;
 

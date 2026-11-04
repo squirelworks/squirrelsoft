@@ -17,6 +17,7 @@ Principles: original code only; each app = portable core + thin native front-end
 - S1.1 Raw explorer: polling all system codes (Request System Code), Request Service/Search Service Code enumeration, Request Response, PMm decode (max response time), per-service block reads with chunk sizes 1..15, timings, status flags.
 - S1.2 Export JSON/hex dump, share intent, redact IDm option. Python desktop twin `suica_analyze.py` producing the same JSON. S1.1 and S1.2 **in review:** #39.
 - S1.3 Findings fed back into SquirrelSuica parsers (fixture tests built from exported dumps).
+  - **In review:** the first real dumps (a Suica and a nanaco card, SquirrelSuicaAnalysis 0.0.3) read completely. They showed shop sales on terminal type `CA` (process `46`) decoded as station codes; Python, C (`sqfelica`) and Kotlin now treat any non-bus sale record as time + terminal ID. The fix has synthetic tests in all three; fixtures from the real dumps follow once Squirrel decides how they may be published.
 
 ## S2 — Shared-core architecture (issue 09)
 - **Done:** `docs/architecture.md`; `sqdsp` moved to `libs/sqdsp` with its own tests and a Kotlin/C FFT parity fixture.
