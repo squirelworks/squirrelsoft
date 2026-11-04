@@ -304,6 +304,9 @@ class MainActivity : AppCompatActivity() {
 
     private fun updateGainLabel() {
         binding.gainLabel.text = getString(R.string.gain_label, binding.gain.progress)
+    }
+
+    /**
      * Spectrum / LOFARgram split (50/50 default). The LOFARgram has one row per
      * pixel of its half, so the engine is told the row count whenever it changes.
      */
