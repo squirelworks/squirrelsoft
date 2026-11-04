@@ -19,7 +19,8 @@ Principles: original code only; each app = portable core + thin native front-end
 - S1.3 Findings fed back into SquirrelSuica parsers (fixture tests built from exported dumps).
 
 ## S2 — Shared-core architecture (issue 09)
-- **In review:** `docs/architecture.md`; `sqdsp` moved to `libs/sqdsp` with its own tests and a Kotlin/C FFT parity fixture.
+- **Done:** `docs/architecture.md`; `sqdsp` moved to `libs/sqdsp` with its own tests and a Kotlin/C FFT parity fixture.
+- **In review:** `libs/sqfelica`: FeliCa command builders and response parsers, Suica/nanaco/Edy history and balances in C, with a parity fixture generated from `felica_parse.py`. Station DB loader still to come.
 - `libs/sqdsp` (exists) becomes the SquirrelSound core used by Android via JNI/NDK and by desktop.
 - `libs/sqfelica` (C): FeliCa command builder/parser, Suica/PASMO/nanaco/Edy/WAON history parsing, station DB loader.
 - `libs/sqqr` (C): original QR decoder (finder patterns, perspective, Reed–Solomon) so desktop and Squirrel OS/2 don't depend on ML Kit.
