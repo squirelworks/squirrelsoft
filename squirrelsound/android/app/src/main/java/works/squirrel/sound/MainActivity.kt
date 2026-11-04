@@ -188,6 +188,7 @@ class MainActivity : AppCompatActivity() {
 
         setupLevelControls()
         setupMicControls()
+        setupSplitControl()
     }
 
     /**
@@ -303,6 +304,32 @@ class MainActivity : AppCompatActivity() {
 
     private fun updateGainLabel() {
         binding.gainLabel.text = getString(R.string.gain_label, binding.gain.progress)
+     * Spectrum / LOFARgram split (50/50 default). The LOFARgram has one row per
+     * pixel of its half, so the engine is told the row count whenever it changes.
+     */
+    private fun setupSplitControl() {
+        binding.spectrum.onWaterfallRowsChanged = { rows -> engine?.waterfallRows = rows }
+        val ratios = SpectrumControls.SplitRatio.values()
+        val labels = ratios.map {
+            getString(
+                when (it) {
+                    SpectrumControls.SplitRatio.SPECTRUM_SMALL -> R.string.split_40_60
+                    SpectrumControls.SplitRatio.SPECTRUM_LARGE -> R.string.split_60_40
+                    SpectrumControls.SplitRatio.EVEN -> R.string.split_50_50
+                }
+            )
+        }
+        binding.splitRatio.adapter =
+            ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, labels)
+        val saved = SpectrumControls.SplitRatio.fromId(prefs.getString(KEY_SPLIT, null))
+        binding.spectrum.splitRatio = saved
+        binding.splitRatio.setSelection(ratios.indexOf(saved))
+        binding.splitRatio.onItemSelectedListener = simpleItemSelected {
+            val r = ratios.getOrNull(binding.splitRatio.selectedItemPosition)
+                ?: SpectrumControls.SplitRatio.DEFAULT
+            binding.spectrum.splitRatio = r
+            prefs.edit().putString(KEY_SPLIT, r.id).apply()
+        }
     }
 
     private fun updateLevelLabel() {
@@ -473,6 +500,7 @@ class MainActivity : AppCompatActivity() {
             )
             eng.fftSize = fft
             eng.waterfallSeconds = span.seconds
+            eng.waterfallRows = binding.spectrum.waterfallRows
             binding.spectrum.waterfallSeconds = span.seconds
             eng.smooth = smooth
             eng.micSource = selectedMicSource()
@@ -579,6 +607,7 @@ class MainActivity : AppCompatActivity() {
         const val KEY_AUTO_RANGE = "auto_range"
         const val KEY_MIC_SOURCE = "mic_source"
         const val KEY_GAIN_DB = "gain_db"
+        const val KEY_SPLIT = "split_ratio"
     }
 
     private fun simpleItemSelected(onSelected: () -> Unit) =

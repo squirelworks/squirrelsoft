@@ -6,6 +6,7 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Path
+import android.graphics.Rect
 import android.graphics.RectF
 import android.util.AttributeSet
 import android.view.MotionEvent
@@ -14,8 +15,8 @@ import kotlin.math.max
 import kotlin.math.min
 
 /**
- * Spectroid-like spectrum trace + scrolling waterfall.
- * Waterfall is a scrolled ARGB bitmap (one row per hop) so redraws stay cheap.
+ * Live spectrum (top) and LOFARgram waterfall (bottom), split by [splitRatio].
+ * The waterfall is a ring of bitmap rows, one per screen pixel, so redraws stay cheap.
  */
 class SpectrumView @JvmOverloads constructor(
     context: Context,
@@ -55,10 +56,29 @@ class SpectrumView @JvmOverloads constructor(
     private var rmsDb = Levels.FLOOR_DB
     private var maxHoldEnabled = false
 
+    // LOFARgram: a ring of bitmap rows, one row per screen pixel of the waterfall
+    // area. [wfHead] is the newest row; older rows follow it (wrapping), so a new
+    // row costs one bitmap row write instead of scrolling the whole bitmap.
     private var wfBitmap: Bitmap? = null
-    private var wfPixels: IntArray? = null
+    private var wfRowPixels: IntArray? = null
     private var wfWidth = 0
-    private val wfRows = SpectrumControls.WATERFALL_ROWS
+    private var wfHead = 0
+
+    /** Rows in the LOFARgram bitmap (= its pixel height once laid out). */
+    var waterfallRows: Int = SpectrumControls.WATERFALL_ROWS
+        private set
+
+    /** Called when [waterfallRows] changes, so the engine can plan its rows. */
+    var onWaterfallRowsChanged: ((Int) -> Unit)? = null
+
+    /** Share of the height given to the spectrum (top) vs the LOFARgram (bottom). */
+    var splitRatio: SpectrumControls.SplitRatio = SpectrumControls.SplitRatio.DEFAULT
+        set(value) {
+            if (field == value) return
+            field = value
+            ensureWaterfall(width, height)
+            invalidate()
+        }
 
     /** Seconds the LOFARgram covers top to bottom; drives the time-axis labels. */
     var waterfallSeconds: Float = SpectrumControls.WaterfallDuration.DEFAULT.seconds
@@ -75,6 +95,8 @@ class SpectrumView @JvmOverloads constructor(
         }
 
     private val spectrumPath = Path()
+    private val srcRect = Rect()
+    private val dstRect = RectF()
 
     /** Visible frequency window (Hz). Defaults = human hearing (phone-friendly). */
     var fMin = SpectrumControls.DEFAULT_FMIN_HZ
@@ -126,11 +148,8 @@ class SpectrumView @JvmOverloads constructor(
     }
 
     fun clearWaterfall() {
-        val pix = wfPixels
-        if (pix != null) {
-            pix.fill(Color.BLACK)
-            wfBitmap?.setPixels(pix, 0, wfWidth, 0, 0, wfWidth, wfRows)
-        }
+        wfBitmap?.eraseColor(Color.BLACK)
+        wfHead = 0
         invalidate()
     }
 
@@ -211,13 +230,22 @@ class SpectrumView @JvmOverloads constructor(
         )
     }
 
-    private fun ensureWaterfall(widthPx: Int) {
-        if (widthPx <= 0) return
-        if (wfBitmap != null && wfWidth == widthPx) return
+    /** (Re)build the LOFARgram ring when the width or the waterfall's pixel height changes. */
+    private fun ensureWaterfall(widthPx: Int, heightPx: Int) {
+        if (widthPx <= 0 || heightPx <= 0) return
+        val layout = SpectrumControls.splitLayout(heightPx, splitRatio)
+        val rows = SpectrumControls.waterfallRowsFor(layout.waterfallHeight)
+        if (wfBitmap != null && wfWidth == widthPx && waterfallRows == rows) return
+        wfBitmap?.recycle()
         wfWidth = widthPx
-        wfPixels = IntArray(widthPx * wfRows) { Color.BLACK }
-        wfBitmap = Bitmap.createBitmap(widthPx, wfRows, Bitmap.Config.ARGB_8888).also {
-            it.setPixels(wfPixels!!, 0, widthPx, 0, 0, widthPx, wfRows)
+        wfRowPixels = IntArray(widthPx)
+        wfBitmap = Bitmap.createBitmap(widthPx, rows, Bitmap.Config.ARGB_8888).also {
+            it.eraseColor(Color.BLACK)
+        }
+        wfHead = 0
+        if (rows != waterfallRows) {
+            waterfallRows = rows
+            onWaterfallRowsChanged?.invoke(rows)
         }
     }
 
@@ -228,26 +256,26 @@ class SpectrumView @JvmOverloads constructor(
         if (n < 2) return
         val ny = nyquist()
         if (ny <= 0f) return
-        ensureWaterfall(w)
-        val pix = wfPixels ?: return
+        ensureWaterfall(w, height)
+        val row = wfRowPixels ?: return
         val bmp = wfBitmap ?: return
-        if (wfWidth <= 0 || pix.size < wfWidth * wfRows) return
-        // Scroll existing rows down by one.
-        System.arraycopy(pix, 0, pix, wfWidth, wfWidth * (wfRows - 1))
+        if (wfWidth <= 0 || row.size < wfWidth) return
         val lo = max(0f, fMin)
         val hi = min(ny, fMax).coerceAtLeast(lo + 1f)
         val b0 = ((lo / ny) * n).toInt().coerceIn(0, n - 2)
         val b1 = ((hi / ny) * n).toInt().coerceIn(b0 + 1, n)
         for (x in 0 until wfWidth) {
             val bin = b0 + ((b1 - b0) * x) / wfWidth
-            pix[x] = dbToColor(frame[bin.coerceIn(0, n - 1)])
+            row[x] = dbToColor(frame[bin.coerceIn(0, n - 1)])
         }
-        bmp.setPixels(pix, 0, wfWidth, 0, 0, wfWidth, wfRows)
+        // New row goes just before the previous newest (age grows with index).
+        wfHead = Math.floorMod(wfHead - 1, waterfallRows)
+        bmp.setPixels(row, 0, wfWidth, 0, wfHead, wfWidth, 1)
     }
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
-        if (w != oldw) ensureWaterfall(w)
+        ensureWaterfall(w, h)
     }
 
     override fun onDraw(canvas: Canvas) {
@@ -255,7 +283,8 @@ class SpectrumView @JvmOverloads constructor(
         val w = width.toFloat()
         val h = height.toFloat()
         canvas.drawColor(Color.parseColor("#0B1020"))
-        val spectrumH = h / 3f
+        val split = SpectrumControls.splitLayout(height, splitRatio)
+        val spectrumH = split.spectrumHeight.toFloat()
         val data = db ?: return
         val n = data.size
         if (n < 2) return
@@ -322,18 +351,27 @@ class SpectrumView @JvmOverloads constructor(
             canvas.drawText(label, x + 2f, spectrumH - 8f, axisPaint)
         }
 
-        val wfTop = spectrumH + 8f
-        val wfH = h - wfTop
+        val wfTop = split.waterfallTop.toFloat()
+        val wfH = split.waterfallHeight.toFloat()
         val bmp = wfBitmap
         if (bmp != null && wfH > 0f) {
-            // The bitmap always stores the newest row at the top; Fountain draws it
-            // mirrored so the newest row sits at the bottom.
+            // Rows are laid out newest-first from the ring head; Fountain draws the
+            // same picture mirrored so the newest row sits at the bottom.
             val fountain = direction == SpectrumControls.WaterfallDirection.FOUNTAIN
             if (fountain) {
                 canvas.save()
                 canvas.scale(1f, -1f, w / 2f, wfTop + wfH / 2f)
             }
-            canvas.drawBitmap(bmp, null, RectF(0f, wfTop, w, h), wfPaint)
+            val rows = bmp.height
+            val rowH = wfH / rows // 1 px per row once laid out
+            var y = wfTop
+            for (seg in SpectrumControls.ringSegments(wfHead, rows)) {
+                val count = seg.last - seg.first + 1
+                srcRect.set(0, seg.first, bmp.width, seg.last + 1)
+                dstRect.set(0f, y, w, y + count * rowH)
+                canvas.drawBitmap(bmp, srcRect, dstRect, wfPaint)
+                y += count * rowH
+            }
             if (fountain) canvas.restore()
             // Time axis: 0 at the newest edge, the full span at the oldest edge.
             for (k in 0..4) {

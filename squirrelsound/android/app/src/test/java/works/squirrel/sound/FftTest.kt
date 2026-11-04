@@ -460,3 +460,59 @@ class MicSettingsTest {
         assertEquals(20f, peak(20f) - peak(0f), 0.05f)
     }
 }
+
+class SplitLayoutTest {
+    @Test
+    fun evenSplitGivesHalfTheHeightToEach() {
+        val l = SpectrumControls.splitLayout(1000, SpectrumControls.SplitRatio.EVEN)
+        assertEquals(500, l.spectrumHeight)
+        assertEquals(508, l.waterfallTop)
+        assertEquals(492, l.waterfallHeight)
+        assertEquals(1000, l.waterfallTop + l.waterfallHeight)
+        assertEquals(SpectrumControls.SplitRatio.EVEN, SpectrumControls.SplitRatio.DEFAULT)
+    }
+
+    @Test
+    fun otherRatiosAndTinyHeights() {
+        assertEquals(400, SpectrumControls.splitLayout(1000, SpectrumControls.SplitRatio.SPECTRUM_SMALL).spectrumHeight)
+        assertEquals(600, SpectrumControls.splitLayout(1000, SpectrumControls.SplitRatio.SPECTRUM_LARGE).spectrumHeight)
+        val tiny = SpectrumControls.splitLayout(10, SpectrumControls.SplitRatio.EVEN)
+        assertTrue(tiny.waterfallHeight >= 0 && tiny.waterfallTop <= 10)
+        val zero = SpectrumControls.splitLayout(0, SpectrumControls.SplitRatio.EVEN)
+        assertEquals(0, zero.waterfallHeight)
+        for (r in SpectrumControls.SplitRatio.values()) {
+            assertEquals(r, SpectrumControls.SplitRatio.fromId(r.id))
+        }
+        assertEquals(SpectrumControls.SplitRatio.EVEN, SpectrumControls.SplitRatio.fromId("nope"))
+    }
+
+    @Test
+    fun oneRowPerPixelWithinCaps() {
+        assertEquals(492, SpectrumControls.waterfallRowsFor(492))
+        assertEquals(SpectrumControls.MIN_WATERFALL_ROWS, SpectrumControls.waterfallRowsFor(3))
+        assertEquals(SpectrumControls.MAX_WATERFALL_ROWS, SpectrumControls.waterfallRowsFor(99_999))
+    }
+
+    @Test
+    fun ringSegmentsListRowsNewestToOldest() {
+        assertEquals(listOf(0 until 5), SpectrumControls.ringSegments(0, 5))
+        assertEquals(listOf(3 until 5, 0 until 3), SpectrumControls.ringSegments(3, 5))
+        assertEquals(listOf(4 until 5, 0 until 4), SpectrumControls.ringSegments(-1, 5))
+        for (head in 0 until 7) {
+            val order = SpectrumControls.ringSegments(head, 7).flatMap { it.toList() }
+            assertEquals(7, order.size)
+            assertEquals(head, order.first())
+            assertEquals((0 until 7).toSet(), order.toSet())
+        }
+    }
+
+    @Test
+    fun rowPlanForPixelRowsStillCoversTheSpan() {
+        val rows = SpectrumControls.waterfallRowsFor(1200)
+        for (d in SpectrumControls.WaterfallDuration.values()) {
+            val plan = SpectrumControls.rowPlan(d.seconds, rows, 48_000, 2048)
+            val covered = plan.rowSeconds(48_000) * rows
+            assertTrue("${d.id}: $covered s", covered >= d.seconds * 0.9f)
+        }
+    }
+}
