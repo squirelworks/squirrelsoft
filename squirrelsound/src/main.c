@@ -22,10 +22,15 @@ static void usage(void) {
     puts("  squirrelsound thd <in.wav> [--fund Hz] [--harmonics N] [--fft N]");
     puts("  squirrelsound snr <in.wav> [--fund Hz] [--bw Hz] [--fft N]");
     puts("  squirrelsound spectrogram <in.wav> <out.svg> [--fft N] [--overlap F]");
-    puts("  squirrelsound live [--source demo|wav|alsa] [--file path] [--device name]");
+    puts("  squirrelsound live [--source demo|wav|mic|loopback|alsa] [--file path] [--device name]");
     puts("                     [--fft N] [--window name] [--freq Hz] [--headless]");
     puts("                     [--frames N] [--max-hold] [--direction waterfall|fountain]");
+    puts("  squirrelsound devices            list capture devices (mic inputs, monitor sources)");
     puts("  squirrelsound help");
+    puts("");
+    puts("Live sources: mic is the default input (or --device NAME); loopback is what the");
+    puts("computer is playing, from a PulseAudio/PipeWire monitor source; alsa reads an ALSA");
+    puts("device directly; demo and wav need no hardware.");
 }
 
 static const char *get_opt(int argc, char **argv, const char *key, const char *def) {
@@ -250,6 +255,8 @@ int main(int argc, char **argv) {
         return 0;
     }
 
+    if (strcmp(cmd, "devices") == 0) return live_audio_list_devices(stdout) < 0 ? 1 : 0;
+
     if (strcmp(cmd, "live") == 0) {
         const char *src = get_opt(argc, argv, "--source", "demo");
         LiveAudioConfig acfg;
@@ -259,16 +266,28 @@ int main(int argc, char **argv) {
         acfg.demo_harmonics = atoi(get_opt(argc, argv, "--harmonics", "3"));
         acfg.wav_path = get_opt(argc, argv, "--file", NULL);
         acfg.alsa_dev = get_opt(argc, argv, "--device", "default");
+        acfg.device = get_opt(argc, argv, "--device", NULL);
         if (strcmp(src, "wav") == 0) acfg.kind = LIVE_SRC_WAV;
-        else if (strcmp(src, "alsa") == 0 || strcmp(src, "mic") == 0)
-            acfg.kind = LIVE_SRC_ALSA;
-        else acfg.kind = LIVE_SRC_DEMO;
+        else if (strcmp(src, "alsa") == 0) acfg.kind = LIVE_SRC_ALSA;
+        else if (strcmp(src, "mic") == 0) {
+#ifdef SQSOUND_HAS_SDL
+            acfg.kind = LIVE_SRC_MIC;
+#else
+            acfg.kind = LIVE_SRC_ALSA; /* no SDL: the ALSA reader is the only mic path */
+#endif
+        } else if (strcmp(src, "loopback") == 0) acfg.kind = LIVE_SRC_LOOPBACK;
+        else if (strcmp(src, "demo") == 0) acfg.kind = LIVE_SRC_DEMO;
+        else {
+            fprintf(stderr, "unknown --source %s (demo, wav, mic, loopback, alsa)\n", src);
+            return 1;
+        }
 
         LiveAudio *audio = live_audio_open(&acfg);
         if (!audio) {
             fprintf(stderr, "failed to open live source '%s'\n", src);
             return 1;
         }
+        if (*live_audio_device_name(audio)) fprintf(stderr, "%s: %s\n", src, live_audio_device_name(audio));
 
         LiveEngineConfig ecfg;
         memset(&ecfg, 0, sizeof(ecfg));

@@ -23,8 +23,8 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
-      - name: Install SDL2 / ALSA / X11 / PC/SC headers, Xvfb and the vpcd virtual reader (optional backends and their tests)
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libsdl2-dev libasound2-dev libx11-dev xvfb xauth libpcsclite-dev pcscd vsmartcard-vpcd
+      - name: Install SDL2 / ALSA / X11 / PC/SC headers, Xvfb, PulseAudio and the vpcd virtual reader (optional backends and their tests)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libsdl2-dev libasound2-dev libx11-dev xvfb xauth libpcsclite-dev pcscd vsmartcard-vpcd pulseaudio pulseaudio-utils
       - name: Start pcscd with the virtual reader
         run: |
           sudo systemctl stop pcscd.socket pcscd.service || true
@@ -34,6 +34,8 @@ jobs:
           python-version: "3.12"
       - name: make test
         run: make test PCSC_TEST_FLAGS=--require
+        env:
+          REQUIRE_LOOPBACK: "1"
 
   android:
     name: Android ${{ matrix.app }}

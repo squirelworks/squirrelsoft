@@ -13,7 +13,7 @@ picking, THD, and SNR estimates.
 - Fundamental frequency via autocorrelation + spectral refine
 - Harmonic THD and band-limited SNR helpers
 - Synthetic tone / chirp / noise generators for self-tests
-- **Live mode**: demo / WAV loop / ALSA mic → SDL spectrum + waterfall
+- **Live mode**: demo / WAV loop / mic / system audio (loopback) / ALSA → SDL spectrum + waterfall
   (pinch/wheel zoom, max-hold, peak marker) or `--headless` for CI
 - **Android phone app** under `android/` (`works.squirrel.sound`) — mic FFT +
   waterfall (QR scanning lives in `../squirrelqr/`)
@@ -41,11 +41,21 @@ make android-test
 ./build/squirrelsound spectrogram /tmp/a440.wav /tmp/a440.svg --fft 1024
 ./build/squirrelsound thd /tmp/a440.wav --fund 440
 
-# live spectrum (demo source; use --source alsa for mic)
+# live spectrum
 ./build/squirrelsound live --source demo --freq 440
+./build/squirrelsound live --source mic                 # default input (SDL: PulseAudio/PipeWire, ALSA, WASAPI, CoreAudio)
+./build/squirrelsound live --source mic --device USB    # first input whose name contains "USB"
+./build/squirrelsound live --source loopback            # what the computer is playing
+./build/squirrelsound devices                           # inputs and monitor sources
 ./build/squirrelsound live --source demo --headless --frames 30
 ./build/squirrelsound live --source demo --direction fountain
 ```
+
+`--source loopback` listens to the computer's own output through the
+monitor source of the default PulseAudio/PipeWire sink (`--device` picks
+another one by name). Windows (WASAPI loopback) and macOS come later in
+roadmap S3.2. `--source alsa` keeps the direct ALSA reader for systems
+without SDL.
 
 In the live window, `w` switches between **Waterfall** (newest row at the top,
 history scrolls down) and **Fountain** (newest row at the bottom, history

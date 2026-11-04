@@ -141,9 +141,23 @@ static void expect(int c, const char *m) {
     }
 }
 
+static void test_pick_loopback(void) {
+    const char *names[] = {"Built-in Audio Analog Stereo", "Monitor of HDMI Output",
+                           "Monitor of Built-in Audio Analog Stereo", "USB Mic"};
+    expect(live_pick_loopback(names, 4, "Built-in Audio Analog Stereo", NULL) == 2, "monitor of the default sink");
+    expect(live_pick_loopback(names, 4, "Headphones", NULL) == 1, "first monitor without the default's");
+    expect(live_pick_loopback(names, 4, NULL, NULL) == 1, "first monitor without a default sink");
+    expect(live_pick_loopback(names, 4, NULL, "hdmi") == 1, "--device picks by name, any case");
+    expect(live_pick_loopback(names, 4, NULL, "usb") == 3, "--device may name a plain input");
+    expect(live_pick_loopback(names, 4, NULL, "nothing") == -1, "--device with no match");
+    expect(live_pick_loopback(names, 1, "Built-in Audio Analog Stereo", NULL) == -1, "no monitors at all");
+    expect(live_pick_loopback(names, 0, NULL, NULL) == -1, "no devices");
+}
+
 int main(void) {
     test_direction();
     test_dbfs_and_colour();
+    test_pick_loopback();
 #ifndef _WIN32
     test_prefs();
 #endif

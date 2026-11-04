@@ -30,6 +30,13 @@ int live_view_sdl_run(LiveAudio *audio, LiveEngine *engine, LiveDirection direct
         SDL_Quit();
         return -1;
     }
+    {
+        char title[400];
+        const char *dev = live_audio_device_name(audio);
+        snprintf(title, sizeof title, "SquirrelSound Live \u2014 %s%s%s", live_audio_kind_name(live_audio_kind(audio)),
+                 *dev ? ": " : "", dev);
+        SDL_SetWindowTitle(win, title);
+    }
     SDL_Renderer *ren =
         SDL_CreateRenderer(win, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
     if (!ren) ren = SDL_CreateRenderer(win, -1, 0);

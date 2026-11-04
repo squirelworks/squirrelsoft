@@ -10,6 +10,9 @@
 #ifdef SQSOUND_HAS_ALSA
 #include <alsa/asoundlib.h>
 #endif
+#ifdef SQSOUND_HAS_SDL
+#include <SDL2/SDL.h>
+#endif
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -34,6 +37,10 @@ struct LiveAudio {
     int16_t *alsa_buf;
     size_t alsa_buf_n;
 #endif
+#ifdef SQSOUND_HAS_SDL
+    SDL_AudioDeviceID cap;
+#endif
+    char device[256];
 };
 
 const char *live_audio_kind_name(LiveSourceKind k) {
@@ -41,6 +48,8 @@ const char *live_audio_kind_name(LiveSourceKind k) {
     case LIVE_SRC_DEMO: return "demo";
     case LIVE_SRC_WAV: return "wav";
     case LIVE_SRC_ALSA: return "alsa";
+    case LIVE_SRC_MIC: return "mic";
+    case LIVE_SRC_LOOPBACK: return "loopback";
     }
     return "unknown";
 }
@@ -52,6 +61,129 @@ static void ring_write(LiveAudio *la, const double *x, size_t n) {
         if (la->available < LIVE_RING) la->available++;
     }
 }
+
+static int contains_ci(const char *hay, const char *needle) {
+    size_t n = strlen(needle);
+    for (; *hay; hay++) {
+        size_t i = 0;
+        while (i < n && hay[i] && (hay[i] | 32) == (needle[i] | 32)) i++;
+        if (i == n) return 1;
+    }
+    return n == 0;
+}
+
+static int is_monitor(const char *name) { return name && strncmp(name, "Monitor of ", 11) == 0; }
+
+int live_pick_loopback(const char *const *names, int n, const char *default_sink, const char *want) {
+    if (want && *want) {
+        for (int i = 0; i < n; i++)
+            if (names[i] && contains_ci(names[i], want)) return i;
+        return -1;
+    }
+    if (default_sink && *default_sink)
+        for (int i = 0; i < n; i++)
+            if (is_monitor(names[i]) && strcmp(names[i] + 11, default_sink) == 0) return i;
+    for (int i = 0; i < n; i++)
+        if (is_monitor(names[i])) return i;
+    return -1;
+}
+
+#ifdef SQSOUND_HAS_SDL
+static int sdl_audio_up(void) {
+    /* Monitor sources are hidden from capture lists unless asked for. */
+    SDL_SetHint("SDL_AUDIO_INCLUDE_MONITORS", "1");
+    if (SDL_WasInit(SDL_INIT_AUDIO)) return 0;
+    if (SDL_InitSubSystem(SDL_INIT_AUDIO) != 0) {
+        fprintf(stderr, "audio: %s\n", SDL_GetError());
+        return -1;
+    }
+    return 0;
+}
+
+int live_audio_list_devices(FILE *out) {
+    if (sdl_audio_up()) return -1;
+    int n = SDL_GetNumAudioDevices(1);
+    for (int i = 0; i < n; i++) {
+        const char *name = SDL_GetAudioDeviceName(i, 1);
+        if (name) fprintf(out, "%-8s %s\n", is_monitor(name) ? "monitor" : "input", name);
+    }
+    fprintf(out, "(audio driver: %s)\n", SDL_GetCurrentAudioDriver());
+    return n < 0 ? 0 : n;
+}
+
+/* Open the SDL capture device for mic or loopback; mono float at the rate asked. */
+static int sdl_capture_open(LiveAudio *la) {
+    if (sdl_audio_up()) return -1;
+    const char *name = NULL; /* NULL = the system's default input */
+    int n = SDL_GetNumAudioDevices(1);
+    const char *drv = SDL_GetCurrentAudioDriver();
+    if (la->cfg.kind == LIVE_SRC_LOOPBACK && (!drv || strcmp(drv, "pulseaudio") != 0)) {
+        /* Monitor sources are listed by SDL's PulseAudio back end (PipeWire
+         * serves it through pipewire-pulse); switch to it when another one
+         * was chosen and shows none. */
+        int monitors = 0;
+        for (int i = 0; i < n; i++) monitors += is_monitor(SDL_GetAudioDeviceName(i, 1));
+        if (!monitors) {
+            if (SDL_AudioInit("pulseaudio") != 0 && SDL_AudioInit(NULL) != 0) {
+                fprintf(stderr, "audio: %s\n", SDL_GetError());
+                return -1;
+            }
+            n = SDL_GetNumAudioDevices(1);
+        }
+    }
+    const char **names = n > 0 ? calloc((size_t)n, sizeof *names) : NULL;
+    for (int i = 0; i < n && names; i++) names[i] = SDL_GetAudioDeviceName(i, 1);
+    if (la->cfg.kind == LIVE_SRC_LOOPBACK) {
+        char *sink = NULL;
+        SDL_AudioSpec ss;
+#if SDL_VERSION_ATLEAST(2, 24, 0)
+        if (SDL_GetDefaultAudioInfo(&sink, &ss, 0) != 0) sink = NULL;
+#endif
+        int k = names ? live_pick_loopback(names, n, sink, la->cfg.device) : -1;
+        SDL_free(sink);
+        if (k < 0) {
+            fprintf(stderr, "loopback: no %s among the capture devices (audio driver %s); "
+                            "system audio capture needs PulseAudio or PipeWire for now. "
+                            "See: squirrelsound devices\n",
+                    la->cfg.device ? "matching device" : "monitor source",
+                    SDL_GetCurrentAudioDriver() ? SDL_GetCurrentAudioDriver() : "none");
+            free(names);
+            return -1;
+        }
+        name = names[k];
+    } else if (la->cfg.device && *la->cfg.device) {
+        for (int i = 0; i < n && names && !name; i++)
+            if (names[i] && contains_ci(names[i], la->cfg.device)) name = names[i];
+        if (!name) {
+            fprintf(stderr, "mic: no capture device matches \"%s\" (see: squirrelsound devices)\n", la->cfg.device);
+            free(names);
+            return -1;
+        }
+    }
+    SDL_AudioSpec want, have;
+    SDL_zero(want);
+    want.freq = (int)la->cfg.sample_rate;
+    want.format = AUDIO_F32SYS;
+    want.channels = 1;
+    want.samples = 1024;
+    la->cap = SDL_OpenAudioDevice(name, 1, &want, &have, 0); /* SDL converts to what we asked */
+    snprintf(la->device, sizeof la->device, "%s", name ? name : "default input");
+    free(names);
+    if (!la->cap) {
+        fprintf(stderr, "%s: cannot open %s: %s\n", live_audio_kind_name(la->cfg.kind), la->device, SDL_GetError());
+        return -1;
+    }
+    return 0;
+}
+#else
+int live_audio_list_devices(FILE *out) {
+    (void)out;
+    fprintf(stderr, "this build has no SDL2 audio; install libsdl2-dev and rebuild\n");
+    return -1;
+}
+#endif
+
+const char *live_audio_device_name(const LiveAudio *la) { return la ? la->device : ""; }
 
 LiveAudio *live_audio_open(const LiveAudioConfig *cfg) {
     LiveAudio *la = (LiveAudio *)calloc(1, sizeof(LiveAudio));
@@ -100,6 +232,18 @@ LiveAudio *live_audio_open(const LiveAudioConfig *cfg) {
         return NULL;
     }
 #endif
+    if (cfg->kind == LIVE_SRC_MIC || cfg->kind == LIVE_SRC_LOOPBACK) {
+#ifdef SQSOUND_HAS_SDL
+        if (sdl_capture_open(la) != 0) {
+            free(la);
+            return NULL;
+        }
+#else
+        fprintf(stderr, "%s capture needs SDL2 (install libsdl2-dev and rebuild)\n", live_audio_kind_name(cfg->kind));
+        free(la);
+        return NULL;
+#endif
+    }
     return la;
 }
 
@@ -110,6 +254,9 @@ void live_audio_close(LiveAudio *la) {
 #ifdef SQSOUND_HAS_ALSA
     if (la->pcm) snd_pcm_close(la->pcm);
     free(la->alsa_buf);
+#endif
+#ifdef SQSOUND_HAS_SDL
+    if (la->cap) SDL_CloseAudioDevice(la->cap);
 #endif
     free(la);
 }
@@ -123,6 +270,9 @@ int live_audio_start(LiveAudio *la) {
         snd_pcm_start(la->pcm);
     }
 #endif
+#ifdef SQSOUND_HAS_SDL
+    if (la->cap) SDL_PauseAudioDevice(la->cap, 0);
+#endif
     return 0;
 }
 
@@ -131,6 +281,9 @@ void live_audio_stop(LiveAudio *la) {
     la->running = 0;
 #ifdef SQSOUND_HAS_ALSA
     if (la->pcm) snd_pcm_drop(la->pcm);
+#endif
+#ifdef SQSOUND_HAS_SDL
+    if (la->cap) SDL_PauseAudioDevice(la->cap, 1);
 #endif
 }
 
@@ -198,6 +351,26 @@ int live_audio_poll(LiveAudio *la) {
         for (snd_pcm_sframes_t i = 0; i < got; i++)
             chunk[i] = (double)la->alsa_buf[i] / 32768.0;
         ring_write(la, chunk, (size_t)got);
+        return (int)got;
+    }
+#endif
+#ifdef SQSOUND_HAS_SDL
+    if (la->cap) {
+        float f[2048];
+        Uint32 bytes = SDL_DequeueAudio(la->cap, f, sizeof f);
+        size_t got = bytes / sizeof(float);
+        for (size_t i = 0; i < got; i++) chunk[i] = f[i];
+        ring_write(la, chunk, got);
+        return (int)got;
+    }
+#endif
+#ifdef SQSOUND_HAS_SDL
+    if (la->cap) {
+        float f[2048];
+        Uint32 bytes = SDL_DequeueAudio(la->cap, f, sizeof f);
+        size_t got = bytes / sizeof(float);
+        for (size_t i = 0; i < got; i++) chunk[i] = f[i];
+        ring_write(la, chunk, got);
         return (int)got;
     }
 #endif
