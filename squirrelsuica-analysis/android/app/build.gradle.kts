@@ -83,6 +83,12 @@ android {
     buildFeatures {
         viewBinding = true
     }
+    // History parsing uses the shared C core in libs/sqfelica through JNI.
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
+        }
+    }
     if (storeShots) {
         testOptions.unitTests.isIncludeAndroidResources = true
         sourceSets["test"].java.srcDir("src/storeShots/java")

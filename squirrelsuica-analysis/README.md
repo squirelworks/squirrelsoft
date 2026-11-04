@@ -18,7 +18,7 @@ FeliCa commands and never uses keys. SquirrelSuica itself stays the consumer app
 4. For every service readable without a key, it runs Read Without Encryption (0x06) from block 0 at chunk sizes 1, 2, 4, 8, 12 and 15. For each chunk size it records the blocks read, where reading stopped, SF1/SF2, the number of commands and the average latency.
 5. The PMm is decoded into ROM/IC type and the maximum response time per command class.
 
-The Android app shows a Summary tab and a raw Command log tab. You can share the JSON or save it with the system file picker. "Redact IDm", which is on by default, replaces every IDm, including the ones inside raw frames.
+The Android app shows a Summary tab, a History tab and a raw Command log tab. History parses the blocks of the Suica (090f), nanaco (564f) and Edy (170f) history services, plus the Suica, nanaco, Edy and WAON balances, with the shared C core in `libs/sqfelica` through JNI (`app/src/main/cpp`). Rail entries show raw line/station codes rather than names. You can share the JSON or save it with the system file picker. "Redact IDm", which is on by default, replaces every IDm, including the ones inside raw frames.
 
 ## Desktop
 
@@ -34,4 +34,4 @@ make test
 cd android && ./gradlew :app:assembleDebug :app:testDebugUnitTest
 ```
 
-Not yet included: the parsed Suica/PASMO/nanaco/Edy/WAON history view next to the log. That waits for SquirrelSuica's parsers to move into a shared core (#32), so they aren't duplicated here.
+The Android build compiles `libs/sqfelica` with the NDK (CMake), so it needs the NDK that Android Studio or the SDK manager installs.
