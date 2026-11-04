@@ -34,6 +34,7 @@ Principles: original code only; each app = portable core + thin native front-end
 - S3.5 Windows/macOS/Linux packaging (MSI/zip, .app, AppImage/deb) built in CI.
 
 ## S4 — CI
+- **In review:** `.github/workflows/ci.yml` runs `make test` and builds plus unit-tests every Android app (debug) on ubuntu. Windows and macOS desktop builds come with S3.5 packaging.
 - GitHub Actions: `make test`, Android `assembleDebug testDebugUnitTest` per app, desktop builds on ubuntu/windows/macos.
 
 ## S5 — Squirrel OS/2 apps built here first
