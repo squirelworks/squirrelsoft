@@ -95,8 +95,8 @@ class AudioEngine(
             acquireKeepAlive()
             val size = fftSize.coerceIn(256, 16384).takeHighestOneBit().coerceAtLeast(256)
             fftSize = size
-            // hopMs is read live inside the capture loop (Scroll speed).
-            hopMs = hopMs.coerceIn(5, 200)
+            // waterfallSeconds is read live inside the capture loop (Span setting).
+            waterfallSeconds = waterfallSeconds.coerceIn(1f, 600f)
             thread = Thread({ loop(size, session) }, "sq-sound-fft").also {
                 it.priority = Thread.NORM_PRIORITY + 1
                 it.isDaemon = true
