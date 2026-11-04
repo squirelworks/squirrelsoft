@@ -4,7 +4,7 @@ Native Android **Suica Reader** for **read-only Suica / PASMO / nanaco / Edy / W
 FeliCa** balance and journey history with **station names**. NFC-F only — no
 camera, no QR, no other scanners.
 
-Launcher label: **Suica Reader** · package `works.squirrel.suica` · version `0.0.9`.
+Launcher label: **Suica Reader** · package `works.squirrel.suica` · version `0.0.10`.
 
 Browsers cannot read FeliCa balances over Web NFC. This app uses `NfcF`.
 
