@@ -1,10 +1,10 @@
-# SquirrelSuica — Suica Reader
+# SquirrelSuica
 
-Read-only **FeliCa Suica Reader**: **Suica/PASMO family**, **nanaco**,
+Read-only **FeliCa card reader**: **Suica/PASMO family**, **nanaco**,
 **楽天Edy**, and **WAON**. Journey history shows **station names**
 (enter → exit) from the public Saibane station-code table. No writes, no cloning.
 
-On Android the launcher label is **Suica Reader** (package `works.squirrel.suica`)
+On Android the launcher label is **SquirrelSuica** (package `works.squirrel.suica`)
 so it is easy to find next to SquirrelQR / SquirrelSound.
 
 Parsers are covered by **fixture unit tests** (no physical card required).
@@ -13,7 +13,7 @@ Parsers are covered by **fixture unit tests** (no physical card required).
 
 | Path | When to use |
 |------|-------------|
-| **`android/`** | Phone app (NFC-F) — preferred Suica Reader |
+| **`android/`** | Phone app (NFC-F), the preferred reader |
 | `data/StationCode.csv` | Saibane region/line/station → name table |
 | `suica_read.py` | USB PaSoRi via `nfcpy`, or `--demo suica\|nanaco\|edy\|waon` |
 | `felica_parse.py` | Shared parsers + synthetic fixtures |
