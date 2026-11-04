@@ -19,6 +19,9 @@ apps' PNGs have no sources in the repo.
 - `suicaanalysis-icon.svg`, `suicaanalysis-feature.svg`: same layout as the
   other apps (dark ring + mark; title and subtitle on the right), on the
   analysis app's navy with the Suica card and a magnifier.
+- `suicaanalysis-launcher-foreground.svg`: the app's adaptive launcher icon
+  (the same mark on `#1A2440`), so it no longer looks like Suica Reader's. The
+  build script also writes the legacy square and round mipmaps.
 - `suicaanalysis-phone-*.png`: the real `MainActivity` layout rendered at
   1080×1920 by Robolectric (`squirrelsuica-analysis/android/app/src/storeShots/`)
   with a synthetic card, so no real card data is in the screenshots. That
