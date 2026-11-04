@@ -347,7 +347,33 @@ static void test_x11(void) {
 }
 #endif
 
+/* --same A B: both images load and have identical pixels (test_png.py). */
+static int same(const char *a, const char *b) {
+    QrImage x, y;
+    char err[160] = "";
+    if (qr_image_load(a, &x, err, sizeof err)) {
+        fprintf(stderr, "%s: %s\n", a, err);
+        return 1;
+    }
+    if (qr_image_load(b, &y, err, sizeof err)) {
+        fprintf(stderr, "%s: %s\n", b, err);
+        qr_image_free(&x);
+        return 1;
+    }
+    int bad = x.w != y.w || x.h != y.h;
+    for (int i = 0; !bad && i < x.w * x.h; i++)
+        if (x.gray[i] != y.gray[i]) {
+            fprintf(stderr, "%s: pixel %d,%d is %d, want %d\n", a, i % x.w, i / x.w, x.gray[i], y.gray[i]);
+            bad = 1;
+        }
+    if (x.w != y.w || x.h != y.h) fprintf(stderr, "%s: size %dx%d, want %dx%d\n", a, x.w, x.h, y.w, y.h);
+    qr_image_free(&x);
+    qr_image_free(&y);
+    return bad;
+}
+
 int main(int argc, char **argv) {
+    if (argc == 4 && !strcmp(argv[1], "--same")) return same(argv[2], argv[3]);
     int x11 = argc > 1 && !strcmp(argv[1], "--x11");
     if (argc != 3 + x11) {
         fprintf(stderr, "usage: %s [--x11] symbols.txt build-dir\n", argv[0]);

@@ -39,7 +39,8 @@ Principles: original code only; each app = portable core + thin native front-end
 - S3.3 SquirrelSuica desktop: PaSoRi RC-S380/RC-S300 over libusb (original driver) or PC/SC on Windows; same `sqfelica` parsing; GUI with balance + history.
   - **In review:** step 1, `squirrelsuica/desktop/`: a C reader on `sqfelica` that runs the card-reading steps (transit, then the nanaco/Edy/WAON purses, chunked reads with a one-block fallback) over a transport interface, shows balance and history with station names, and replays SquirrelSuicaAnalysis dumps through a simulated card. Next: the PC/SC transport (RC-S300 and other CCID readers), then the PaSoRi USB driver and a GUI window.
 - S3.4 SquirrelQR desktop: drag a rectangle on screen → capture (X11/XShm, Wayland portal, Windows Graphics Capture/GDI, macOS ScreenCaptureKit) → `sqqr` decode; also webcam.
-  - **In review:** step 1, `squirrelqr/desktop/`: a command-line reader on `sqqr` that decodes image files (PGM/PPM/PBM, BMP) and, on X11, the whole screen, a fixed rectangle or one dragged with the mouse (`--select`); text uses the Android app's charset rules; tested under Xvfb in CI. Next: PNG input, the Wayland portal, Windows and macOS capture, a small GUI window, webcam.
+  - **Done:** step 1, `squirrelqr/desktop/`: a command-line reader on `sqqr` that decodes image files (PGM/PPM/PBM, BMP) and, on X11, the whole screen, a fixed rectangle or one dragged with the mouse (`--select`); text uses the Android app's charset rules; tested under Xvfb in CI.
+  - **In review:** step 2, PNG input with SquirrelQR's own PNG and zlib decoder (all colour types and depths, interlacing, transparency), and a Wayland note: screenshot with the desktop's tool, then pass the PNG. Next: the Wayland portal, Windows and macOS capture, a small GUI window, webcam.
 - S3.5 Windows/macOS/Linux packaging (MSI/zip, .app, AppImage/deb) built in CI.
 
 ## S4 — CI

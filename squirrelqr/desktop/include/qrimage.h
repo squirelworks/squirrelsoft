@@ -1,5 +1,6 @@
 /* qrimage: load still images as 8-bit grayscale for the sqqr decoder.
- * Formats: Netpbm (PBM/PGM/PPM, ASCII and binary, 8 or 16 bit) and Windows BMP
+ * Formats: PNG (all colour types and depths, interlaced, transparency over
+ * white), Netpbm (PBM/PGM/PPM, ASCII and binary, 8 or 16 bit) and Windows BMP
  * (1/4/8-bit palette, 16/24/32-bit, uncompressed or BI_BITFIELDS). */
 #ifndef QRIMAGE_H
 #define QRIMAGE_H
@@ -22,6 +23,11 @@ int qr_image_decode(const uint8_t *buf, size_t len, QrImage *img, char *err, siz
 /* Write img as a binary PGM. Returns 0 or -1. */
 int qr_image_save_pgm(const char *path, const QrImage *img);
 void qr_image_free(QrImage *img);
+
+/* PNG reader (qrpng.c), used by qr_image_decode. */
+int qr_png_decode(const uint8_t *buf, size_t len, QrImage *img, char *err, size_t errlen);
+/* zlib stream (RFC 1950/1951) into out. Returns 0 and the length, or -1. */
+int qr_inflate_zlib(const uint8_t *in, size_t len, uint8_t *out, size_t cap, size_t *olen);
 
 /* ITU-R BT.601 luma, the same weights the Android path uses. */
 static inline uint8_t qr_luma(unsigned r, unsigned g, unsigned b) {
