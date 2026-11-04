@@ -23,7 +23,7 @@ class FftTest {
         }
         Fft.forward(re, im)
         val mags = FloatArray(n / 2)
-        Fft.magnitudeDb(re, im, mags)
+        Fft.magnitudeDb(re, im, mags, Fft.windowSum(w))
         var peak = 0
         var best = -999f
         for (i in 1 until mags.size) {
@@ -45,10 +45,129 @@ class FftTest {
         val im = FloatArray(n)
         Fft.forward(re, im)
         val mags = FloatArray(n / 2)
-        Fft.magnitudeDb(re, im, mags)
+        Fft.magnitudeDb(re, im, mags, Fft.windowSum(Fft.hann(n)))
         for (v in mags) {
-            assertEquals(-90f, v, 0.01f)
+            assertEquals(Levels.FLOOR_DB, v, 0.01f)
         }
+    }
+
+    /** Peak dBFS of a sine of [amp] at a bin-centred frequency. */
+    private fun sinePeakDb(amp: Double, n: Int, bin: Int): Float {
+        val w = Fft.hann(n)
+        val re = FloatArray(n) { i -> (amp * sin(2.0 * PI * bin * i / n) * w[i]).toFloat() }
+        val im = FloatArray(n)
+        Fft.forward(re, im)
+        val mags = FloatArray(n / 2)
+        Fft.magnitudeDb(re, im, mags, Fft.windowSum(w))
+        return mags.maxOrNull()!!
+    }
+
+    @Test
+    fun fullScaleSineReadsZeroDbfs() {
+        for (n in intArrayOf(1024, 2048, 4096)) {
+            assertEquals("n=$n", 0f, sinePeakDb(1.0, n, n / 8), 0.5f)
+        }
+    }
+
+    @Test
+    fun minus20DbSineReadsMinus20() {
+        assertEquals(-20f, sinePeakDb(0.1, 2048, 200), 0.5f)
+        assertEquals(-60f, sinePeakDb(0.001, 2048, 77), 0.5f)
+    }
+
+    @Test
+    fun dcUsesSingleSidedScale() {
+        val n = 1024
+        val w = Fft.hann(n)
+        val re = FloatArray(n) { i -> 0.5f * w[i] }
+        val im = FloatArray(n)
+        Fft.forward(re, im)
+        val mags = FloatArray(n / 2)
+        Fft.magnitudeDb(re, im, mags, Fft.windowSum(w))
+        assertEquals(20f * kotlin.math.log10(0.5f), mags[0], 0.05f)
+    }
+}
+
+class LevelsTest {
+    private fun rgb(c: Int) = Triple((c shr 16) and 0xFF, (c shr 8) and 0xFF, c and 0xFF)
+
+    @Test
+    fun colourMapIsBlackAtFloorAndWhiteAtTop() {
+        assertEquals(Triple(0, 0, 0), rgb(Levels.colorAt(0f)))
+        assertEquals(Triple(255, 255, 255), rgb(Levels.colorAt(1f)))
+        assertEquals(0xFF, (Levels.colorAt(0.5f) ushr 24))
+        // Out of range and NaN clamp instead of wrapping.
+        assertEquals(Levels.colorAt(0f), Levels.colorAt(-3f))
+        assertEquals(Levels.colorAt(1f), Levels.colorAt(7f))
+        assertEquals(Levels.colorAt(0f), Levels.colorAt(Float.NaN))
+    }
+
+    @Test
+    fun colourMapPassesThroughWarmColours() {
+        val (r1, g1, b1) = rgb(Levels.colorAt(4f / 6f)) // yellow stop
+        assertTrue(r1 > 200 && g1 > 200 && b1 < 50)
+        val (r2, g2, _) = rgb(Levels.colorAt(5f / 6f)) // red stop
+        assertTrue(r2 > 200 && g2 < 60)
+    }
+
+    @Test
+    fun colourMapBrightnessRisesAcrossTheLowEnd() {
+        // Quiet bins must not jump straight to a bright colour.
+        var last = -1
+        for (k in 0..20) {
+            val (r, g, b) = rgb(Levels.colorAt(k / 60f))
+            val sum = r + g + b
+            assertTrue("t=${k / 60f}", sum >= last)
+            last = sum
+        }
+        val (r, g, b) = rgb(Levels.colorFor(-118f, -120f, -20f))
+        assertTrue("near floor is dark", r + g + b < 40)
+    }
+
+    @Test
+    fun defaultRangeAndClamp() {
+        assertEquals(-120f, Levels.DEFAULT_MIN_DB, 0f)
+        assertEquals(-20f, Levels.DEFAULT_MAX_DB, 0f)
+        assertEquals(-140f to 0f, Levels.clampRange(-200f, 30f))
+        val (lo, hi) = Levels.clampRange(-50f, -48f)
+        assertEquals(Levels.MIN_SPAN_DB, hi - lo, 0.001f)
+        val (lo2, hi2) = Levels.clampRange(-3f, -1f)
+        assertEquals(0f, hi2, 0f)
+        assertEquals(-Levels.MIN_SPAN_DB, lo2, 0f)
+    }
+
+    @Test
+    fun autoRangeTracksFloorAndPeak() {
+        val ar = AutoRange()
+        assertEquals(Levels.DEFAULT_MIN_DB to Levels.DEFAULT_MAX_DB, ar.range())
+        // Room noise at -100 dB with a tone at -40 dB.
+        val spec = FloatArray(512) { -100f }.also { it[100] = -40f }
+        var r = ar.update(spec, 0f)
+        repeat(100) { r = ar.update(spec, 0.05f) }
+        assertEquals(-110f, r.first, 0.5f)
+        assertEquals(-34f, r.second, 0.5f)
+    }
+
+    @Test
+    fun autoRangePeakJumpsUpAndRelaxes() {
+        val ar = AutoRange(timeConstantS = 1f)
+        val quiet = FloatArray(256) { -100f }.also { it[10] = -70f }
+        val loud = quiet.copyOf().also { it[10] = -10f }
+        ar.update(quiet, 0f)
+        val up = ar.update(loud, 0.02f)
+        assertEquals(-4f, up.second, 0.01f) // instant attack, no clipping
+        var r = up
+        repeat(200) { r = ar.update(quiet, 0.05f) }
+        assertTrue("relaxed back down, got ${r.second}", r.second < -50f)
+    }
+
+    @Test
+    fun autoRangeKeepsAMinimumSpanForPureNoise() {
+        val ar = AutoRange()
+        val flat = FloatArray(128) { -90f }
+        val (lo, hi) = ar.update(flat, 0f)
+        assertEquals(-100f, lo, 0.01f)
+        assertEquals(-50f, hi, 0.01f)
     }
 }
 

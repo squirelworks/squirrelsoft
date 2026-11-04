@@ -343,8 +343,9 @@ class AudioEngine(
         val re = FloatArray(size)
         val im = FloatArray(size)
         val window = Fft.hann(size)
+        val windowSum = Fft.windowSum(window)
         val mags = FloatArray(size / 2)
-        val smoothed = FloatArray(size / 2) { -90f }
+        val smoothed = FloatArray(size / 2) { Levels.FLOOR_DB }
         var smoothInit = false
         var phase = 0.0
         var recorder: AudioRecord? = null
@@ -529,10 +530,10 @@ class AudioEngine(
                             im[i] = 0f
                         }
                         val rms = sqrt(sumSq / size).toFloat()
-                        val rmsDb = if (rms > 1e-12f) 20f * log10(rms) else -90f
+                        val rmsDb = if (rms > 1e-12f) (20f * log10(rms)).coerceAtLeast(Levels.FLOOR_DB) else Levels.FLOOR_DB
 
                         Fft.forward(re, im)
-                        Fft.magnitudeDb(re, im, mags)
+                        Fft.magnitudeDb(re, im, mags, windowSum)
 
                         val a = smooth.coerceIn(0f, 0.95f)
                         if (!smoothInit || a <= 0f) {

@@ -51,8 +51,8 @@ class SpectrumView @JvmOverloads constructor(
     private var hold: FloatArray? = null
     private var sampleRate = 44100
     private var peakHz = 0f
-    private var peakDb = -90f
-    private var rmsDb = -90f
+    private var peakDb = Levels.FLOOR_DB
+    private var rmsDb = Levels.FLOOR_DB
     private var maxHoldEnabled = false
 
     private var wfBitmap: Bitmap? = null
@@ -80,9 +80,31 @@ class SpectrumView @JvmOverloads constructor(
     var fMin = SpectrumControls.DEFAULT_FMIN_HZ
     var fMax = SpectrumControls.DEFAULT_FMAX_HZ
 
-    /** dBFS display range (Spectroid-style negative full-scale). */
-    var dbMin = -90f
-    var dbMax = 0f
+    /** dBFS display range; [autoRange] moves it with the signal. */
+    var dbMin = Levels.DEFAULT_MIN_DB
+        private set
+    var dbMax = Levels.DEFAULT_MAX_DB
+        private set
+
+    /** When on, the display range follows the noise floor and recent peaks. */
+    var autoRange = false
+        set(value) {
+            field = value
+            if (value) {
+                autoRanger.reset()
+                lastFrameNs = 0L
+            }
+        }
+    private val autoRanger = AutoRange()
+    private var lastFrameNs = 0L
+
+    /** Fixed display range (dBFS); clamped to FLOOR_DB..0 with a minimum span. */
+    fun setDbRange(minDb: Float, maxDb: Float) {
+        val (lo, hi) = Levels.clampRange(minDb, maxDb)
+        dbMin = lo
+        dbMax = hi
+        invalidate()
+    }
 
     private var pinchStartSpan = 0f
     private var pinchStartMin = 0f
@@ -106,7 +128,7 @@ class SpectrumView @JvmOverloads constructor(
     fun clearWaterfall() {
         val pix = wfPixels
         if (pix != null) {
-            pix.fill(Color.rgb(12, 16, 32))
+            pix.fill(Color.BLACK)
             wfBitmap?.setPixels(pix, 0, wfWidth, 0, 0, wfWidth, wfRows)
         }
         invalidate()
@@ -145,6 +167,18 @@ class SpectrumView @JvmOverloads constructor(
         val (lo, hi) = SpectrumControls.clampRange(fMin, fMax, nyquist())
         fMin = lo
         fMax = hi
+        if (autoRange) {
+            val now = System.nanoTime()
+            val dt = if (lastFrameNs == 0L) 0f else ((now - lastFrameNs) / 1e9f).coerceIn(0f, 1f)
+            lastFrameNs = now
+            val n = frame.db.size
+            val ny = nyquist()
+            val b0 = ((max(0f, fMin) / ny) * n).toInt().coerceIn(0, n - 2)
+            val b1 = ((min(ny, fMax) / ny) * n).toInt().coerceIn(b0 + 1, n)
+            val (lo, hi) = autoRanger.update(frame.db.copyOfRange(b0, b1), dt)
+            dbMin = lo
+            dbMax = hi
+        }
         if (maxHoldEnabled) {
             val h = hold
             if (h == null || h.size != frame.db.size) {
@@ -169,8 +203,8 @@ class SpectrumView @JvmOverloads constructor(
                 sampleRate = sr,
                 fftSize = frame.size * 2,
                 peakHz = peak,
-                peakDb = frame.maxOrNull() ?: -90f,
-                rmsDb = -90f,
+                peakDb = frame.maxOrNull() ?: Levels.FLOOR_DB,
+                rmsDb = Levels.FLOOR_DB,
                 sourceLabel = "legacy",
                 waterfallRow = frame
             )
@@ -181,7 +215,7 @@ class SpectrumView @JvmOverloads constructor(
         if (widthPx <= 0) return
         if (wfBitmap != null && wfWidth == widthPx) return
         wfWidth = widthPx
-        wfPixels = IntArray(widthPx * wfRows) { Color.rgb(12, 16, 32) }
+        wfPixels = IntArray(widthPx * wfRows) { Color.BLACK }
         wfBitmap = Bitmap.createBitmap(widthPx, wfRows, Bitmap.Config.ARGB_8888).also {
             it.setPixels(wfPixels!!, 0, widthPx, 0, 0, widthPx, wfRows)
         }
@@ -376,12 +410,5 @@ class SpectrumView @JvmOverloads constructor(
         return kotlin.math.sqrt(dx * dx + dy * dy)
     }
 
-    private fun dbToColor(dbVal: Float): Int {
-        val span = (dbMax - dbMin).coerceAtLeast(1f)
-        val t = ((dbVal - dbMin) / span).coerceIn(0f, 1f)
-        val r = (8 + 40 * t + 200 * t * t).toInt().coerceIn(0, 255)
-        val g = (12 + 180 * t).toInt().coerceIn(0, 255)
-        val b = (28 + 140 * (1f - t) + 80 * t).toInt().coerceIn(0, 255)
-        return Color.rgb(r, g, b)
-    }
+    private fun dbToColor(dbVal: Float): Int = Levels.colorFor(dbVal, dbMin, dbMax)
 }
