@@ -37,18 +37,34 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       apps: ${{ steps.apps.outputs.apps }}
+      desktop: ${{ steps.apps.outputs.desktop }}
     steps:
       - uses: actions/checkout@v4
-      - name: Pick apps
+      - name: Pick apps and desktop builds
         id: apps
         env:
           APP: ${{ github.event.inputs.app }}
         run: |
           if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
-            echo "apps=[\"$APP\"]" >> "$GITHUB_OUTPUT"
+            apps="$APP"
           else
-            echo 'apps=["squirrelsound","squirrelsuica","squirrelqr","squirrelsuica-analysis"]' >> "$GITHUB_OUTPUT"
+            apps="squirrelsound squirrelsuica squirrelqr squirrelsuica-analysis"
           fi
+          # Only the desktop jobs an app has, so an app without a C build never
+          # waits for a Windows or macOS runner.
+          rows=""
+          for a in $apps; do
+            desktop=$(scripts/release/app_meta.sh "$a" | sed -n 's/^desktop=//p')
+            case "$desktop" in
+              c) for p in linux-x86_64:ubuntu-latest windows-x86_64:windows-latest macos-arm64:macos-latest; do
+                   rows="$rows{\"app\":\"$a\",\"platform\":\"${p%%:*}\",\"os\":\"${p#*:}\"},"
+                 done ;;
+              python) rows="$rows{\"app\":\"$a\",\"platform\":\"any\",\"os\":\"ubuntu-latest\"}," ;;
+            esac
+          done
+          echo "apps=$(printf '%s\n' $apps | jq -R . | jq -cs .)" >> "$GITHUB_OUTPUT"
+          echo "desktop=[${rows%,}]" >> "$GITHUB_OUTPUT"
+          echo "apps: $apps"; echo "desktop: [${rows%,}]"
       - name: Check the release can be made
         if: github.event_name == 'workflow_dispatch'
         env:
@@ -129,16 +145,11 @@ jobs:
   desktop:
     name: Desktop ${{ matrix.app }} ${{ matrix.platform }}
     needs: meta
+    if: needs.meta.outputs.desktop != '[]'
     strategy:
       fail-fast: false
       matrix:
-        app: ${{ fromJSON(needs.meta.outputs.apps) }}
-        platform: [linux-x86_64, windows-x86_64, macos-arm64, any]
-        include:
-          - { platform: linux-x86_64, os: ubuntu-latest }
-          - { platform: windows-x86_64, os: windows-latest }
-          - { platform: macos-arm64, os: macos-latest }
-          - { platform: any, os: ubuntu-latest }
+        include: ${{ fromJSON(needs.meta.outputs.desktop) }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     defaults:
@@ -146,27 +157,14 @@ jobs:
         shell: ${{ matrix.os == 'windows-latest' && 'msys2 {0}' || 'bash' }}
     steps:
       - uses: actions/checkout@v4
-      - name: Which build does this app have?
-        id: kind
-        shell: bash
-        env:
-          APP: ${{ matrix.app }}
-          PLATFORM: ${{ matrix.platform }}
-        run: |
-          eval "$(scripts/release/app_meta.sh "$APP")"
-          run=false
-          if [ "$desktop" = c ] && [ "$PLATFORM" != any ]; then run=true; fi
-          if [ "$desktop" = python ] && [ "$PLATFORM" = any ]; then run=true; fi
-          echo "run=$run" >> "$GITHUB_OUTPUT"
-          echo "$APP ($desktop) on $PLATFORM: run=$run"
       - name: Install SDL2 / ALSA (Linux)
-        if: steps.kind.outputs.run == 'true' && matrix.platform == 'linux-x86_64'
+        if: matrix.platform == 'linux-x86_64'
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libsdl2-dev libasound2-dev
       - name: Install SDL2 (macOS)
-        if: steps.kind.outputs.run == 'true' && matrix.platform == 'macos-arm64'
+        if: matrix.platform == 'macos-arm64'
         run: brew install sdl2 pkg-config
       - uses: msys2/setup-msys2@v2
-        if: steps.kind.outputs.run == 'true' && matrix.platform == 'windows-x86_64'
+        if: matrix.platform == 'windows-x86_64'
         with:
           msystem: MINGW64
           install: >-
@@ -175,14 +173,13 @@ jobs:
             mingw-w64-x86_64-SDL2
             mingw-w64-x86_64-pkgconf
       - name: Build and package
-        if: steps.kind.outputs.run == 'true'
         env:
           APP: ${{ matrix.app }}
           PLATFORM: ${{ matrix.platform }}
           CC: ${{ matrix.os == 'macos-latest' && 'clang' || 'gcc' }}
         run: scripts/release/package_desktop.sh "$APP" dist "$PLATFORM"
       - uses: actions/upload-artifact@v4
-        if: steps.kind.outputs.run == 'true' && github.event_name == 'workflow_dispatch'
+        if: github.event_name == 'workflow_dispatch'
         with:
           name: desktop-${{ matrix.app }}-${{ matrix.platform }}
           path: dist/*
@@ -191,7 +188,11 @@ jobs:
 
   draft:
     name: Draft release
-    if: github.event_name == 'workflow_dispatch'
+    # Desktop is skipped for an app with no desktop build; anything else must succeed.
+    if: >-
+      always() && github.event_name == 'workflow_dispatch' &&
+      needs.meta.result == 'success' && needs.android.result == 'success' &&
+      (needs.desktop.result == 'success' || needs.desktop.result == 'skipped')
     needs: [meta, android, desktop]
     runs-on: ubuntu-latest
     permissions:

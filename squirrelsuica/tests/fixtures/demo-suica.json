@@ -1,0 +1,1033 @@
+{
+ "schema": "squirrel-felica-dump/1",
+ "tool": "make_demo_dumps.py (made-up Suica)",
+ "created_at": "2024-01-01T00:00:00Z",
+ "idm": "01145a1b2c3d4e5f",
+ "pmm": "0118344455667788",
+ "pmm_decoded": {
+  "rom_type": 1,
+  "ic_type": 24,
+  "max_response_ms": {
+   "request_service": 3.625,
+   "request_response": 7.25,
+   "authenticate": 10.874,
+   "read": 14.499,
+   "write": 18.124,
+   "other": 14.499
+  }
+ },
+ "polls": [
+  {
+   "system_code": "0xffff",
+   "request_code": 1,
+   "idm": "01145a1b2c3d4e5f",
+   "pmm": "0118344455667788",
+   "request_data": "0x0003"
+  },
+  {
+   "system_code": "0xffff",
+   "request_code": 2,
+   "idm": "01145a1b2c3d4e5f",
+   "pmm": "0118344455667788",
+   "request_data": "0x0083"
+  },
+  {
+   "system_code": "0x0003",
+   "request_code": 1,
+   "idm": "01145a1b2c3d4e5f",
+   "pmm": "0118344455667788",
+   "request_data": "0x0003"
+  },
+  {
+   "system_code": "0x0003",
+   "request_code": 2,
+   "idm": "01145a1b2c3d4e5f",
+   "pmm": "0118344455667788",
+   "request_data": "0x0083"
+  },
+  {
+   "system_code": "0xfe00",
+   "request_code": 1,
+   "idm": "11145a1b2c3d4e5f",
+   "pmm": "0118344455667788",
+   "request_data": "0xfe00"
+  },
+  {
+   "system_code": "0xfe00",
+   "request_code": 2,
+   "idm": "11145a1b2c3d4e5f",
+   "pmm": "0118344455667788",
+   "request_data": "0x0083"
+  }
+ ],
+ "system_codes": [
+  "0x0003",
+  "0xfe00"
+ ],
+ "systems": [
+  {
+   "system_code": "0x0003",
+   "idm": "01145a1b2c3d4e5f",
+   "pmm": "0118344455667788",
+   "mode": 0,
+   "search_stopped_at": null,
+   "areas": [
+    {
+     "code": "0x0000",
+     "end_code": "0xfffe"
+    },
+    {
+     "code": "0x0080",
+     "end_code": "0x00bf"
+    },
+    {
+     "code": "0x0900",
+     "end_code": "0x093f"
+    },
+    {
+     "code": "0x1000",
+     "end_code": "0x103f"
+    },
+    {
+     "code": "0x1080",
+     "end_code": "0x10bf"
+    }
+   ],
+   "services": [
+    {
+     "code": "0x0088",
+     "kind": "random-rw",
+     "readable": false,
+     "key_version": "0x0001",
+     "blocks": [],
+     "attempts": []
+    },
+    {
+     "code": "0x008b",
+     "kind": "random-ro",
+     "readable": true,
+     "key_version": "0x0001",
+     "blocks": [
+      "00000000000000002000005015005400"
+     ],
+     "attempts": [
+      {
+       "chunk_size": 1,
+       "blocks_read": 1,
+       "stopped_at": 1,
+       "sf1": 1,
+       "sf2": 168,
+       "error": null,
+       "commands": 2,
+       "avg_ms": 2.0
+      },
+      {
+       "chunk_size": 2,
+       "blocks_read": 0,
+       "stopped_at": 0,
+       "sf1": 1,
+       "sf2": 168,
+       "error": null,
+       "commands": 1,
+       "avg_ms": 2.0
+      },
+      {
+       "chunk_size": 4,
+       "blocks_read": 0,
+       "stopped_at": 0,
+       "sf1": 1,
+       "sf2": 168,
+       "error": null,
+       "commands": 1,
+       "avg_ms": 2.0
+      },
+      {
+       "chunk_size": 8,
+       "blocks_read": 0,
+       "stopped_at": 0,
+       "sf1": 1,
+       "sf2": 168,
+       "error": null,
+       "commands": 1,
+       "avg_ms": 2.0
+      },
+      {
+       "chunk_size": 12,
+       "blocks_read": 0,
+       "stopped_at": 0,
+       "sf1": 1,
+       "sf2": 168,
+       "error": null,
+       "commands": 1,
+       "avg_ms": 2.0
+      },
+      {
+       "chunk_size": 15,
+       "blocks_read": 0,
+       "stopped_at": 0,
+       "sf1": 1,
+       "sf2": 162,
+       "error": null,
+       "commands": 1,
+       "avg_ms": 2.0
+      }
+     ]
+    },
+    {
+     "code": "0x090c",
+     "kind": "cyclic-rw",
+     "readable": false,
+     "key_version": "0x0001",
+     "blocks": [],
+     "attempts": []
+    },
+    {
+     "code": "0x090f",
+     "kind": "cyclic-ro",
+     "readable": true,
+     "key_version": "0x0001",
+     "blocks": [
+      "c7460000306f83a045b1501500005300",
+      "16010000306e038f0353aa1a00005200",
+      "16010000306e0333030c7a1b00005100",
+      "16010000306e034b03270c1c00005000",
+      "050d0000306e4a439fd8d31c00004f00",
+      "16010000306d03770307871d00004e00",
+      "16010000306c0339036f241e00004d00",
+      "ca460000306b9b0076dacc1e00004c00",
+      "16010000306a031b03753a1f00004b00",
+      "160100003069d771d76bec1f00004af0",
+      "160100003069d770d773be20000049f0",
+      "080200003068036b0000ae2100004800",
+      "08020000306803750000f61500004700",
+      "c84600003067b5e0cfb70e1200004600",
+      "160100003067030c0348901200004500",
+      "c8460000306684402fa0601300004400",
+      "ca460000306591002c0faa1400004300",
+      "050d0000306585e024b0f61800004200",
+      "ca4600003064a1e0f5bac81900004100",
+      "080200003064032a0000401f00004000"
+     ],
+     "attempts": [
+      {
+       "chunk_size": 1,
+       "blocks_read": 20,
+       "stopped_at": 20,
+       "sf1": 1,
+       "sf2": 168,
+       "error": null,
+       "commands": 21,
+       "avg_ms": 2.0
+      },
+      {
+       "chunk_size": 2,
+       "blocks_read": 20,
+       "stopped_at": 20,
+       "sf1": 1,
+       "sf2": 168,
+       "error": null,
+       "commands": 11,
+       "avg_ms": 2.0
+      },
+      {
+       "chunk_size": 4,
+       "blocks_read": 20,
+       "stopped_at": 20,
+       "sf1": 1,
+       "sf2": 168,
+       "error": null,
+       "commands": 6,
+       "avg_ms": 2.0
+      },
+      {
+       "chunk_size": 8,
+       "blocks_read": 16,
+       "stopped_at": 16,
+       "sf1": 1,
+       "sf2": 168,
+       "error": null,
+       "commands": 3,
+       "avg_ms": 2.0
+      },
+      {
+       "chunk_size": 12,
+       "blocks_read": 12,
+       "stopped_at": 12,
+       "sf1": 1,
+       "sf2": 168,
+       "error": null,
+       "commands": 2,
+       "avg_ms": 2.0
+      },
+      {
+       "chunk_size": 15,
+       "blocks_read": 0,
+       "stopped_at": 0,
+       "sf1": 1,
+       "sf2": 162,
+       "error": null,
+       "commands": 1,
+       "avg_ms": 2.0
+      }
+     ]
+    },
+    {
+     "code": "0x1008",
+     "kind": "random-rw",
+     "readable": false,
+     "key_version": "0x0001",
+     "blocks": [],
+     "attempts": []
+    },
+    {
+     "code": "0x108c",
+     "kind": "cyclic-rw",
+     "readable": false,
+     "key_version": "0x0001",
+     "blocks": [],
+     "attempts": []
+    },
+    {
+     "code": "0x108f",
+     "kind": "cyclic-ro",
+     "readable": true,
+     "key_version": "0x0001",
+     "blocks": [
+      "09483af6b12daf490f3d5ff107a15f03",
+      "c9ef62446b09312ed2301f4dd154c16e",
+      "aa22438d4d39ab5808dc3f6821c778b8"
+     ],
+     "attempts": [
+      {
+       "chunk_size": 1,
+       "blocks_read": 3,
+       "stopped_at": 3,
+       "sf1": 1,
+       "sf2": 168,
+       "error": null,
+       "commands": 4,
+       "avg_ms": 2.0
+      },
+      {
+       "chunk_size": 2,
+       "blocks_read": 2,
+       "stopped_at": 2,
+       "sf1": 1,
+       "sf2": 168,
+       "error": null,
+       "commands": 2,
+       "avg_ms": 2.0
+      },
+      {
+       "chunk_size": 4,
+       "blocks_read": 0,
+       "stopped_at": 0,
+       "sf1": 1,
+       "sf2": 168,
+       "error": null,
+       "commands": 1,
+       "avg_ms": 2.0
+      },
+      {
+       "chunk_size": 8,
+       "blocks_read": 0,
+       "stopped_at": 0,
+       "sf1": 1,
+       "sf2": 168,
+       "error": null,
+       "commands": 1,
+       "avg_ms": 2.0
+      },
+      {
+       "chunk_size": 12,
+       "blocks_read": 0,
+       "stopped_at": 0,
+       "sf1": 1,
+       "sf2": 168,
+       "error": null,
+       "commands": 1,
+       "avg_ms": 2.0
+      },
+      {
+       "chunk_size": 15,
+       "blocks_read": 0,
+       "stopped_at": 0,
+       "sf1": 1,
+       "sf2": 162,
+       "error": null,
+       "commands": 1,
+       "avg_ms": 2.0
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "system_code": "0xfe00",
+   "idm": "11145a1b2c3d4e5f",
+   "pmm": "0118344455667788",
+   "mode": 0,
+   "search_stopped_at": null,
+   "areas": [
+    {
+     "code": "0x0000",
+     "end_code": "0xfffe"
+    },
+    {
+     "code": "0x2000",
+     "end_code": "0x203f"
+    }
+   ],
+   "services": [
+    {
+     "code": "0x2008",
+     "kind": "random-rw",
+     "readable": false,
+     "key_version": "0x0001",
+     "blocks": [],
+     "attempts": []
+    }
+   ]
+  }
+ ],
+ "log": [
+  {
+   "name": "polling ffff rc=1",
+   "command": "0600ffff0100",
+   "response": "140101145a1b2c3d4e5f01183444556677880003",
+   "ms": 2.0,
+   "error": null
+  },
+  {
+   "name": "polling ffff rc=2",
+   "command": "0600ffff0200",
+   "response": "140101145a1b2c3d4e5f01183444556677880083",
+   "ms": 2.0,
+   "error": null
+  },
+  {
+   "name": "polling 0003 rc=1",
+   "command": "060000030100",
+   "response": "140101145a1b2c3d4e5f01183444556677880003",
+   "ms": 2.0,
+   "error": null
+  },
+  {
+   "name": "polling 0003 rc=2",
+   "command": "060000030200",
+   "response": "140101145a1b2c3d4e5f01183444556677880083",
+   "ms": 2.0,
+   "error": null
+  },
+  {
+   "name": "polling fe00 rc=1",
+   "command": "0600fe000100",
+   "response": "140111145a1b2c3d4e5f0118344455667788fe00",
+   "ms": 2.0,
+   "error": null
+  },
+  {
+   "name": "polling fe00 rc=2",
+   "command": "0600fe000200",
+   "response": "140111145a1b2c3d4e5f01183444556677880083",
+   "ms": 2.0,
+   "error": null
+  },
+  {
+   "name": "request system code",
+   "command": "0a0c01145a1b2c3d4e5f",
+   "response": "0f0d01145a1b2c3d4e5f020003fe00",
+   "ms": 2.0,
+   "error": null
+  },
+  {
+   "name": "polling 0003",
+   "command": "060000030000",
+   "response": "120101145a1b2c3d4e5f0118344455667788",
+   "ms": 2.0,
+   "error": null
+  },
+  {
+   "name": "request response",
+   "command": "0a0401145a1b2c3d4e5f",
+   "response": "0b0501145a1b2c3d4e5f00",
+   "ms": 2.0,
+   "error": null
+  },
+  {
+   "name": "search service #0",
+   "command": "0c0a01145a1b2c3d4e5f0000",
+   "response": "0e0b01145a1b2c3d4e5f0000feff",
+   "ms": 2.0,
+   "error": null
+  },
+  {
+   "name": "search service #1",
+   "command": "0c0a01145a1b2c3d4e5f0100",
+   "response": "0e0b01145a1b2c3d4e5f8000bf00",
+   "ms": 2.0,
+   "error": null
+  },
+  {
+   "name": "search service #2",
+   "command": "0c0a01145a1b2c3d4e5f0200",
+   "response": "0c0b01145a1b2c3d4e5f8800",
+   "ms": 2.0,
+   "error": null
+  },
+  {
+   "name": "search service #3",
+   "command": "0c0a01145a1b2c3d4e5f0300",
+   "response": "0c0b01145a1b2c3d4e5f8b00",
+   "ms": 2.0,
+   "error": null
+  },
+  {
+   "name": "search service #4",
+   "command": "0c0a01145a1b2c3d4e5f0400",
+   "response": "0e0b01145a1b2c3d4e5f00093f09",
+   "ms": 2.0,
+   "error": null
+  },
+  {
+   "name": "search service #5",
+   "command": "0c0a01145a1b2c3d4e5f0500",
+   "response": "0c0b01145a1b2c3d4e5f0c09",
+   "ms": 2.0,
+   "error": null
+  },
+  {
+   "name": "search service #6",
+   "command": "0c0a01145a1b2c3d4e5f0600",
+   "response": "0c0b01145a1b2c3d4e5f0f09",
+   "ms": 2.0,
+   "error": null
+  },
+  {
+   "name": "search service #7",
+   "command": "0c0a01145a1b2c3d4e5f0700",
+   "response": "0e0b01145a1b2c3d4e5f00103f10",
+   "ms": 2.0,
+   "error": null
+  },
+  {
+   "name": "search service #8",
+   "command": "0c0a01145a1b2c3d4e5f0800",
+   "response": "0c0b01145a1b2c3d4e5f0810",
+   "ms": 2.0,
+   "error": null
+  },
+  {
+   "name": "search service #9",
+   "command": "0c0a01145a1b2c3d4e5f0900",
+   "response": "0e0b01145a1b2c3d4e5f8010bf10",
+   "ms": 2.0,
+   "error": null
+  },
+  {
+   "name": "search service #10",
+   "command": "0c0a01145a1b2c3d4e5f0a00",
+   "response": "0c0b01145a1b2c3d4e5f8c10",
+   "ms": 2.0,
+   "error": null
+  },
+  {
+   "name": "search service #11",
+   "command": "0c0a01145a1b2c3d4e5f0b00",
+   "response": "0c0b01145a1b2c3d4e5f8f10",
+   "ms": 2.0,
+   "error": null
+  },
+  {
+   "name": "search service #12",
+   "command": "0c0a01145a1b2c3d4e5f0c00",
+   "response": "0c0b01145a1b2c3d4e5fffff",
+   "ms": 2.0,
+   "error": null
+  },
+  {
+   "name": "request service x7",
+   "command": "190201145a1b2c3d4e5f0788008b000c090f0908108c108f10",
+   "response": "190301145a1b2c3d4e5f070100010001000100010001000100",
+   "ms": 2.0,
+   "error": null
+  },
+  {
+   "name": "read 008b [0..0]",
+   "command": "100601145a1b2c3d4e5f018b00018000",
+   "response": "1d0701145a1b2c3d4e5f00000100000000000000002000005015005400",
+   "ms": 2.0,
+   "error": null
+  },
+  {
+   "name": "read 008b [1..1]",
+   "command": "100601145a1b2c3d4e5f018b00018001",
+   "response": "0c0701145a1b2c3d4e5f01a8",
+   "ms": 2.0,
+   "error": null
+  },
+  {
+   "name": "read 008b [0..1]",
+   "command": "120601145a1b2c3d4e5f018b000280008001",
+   "response": "0c0701145a1b2c3d4e5f01a8",
+   "ms": 2.0,
+   "error": null
+  },
+  {
+   "name": "read 008b [0..3]",
+   "command": "160601145a1b2c3d4e5f018b00048000800180028003",
+   "response": "0c0701145a1b2c3d4e5f01a8",
+   "ms": 2.0,
+   "error": null
+  },
+  {
+   "name": "read 008b [0..7]",
+   "command": "1e0601145a1b2c3d4e5f018b000880008001800280038004800580068007",
+   "response": "0c0701145a1b2c3d4e5f01a8",
+   "ms": 2.0,
+   "error": null
+  },
+  {
+   "name": "read 008b [0..11]",
+   "command": "260601145a1b2c3d4e5f018b000c8000800180028003800480058006800780088009800a800b",
+   "response": "0c0701145a1b2c3d4e5f01a8",
+   "ms": 2.0,
+   "error": null
+  },
+  {
+   "name": "read 008b [0..14]",
+   "command": "2c0601145a1b2c3d4e5f018b000f8000800180028003800480058006800780088009800a800b800c800d800e",
+   "response": "0c0701145a1b2c3d4e5f01a2",
+   "ms": 2.0,
+   "error": null
+  },
+  {
+   "name": "read 090f [0..0]",
+   "command": "100601145a1b2c3d4e5f010f09018000",
+   "response": "1d0701145a1b2c3d4e5f000001c7460000306f83a045b1501500005300",
+   "ms": 2.0,
+   "error": null
+  },
+  {
+   "name": "read 090f [1..1]",
+   "command": "100601145a1b2c3d4e5f010f09018001",
+   "response": "1d0701145a1b2c3d4e5f00000116010000306e038f0353aa1a00005200",
+   "ms": 2.0,
+   "error": null
+  },
+  {
+   "name": "read 090f [2..2]",
+   "command": "100601145a1b2c3d4e5f010f09018002",
+   "response": "1d0701145a1b2c3d4e5f00000116010000306e0333030c7a1b00005100",
+   "ms": 2.0,
+   "error": null
+  },
+  {
+   "name": "read 090f [3..3]",
+   "command": "100601145a1b2c3d4e5f010f09018003",
+   "response": "1d0701145a1b2c3d4e5f00000116010000306e034b03270c1c00005000",
+   "ms": 2.0,
+   "error": null
+  },
+  {
+   "name": "read 090f [4..4]",
+   "command": "100601145a1b2c3d4e5f010f09018004",
+   "response": "1d0701145a1b2c3d4e5f000001050d0000306e4a439fd8d31c00004f00",
+   "ms": 2.0,
+   "error": null
+  },
+  {
+   "name": "read 090f [5..5]",
+   "command": "100601145a1b2c3d4e5f010f09018005",
+   "response": "1d0701145a1b2c3d4e5f00000116010000306d03770307871d00004e00",
+   "ms": 2.0,
+   "error": null
+  },
+  {
+   "name": "read 090f [6..6]",
+   "command": "100601145a1b2c3d4e5f010f09018006",
+   "response": "1d0701145a1b2c3d4e5f00000116010000306c0339036f241e00004d00",
+   "ms": 2.0,
+   "error": null
+  },
+  {
+   "name": "read 090f [7..7]",
+   "command": "100601145a1b2c3d4e5f010f09018007",
+   "response": "1d0701145a1b2c3d4e5f000001ca460000306b9b0076dacc1e00004c00",
+   "ms": 2.0,
+   "error": null
+  },
+  {
+   "name": "read 090f [8..8]",
+   "command": "100601145a1b2c3d4e5f010f09018008",
+   "response": "1d0701145a1b2c3d4e5f00000116010000306a031b03753a1f00004b00",
+   "ms": 2.0,
+   "error": null
+  },
+  {
+   "name": "read 090f [9..9]",
+   "command": "100601145a1b2c3d4e5f010f09018009",
+   "response": "1d0701145a1b2c3d4e5f000001160100003069d771d76bec1f00004af0",
+   "ms": 2.0,
+   "error": null
+  },
+  {
+   "name": "read 090f [10..10]",
+   "command": "100601145a1b2c3d4e5f010f0901800a",
+   "response": "1d0701145a1b2c3d4e5f000001160100003069d770d773be20000049f0",
+   "ms": 2.0,
+   "error": null
+  },
+  {
+   "name": "read 090f [11..11]",
+   "command": "100601145a1b2c3d4e5f010f0901800b",
+   "response": "1d0701145a1b2c3d4e5f000001080200003068036b0000ae2100004800",
+   "ms": 2.0,
+   "error": null
+  },
+  {
+   "name": "read 090f [12..12]",
+   "command": "100601145a1b2c3d4e5f010f0901800c",
+   "response": "1d0701145a1b2c3d4e5f00000108020000306803750000f61500004700",
+   "ms": 2.0,
+   "error": null
+  },
+  {
+   "name": "read 090f [13..13]",
+   "command": "100601145a1b2c3d4e5f010f0901800d",
+   "response": "1d0701145a1b2c3d4e5f000001c84600003067b5e0cfb70e1200004600",
+   "ms": 2.0,
+   "error": null
+  },
+  {
+   "name": "read 090f [14..14]",
+   "command": "100601145a1b2c3d4e5f010f0901800e",
+   "response": "1d0701145a1b2c3d4e5f000001160100003067030c0348901200004500",
+   "ms": 2.0,
+   "error": null
+  },
+  {
+   "name": "read 090f [15..15]",
+   "command": "100601145a1b2c3d4e5f010f0901800f",
+   "response": "1d0701145a1b2c3d4e5f000001c8460000306684402fa0601300004400",
+   "ms": 2.0,
+   "error": null
+  },
+  {
+   "name": "read 090f [16..16]",
+   "command": "100601145a1b2c3d4e5f010f09018010",
+   "response": "1d0701145a1b2c3d4e5f000001ca460000306591002c0faa1400004300",
+   "ms": 2.0,
+   "error": null
+  },
+  {
+   "name": "read 090f [17..17]",
+   "command": "100601145a1b2c3d4e5f010f09018011",
+   "response": "1d0701145a1b2c3d4e5f000001050d0000306585e024b0f61800004200",
+   "ms": 2.0,
+   "error": null
+  },
+  {
+   "name": "read 090f [18..18]",
+   "command": "100601145a1b2c3d4e5f010f09018012",
+   "response": "1d0701145a1b2c3d4e5f000001ca4600003064a1e0f5bac81900004100",
+   "ms": 2.0,
+   "error": null
+  },
+  {
+   "name": "read 090f [19..19]",
+   "command": "100601145a1b2c3d4e5f010f09018013",
+   "response": "1d0701145a1b2c3d4e5f000001080200003064032a0000401f00004000",
+   "ms": 2.0,
+   "error": null
+  },
+  {
+   "name": "read 090f [20..20]",
+   "command": "100601145a1b2c3d4e5f010f09018014",
+   "response": "0c0701145a1b2c3d4e5f01a8",
+   "ms": 2.0,
+   "error": null
+  },
+  {
+   "name": "read 090f [0..1]",
+   "command": "120601145a1b2c3d4e5f010f090280008001",
+   "response": "2d0701145a1b2c3d4e5f000002c7460000306f83a045b150150000530016010000306e038f0353aa1a00005200",
+   "ms": 2.0,
+   "error": null
+  },
+  {
+   "name": "read 090f [2..3]",
+   "command": "120601145a1b2c3d4e5f010f090280028003",
+   "response": "2d0701145a1b2c3d4e5f00000216010000306e0333030c7a1b0000510016010000306e034b03270c1c00005000",
+   "ms": 2.0,
+   "error": null
+  },
+  {
+   "name": "read 090f [4..5]",
+   "command": "120601145a1b2c3d4e5f010f090280048005",
+   "response": "2d0701145a1b2c3d4e5f000002050d0000306e4a439fd8d31c00004f0016010000306d03770307871d00004e00",
+   "ms": 2.0,
+   "error": null
+  },
+  {
+   "name": "read 090f [6..7]",
+   "command": "120601145a1b2c3d4e5f010f090280068007",
+   "response": "2d0701145a1b2c3d4e5f00000216010000306c0339036f241e00004d00ca460000306b9b0076dacc1e00004c00",
+   "ms": 2.0,
+   "error": null
+  },
+  {
+   "name": "read 090f [8..9]",
+   "command": "120601145a1b2c3d4e5f010f090280088009",
+   "response": "2d0701145a1b2c3d4e5f00000216010000306a031b03753a1f00004b00160100003069d771d76bec1f00004af0",
+   "ms": 2.0,
+   "error": null
+  },
+  {
+   "name": "read 090f [10..11]",
+   "command": "120601145a1b2c3d4e5f010f0902800a800b",
+   "response": "2d0701145a1b2c3d4e5f000002160100003069d770d773be20000049f0080200003068036b0000ae2100004800",
+   "ms": 2.0,
+   "error": null
+  },
+  {
+   "name": "read 090f [12..13]",
+   "command": "120601145a1b2c3d4e5f010f0902800c800d",
+   "response": "2d0701145a1b2c3d4e5f00000208020000306803750000f61500004700c84600003067b5e0cfb70e1200004600",
+   "ms": 2.0,
+   "error": null
+  },
+  {
+   "name": "read 090f [14..15]",
+   "command": "120601145a1b2c3d4e5f010f0902800e800f",
+   "response": "2d0701145a1b2c3d4e5f000002160100003067030c0348901200004500c8460000306684402fa0601300004400",
+   "ms": 2.0,
+   "error": null
+  },
+  {
+   "name": "read 090f [16..17]",
+   "command": "120601145a1b2c3d4e5f010f090280108011",
+   "response": "2d0701145a1b2c3d4e5f000002ca460000306591002c0faa1400004300050d0000306585e024b0f61800004200",
+   "ms": 2.0,
+   "error": null
+  },
+  {
+   "name": "read 090f [18..19]",
+   "command": "120601145a1b2c3d4e5f010f090280128013",
+   "response": "2d0701145a1b2c3d4e5f000002ca4600003064a1e0f5bac81900004100080200003064032a0000401f00004000",
+   "ms": 2.0,
+   "error": null
+  },
+  {
+   "name": "read 090f [20..21]",
+   "command": "120601145a1b2c3d4e5f010f090280148015",
+   "response": "0c0701145a1b2c3d4e5f01a8",
+   "ms": 2.0,
+   "error": null
+  },
+  {
+   "name": "read 090f [0..3]",
+   "command": "160601145a1b2c3d4e5f010f09048000800180028003",
+   "response": "4d0701145a1b2c3d4e5f000004c7460000306f83a045b150150000530016010000306e038f0353aa1a0000520016010000306e0333030c7a1b0000510016010000306e034b03270c1c00005000",
+   "ms": 2.0,
+   "error": null
+  },
+  {
+   "name": "read 090f [4..7]",
+   "command": "160601145a1b2c3d4e5f010f09048004800580068007",
+   "response": "4d0701145a1b2c3d4e5f000004050d0000306e4a439fd8d31c00004f0016010000306d03770307871d00004e0016010000306c0339036f241e00004d00ca460000306b9b0076dacc1e00004c00",
+   "ms": 2.0,
+   "error": null
+  },
+  {
+   "name": "read 090f [8..11]",
+   "command": "160601145a1b2c3d4e5f010f090480088009800a800b",
+   "response": "4d0701145a1b2c3d4e5f00000416010000306a031b03753a1f00004b00160100003069d771d76bec1f00004af0160100003069d770d773be20000049f0080200003068036b0000ae2100004800",
+   "ms": 2.0,
+   "error": null
+  },
+  {
+   "name": "read 090f [12..15]",
+   "command": "160601145a1b2c3d4e5f010f0904800c800d800e800f",
+   "response": "4d0701145a1b2c3d4e5f00000408020000306803750000f61500004700c84600003067b5e0cfb70e1200004600160100003067030c0348901200004500c8460000306684402fa0601300004400",
+   "ms": 2.0,
+   "error": null
+  },
+  {
+   "name": "read 090f [16..19]",
+   "command": "160601145a1b2c3d4e5f010f09048010801180128013",
+   "response": "4d0701145a1b2c3d4e5f000004ca460000306591002c0faa1400004300050d0000306585e024b0f61800004200ca4600003064a1e0f5bac81900004100080200003064032a0000401f00004000",
+   "ms": 2.0,
+   "error": null
+  },
+  {
+   "name": "read 090f [20..23]",
+   "command": "160601145a1b2c3d4e5f010f09048014801580168017",
+   "response": "0c0701145a1b2c3d4e5f01a8",
+   "ms": 2.0,
+   "error": null
+  },
+  {
+   "name": "read 090f [0..7]",
+   "command": "1e0601145a1b2c3d4e5f010f090880008001800280038004800580068007",
+   "response": "8d0701145a1b2c3d4e5f000008c7460000306f83a045b150150000530016010000306e038f0353aa1a0000520016010000306e0333030c7a1b0000510016010000306e034b03270c1c00005000050d0000306e4a439fd8d31c00004f0016010000306d03770307871d00004e0016010000306c0339036f241e00004d00ca460000306b9b0076dacc1e00004c00",
+   "ms": 2.0,
+   "error": null
+  },
+  {
+   "name": "read 090f [8..15]",
+   "command": "1e0601145a1b2c3d4e5f010f090880088009800a800b800c800d800e800f",
+   "response": "8d0701145a1b2c3d4e5f00000816010000306a031b03753a1f00004b00160100003069d771d76bec1f00004af0160100003069d770d773be20000049f0080200003068036b0000ae210000480008020000306803750000f61500004700c84600003067b5e0cfb70e1200004600160100003067030c0348901200004500c8460000306684402fa0601300004400",
+   "ms": 2.0,
+   "error": null
+  },
+  {
+   "name": "read 090f [16..23]",
+   "command": "1e0601145a1b2c3d4e5f010f090880108011801280138014801580168017",
+   "response": "0c0701145a1b2c3d4e5f01a8",
+   "ms": 2.0,
+   "error": null
+  },
+  {
+   "name": "read 090f [0..11]",
+   "command": "260601145a1b2c3d4e5f010f090c8000800180028003800480058006800780088009800a800b",
+   "response": "cd0701145a1b2c3d4e5f00000cc7460000306f83a045b150150000530016010000306e038f0353aa1a0000520016010000306e0333030c7a1b0000510016010000306e034b03270c1c00005000050d0000306e4a439fd8d31c00004f0016010000306d03770307871d00004e0016010000306c0339036f241e00004d00ca460000306b9b0076dacc1e00004c0016010000306a031b03753a1f00004b00160100003069d771d76bec1f00004af0160100003069d770d773be20000049f0080200003068036b0000ae2100004800",
+   "ms": 2.0,
+   "error": null
+  },
+  {
+   "name": "read 090f [12..23]",
+   "command": "260601145a1b2c3d4e5f010f090c800c800d800e800f80108011801280138014801580168017",
+   "response": "0c0701145a1b2c3d4e5f01a8",
+   "ms": 2.0,
+   "error": null
+  },
+  {
+   "name": "read 090f [0..14]",
+   "command": "2c0601145a1b2c3d4e5f010f090f8000800180028003800480058006800780088009800a800b800c800d800e",
+   "response": "0c0701145a1b2c3d4e5f01a2",
+   "ms": 2.0,
+   "error": null
+  },
+  {
+   "name": "read 108f [0..0]",
+   "command": "100601145a1b2c3d4e5f018f10018000",
+   "response": "1d0701145a1b2c3d4e5f00000109483af6b12daf490f3d5ff107a15f03",
+   "ms": 2.0,
+   "error": null
+  },
+  {
+   "name": "read 108f [1..1]",
+   "command": "100601145a1b2c3d4e5f018f10018001",
+   "response": "1d0701145a1b2c3d4e5f000001c9ef62446b09312ed2301f4dd154c16e",
+   "ms": 2.0,
+   "error": null
+  },
+  {
+   "name": "read 108f [2..2]",
+   "command": "100601145a1b2c3d4e5f018f10018002",
+   "response": "1d0701145a1b2c3d4e5f000001aa22438d4d39ab5808dc3f6821c778b8",
+   "ms": 2.0,
+   "error": null
+  },
+  {
+   "name": "read 108f [3..3]",
+   "command": "100601145a1b2c3d4e5f018f10018003",
+   "response": "0c0701145a1b2c3d4e5f01a8",
+   "ms": 2.0,
+   "error": null
+  },
+  {
+   "name": "read 108f [0..1]",
+   "command": "120601145a1b2c3d4e5f018f100280008001",
+   "response": "2d0701145a1b2c3d4e5f00000209483af6b12daf490f3d5ff107a15f03c9ef62446b09312ed2301f4dd154c16e",
+   "ms": 2.0,
+   "error": null
+  },
+  {
+   "name": "read 108f [2..3]",
+   "command": "120601145a1b2c3d4e5f018f100280028003",
+   "response": "0c0701145a1b2c3d4e5f01a8",
+   "ms": 2.0,
+   "error": null
+  },
+  {
+   "name": "read 108f [0..3]",
+   "command": "160601145a1b2c3d4e5f018f10048000800180028003",
+   "response": "0c0701145a1b2c3d4e5f01a8",
+   "ms": 2.0,
+   "error": null
+  },
+  {
+   "name": "read 108f [0..7]",
+   "command": "1e0601145a1b2c3d4e5f018f100880008001800280038004800580068007",
+   "response": "0c0701145a1b2c3d4e5f01a8",
+   "ms": 2.0,
+   "error": null
+  },
+  {
+   "name": "read 108f [0..11]",
+   "command": "260601145a1b2c3d4e5f018f100c8000800180028003800480058006800780088009800a800b",
+   "response": "0c0701145a1b2c3d4e5f01a8",
+   "ms": 2.0,
+   "error": null
+  },
+  {
+   "name": "read 108f [0..14]",
+   "command": "2c0601145a1b2c3d4e5f018f100f8000800180028003800480058006800780088009800a800b800c800d800e",
+   "response": "0c0701145a1b2c3d4e5f01a2",
+   "ms": 2.0,
+   "error": null
+  },
+  {
+   "name": "polling fe00",
+   "command": "0600fe000000",
+   "response": "120111145a1b2c3d4e5f0118344455667788",
+   "ms": 2.0,
+   "error": null
+  },
+  {
+   "name": "request response",
+   "command": "0a0411145a1b2c3d4e5f",
+   "response": "0b0511145a1b2c3d4e5f00",
+   "ms": 2.0,
+   "error": null
+  },
+  {
+   "name": "search service #0",
+   "command": "0c0a11145a1b2c3d4e5f0000",
+   "response": "0e0b11145a1b2c3d4e5f0000feff",
+   "ms": 2.0,
+   "error": null
+  },
+  {
+   "name": "search service #1",
+   "command": "0c0a11145a1b2c3d4e5f0100",
+   "response": "0e0b11145a1b2c3d4e5f00203f20",
+   "ms": 2.0,
+   "error": null
+  },
+  {
+   "name": "search service #2",
+   "command": "0c0a11145a1b2c3d4e5f0200",
+   "response": "0c0b11145a1b2c3d4e5f0820",
+   "ms": 2.0,
+   "error": null
+  },
+  {
+   "name": "search service #3",
+   "command": "0c0a11145a1b2c3d4e5f0300",
+   "response": "0c0b11145a1b2c3d4e5fffff",
+   "ms": 2.0,
+   "error": null
+  },
+  {
+   "name": "request service x1",
+   "command": "0d0211145a1b2c3d4e5f010820",
+   "response": "0d0311145a1b2c3d4e5f010100",
+   "ms": 2.0,
+   "error": null
+  }
+ ],
+ "error": null
+}

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Launcher / title: searchable as "Suica Reader"; Squirrel brand in subtitle. -->
-    <string name="app_name">Suica Reader</string>
+    <!-- Launcher / title: the app's own name, as on the Play listing. -->
+    <string name="app_name">SquirrelSuica</string>
     <string name="app_brand">SquirrelSuica</string>
     <string name="hold_card">カードをかざしてください</string>
     <string name="hold_card_en">App open → hold Suica / PASMO / nanaco / Edy / WAON still on NFC</string>
@@ -13,6 +13,6 @@
     <string name="idm_fmt">IDm  %1$s</string>
     <string name="history_title">History</string>
     <string name="history_placeholder">Hold a card to load journey history.\nIf a scan fails, an error will appear here — not a blank list.</string>
-    <string name="read_only">SquirrelSuica · read-only FeliCa Suica Reader · station names · no writes</string>
+    <string name="read_only">SquirrelSuica · read-only FeliCa reader · station names · no writes</string>
     <string name="reading">Reading… hold the card still</string>
 </resources>

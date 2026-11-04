@@ -4,7 +4,7 @@ Exact answers for **Policy and programs → App content** for:
 
 | Package | App |
 |---------|-----|
-| `works.squirrel.suica` | Suica Reader |
+| `works.squirrel.suica` | SquirrelSuica |
 | `works.squirrel.sound` | SquirrelSound |
 | `works.squirrel.qr` | SquirrelQR |
 
