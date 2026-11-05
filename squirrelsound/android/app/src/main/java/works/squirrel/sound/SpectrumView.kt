@@ -304,11 +304,19 @@ class SpectrumView @JvmOverloads constructor(
             return spectrumH - t * (spectrumH - 8f)
         }
 
+        // dB labels sit at the right edge so they stay clear of the peak readout
+        // (top left) and the Hz tick labels along the spectrum's bottom edge.
         for (g in 0..3) {
             val dbLine = dbMin + span * g / 3f
             val y = yOf(dbLine)
             canvas.drawLine(0f, y, w, y, gridPaint)
-            canvas.drawText("${dbLine.toInt()} dB", 8f, y - 4f, axisPaint)
+            val label = "${dbLine.toInt()} dB"
+            val ly = when (g) {
+                3 -> y + axisPaint.textSize + 2f // top line: label below it
+                0 -> y - axisPaint.textSize - 12f // bottom line: above the Hz ticks
+                else -> y - 4f
+            }
+            canvas.drawText(label, w - 8f - axisPaint.measureText(label), ly, axisPaint)
         }
 
         spectrumPath.reset()
