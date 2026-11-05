@@ -62,13 +62,20 @@ class MainActivity : AppCompatActivity() {
         binding.root.post { if (wantLive && !isFinishing) requestStart() }
     }
 
+    /**
+     * Live (default) shows only the status line and the plot, which SpectrumView
+     * splits into the spectrum on the top half and the LOFARgram on the bottom
+     * half. Settings and Advanced open their control panels above the plot.
+     */
     private fun setupTabs() {
+        binding.tabs.addTab(binding.tabs.newTab().setText(R.string.tab_live))
         binding.tabs.addTab(binding.tabs.newTab().setText(R.string.tab_basic))
         binding.tabs.addTab(binding.tabs.newTab().setText(R.string.tab_advanced))
         binding.tabs.addOnTabSelectedListener(object : TabLayout.OnTabSelectedListener {
             override fun onTabSelected(tab: TabLayout.Tab) {
-                val advanced = tab.position == 1
-                binding.panelBasic.visibility = if (advanced) android.view.View.GONE else android.view.View.VISIBLE
+                val settings = tab.position == TAB_SETTINGS
+                val advanced = tab.position == TAB_ADVANCED
+                binding.panelBasic.visibility = if (settings) android.view.View.VISIBLE else android.view.View.GONE
                 binding.panelAdvanced.visibility = if (advanced) android.view.View.VISIBLE else android.view.View.GONE
                 if (advanced) syncAdvancedFieldsFromView()
             }
@@ -76,7 +83,7 @@ class MainActivity : AppCompatActivity() {
             override fun onTabUnselected(tab: TabLayout.Tab) {}
             override fun onTabReselected(tab: TabLayout.Tab) {}
         })
-        binding.tabs.getTabAt(0)?.select()
+        binding.tabs.getTabAt(TAB_LIVE)?.select()
     }
 
     private fun setupBasicControls() {
@@ -611,6 +618,9 @@ class MainActivity : AppCompatActivity() {
         const val KEY_MIC_SOURCE = "mic_source"
         const val KEY_GAIN_DB = "gain_db"
         const val KEY_SPLIT = "split_ratio"
+        const val TAB_LIVE = 0
+        const val TAB_SETTINGS = 1
+        const val TAB_ADVANCED = 2
     }
 
     private fun simpleItemSelected(onSelected: () -> Unit) =

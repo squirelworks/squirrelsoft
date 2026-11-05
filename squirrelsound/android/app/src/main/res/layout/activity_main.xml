@@ -7,21 +7,33 @@
     android:orientation="vertical"
     android:padding="12dp">
 
-    <TextView
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="@string/app_name"
-        android:textColor="@color/accent"
-        android:textSize="24sp"
-        android:textStyle="bold" />
-
-    <TextView
+    <!-- One compact header line so the plot gets the rest of the screen. -->
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginBottom="4dp"
-        android:text="@string/tagline"
-        android:textColor="@color/muted"
-        android:textSize="13sp" />
+        android:baselineAligned="true"
+        android:orientation="horizontal">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/app_name"
+            android:textColor="@color/accent"
+            android:textSize="20sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="10dp"
+            android:layout_weight="1"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:text="@string/tagline"
+            android:textColor="@color/muted"
+            android:textSize="12sp" />
+    </LinearLayout>
 
     <com.google.android.material.tabs.TabLayout
         android:id="@+id/tabs"
@@ -33,14 +45,16 @@
         app:tabSelectedTextColor="@color/accent"
         app:tabTextColor="@color/muted" />
 
-    <!-- Basic controls -->
+    <!-- Settings tab: the everyday controls. Hidden on the Live tab so the
+         spectrum and the LOFARgram get the whole screen, half each. -->
     <LinearLayout
         android:id="@+id/panelBasic"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
         android:paddingTop="6dp"
-        android:paddingBottom="4dp">
+        android:paddingBottom="4dp"
+        android:visibility="gone">
 
         <LinearLayout
             android:layout_width="match_parent"

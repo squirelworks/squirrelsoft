@@ -2,7 +2,8 @@
 <resources>
     <string name="app_name">SquirrelSound</string>
     <string name="tagline">Live mic spectrum + waterfall</string>
-    <string name="tab_basic">Basic</string>
+    <string name="tab_live">Live</string>
+    <string name="tab_basic">Settings</string>
     <string name="tab_advanced">Advanced</string>
     <string name="start">Start</string>
     <string name="stop">Stop</string>
@@ -52,7 +53,7 @@
     <string name="fmin_hint">Hz</string>
     <string name="fmax_hint">Hz</string>
     <string name="apply_range">Apply</string>
-    <string name="custom_range_help">Custom window overrides the Basic range chips until you pick a preset again. Pinch or drag on the plot also zooms/pans.</string>
+    <string name="custom_range_help">Custom window overrides the Settings range chips until you pick a preset again. Pinch or drag on the plot also zooms/pans.</string>
     <string name="smooth_off">Off</string>
     <string name="smooth_light">Light</string>
     <string name="smooth_medium">Medium</string>
