@@ -1,7 +1,8 @@
 # SquirrelSoft roadmap
 
-State as of `main` at `9d7b38e` (2026-11-05). Android native apps (Kotlin, Android Views, CameraX/ML Kit, AudioRecord, NfcF):
+State as of `main` at `0449284` (2026-11-05). Android native apps (Kotlin, Android Views, CameraX/ML Kit, AudioRecord, NfcF):
 **SquirrelSuica 0.0.12**, **SquirrelSuicaAnalysis 0.0.3**, **SquirrelSound 0.0.13**, **SquirrelQR 0.1.6**, all on Play closed testing.
+SquirrelSound **0.0.14** (#81) is on `main` and not yet published.
 Desktop C tools: SquirrelStation, SquirrelCAD, SquirrelGNSS, `sqdsp` + live SDL spectrum, and the new desktop readers
 `squirrelsuica/desktop/` (PC/SC) and `squirrelqr/desktop/`. Shared C cores in `libs/` (`sqdsp`, `sqfelica`, `sqqr`).
 The SquirrelQR PWA is retired (`squirrelqr/web-demo/`, not a product). Play scripts in `scripts/`, CI in `.github/workflows/`.
@@ -16,7 +17,7 @@ Every item is a checkbox. Tick it in the PR that merges its last piece. Nested b
 - [x] S0.1 Suica history block-list encoding fix + reader mode on a background thread (#33, #36, #38; issue 02).
 - [x] S0.2 SquirrelSound LOFARgram span actually sets the scroll rate (#35, closes #29).
 - [x] S0.3 SquirrelSound levels and colour: true dBFS, black-floor colour map, −120…−20 dB with Auto, mic source picker and gain (#43, #44, #45; #27).
-- [x] S0.4 SquirrelSound split layout: 50/50 default, 40/60 and 60/40, one waterfall row per pixel, time axis (#46; #28).
+- [x] S0.4 SquirrelSound split layout: 50/50 default, 40/60 and 60/40, one waterfall row per pixel, time axis (#46; #28). The Live tab gives the plot the whole screen and the controls move to a Settings tab (#81, 0.0.14).
   - [ ] Landscape side-by-side layout (#28)
   - [ ] Optional oscilloscope view in the top half (#28)
 - [x] S0.5 SquirrelQR overlay mapping + fixed framing guide default, tracking optional (#37).
