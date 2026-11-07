@@ -38,7 +38,7 @@ PASORI_OBJ = $(BUILD)/transport_pasori.o
 else
 PASORI_OBJ = $(BUILD)/transport_nopasori.o
 endif
-OBJ = $(BUILD)/sqjson.o $(BUILD)/sqcard.o $(BUILD)/virtcard.o $(BUILD)/pcsc_apdu.o $(BUILD)/pasori_frame.o $(PCSC_OBJ) $(PASORI_OBJ)
+OBJ = $(BUILD)/sqjson.o $(BUILD)/sqcard.o $(BUILD)/virtcard.o $(BUILD)/pcsc_apdu.o $(BUILD)/pasori_frame.o $(BUILD)/sqcsv.o $(PCSC_OBJ) $(PASORI_OBJ)
 HDR = $(wildcard desktop/include/*.h) $(SQFELICA)/include/sqfelica.h
 SQFELICA_LIB = $(SQFELICA)/build/libsqfelica.a
 

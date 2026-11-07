@@ -57,7 +57,7 @@ Every item is a checkbox. Tick it in the PR that merges its last piece. Nested b
   - [x] Step 2: PC/SC transport (RC-S300 and other CCID readers; pcsc-lite, macOS PCSC, winscard), `--reader`/`--wait`/`--list-readers`, CI through pcscd and a virtual reader (#76).
   - [x] PaSoRi RC-S380 USB driver (original, libusb) — framing + InCommRF unit-tested; live path via `--usb` (#85).
   - [ ] GUI window
-  - [ ] CSV export
+  - [x] CSV export (`--csv` / `--csv-file`, IDm omitted by default; `--include-idm` opt-in) (#87).
 - [ ] S3.4 SquirrelQR desktop: drag a rectangle on screen → capture → `sqqr` decode; also webcam.
   - [x] Step 1: `squirrelqr/desktop/`, files (PGM/PPM/PBM, BMP) and X11 whole screen / rectangle / `--select`, CI under Xvfb (#69).
   - [x] Step 2: PNG input with its own PNG and zlib decoder, and a Wayland note (#77).
@@ -88,7 +88,7 @@ Every item is a checkbox. Tick it in the PR that merges its last piece. Nested b
   - [ ] Richer station tables (with source + license stated)
   - [x] Product-sale rows (terminal `CA`, #73)
   - [ ] Bus rows
-  - [ ] Export CSV
+  - [x] Export CSV (desktop `--csv` / `--csv-file`, #87)
 - SquirrelSound
   - [ ] Multi-resolution FFT
   - [ ] Peak hold markers

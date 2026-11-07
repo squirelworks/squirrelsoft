@@ -65,9 +65,15 @@ build/squirrelsuica --list-readers                   # PC/SC names + usb:RC-S380
 build/squirrelsuica --usb --wait 30 --json           # PaSoRi RC-S380 over libusb
 build/squirrelsuica --reader RC-S300 --wait 30 --json
 build/squirrelsuica --dump tests/fixtures/demo-suica.json          # made-up demo card, text
+build/squirrelsuica --csv --dump tests/fixtures/demo-suica.json    # history CSV (IDm omitted)
+build/squirrelsuica --csv-file out.csv --dump felica-dump.json     # write CSV to a file
 build/squirrelsuica --dump felica-dump.json --json   # your own dump, JSON with felica_parse field names
 make test-desktop                                    # C unit tests, parity with felica_parse.py, PC/SC test
 ```
+
+CSV columns: `index,brand,system_code,card_balance_yen,date,time,kind,fare_yen,balance_yen,enter_station,exit_station,enter_code,exit_code,process_label`.
+IDm/PMm are omitted unless you pass `--include-idm`. Do not commit real card dumps or exports that contain a real IDm.
+
 
 Exit status: 0 read, 1 no card (or it did not answer), 2 reader or file error.
 `make test-pcsc` reads a made-up card through pcscd and the vpcd virtual reader
