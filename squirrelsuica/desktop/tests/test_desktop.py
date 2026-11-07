@@ -157,8 +157,14 @@ Path(f.name).unlink()
 # A live read with no such reader (or no PC/SC at all) is a reader error.
 check(subprocess.run([EXE, "--reader", "no-such-reader-zz", "--wait", "0"], capture_output=True).returncode == 2,
       "missing reader")
+# PaSoRi USB path with no hardware (or a nonsense name) is a reader error, not a crash.
+usb = subprocess.run([EXE, "--usb", "--reader", "no-such-pasori-zz", "--wait", "0"], capture_output=True)
+check(usb.returncode == 2 and usb.stderr, "missing pasori")
+help_out = subprocess.run([EXE, "--help"], capture_output=True)
+check(help_out.returncode == 0 and b"--usb" in help_out.stdout, "--help mentions --usb")
+list_out = subprocess.run([EXE, "--list-readers"], capture_output=True)
+check(list_out.returncode == 0, "--list-readers")
 check(subprocess.run([EXE, "--wait", "x"], capture_output=True).returncode == 2, "bad --wait")
-check(subprocess.run([EXE, "--help"], capture_output=True).returncode == 0, "--help")
 
 print("squirrelsuica desktop:", "FAILED" if failures else "ok")
 sys.exit(1 if failures else 0)

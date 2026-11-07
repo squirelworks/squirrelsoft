@@ -43,17 +43,26 @@ hex.
 with station names, from a card on a PC/SC contactless reader or from a JSON
 dump SquirrelSuicaAnalysis exports (replayed through a simulated card).
 
-Live reads use the PC/SC Part 3 transparent exchange, which Sony's RC-S300 and
-other CCID contactless readers implement: pcsc-lite on Linux
-(`sudo apt install pcscd libpcsclite-dev` before building), the system PC/SC
-framework on macOS, winscard on Windows. A build without PC/SC headers still
-reads dumps. The RC-S380, which is not a CCID reader, needs the USB driver
-that is a later step of roadmap S3.3.
+Live reads use either:
+
+- **PC/SC** Part 3 transparent exchange for Sony's RC-S300 and other CCID
+  contactless readers: pcsc-lite on Linux
+  (`sudo apt install pcscd libpcsclite-dev`), the system PC/SC framework on
+  macOS, winscard on Windows.
+- **PaSoRi RC-S380 over USB** (`--usb`): an original libusb driver for the
+  NFC Port-100 bulk protocol (`sudo apt install libusb-1.0-0-dev`). The RC-S380
+  is not a CCID reader, so PC/SC cannot talk to it.
+
+A build without PC/SC or libusb headers still reads dumps; the matching live
+backend becomes a stub. Framing and InCommRF helpers are unit-tested without
+hardware. **Checking a physical RC-S380 is an owner-side post-merge step**, not
+a CI or merge gate. Do not commit real card dumps.
 
 ```bash
 make desktop
-build/squirrelsuica                                  # wait 10 s for a card on the first reader
-build/squirrelsuica --list-readers
+build/squirrelsuica                                  # wait 10 s for a card on the first PC/SC reader
+build/squirrelsuica --list-readers                   # PC/SC names + usb:RC-S380 when plugged in
+build/squirrelsuica --usb --wait 30 --json           # PaSoRi RC-S380 over libusb
 build/squirrelsuica --reader RC-S300 --wait 30 --json
 build/squirrelsuica --dump tests/fixtures/demo-suica.json          # made-up demo card, text
 build/squirrelsuica --dump felica-dump.json --json   # your own dump, JSON with felica_parse field names

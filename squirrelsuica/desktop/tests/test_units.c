@@ -1,8 +1,9 @@
 /* Unit tests for the SquirrelSuica desktop pieces: the JSON reader, the
- * card reader's chunk fallback over a scripted transport, and the PC/SC
- * transparent exchange framing. */
+ * card reader's chunk fallback over a scripted transport, the PC/SC
+ * transparent exchange framing, and the PaSoRi RC-S380 USB framing. */
 #include "sqcard.h"
 #include "sqjson.h"
+#include "sqpasori.h"
 #include "sqpcsc.h"
 
 #include <stdio.h>
@@ -169,10 +170,134 @@ static void test_pcsc_framing(void) {
     CHECK(sqs_pcsc_unwrap(ok, 1, f, sizeof f) == -1);
 }
 
+static void test_pasori_framing(void) {
+    /* Published USB trace: SetCommandType 01 → frame with payload D6 2A 01. */
+    const uint8_t cmd[] = {0xD6, 0x2A, 0x01};
+    uint8_t frame[64];
+    int n = sqs_pasori_frame_wrap(cmd, sizeof cmd, frame, sizeof frame);
+    const uint8_t want[] = {0x00, 0x00, 0xFF, 0xFF, 0xFF, 0x03, 0x00, 0xFD,
+                            0xD6, 0x2A, 0x01, 0xFF, 0x00};
+    CHECK(n == (int)sizeof want && !memcmp(frame, want, sizeof want));
+    CHECK(sqs_pasori_frame_wrap(cmd, sizeof cmd, frame, 12) == -1);
+
+    uint8_t payload[32];
+    size_t plen = 0;
+    CHECK(sqs_pasori_frame_unwrap(want, sizeof want, payload, sizeof payload, &plen) == 1);
+    CHECK(plen == 3 && payload[0] == 0xD6 && payload[2] == 0x01);
+    CHECK(sqs_pasori_frame_unwrap(SQS_PASORI_ACK, sizeof SQS_PASORI_ACK, payload, sizeof payload, &plen) == 0);
+    const uint8_t errf[] = {0x00, 0x00, 0xFF, 0xFF, 0xFF, 0x00};
+    CHECK(sqs_pasori_frame_unwrap(errf, sizeof errf, payload, sizeof payload, &plen) == -1);
+    /* Bad LCS */
+    uint8_t bad_lcs[sizeof want];
+    memcpy(bad_lcs, want, sizeof want);
+    bad_lcs[7] ^= 0x01;
+    CHECK(sqs_pasori_frame_unwrap(bad_lcs, sizeof bad_lcs, payload, sizeof payload, &plen) == -1);
+    /* Bad DCS */
+    memcpy(bad_lcs, want, sizeof want);
+    bad_lcs[11] ^= 0x01;
+    CHECK(sqs_pasori_frame_unwrap(bad_lcs, sizeof bad_lcs, payload, sizeof payload, &plen) == -1);
+
+    uint8_t built[8];
+    CHECK(sqs_pasori_cmd_build(0x20, NULL, 0, built, sizeof built) == 2 && built[0] == 0xD6 &&
+          built[1] == 0x20);
+    const uint8_t arg = 0x01;
+    CHECK(sqs_pasori_cmd_build(0x2A, &arg, 1, built, sizeof built) == 3 && built[2] == 0x01);
+
+    /* InCommRF body: 100 ms → 1000 = 0x03E8 ticks of 0.1 ms, then the FeliCa frame. */
+    const uint8_t poll[6] = {0x06, 0x00, 0xFF, 0xFF, 0x01, 0x00};
+    uint8_t body[16];
+    n = sqs_pasori_incomm_body(100, poll, sizeof poll, body, sizeof body);
+    CHECK(n == 8 && body[0] == 0xE8 && body[1] == 0x03 && body[2] == 0x06 && body[7] == 0x00);
+    CHECK(sqs_pasori_incomm_body(100, poll, sizeof poll, body, 4) == -1);
+
+    /* Successful InCommRF reply: status 00*4, skip byte, then a 20-byte Polling response. */
+    uint8_t rsp[40] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x14, 0x01};
+    for (int i = 0; i < 8; i++) rsp[7 + i] = (uint8_t)(0x10 + i);
+    for (int i = 0; i < 8; i++) rsp[15 + i] = (uint8_t)(0xA0 + i);
+    rsp[23] = 0x00;
+    rsp[24] = 0x03; /* system code 0003 */
+    uint8_t felica[32];
+    CHECK(sqs_pasori_incomm_unwrap(rsp, 25, felica, sizeof felica) == 20 && felica[0] == 0x14 &&
+          felica[1] == 0x01 && felica[2] == 0x10);
+    const uint8_t mute[] = {0x80, 0x00, 0x00, 0x00};
+    CHECK(sqs_pasori_incomm_unwrap(mute, sizeof mute, felica, sizeof felica) == 0);
+    const uint8_t hard[] = {0x01, 0x00, 0x00, 0x00};
+    CHECK(sqs_pasori_incomm_unwrap(hard, sizeof hard, felica, sizeof felica) == -1);
+    CHECK(sqs_pasori_checksum((const uint8_t *)"\x03\x00", 2) == 0xFD);
+}
+
+/* A scripted RC-S380 that answers InCommRF through the same unwrap path the
+ * USB transport uses, feeding a virtual Suica so sqs_read_card runs end-to-end
+ * without hardware. */
+typedef struct {
+    SqsVirtualCard *vc;
+    int exchanges;
+} FakePasori;
+
+static int fake_pasori_exchange(void *ctx, const uint8_t *cmd, size_t len, uint8_t *resp, size_t cap,
+                                int timeout_ms) {
+    FakePasori *fp = ctx;
+    fp->exchanges++;
+    /* Build the InCommRF body the real driver would send, then answer as the
+     * chipset: status OK + reserved + the virtual card's FeliCa frame. */
+    uint8_t body[300];
+    int blen = sqs_pasori_incomm_body(timeout_ms, cmd, len, body, sizeof body);
+    CHECK(blen > 2 && body[2] == cmd[0]);
+    SqsTransport vt = sqs_virtual_transport(fp->vc);
+    uint8_t frame[300];
+    int fl = vt.exchange(vt.ctx, cmd, len, frame, sizeof frame, timeout_ms);
+    if (fl < 0) return -1;
+    if (fl == 0) {
+        /* Chipset timeout status. */
+        return sqs_pasori_incomm_unwrap((const uint8_t *)"\x80\x00\x00\x00", 4, resp, cap);
+    }
+    uint8_t chip[320];
+    memset(chip, 0, 5);
+    if ((size_t)fl > sizeof chip - 5) return -1;
+    memcpy(chip + 5, frame, (size_t)fl);
+    return sqs_pasori_incomm_unwrap(chip, (size_t)fl + 5, resp, cap);
+}
+
+static void test_pasori_mock_card(void) {
+    char json[2048];
+    snprintf(json, sizeof json,
+             "{\"schema\":\"squirrel-felica-dump/1\",\"idm\":\"0101020304050607\",\"pmm\":\"0000000000000000\","
+             "\"systems\":[{\"system_code\":\"0x0003\",\"idm\":\"0101020304050607\",\"pmm\":null,"
+             "\"services\":[{\"code\":\"0x090f\",\"readable\":true,\"blocks\":["
+             "\"16010000345c00000000f40100000000\",\"16010000345b00000000580200000000\"]},"
+             "{\"code\":\"0x008b\",\"readable\":true,\"blocks\":["
+             "\"0000000000000000000000f401000000\"]}]}]}"); /* balance at bytes 11–12 LE */
+    char err[128] = "";
+    SqjValue *doc = sqj_parse(json, strlen(json), err, sizeof err);
+    CHECK(doc != NULL);
+    if (!doc) return;
+    SqsVirtualCard *vc = sqs_virtual_card_new(doc, err, sizeof err);
+    sqj_free(doc);
+    CHECK(vc != NULL);
+    if (!vc) return;
+    FakePasori fp = {vc, 0};
+    SqsTransport t = {fake_pasori_exchange, &fp};
+    SqsCard card;
+    CHECK(sqs_read_card(&t, &card) == 0);
+    CHECK(card.brand == SQS_SUICA && card.balance_yen == 500 && card.n_history == 2);
+    CHECK(fp.exchanges >= 2); /* at least poll + reads */
+    sqs_virtual_card_free(vc);
+
+    /* list/open without hardware must not crash; open fails cleanly. */
+    char names[256], e2[128] = "";
+    int n = sqs_pasori_list(names, sizeof names, e2, sizeof e2);
+    CHECK(n >= 0);
+    int no_card = 0;
+    SqsPasori *p = sqs_pasori_open("no-such-pasori-zz", 0, &no_card, e2, sizeof e2);
+    CHECK(p == NULL && e2[0]);
+}
+
 int main(void) {
     test_json();
     test_reader();
     test_pcsc_framing();
+    test_pasori_framing();
+    test_pasori_mock_card();
     printf("squirrelsuica desktop units: %s\n", failures ? "FAILED" : "ok");
     return failures ? 1 : 0;
 }
