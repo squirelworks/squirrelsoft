@@ -53,10 +53,16 @@ Live reads use either:
   NFC Port-100 bulk protocol (`sudo apt install libusb-1.0-0-dev`). The RC-S380
   is not a CCID reader, so PC/SC cannot talk to it.
 
-A build without PC/SC or libusb headers still reads dumps; the matching live
+**GUI** (`--gui`): an optional SDL2 + SDL_ttf window shows brand, balance, and
+scrollable history with station names (same view-model as the text CLI). Install
+`libsdl2-dev libsdl2-ttf-dev` (and a Latin+CJK font such as
+`fonts-wqy-microhei` on Debian/Ubuntu). Override the font with
+`$SQUIRRELSUICA_FONT`. `--gui-ms MS` auto-quits after MS milliseconds for CI.
+
+A build without PC/SC, libusb, or SDL headers still reads dumps; the matching
 backend becomes a stub. Framing and InCommRF helpers are unit-tested without
-hardware. **Checking a physical RC-S380 is an owner-side post-merge step**, not
-a CI or merge gate. Do not commit real card dumps.
+hardware. **Checking a physical RC-S380 / live GUI is an owner-side post-merge
+step**, not a CI or merge gate. Do not commit real card dumps.
 
 ```bash
 make desktop
@@ -65,6 +71,7 @@ build/squirrelsuica --list-readers                   # PC/SC names + usb:RC-S380
 build/squirrelsuica --usb --wait 30 --json           # PaSoRi RC-S380 over libusb
 build/squirrelsuica --reader RC-S300 --wait 30 --json
 build/squirrelsuica --dump tests/fixtures/demo-suica.json          # made-up demo card, text
+build/squirrelsuica --gui --dump tests/fixtures/demo-suica.json   # same dump in an SDL window
 build/squirrelsuica --dump felica-dump.json --json   # your own dump, JSON with felica_parse field names
 make test-desktop                                    # C unit tests, parity with felica_parse.py, PC/SC test
 ```

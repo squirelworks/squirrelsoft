@@ -56,7 +56,7 @@ Every item is a checkbox. Tick it in the PR that merges its last piece. Nested b
   - [x] Step 1: `squirrelsuica/desktop/`, a C reader on `sqfelica` over a transport interface, balance and history with station names, replays SuicaAnalysis dumps (#71).
   - [x] Step 2: PC/SC transport (RC-S300 and other CCID readers; pcsc-lite, macOS PCSC, winscard), `--reader`/`--wait`/`--list-readers`, CI through pcscd and a virtual reader (#76).
   - [x] PaSoRi RC-S380 USB driver (original, libusb) — framing + InCommRF unit-tested; live path via `--usb` (#85).
-  - [ ] GUI window
+  - [x] GUI window (SDL2 + SDL_ttf): balance + history with station names; `--gui` / `--gui-ms` (#86).
   - [ ] CSV export
 - [ ] S3.4 SquirrelQR desktop: drag a rectangle on screen → capture → `sqqr` decode; also webcam.
   - [x] Step 1: `squirrelqr/desktop/`, files (PGM/PPM/PBM, BMP) and X11 whole screen / rectangle / `--select`, CI under Xvfb (#69).
