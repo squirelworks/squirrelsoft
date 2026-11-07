@@ -1,8 +1,10 @@
 /* SquirrelSuica desktop: show a FeliCa e-money card's balance and history with
  * station names, using the shared C core (libs/sqfelica). Cards are read live
- * from a PC/SC contactless reader (Sony RC-S300 and other CCID readers), or
- * replayed from squirrel-felica-dump/1 files from SquirrelSuicaAnalysis. */
+ * from a PC/SC contactless reader (Sony RC-S300 and other CCID readers), from a
+ * PaSoRi RC-S380 over USB (libusb), or replayed from squirrel-felica-dump/1
+ * files from SquirrelSuicaAnalysis. */
 #include "sqcard.h"
+#include "sqpasori.h"
 #include "sqpcsc.h"
 #include "sqfelica.h"
 #include "sqjson.h"
@@ -19,21 +21,28 @@ static void usage(FILE *f) {
     fprintf(f,
             "SquirrelSuica desktop %s: FeliCa balance and history (Suica/PASMO, nanaco, Edy, WAON).\n"
             "\n"
-            "usage: squirrelsuica [options]               read the card on a PC/SC reader\n"
+            "usage: squirrelsuica [options]               read a card (PC/SC, or RC-S380 with --usb)\n"
             "       squirrelsuica [options] --dump FILE   read a SquirrelSuicaAnalysis dump (.json)\n"
             "       squirrelsuica --list-readers\n"
             "\n"
             "options:\n"
             "  --json            print JSON instead of text\n"
+            "  --usb             use a PaSoRi RC-S380 over USB (libusb), not PC/SC\n"
             "  --reader NAME     use the reader whose name contains NAME (default: the first with a card)\n"
             "  --wait SECS       how long to wait for a card (default 10)\n"
             "  --stations CSV    station table (default: data/StationCode.csv next to the program\n"
             "                    or its parent, or $SQUIRRELSUICA_STATIONS)\n"
             "\n"
-            "PC/SC readers need pcscd on Linux (sudo apt install pcscd). Sony PaSoRi RC-S380 over\n"
-            "USB without PC/SC is a later step of roadmap S3.3.\n"
-            "Read-only: plain FeliCa reads, no keys, no writes.\n",
+            "PC/SC readers need pcscd on Linux (sudo apt install pcscd libpcsclite-dev).\n"
+            "RC-S380 needs libusb (sudo apt install libusb-1.0-0-dev); real-hardware checks are\n"
+            "owner-side after merge. Read-only: plain FeliCa reads, no keys, no writes.\n",
             SQS_VERSION);
+}
+
+static int want_usb_reader(const char *reader) {
+    if (!reader || !*reader) return 0;
+    return strstr(reader, "usb") || strstr(reader, "USB") || strstr(reader, "RC-S380") ||
+           strstr(reader, "PaSoRi") || strstr(reader, "pasori") || strstr(reader, "PASORI");
 }
 
 static char *slurp(const char *path, size_t *len) {
@@ -217,7 +226,27 @@ static void print_text(const SqsCard *c, const Stations *st) {
     }
 }
 
-static int read_live(const char *reader, int wait_s, SqsCard *card) {
+static int read_live_pasori(const char *reader, int wait_s, SqsCard *card) {
+    char err[256] = "";
+    int no_card = 0;
+    if (wait_s > 0) fprintf(stderr, "Hold the card on the RC-S380...\n");
+    SqsPasori *p = sqs_pasori_open(reader, wait_s * 1000, &no_card, err, sizeof err);
+    if (!p) {
+        fprintf(stderr, "%s\n", err);
+        return no_card ? 1 : 2;
+    }
+    SqsTransport t = sqs_pasori_transport(p);
+    int rc = sqs_read_card(&t, card);
+    sqs_pasori_close(p);
+    if (rc != 0) {
+        fprintf(stderr, "%s\n",
+                rc > 0 ? "the card did not answer FeliCa polling" : "reader error while reading the card");
+        return rc > 0 ? 1 : 2;
+    }
+    return 0;
+}
+
+static int read_live_pcsc(const char *reader, int wait_s, SqsCard *card) {
     char err[256] = "";
     int no_card = 0;
     if (wait_s > 0) fprintf(stderr, "Hold the card on the reader...\n");
@@ -230,10 +259,16 @@ static int read_live(const char *reader, int wait_s, SqsCard *card) {
     int rc = sqs_read_card(&t, card);
     sqs_pcsc_close(p);
     if (rc != 0) {
-        fprintf(stderr, "%s\n", rc > 0 ? "the card did not answer FeliCa polling" : "reader error while reading the card");
+        fprintf(stderr, "%s\n",
+                rc > 0 ? "the card did not answer FeliCa polling" : "reader error while reading the card");
         return rc > 0 ? 1 : 2;
     }
     return 0;
+}
+
+static int read_live(const char *reader, int wait_s, int force_usb, SqsCard *card) {
+    if (force_usb || want_usb_reader(reader)) return read_live_pasori(reader, wait_s, card);
+    return read_live_pcsc(reader, wait_s, card);
 }
 
 static int read_dump(const char *path, SqsCard *card) {
@@ -267,7 +302,7 @@ static int read_dump(const char *path, SqsCard *card) {
 
 int main(int argc, char **argv) {
     const char *dump_path = NULL, *stations_path = NULL, *reader = NULL;
-    int json = 0, list = 0, wait_s = 10;
+    int json = 0, list = 0, wait_s = 10, force_usb = 0;
     for (int i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "--help") || !strcmp(argv[i], "-h")) {
             usage(stdout);
@@ -277,6 +312,8 @@ int main(int argc, char **argv) {
             return 0;
         } else if (!strcmp(argv[i], "--json")) {
             json = 1;
+        } else if (!strcmp(argv[i], "--usb")) {
+            force_usb = 1;
         } else if (!strcmp(argv[i], "--list-readers")) {
             list = 1;
         } else if (!strcmp(argv[i], "--dump") && i + 1 < argc) {
@@ -301,18 +338,33 @@ int main(int argc, char **argv) {
     }
     if (list) {
         char names[4096], err[256] = "";
+        int any = 0;
         int n = sqs_pcsc_list(names, sizeof names, err, sizeof err);
+        if (n > 0) {
+            for (const char *q = names; *q; q += strlen(q) + 1) {
+                puts(q);
+                any = 1;
+            }
+        } else if (n < 0 && force_usb == 0) {
+            /* PC/SC missing is fine when a USB PaSoRi is still listed. */
+            fprintf(stderr, "PC/SC: %s\n", err);
+        }
+        err[0] = 0;
+        n = sqs_pasori_list(names, sizeof names, err, sizeof err);
         if (n < 0) {
             fprintf(stderr, "%s\n", err);
             return 2;
         }
-        if (n == 0) fprintf(stderr, "no card readers\n");
-        for (const char *q = names; n > 0 && *q; q += strlen(q) + 1) puts(q);
+        for (const char *q = names; n > 0 && *q; q += strlen(q) + 1) {
+            puts(q);
+            any = 1;
+        }
+        if (!any) fprintf(stderr, "no card readers\n");
         return 0;
     }
     SqsCard *card = malloc(sizeof *card);
     if (!card) return 2;
-    int rc = dump_path ? read_dump(dump_path, card) : read_live(reader, wait_s, card);
+    int rc = dump_path ? read_dump(dump_path, card) : read_live(reader, wait_s, force_usb, card);
     if (rc != 0) {
         free(card);
         return rc;

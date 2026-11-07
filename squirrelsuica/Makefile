@@ -29,14 +29,23 @@ PCSC_OBJ = $(BUILD)/transport_pcsc.o
 else
 PCSC_OBJ = $(BUILD)/transport_nopcsc.o
 endif
-OBJ = $(BUILD)/sqjson.o $(BUILD)/sqcard.o $(BUILD)/virtcard.o $(BUILD)/pcsc_apdu.o $(PCSC_OBJ)
+# PaSoRi RC-S380 over libusb (optional; framing always builds).
+LIBUSB ?= $(shell pkg-config --exists libusb-1.0 && echo yes || echo no)
+ifeq ($(LIBUSB),yes)
+CFLAGS += $(shell pkg-config --cflags libusb-1.0)
+LDLIBS += $(shell pkg-config --libs libusb-1.0)
+PASORI_OBJ = $(BUILD)/transport_pasori.o
+else
+PASORI_OBJ = $(BUILD)/transport_nopasori.o
+endif
+OBJ = $(BUILD)/sqjson.o $(BUILD)/sqcard.o $(BUILD)/virtcard.o $(BUILD)/pcsc_apdu.o $(BUILD)/pasori_frame.o $(PCSC_OBJ) $(PASORI_OBJ)
 HDR = $(wildcard desktop/include/*.h) $(SQFELICA)/include/sqfelica.h
 SQFELICA_LIB = $(SQFELICA)/build/libsqfelica.a
 
 .PHONY: all desktop test test-desktop test-pcsc clean android android-test $(SQFELICA_LIB)
 
 all: desktop
-	@echo "squirrelsuica: build/squirrelsuica (card on a PC/SC reader), build/squirrelsuica --dump card.json, or python3 suica_read.py --demo"
+	@echo "squirrelsuica: build/squirrelsuica (PC/SC or --usb RC-S380), build/squirrelsuica --dump card.json, or python3 suica_read.py --demo"
 
 desktop: $(BUILD)/squirrelsuica
 
