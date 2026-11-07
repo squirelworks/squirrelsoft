@@ -4,10 +4,12 @@
  * PaSoRi RC-S380 over USB (libusb), or replayed from squirrel-felica-dump/1
  * files from SquirrelSuicaAnalysis. */
 #include "sqcard.h"
+#include "sqgui.h"
 #include "sqpasori.h"
 #include "sqpcsc.h"
 #include "sqfelica.h"
 #include "sqjson.h"
+#include "sqview.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -27,6 +29,8 @@ static void usage(FILE *f) {
             "\n"
             "options:\n"
             "  --json            print JSON instead of text\n"
+            "  --gui             show balance + history in an SDL2 window (needs libsdl2-ttf)\n"
+            "  --gui-ms MS       like --gui, then auto-quit after MS milliseconds (CI smoke)\n"
             "  --usb             use a PaSoRi RC-S380 over USB (libusb), not PC/SC\n"
             "  --reader NAME     use the reader whose name contains NAME (default: the first with a card)\n"
             "  --wait SECS       how long to wait for a card (default 10)\n"
@@ -35,7 +39,8 @@ static void usage(FILE *f) {
             "\n"
             "PC/SC readers need pcscd on Linux (sudo apt install pcscd libpcsclite-dev).\n"
             "RC-S380 needs libusb (sudo apt install libusb-1.0-0-dev); real-hardware checks are\n"
-            "owner-side after merge. Read-only: plain FeliCa reads, no keys, no writes.\n",
+            "owner-side after merge. The GUI needs libsdl2-dev + libsdl2-ttf-dev (optional).\n"
+            "Read-only: plain FeliCa reads, no keys, no writes.\n",
             SQS_VERSION);
 }
 
@@ -193,39 +198,6 @@ static void print_json(const SqsCard *c, const Stations *st) {
     puts("]}");
 }
 
-static void print_text(const SqsCard *c, const Stations *st) {
-    char idm[17], pmm[17];
-    hex(c->idm, 8, idm);
-    hex(c->pmm, 8, pmm);
-    printf("Brand %s\nIDm %s\nPMm %s\nSystem %04x\n", sqs_brand_label(c->brand), idm, pmm, c->system_code);
-    if (c->balance_yen >= 0) printf("Balance ¥%d\n", (int)c->balance_yen);
-    else puts("Balance (unknown)");
-    puts("History:");
-    if (!c->n_history) puts("  (none)");
-    for (size_t i = 0; i < c->n_history; i++) {
-        const SqfHistory *h = &c->history[i];
-        char date[16], fare[32];
-        date_of(h, date, sizeof date);
-        if (h->fare_yen) snprintf(fare, sizeof fare, "fare ¥%d", (int)h->fare_yen);
-        else snprintf(fare, sizeof fare, "fare —");
-        printf("  %zu. %s  %-6s  %s  bal ¥%d", i + 1, date, sqf_kind_name(h->kind), fare, (int)h->balance_yen);
-        const char *en = station(st, h, 0), *ex = station(st, h, 1);
-        char enc[8], exc[8];
-        code_of(h->has_enter, h->enter_line, h->enter_station, enc, sizeof enc);
-        code_of(h->has_exit, h->exit_line, h->exit_station, exc, sizeof exc);
-        const char *a = en ? en : (enc[0] ? enc : NULL), *b = ex ? ex : (exc[0] ? exc : NULL);
-        if (a && b && strcmp(a, b)) printf("  %s → %s", a, b);
-        else if (a || b) printf("  %s", a ? a : b);
-        const char *label = c->brand == SQS_SUICA ? sqf_suica_process_label(h->process) : NULL;
-        if (label || h->hour >= 0) {
-            fputs("\n      ", stdout);
-            if (label) fputs(label, stdout);
-            if (h->hour >= 0) printf("%s%02d:%02d", label ? " · " : "", h->hour, h->minute);
-        }
-        putchar('\n');
-    }
-}
-
 static int read_live_pasori(const char *reader, int wait_s, SqsCard *card) {
     char err[256] = "";
     int no_card = 0;
@@ -302,7 +274,7 @@ static int read_dump(const char *path, SqsCard *card) {
 
 int main(int argc, char **argv) {
     const char *dump_path = NULL, *stations_path = NULL, *reader = NULL;
-    int json = 0, list = 0, wait_s = 10, force_usb = 0;
+    int json = 0, list = 0, wait_s = 10, force_usb = 0, gui = 0, gui_ms = 0;
     for (int i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "--help") || !strcmp(argv[i], "-h")) {
             usage(stdout);
@@ -312,6 +284,17 @@ int main(int argc, char **argv) {
             return 0;
         } else if (!strcmp(argv[i], "--json")) {
             json = 1;
+        } else if (!strcmp(argv[i], "--gui")) {
+            gui = 1;
+        } else if (!strcmp(argv[i], "--gui-ms") && i + 1 < argc) {
+            char *end;
+            long v = strtol(argv[++i], &end, 10);
+            if (*end || v < 1 || v > 600000) {
+                fprintf(stderr, "--gui-ms wants milliseconds (1..600000)\n");
+                return 2;
+            }
+            gui = 1;
+            gui_ms = (int)v;
         } else if (!strcmp(argv[i], "--usb")) {
             force_usb = 1;
         } else if (!strcmp(argv[i], "--list-readers")) {
@@ -371,8 +354,22 @@ int main(int argc, char **argv) {
     }
     Stations st = {NULL, NULL, 0};
     load_stations(&st, stations_path, argv[0]);
-    if (json) print_json(card, &st);
-    else print_text(card, &st);
+    SqsView view;
+    sqs_view_build(&view, card, st.rows, st.n);
+    if (gui) {
+        int grc = sqs_gui_show(&view, gui_ms);
+        if (grc != 0) {
+            free(card);
+            free(st.rows);
+            free(st.csv);
+            /* Stub backend already printed text; treat as success so dump CI still works. */
+            return sqs_gui_available() ? 2 : 0;
+        }
+    } else if (json) {
+        print_json(card, &st);
+    } else {
+        sqs_view_print_text(stdout, &view);
+    }
     free(card);
     free(st.rows);
     free(st.csv);

@@ -38,14 +38,23 @@ PASORI_OBJ = $(BUILD)/transport_pasori.o
 else
 PASORI_OBJ = $(BUILD)/transport_nopasori.o
 endif
-OBJ = $(BUILD)/sqjson.o $(BUILD)/sqcard.o $(BUILD)/virtcard.o $(BUILD)/pcsc_apdu.o $(BUILD)/pasori_frame.o $(PCSC_OBJ) $(PASORI_OBJ)
+# Optional SDL2 + SDL_ttf GUI (balance + history window).
+HAS_SDL_GUI ?= $(shell pkg-config --exists sdl2 SDL2_ttf && echo yes || echo no)
+ifeq ($(HAS_SDL_GUI),yes)
+CFLAGS += -DSQS_HAS_SDL_GUI $(shell pkg-config --cflags sdl2 SDL2_ttf)
+LDLIBS += $(shell pkg-config --libs sdl2 SDL2_ttf)
+GUI_OBJ = $(BUILD)/gui_sdl.o
+else
+GUI_OBJ = $(BUILD)/gui_nosdl.o
+endif
+OBJ = $(BUILD)/sqjson.o $(BUILD)/sqcard.o $(BUILD)/virtcard.o $(BUILD)/pcsc_apdu.o $(BUILD)/pasori_frame.o $(BUILD)/sqview.o $(PCSC_OBJ) $(PASORI_OBJ) $(GUI_OBJ)
 HDR = $(wildcard desktop/include/*.h) $(SQFELICA)/include/sqfelica.h
 SQFELICA_LIB = $(SQFELICA)/build/libsqfelica.a
 
 .PHONY: all desktop test test-desktop test-pcsc clean android android-test $(SQFELICA_LIB)
 
 all: desktop
-	@echo "squirrelsuica: build/squirrelsuica (PC/SC or --usb RC-S380), build/squirrelsuica --dump card.json, or python3 suica_read.py --demo"
+	@echo "squirrelsuica: build/squirrelsuica (PC/SC, --usb RC-S380, --gui, --dump), or python3 suica_read.py --demo"
 
 desktop: $(BUILD)/squirrelsuica
 

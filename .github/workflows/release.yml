@@ -157,12 +157,12 @@ jobs:
         shell: ${{ matrix.os == 'windows-latest' && 'msys2 {0}' || 'bash' }}
     steps:
       - uses: actions/checkout@v4
-      - name: Install SDL2 / ALSA (Linux)
+      - name: Install SDL2 / SDL_ttf / ALSA (Linux)
         if: matrix.platform == 'linux-x86_64'
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libsdl2-dev libasound2-dev
-      - name: Install SDL2 (macOS)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libsdl2-dev libsdl2-ttf-dev fonts-wqy-microhei fonts-droid-fallback libasound2-dev
+      - name: Install SDL2 / SDL_ttf (macOS)
         if: matrix.platform == 'macos-arm64'
-        run: brew install sdl2 pkg-config
+        run: brew install sdl2 sdl2_ttf pkg-config
       - uses: msys2/setup-msys2@v2
         if: matrix.platform == 'windows-x86_64'
         with:
@@ -171,6 +171,7 @@ jobs:
             make zip git
             mingw-w64-x86_64-gcc
             mingw-w64-x86_64-SDL2
+            mingw-w64-x86_64-SDL2_ttf
             mingw-w64-x86_64-pkgconf
       - name: Build and package
         env:

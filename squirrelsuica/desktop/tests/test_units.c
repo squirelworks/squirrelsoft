@@ -2,9 +2,11 @@
  * card reader's chunk fallback over a scripted transport, the PC/SC
  * transparent exchange framing, and the PaSoRi RC-S380 USB framing. */
 #include "sqcard.h"
+#include "sqgui.h"
 #include "sqjson.h"
 #include "sqpasori.h"
 #include "sqpcsc.h"
+#include "sqview.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -292,12 +294,59 @@ static void test_pasori_mock_card(void) {
     CHECK(p == NULL && e2[0]);
 }
 
+static void test_view(void) {
+    SqsCard card;
+    memset(&card, 0, sizeof card);
+    card.brand = SQS_SUICA;
+    card.system_code = 0x0003;
+    card.balance_yen = 2480;
+    card.idm[0] = 0x01;
+    card.n_history = 1;
+    card.history[0].year = 2026;
+    card.history[0].month = 10;
+    card.history[0].day = 28;
+    card.history[0].kind = SQF_KIND_TRAIN;
+    card.history[0].fare_yen = 168;
+    card.history[0].balance_yen = 2480;
+    card.history[0].has_enter = 1;
+    card.history[0].enter_line = 0xE3;
+    card.history[0].enter_station = 0x59;
+    card.history[0].has_exit = 1;
+    card.history[0].exit_line = 0xE3;
+    card.history[0].exit_station = 0x5E;
+    card.history[0].hour = -1;
+    card.history[0].process = 0x01;
+
+    /* Tiny station table (two named stops). */
+    SqfStation rows[2] = {
+        {0, 0xE3, 0x59, "Co", "Line", "EnterStop"},
+        {0, 0xE3, 0x5E, "Co", "Line", "ExitStop"},
+    };
+    SqsView v;
+    sqs_view_build(&v, &card, rows, 2);
+    CHECK(!strcmp(v.brand_id, "suica_family"));
+    CHECK(v.balance_yen == 2480);
+    CHECK(strstr(v.balance, "2480") != NULL);
+    CHECK(v.n_rows == 1);
+    CHECK(!strcmp(v.rows[0].date, "2026-10-28"));
+    CHECK(strstr(v.rows[0].route, "EnterStop") && strstr(v.rows[0].route, "ExitStop"));
+    CHECK(strstr(v.rows[0].route, "→") != NULL);
+
+    /* Without a station table, fall back to LINE/STA codes. */
+    sqs_view_build(&v, &card, NULL, 0);
+    CHECK(strstr(v.rows[0].route, "E3/59") && strstr(v.rows[0].route, "E3/5E"));
+
+    /* gui availability is a compile-time fact; just ensure the symbol links. */
+    (void)sqs_gui_available();
+}
+
 int main(void) {
     test_json();
     test_reader();
     test_pcsc_framing();
     test_pasori_framing();
     test_pasori_mock_card();
+    test_view();
     printf("squirrelsuica desktop units: %s\n", failures ? "FAILED" : "ok");
     return failures ? 1 : 0;
 }
