@@ -162,11 +162,23 @@ usb = subprocess.run([EXE, "--usb", "--reader", "no-such-pasori-zz", "--wait", "
 check(usb.returncode == 2 and usb.stderr, "missing pasori")
 help_out = subprocess.run([EXE, "--help"], capture_output=True)
 check(help_out.returncode == 0 and b"--usb" in help_out.stdout, "--help mentions --usb")
+check(help_out.returncode == 0 and b"--gui" in help_out.stdout, "--help mentions --gui")
 check(help_out.returncode == 0 and b"--csv" in help_out.stdout, "--help mentions --csv")
 list_out = subprocess.run([EXE, "--list-readers"], capture_output=True)
 check(list_out.returncode == 0, "--list-readers")
 check(subprocess.run([EXE, "--wait", "x"], capture_output=True).returncode == 2, "bad --wait")
 
+# GUI smoke: auto-quit after a short window. Uses the demo dump (made-up data).
+# Prefer a real/Xvfb display when present; otherwise SDL's dummy video driver.
+# nosdl stub builds print text and still exit 0.
+import os
+gui_env = os.environ.copy()
+if not gui_env.get("DISPLAY") and not gui_env.get("WAYLAND_DISPLAY"):
+    gui_env["SDL_VIDEODRIVER"] = "dummy"
+gui = subprocess.run(
+    [EXE, "--gui-ms", "250", "--dump", str(FIX / "demo-suica.json"), "--stations", STATIONS],
+    capture_output=True, env=gui_env, timeout=30)
+check(gui.returncode == 0, f"--gui-ms smoke exit {gui.returncode} {gui.stderr.decode()[:300]}")
 # CSV export from the made-up demo dump: shape + IDm omitted by default.
 csv = subprocess.run(
     [EXE, "--csv", "--dump", str(FIX / "demo-suica.json"), "--stations", STATIONS],
