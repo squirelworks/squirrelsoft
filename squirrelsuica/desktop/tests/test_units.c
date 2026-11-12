@@ -3,6 +3,7 @@
  * transparent exchange framing, and the PaSoRi RC-S380 USB framing. */
 #include "sqcard.h"
 #include "sqgui.h"
+#include "sqcsv.h"
 #include "sqjson.h"
 #include "sqpasori.h"
 #include "sqpcsc.h"
@@ -340,6 +341,88 @@ static void test_view(void) {
     (void)sqs_gui_available();
 }
 
+static char *slurp_tmp(const char *path) {
+    FILE *f = fopen(path, "rb");
+    if (!f) return NULL;
+    if (fseek(f, 0, SEEK_END) != 0) {
+        fclose(f);
+        return NULL;
+    }
+    long n = ftell(f);
+    if (n < 0) {
+        fclose(f);
+        return NULL;
+    }
+    rewind(f);
+    char *buf = malloc((size_t)n + 1);
+    if (!buf) {
+        fclose(f);
+        return NULL;
+    }
+    size_t got = fread(buf, 1, (size_t)n, f);
+    fclose(f);
+    buf[got] = 0;
+    return buf;
+}
+
+static void test_csv(void) {
+    SqsCard card;
+    memset(&card, 0, sizeof card);
+    card.brand = SQS_SUICA;
+    card.system_code = 0x0003;
+    card.balance_yen = 2480;
+    memset(card.idm, 0xAB, 8);
+    card.n_history = 1;
+    card.history[0].year = 2026;
+    card.history[0].month = 11;
+    card.history[0].day = 7;
+    card.history[0].kind = SQF_KIND_TRAIN;
+    card.history[0].fare_yen = 168;
+    card.history[0].balance_yen = 2480;
+    card.history[0].has_enter = 1;
+    card.history[0].enter_line = 0xE3;
+    card.history[0].enter_station = 0x59;
+    card.history[0].has_exit = 1;
+    card.history[0].exit_line = 0xE3;
+    card.history[0].exit_station = 0x5E;
+    card.history[0].hour = -1;
+    card.history[0].process = 0x01;
+    SqfStation rows[2] = {
+        {0, 0xE3, 0x59, "Co", "Line", "EnterStop"},
+        {0, 0xE3, 0x5E, "Co", "Line", "ExitStop"},
+    };
+
+    const char *path = "build/test_csv_out.csv";
+    FILE *out = fopen(path, "wb");
+    CHECK(out != NULL);
+    if (!out) return;
+    SqsCsvOpts opts = {0};
+    CHECK(sqs_csv_write(out, &card, rows, 2, &opts) == 0);
+    fclose(out);
+    char *buf = slurp_tmp(path);
+    CHECK(buf != NULL);
+    if (!buf) return;
+    CHECK(strstr(buf, "index,brand,system_code,card_balance_yen"));
+    CHECK(!strstr(buf, ",idm,")); /* redacted by default */
+    CHECK(!strstr(buf, "abababab"));
+    CHECK(strstr(buf, "EnterStop") && strstr(buf, "ExitStop"));
+    CHECK(strstr(buf, "2026-11-07") && strstr(buf, "suica_family"));
+    free(buf);
+
+    out = fopen(path, "wb");
+    CHECK(out != NULL);
+    if (!out) return;
+    opts.include_idm = 1;
+    CHECK(sqs_csv_write(out, &card, rows, 2, &opts) == 0);
+    fclose(out);
+    buf = slurp_tmp(path);
+    CHECK(buf != NULL);
+    if (!buf) return;
+    CHECK(strstr(buf, ",idm,pmm,") && strstr(buf, "abababababababab"));
+    free(buf);
+    remove(path);
+}
+
 int main(void) {
     test_json();
     test_reader();
@@ -347,6 +430,7 @@ int main(void) {
     test_pasori_framing();
     test_pasori_mock_card();
     test_view();
+    test_csv();
     printf("squirrelsuica desktop units: %s\n", failures ? "FAILED" : "ok");
     return failures ? 1 : 0;
 }

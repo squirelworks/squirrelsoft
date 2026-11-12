@@ -47,7 +47,7 @@ GUI_OBJ = $(BUILD)/gui_sdl.o
 else
 GUI_OBJ = $(BUILD)/gui_nosdl.o
 endif
-OBJ = $(BUILD)/sqjson.o $(BUILD)/sqcard.o $(BUILD)/virtcard.o $(BUILD)/pcsc_apdu.o $(BUILD)/pasori_frame.o $(BUILD)/sqview.o $(PCSC_OBJ) $(PASORI_OBJ) $(GUI_OBJ)
+OBJ = $(BUILD)/sqjson.o $(BUILD)/sqcard.o $(BUILD)/virtcard.o $(BUILD)/pcsc_apdu.o $(BUILD)/pasori_frame.o $(BUILD)/sqview.o $(BUILD)/sqcsv.o $(PCSC_OBJ) $(PASORI_OBJ) $(GUI_OBJ)
 HDR = $(wildcard desktop/include/*.h) $(SQFELICA)/include/sqfelica.h
 SQFELICA_LIB = $(SQFELICA)/build/libsqfelica.a
 

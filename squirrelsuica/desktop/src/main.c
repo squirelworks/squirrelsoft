@@ -5,6 +5,7 @@
  * files from SquirrelSuicaAnalysis. */
 #include "sqcard.h"
 #include "sqgui.h"
+#include "sqcsv.h"
 #include "sqpasori.h"
 #include "sqpcsc.h"
 #include "sqfelica.h"
@@ -31,6 +32,9 @@ static void usage(FILE *f) {
             "  --json            print JSON instead of text\n"
             "  --gui             show balance + history in an SDL2 window (needs libsdl2-ttf)\n"
             "  --gui-ms MS       like --gui, then auto-quit after MS milliseconds (CI smoke)\n"
+            "  --csv             print history as CSV (IDm/PMm omitted by default)\n"
+            "  --csv-file PATH   write that CSV to PATH instead of stdout\n"
+            "  --include-idm     include IDm/PMm columns in CSV (off by default)\n"
             "  --usb             use a PaSoRi RC-S380 over USB (libusb), not PC/SC\n"
             "  --reader NAME     use the reader whose name contains NAME (default: the first with a card)\n"
             "  --wait SECS       how long to wait for a card (default 10)\n"
@@ -40,7 +44,8 @@ static void usage(FILE *f) {
             "PC/SC readers need pcscd on Linux (sudo apt install pcscd libpcsclite-dev).\n"
             "RC-S380 needs libusb (sudo apt install libusb-1.0-0-dev); real-hardware checks are\n"
             "owner-side after merge. The GUI needs libsdl2-dev + libsdl2-ttf-dev (optional).\n"
-            "Read-only: plain FeliCa reads, no keys, no writes.\n",
+            "Read-only: plain FeliCa reads, no keys, no writes.\n"
+            "Do not commit real card dumps or CSV exports that contain real IDm.\n",
             SQS_VERSION);
 }
 
@@ -273,8 +278,8 @@ static int read_dump(const char *path, SqsCard *card) {
 }
 
 int main(int argc, char **argv) {
-    const char *dump_path = NULL, *stations_path = NULL, *reader = NULL;
-    int json = 0, list = 0, wait_s = 10, force_usb = 0, gui = 0, gui_ms = 0;
+    const char *dump_path = NULL, *stations_path = NULL, *reader = NULL, *csv_path = NULL;
+    int json = 0, csv = 0, include_idm = 0, list = 0, wait_s = 10, force_usb = 0, gui = 0, gui_ms = 0;
     for (int i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "--help") || !strcmp(argv[i], "-h")) {
             usage(stdout);
@@ -295,6 +300,13 @@ int main(int argc, char **argv) {
             }
             gui = 1;
             gui_ms = (int)v;
+        } else if (!strcmp(argv[i], "--csv")) {
+            csv = 1;
+        } else if (!strcmp(argv[i], "--csv-file") && i + 1 < argc) {
+            csv = 1;
+            csv_path = argv[++i];
+        } else if (!strcmp(argv[i], "--include-idm")) {
+            include_idm = 1;
         } else if (!strcmp(argv[i], "--usb")) {
             force_usb = 1;
         } else if (!strcmp(argv[i], "--list-readers")) {
@@ -364,6 +376,28 @@ int main(int argc, char **argv) {
             free(st.csv);
             /* Stub backend already printed text; treat as success so dump CI still works. */
             return sqs_gui_available() ? 2 : 0;
+        }
+    } else if (csv) {
+        SqsCsvOpts opts = {.include_idm = include_idm};
+        FILE *out = stdout;
+        if (csv_path) {
+            out = fopen(csv_path, "wb");
+            if (!out) {
+                perror(csv_path);
+                free(card);
+                free(st.rows);
+                free(st.csv);
+                return 2;
+            }
+        }
+        int wrc = sqs_csv_write(out, card, st.rows, st.n, &opts);
+        if (csv_path) fclose(out);
+        if (wrc != 0) {
+            fprintf(stderr, "CSV write failed\n");
+            free(card);
+            free(st.rows);
+            free(st.csv);
+            return 2;
         }
     } else if (json) {
         print_json(card, &st);

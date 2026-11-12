@@ -163,6 +163,7 @@ check(usb.returncode == 2 and usb.stderr, "missing pasori")
 help_out = subprocess.run([EXE, "--help"], capture_output=True)
 check(help_out.returncode == 0 and b"--usb" in help_out.stdout, "--help mentions --usb")
 check(help_out.returncode == 0 and b"--gui" in help_out.stdout, "--help mentions --gui")
+check(help_out.returncode == 0 and b"--csv" in help_out.stdout, "--help mentions --csv")
 list_out = subprocess.run([EXE, "--list-readers"], capture_output=True)
 check(list_out.returncode == 0, "--list-readers")
 check(subprocess.run([EXE, "--wait", "x"], capture_output=True).returncode == 2, "bad --wait")
@@ -178,6 +179,29 @@ gui = subprocess.run(
     [EXE, "--gui-ms", "250", "--dump", str(FIX / "demo-suica.json"), "--stations", STATIONS],
     capture_output=True, env=gui_env, timeout=30)
 check(gui.returncode == 0, f"--gui-ms smoke exit {gui.returncode} {gui.stderr.decode()[:300]}")
+# CSV export from the made-up demo dump: shape + IDm omitted by default.
+csv = subprocess.run(
+    [EXE, "--csv", "--dump", str(FIX / "demo-suica.json"), "--stations", STATIONS],
+    capture_output=True, text=True)
+check(csv.returncode == 0, f"--csv exit {csv.returncode} {csv.stderr}")
+lines = [ln for ln in csv.stdout.splitlines() if ln.strip()]
+check(lines and lines[0].startswith("index,brand,system_code,card_balance_yen"), f"--csv header {lines[:1]}")
+check("idm" not in lines[0].split(","), "--csv omits idm by default")
+check(len(lines) > 1 and "suica_family" in lines[1], "--csv data row")
+# Demo IDm must not appear when redacted.
+demo_idm = json.loads((FIX / "demo-suica.json").read_text(encoding="utf-8"))["idm"]
+check(demo_idm not in csv.stdout, "--csv redacts demo idm")
+with_idm = subprocess.run(
+    [EXE, "--csv", "--include-idm", "--dump", str(FIX / "demo-suica.json"), "--stations", STATIONS],
+    capture_output=True, text=True)
+check(with_idm.returncode == 0 and demo_idm in with_idm.stdout, "--include-idm shows idm")
+with tempfile.NamedTemporaryFile("w", suffix=".csv", delete=False) as f:
+    path = f.name
+csvf = subprocess.run(
+    [EXE, "--csv-file", path, "--dump", str(FIX / "demo-suica.json"), "--stations", STATIONS],
+    capture_output=True, text=True)
+check(csvf.returncode == 0 and Path(path).read_text(encoding="utf-8").startswith("index,"), "--csv-file")
+Path(path).unlink()
 
 print("squirrelsuica desktop:", "FAILED" if failures else "ok")
 sys.exit(1 if failures else 0)
