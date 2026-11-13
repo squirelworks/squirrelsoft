@@ -765,7 +765,7 @@ static void test_lists_gui(void) {
     CHECK(calc_gui_eval(&g, "zs = {a, a^2, sqrt(16), (1, 2)}") == -1); /* a pair is not a number */
     CHECK(calc_gui_eval(&g, "zs = {a, a^2, max(3, 4)}") == 0 && contains(g.hist, "zs = {2, 4, 4}"));
     CHECK(calc_gui_eval(&g, "stats ys") == 0 && contains(g.hist, "n = 6  mean = 7.05  sd = 3.78246") &&
-          contains(g.hist, "median = 7  max = 12.2  sum = 42.3"));
+          contains(g.hist, "min = 2.1  q1 = 3.9  median = 7  q3 = 10.1  max = 12.2") && contains(g.hist, "sum = 42.3"));
     NEAR(calc_gui_var(&g, "ans"), 7.05, 1e-12);
     CHECK(calc_gui_eval(&g, "linreg xs ys") == 0 && contains(g.hist, "  y = 2.02 x - 0.02") &&
           contains(g.hist, "r^2 = 0.998211  r = 0.999105"));
@@ -803,7 +803,8 @@ static void test_lists_gui(void) {
     CHECK(calc_gui_eval(&g, "linreg xs") == -1 && contains(g.hist, "name two lists"));
     CHECK(calc_gui_eval(&g, "linreg xs nope") == -1 && contains(g.hist, "nope is not a list"));
     CHECK(calc_gui_eval(&g, "stats") == -1 || contains(g.hist, "stats"));
-    CHECK(calc_gui_eval(&g, "stats nope") == -1 && contains(g.hist, "name one list"));
+    CHECK(calc_gui_eval(&g, "stats nope") == -1 && contains(g.hist, "nope is not a list or a range"));
+    CHECK(calc_gui_eval(&g, "stats xs ys") == -1 && contains(g.hist, "name one list"));
     CHECK(calc_gui_eval(&g, "zs = {1, -2, 3}") == 0);
     CHECK(calc_gui_eval(&g, "expreg zs zs") == -1 && contains(g.hist, "above 0"));
     CHECK(calc_gui_eval(&g, "quadreg xs xs") == -1 && contains(g.hist, "3 points"));
@@ -835,6 +836,132 @@ static void test_cas_step3(void) {
     CHECK(calc_gui_eval(&g, "integrate y1 from 0 to pi/2") == 0 && contains(g.hist, "= 1")); /* still numeric */
 }
 
+/* the centre of cell (r, c) of the sheet as last drawn */
+static void cell_xy(int r, int c, int *x, int *y) {
+    sqg_rect a = g.sheet_at;
+    int cw = (a.w - 30) / CALC_SHEET_COLS;
+    *x = a.x + 30 + c * cw + cw / 2;
+    *y = a.y + 16 + (r - g.sheet_top) * 16 + 8;
+}
+
+static void type(const char *text) {
+    snprintf(in.text, sizeof in.text, "%s", text);
+    frame();
+}
+
+static void key(int k) {
+    in.key = k;
+    frame();
+}
+
+static void test_sheet_gui(const char *dir) {
+    calc_gui_init(&g);
+    /* the calculator line sets cells and reads them */
+    CHECK(calc_gui_eval(&g, "A1 = 3") == 0 && contains(g.hist, "A1 = 3"));
+    CHECK(calc_gui_eval(&g, "A2 = A1 * 2") == 0 && !strcmp(g.sheet.text[1][0], "=A1 * 2") && contains(g.hist, "A2 = 6"));
+    CHECK(calc_gui_eval(&g, "A3 = \"total\"") == 0 && g.sheet.kind[2][0] == CALC_CELL_TEXT);
+    CHECK(calc_gui_eval(&g, "A1 + A2") == 0 && contains(g.hist, "A1 + A2 = 9"));
+    CHECK(calc_gui_eval(&g, "A3 + 1") == -1 && contains(g.hist, "A3 is text"));
+    CHECK(calc_gui_eval(&g, "B1 = B1 + 1") == -1 && contains(g.hist, "cycle"));
+    CHECK(calc_gui_eval(&g, "B1 =") == 0 && g.sheet.kind[0][1] == CALC_CELL_EMPTY);
+    /* cells follow the calculator's variables and lists */
+    CHECK(calc_gui_eval(&g, "k = 10") == 0 && calc_gui_eval(&g, "B2 = k + A1") == 0);
+    NEAR(g.sheet.val[1][1], 13, 0);
+    CHECK(calc_gui_eval(&g, "k = 20") == 0);
+    NEAR(g.sheet.val[1][1], 23, 0);
+    CHECK(calc_gui_eval(&g, "xs = {1, 2, 3, 4}") == 0 && calc_gui_eval(&g, "B3 = mean(xs)") == 0);
+    NEAR(g.sheet.val[2][1], 2.5, 0);
+    CHECK(calc_gui_eval(&g, "xs = {10, 20}") == 0);
+    NEAR(g.sheet.val[2][1], 15, 0);
+    /* fill: down a column with the names moved */
+    CHECK(calc_gui_eval(&g, "C1 = 1") == 0 && calc_gui_eval(&g, "C2 = C1 + 1") == 0);
+    CHECK(calc_gui_eval(&g, "fill C2:C10") == 0 && !strcmp(g.sheet.text[9][2], "=C9 + 1"));
+    NEAR(g.sheet.val[9][2], 10, 0);
+    CHECK(calc_gui_eval(&g, "fill C2:D9") == -1 && contains(g.hist, "fill a column or a row"));
+    CHECK(calc_gui_eval(&g, "fill C2") == -1);
+    /* ranges wherever a list goes */
+    CHECK(calc_gui_eval(&g, "stats C1:C10") == 0 && contains(g.hist, "n = 10  mean = 5.5"));
+    CHECK(calc_gui_eval(&g, "D1 = 2") == 0 && calc_gui_eval(&g, "D2 = D1 + 2") == 0 && calc_gui_eval(&g, "fill D2:D10") == 0);
+    CHECK(calc_gui_eval(&g, "linreg C1:C10 D:D") == 0 && contains(g.hist, "y = 2 x"));
+    CHECK(g.fit_on == 2 && g.fit_n == 10 && g.fit_y[9] == 20);
+    CHECK(calc_gui_eval(&g, "linreg C1:C10 D1:D5") == -1 && contains(g.hist, "not the same length"));
+    CHECK(calc_gui_eval(&g, "stats E:E") == -1 && contains(g.hist, "E:E has no numbers"));
+    CHECK(calc_gui_eval(&g, "sum(C:C) + normalcdf(-1e99, 0)") == 0 && contains(g.hist, "= 55.5"));
+    /* a graph row may use cells: it is redrawn when they change */
+    calc_gui_set(&g, 0, "A1 x");
+    CHECK(g.ok[0]);
+    double values[CALC_VARS + 1] = {2};
+    for (int i = 0; i < g.nvars; i++) values[i + 1] = g.vval[i];
+    NEAR(sqm_run(&g.prog[0], values), 6, 0);
+    CHECK(calc_gui_eval(&g, "A1 = 5") == 0);
+    NEAR(sqm_run(&g.prog[0], values), 10, 0);
+    calc_gui_set(&g, 1, "y = normalpdf(x, 0, 2)");
+    CHECK(g.ok[1] && g.kind[1] == CALC_FUNC);
+    values[0] = 0;
+    NEAR(sqm_run(&g.prog[1], values), 0.19947114020071635, 1e-15);
+    calc_gui_set(&g, 2, "A3 x");
+    CHECK(!g.ok[2] && contains(g.err[2], "A3 is text"));
+    calc_gui_set(&g, 2, "");
+    CHECK(calc_gui_eval(&g, "a1 = 4") == 0 && !isnan(calc_gui_var(&g, "a1"))); /* lower case is a variable */
+    CHECK(calc_gui_cell(&g, "I1", "1") == -1 && calc_gui_cell(&g, "A1x", "1") == -1 && calc_gui_cell(&g, "A1", "3") == 0);
+
+    /* hist and box draw on the graph and move the view onto it */
+    CHECK(calc_gui_eval(&g, "hs = {1, 2, 2, 3, 3, 3, 4, 4, 5, 9}") == 0);
+    CHECK(calc_gui_eval(&g, "hist hs") == 0 && contains(g.hist, "5 bins of 2 from 0") && g.stat_plot == CALC_PLOT_HIST);
+    frame();
+    CHECK(g.view.xmin < 0 && g.view.xmax > 10 && g.view.ymax > 5 && g.view.ymax < 6);
+    CHECK(count(g.graph_at, 0xFF305080u) > 100); /* the bar edges */
+    CHECK(calc_gui_eval(&g, "hist hs 0.5") == 0 && contains(g.hist, "16 bins of 0.5 from 1") && g.hist_bins == 16);
+    CHECK(calc_gui_eval(&g, "hist hs -1") == -1 && contains(g.hist, "above 0"));
+    CHECK(calc_gui_eval(&g, "box hs") == 0 && contains(g.hist, "box hs: 1 | 2 [3] 4 | 9") && g.stat_plot == CALC_PLOT_BOX);
+    frame();
+    CHECK(count(g.graph_at, 0xFF305080u) > 100);
+    CHECK(calc_gui_eval(&g, "box hs hs") == -1);
+
+    /* the Sheet view: click a cell, type, Enter goes down a row */
+    g.show_sheet = 1;
+    frame();
+    CHECK(g.sheet_at.w > 200 && g.sheet_at.h > 100);
+    int x, y;
+    cell_xy(4, 1, &x, &y); /* B5 */
+    click(x, y);
+    CHECK(g.sel_r == 4 && g.sel_c == 1 && ui.focus == sqg_id_str("cell"));
+    type("=sum(");
+    type("C1:C4)");
+    key(SQG_KEY_ENTER);
+    CHECK(!strcmp(g.sheet.text[4][1], "=sum(C1:C4)") && g.sel_r == 5);
+    NEAR(g.sheet.val[4][1], 10, 0);
+    type("7");
+    key(SQG_KEY_UP); /* moving also puts the line in */
+    CHECK(g.sheet.val[5][1] == 7 && g.sel_r == 4 && !strcmp(g.cell_line, "=sum(C1:C4)"));
+    key(SQG_KEY_TAB);
+    CHECK(g.sel_c == 2 && g.sel_r == 4 && !strcmp(g.cell_line, "=C4 + 1"));
+    key(SQG_KEY_DOWN);
+    CHECK(g.sel_r == 5);
+    /* the values are drawn: a formula's in blue, an error as #ERR */
+    calc_gui_cell(&g, "E1", "=nope");
+    frame();
+    cell_xy(0, 4, &x, &y);
+    CHECK(count(sqg_rect_make(x - 30, y - 7, 60, 14), 0xFFB02020u) > 5);
+    cell_xy(4, 1, &x, &y);
+    CHECK(count(sqg_rect_make(x - 30, y - 7, 60, 14), 0xFF2050A0u) > 5);
+    /* the wheel scrolls, and selecting far down keeps the cell in view */
+    in.mx = g.sheet_at.x + 100;
+    in.my = g.sheet_at.y + 100;
+    in.wheel = -5;
+    frame();
+    CHECK(g.sheet_top == 15);
+    g.sel_r = 49;
+    frame();
+    CHECK(g.sheet_top + (g.sheet_at.h - 16) / 16 > 49);
+    if (dir) {
+        char path[512];
+        snprintf(path, sizeof path, "%s/calc_sheet.ppm", dir);
+        CHECK(sqg_write_ppm(&cv, path) == 0);
+    }
+    g.show_sheet = 0;
+}
+
 int main(int argc, char **argv) {
     const char *dir = argc > 1 ? argv[1] : ".";
     test_steps();
@@ -848,6 +975,7 @@ int main(int argc, char **argv) {
     test_relations_gui();
     test_lists_gui();
     test_cas_step3();
+    test_sheet_gui(dir);
     printf("test_calc: %d checks, %d failed\n", checks, failures);
     return failures != 0;
 }

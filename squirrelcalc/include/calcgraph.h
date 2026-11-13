@@ -84,4 +84,16 @@ int calc_shade_region(sqg_canvas *c, sqg_rect r, const CalcView *v, const SqmPro
 int calc_plot_fn(sqg_canvas *c, sqg_rect r, const CalcView *v, double (*f)(const void *ctx, double x),
                  const void *ctx, uint32_t color);
 
+/* Histogram bars: bin k spans start + k width to start + (k + 1) width and
+ * is counts[k] high, filled with argb (blended) and outlined in edge.
+ * Returns the bars at least partly in view. */
+int calc_draw_histogram(sqg_canvas *c, sqg_rect r, const CalcView *v, double start, double width, const int *counts,
+                        int n, uint32_t argb, uint32_t edge);
+
+/* A box plot along x at height y (h tall in plane units): whiskers from
+ * lo to hi, the box from q1 to q3, a bar at the median. Returns 1 when any
+ * of it is in view. */
+int calc_draw_boxplot(sqg_canvas *c, sqg_rect r, const CalcView *v, double lo, double q1, double med, double q3,
+                      double hi, double y, double h, uint32_t argb, uint32_t edge);
+
 #endif

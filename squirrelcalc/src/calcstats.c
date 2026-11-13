@@ -7,6 +7,8 @@
 
 #include "sqmath.h"
 
+#define SQRT_2PI 2.5066282746310002 /* sqrt(2 pi) */
+
 static int all_finite(const double *v, int n) {
     for (int i = 0; i < n; i++)
         if (!isfinite(v[i])) return 0;
@@ -34,7 +36,150 @@ int calc_stats(const double *v, int n, CalcStats *out) {
     out->min = s[0];
     out->max = s[n - 1];
     out->median = n % 2 ? s[n / 2] : (s[n / 2 - 1] + s[n / 2]) / 2;
+    out->var = n > 1 ? ss / (n - 1) : 0;
+    out->sd_pop = sqrt(ss / n);
+    /* quartiles: medians of the halves below and above the median */
+    int h = n / 2;
+    if (n < 2) {
+        out->q1 = out->q3 = s[0];
+    } else {
+        const double *hi = s + n - h;
+        out->q1 = h % 2 ? s[h / 2] : (s[h / 2 - 1] + s[h / 2]) / 2;
+        out->q3 = h % 2 ? hi[h / 2] : (hi[h / 2 - 1] + hi[h / 2]) / 2;
+    }
     return 0;
+}
+
+/* the nearest of 1, 2 or 5 times a power of ten to x, measured by ratio */
+static double nice_width(double x) {
+    double p = pow(10, floor(log10(x))), best = p;
+    const double m[] = {1, 2, 5, 10};
+    for (int i = 1; i < 4; i++)
+        if (fabs(log(m[i] * p / x)) < fabs(log(best / x))) best = m[i] * p;
+    return best;
+}
+
+int calc_histogram(const double *v, int n, double *start, double *width, int *counts, int cap) {
+    if (n < 1 || cap < 1 || !all_finite(v, n) || !start || !width) return -1;
+    double lo = v[0], hi = v[0];
+    for (int i = 1; i < n; i++) {
+        if (v[i] < lo) lo = v[i];
+        if (v[i] > hi) hi = v[i];
+    }
+    if (!(*width > 0) || !isfinite(*width) || !isfinite(*start)) {
+        int want = 1 + (int)ceil(log2((double)n));
+        double span = hi - lo;
+        *width = span > 0 ? nice_width(span / want) : 1;
+        *start = floor(lo / *width) * *width;
+    }
+    double top = (hi - *start) / *width;
+    int bins = (int)floor(top) + 1;
+    if (bins < 1) bins = 1;
+    if (top == floor(top) && top >= 1) bins--; /* the maximum on a bin edge closes the bin below */
+    if (bins > cap) bins = cap;
+    for (int k = 0; k < bins; k++) counts[k] = 0;
+    for (int i = 0; i < n; i++) {
+        double t = (v[i] - *start) / *width;
+        if (t < 0) continue;
+        int k = (int)floor(t);
+        if (k == bins && t == (double)bins) k = bins - 1;
+        if (k < bins) counts[k]++;
+    }
+    return bins;
+}
+
+/* ---- distributions ---- */
+
+double calc_normal_pdf(double x, double mu, double sd) {
+    if (!(sd > 0)) return NAN;
+    double z = (x - mu) / sd;
+    return exp(-0.5 * z * z) / (sd * SQRT_2PI);
+}
+
+/* P(Z < z), accurate in both tails */
+static double phi(double z) { return 0.5 * erfc(-z / sqrt(2.0)); }
+
+double calc_normal_cdf(double lo, double hi, double mu, double sd) {
+    if (!(sd > 0) || isnan(lo) || isnan(hi) || isnan(mu)) return NAN;
+    if (lo >= 1e99) lo = INFINITY;
+    if (lo <= -1e99) lo = -INFINITY;
+    if (hi >= 1e99) hi = INFINITY;
+    if (hi <= -1e99) hi = -INFINITY;
+    double a = (lo - mu) / sd, b = (hi - mu) / sd;
+    if (a > 0) return phi(-a) - phi(-b); /* the upper tail, without cancelling */
+    return phi(b) - phi(a);
+}
+
+double calc_inv_norm(double p, double mu, double sd) {
+    if (!(p > 0 && p < 1) || !(sd > 0)) return NAN;
+    /* solve phi(z) = p on the side of the smaller tail, by bisection then Newton */
+    double q = p < 0.5 ? p : 1 - p, lo = -40, hi = 0;
+    for (int i = 0; i < 80; i++) {
+        double m = (lo + hi) / 2;
+        if (phi(m) < q) lo = m;
+        else hi = m;
+    }
+    double z = (lo + hi) / 2;
+    for (int i = 0; i < 3; i++) {
+        double d = exp(-0.5 * z * z) / SQRT_2PI;
+        if (!(d > 0)) break;
+        z -= (phi(z) - q) / d;
+    }
+    return mu + sd * (p < 0.5 ? z : -z);
+}
+
+static int whole(double x) { return isfinite(x) && x == floor(x); }
+
+double calc_ncr(double n, double k) {
+    if (!whole(n) || !whole(k) || k < 0 || n < k) return NAN;
+    if (k > n - k) k = n - k;
+    double r = 1;
+    for (double i = 1; i <= k; i++) r = r * (n - k + i) / i;
+    return r < 1e15 ? round(r) : r; /* the divisions leave a last-bit error */
+}
+
+double calc_npr(double n, double k) {
+    if (!whole(n) || !whole(k) || k < 0 || n < k) return NAN;
+    double r = 1;
+    for (double i = 0; i < k; i++) r *= n - i;
+    return r;
+}
+
+double calc_binom_pdf(double n, double p, double k) {
+    if (!whole(n) || n < 0 || !(p >= 0 && p <= 1)) return NAN;
+    if (!whole(k) || k < 0 || k > n) return 0;
+    if (p == 0) return k == 0;
+    if (p == 1) return k == n;
+    return exp(lgamma(n + 1) - lgamma(k + 1) - lgamma(n - k + 1) + k * log(p) + (n - k) * log1p(-p));
+}
+
+double calc_binom_cdf(double n, double p, double k) {
+    if (!whole(n) || n < 0 || !(p >= 0 && p <= 1) || isnan(k)) return NAN;
+    k = floor(k);
+    if (k < 0) return 0;
+    if (k >= n) return 1;
+    double s = 0;
+    for (double i = 0; i <= k; i++) s += calc_binom_pdf(n, p, i);
+    return s > 1 ? 1 : s;
+}
+
+double calc_poisson_pdf(double lambda, double k) {
+    if (!(lambda > 0) || !isfinite(lambda)) return NAN;
+    if (!whole(k) || k < 0) return 0;
+    return exp(k * log(lambda) - lambda - lgamma(k + 1));
+}
+
+double calc_poisson_cdf(double lambda, double k) {
+    if (!(lambda > 0) || !isfinite(lambda) || isnan(k)) return NAN;
+    k = floor(k);
+    if (k < 0) return 0;
+    double s = 0;
+    for (double i = 0; i <= k && i < 1e7; i++) {
+        double t = calc_poisson_pdf(lambda, i);
+        s += t;
+        if (i > lambda && t < 1e-17 * s) break;
+    }
+    return s > 1 ? 1 : s;
 }
 
 double calc_fit_eval(const CalcFit *f, double x) {
@@ -178,6 +323,7 @@ static size_t term(char *out, size_t cap, size_t at, double c, const char *what,
         return at + (size_t)snprintf(out + at, cap - at, "%s%s", num, what);
     }
     sqm_format(fabs(c), 6, num, sizeof num);
+    if (!strcmp(num, "0")) return at; /* "y = 2 x", not "y = 2 x + 0" */
     return at + (size_t)snprintf(out + at, cap - at, " %c %s%s", c < 0 ? '-' : '+', num, what);
 }
 

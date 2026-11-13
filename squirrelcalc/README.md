@@ -51,6 +51,21 @@ build/squirrelcalc --fn "x^2 - 2" --fn "2 sin(x)" --roots
     the fit and r² (and r for the line) and draw the fit through the points.
     The view moves onto the points, and Reset clears them.
   - r² is measured on y itself, also for the exponential fit.
+  - `hist xs` draws a histogram (round bins, about 1 + log2 n of them, or
+    `hist xs 0.5` for a width) and `box xs` a box plot from the minimum,
+    quartiles, median and maximum. Reset clears them.
+  - Wherever a list goes, a range of the sheet goes too: `stats A2:A20`,
+    `linreg A:A B:B`.
+- **Functions of values and distributions**, in the calculator, the graph
+  rows and the cells: `sum`, `mean`, `median`, `sd`, `var`, `count`, `min`,
+  `max`, `q1` and `q3` of a list (`mean(xs)`), a range (`sum(A1:A10)`,
+  `max(B:B)`) or several values (`sum(1, 2, a)`); `normalpdf(x, mu, sd)`
+  (it graphs: `y = normalpdf(x, 100, 15)`), `normalcdf(lo, hi, mu, sd)` (use
+  ±1e99 for an open end), `invnorm(p, mu, sd)`, `binompdf(n, p, k)`,
+  `binomcdf(n, p, k)`, `poissonpdf(l, k)`, `poissoncdf(l, k)`, `ncr(n, k)`
+  and `npr(n, k)`. mu and sd default to 0 and 1. Quartiles are the medians
+  of the lower and upper halves, leaving out the middle value of an odd
+  count.
 - **Units:** `5 ft to m`, `65 mph -> km/h`, `20 degC to degF`,
   `35.681236 deg to dms`, or `units 5 kg * 9.81 m/s^2` (shown as `49.05 N`).
   `convert` works like `units`, and the number lands in `ans`.
@@ -67,6 +82,18 @@ build/squirrelcalc --fn "x^2 - 2" --fn "2 sin(x)" --roots
   instead of joining across them. Esc closes the window.
 - **Table** shows x and every function from Start by Step in place of the
   graph; the wheel scrolls it.
+- **Sheet** shows the spreadsheet in place of the graph: columns A to H,
+  rows 1 to 50. Click a cell and type into the line above the grid: a
+  number, a label, or a formula starting with `=` (`=A1*2 + b`,
+  `=mean(B2:B9)`). Enter puts it in and moves down; Up, Down and Tab move
+  too. Formulas show their values (in blue, `#ERR` in red, with the reason
+  above the grid); cells are worked out in the order they need each other,
+  and a cycle is an error rather than a hang. An empty cell counts as 0.
+  From the calculator, `B2 = 5` sets a cell, `B2 = A1 * 2` stores the
+  formula, `B2 = "label"` a label, and `fill B2:B10` copies B2 down (or
+  across) with its cell names moved (`$A$1` stays). Cells can use the
+  calculator's variables and lists, and graph rows can use cells
+  (`y1 = A1 x` redraws when A1 changes).
 
 ## Command line
 
@@ -77,6 +104,12 @@ build/squirrelcalc --fn "x^2 - 2" --fn "2 sin(x)" --roots
 --line TEXT      run a calculator line first ("a = 2", "solve x^2 = 2",
                  "xs = {1, 2, 3}", "linreg xs ys");
                  with --snapshot the history is printed
+--csv FILE       load FILE into the sheet (its first field is A1; past H
+                 or row 50 is left out, with a warning)
+--cell REF=TEXT  set a cell as typed (--cell A1=5, --cell "B1==A1*2")
+--sheet          show the sheet instead of the graph
+--save-csv FILE  write the sheet's values as CSV after everything else
+--save-sheet FILE  the same with the formulas as typed
 --roots          mark the roots
 --crossings      mark where the functions cross
 --table          show the table instead of the graph
@@ -95,20 +128,31 @@ or no window.
   steps and labels, axes and grid, curve plotting, point rings, area shading.
 - `calcgraph.c` also has implicit curves (marching squares with bisection),
   shaded regions, and plots of fitted curves.
-- `calcstats.c`: list statistics and the least-squares fits. The quadratic
-  fit centres and scales x first, so data far from 0 stays well conditioned.
+- `calcstats.c`: list statistics, quartiles, histograms, the least-squares
+  fits and the distributions. The quadratic fit centres and scales x first,
+  so data far from 0 stays well conditioned. The normal tails come from
+  `erfc`, so `normalcdf(8, 1e99)` keeps its digits, and `invnorm` solves on
+  the smaller tail.
+- `calcsheet.c`: the sheet (cells, recalculation in dependency order,
+  copying with moved names, CSV) and `calc_expand`, which rewrites cell
+  names and the functions of values for `sqmath` before it parses a line.
 - `calcgui.c`: the panel, the calculator line, its variables and lists.
 - `calc_sdl.c` / `calc_nosdl.c`: the window loop, with or without SDL2.
 
 ## Tests
 
-`make test` runs `tests/test_calc.c` (tick steps and labels, view maps, zoom
+`make test` runs `tests/test_sheet.c` (cell names, kinds, recalculation,
+cycles, errors and their spread, a 50-deep chain, every function of values
+and distribution against known values, copying and `#REF`, CSV both ways,
+quartiles and histograms), `tests/test_calc.c` (tick steps and labels, view maps, zoom
 about a point, pan, plotted pixels for `x`, `1/x`, `sqrt(x)`, the calculator
 line and its errors, roots, the derivative, wheel zoom and drag pan through
 the panel, crossings, integrals and their shading, trace by click and arrow
 keys, the table, parametric and polar curves, tmin and tmax, sliders, implicit curves with
 saddles, poles and dashes, region areas, equation and inequality rows and
-their errors, statistics and fits checked against an independent fit, and
-lists and their errors),
+their errors, statistics and fits checked against an independent fit,
+lists and their errors, cells from the calculator line, fill, ranges in
+stats and fits, rows that use cells, histograms and box plots, and the
+Sheet view by click, typing and keys),
 `tests/cli_smoke.sh`, and ten frames of the real window with
 `SDL_VIDEODRIVER=dummy` when SDL2 is installed.

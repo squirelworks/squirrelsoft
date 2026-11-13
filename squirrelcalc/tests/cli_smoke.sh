@@ -43,6 +43,21 @@ echo "$out" | grep -q "r^2 = 1  r = 1" || fail "linreg r^2: $out"
 echo "$out" | grep -q "n = 4  mean = 6" || fail "stats: $out"
 echo "$out" | grep -q "Fit y = 2 x + 1" || fail "fit in the status: $out"
 
+# the sheet: a CSV in, cells and a fill, a regression over ranges, the CSV out
+printf 'x,y\n1,3\n2,5\n3,7\n4,9\n' > "$B/data.csv"
+out=$($C --csv "$B/data.csv" --cell "C1=twice" --cell "C2==B2*2" --line "fill C2:C5" --line "linreg A2:A5 B:B" \
+    --line "D1 = mean(C2:C5)" --line "normalcdf(-1, 1)" --line "hist B2:B5 2" --sheet \
+    --save-csv "$B/out.csv" --snapshot "$B/snap13.ppm") || fail "sheet"
+echo "$out" | grep -q "^  y = 2 x + 1$" || fail "linreg over ranges: $out"
+echo "$out" | grep -q "D1 = 12" || fail "mean of a range: $out"
+echo "$out" | grep -q "normalcdf(-1, 1) = 0.682689492137" || fail "normalcdf: $out"
+echo "$out" | grep -q "4 bins of 2 from 2" || fail "hist: $out"
+[ "$(sed -n 5p "$B/out.csv")" = "4,9,18," ] || fail "saved values: $(cat "$B/out.csv")"
+$C --csv "$B/data.csv" --cell "C2==B2*2" --save-sheet "$B/out2.csv" >/dev/null --snapshot "$B/snap14.ppm" || fail "save-sheet"
+grep -q "^1,3,=B2\*2$" "$B/out2.csv" || fail "saved formulas: $(cat "$B/out2.csv")"
+$C --cell "Z9=1" --snapshot "$B/snap4.ppm" >/dev/null 2>&1; [ $? -eq 1 ] || fail "--cell Z9 should exit 1"
+$C --csv "$B/no-such.csv" --snapshot "$B/snap4.ppm" >/dev/null 2>&1; [ $? -eq 1 ] || fail "a missing CSV should exit 1"
+
 err=$($C --fn "sin(" --snapshot "$B/snap3.ppm" 2>&1 >/dev/null)
 echo "$err" | grep -q "y1:" || fail "parse error reported: $err"
 $C --let "x=1" --snapshot "$B/snap4.ppm" >/dev/null 2>&1; [ $? -eq 1 ] || fail "--let x=1 should exit 1"

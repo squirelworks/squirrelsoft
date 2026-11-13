@@ -12,6 +12,8 @@ static const uint32_t COLORS[CALC_N] = {0xFF2060D0u, 0xFFD03030u, 0xFF20A040u, 0
 #define COL_ERR 0xFFB02020u
 #define COL_FIT 0xFFE07000u
 #define COL_POINTS 0xFF303030u
+#define COL_BARS 0x604080D0u
+#define COL_BAR_EDGE 0xFF305080u
 
 static SqmExpr scratch, scratch2; /* big: kept off the stack */
 
@@ -31,6 +33,8 @@ void calc_gui_init(CalcGui *g) {
     snprintf(g->tstart, sizeof g->tstart, "-5");
     snprintf(g->tstep, sizeof g->tstep, "1");
     snprintf(g->status, sizeof g->status, "%s", HINT);
+    calc_sheet_init(&g->sheet);
+    g->cell_r = g->cell_c = -1;
 }
 
 double calc_gui_var(const CalcGui *g, const char *name) {
@@ -53,7 +57,7 @@ static int slots(const CalcGui *g, const char **names, double *values) {
 static void compile_deriv(CalcGui *g) {
     g->dok = 0;
     g->dtext[0] = 0;
-    if (!g->ok[0] || g->kind[0] != CALC_FUNC || sqm_parse(g->fx[0] + g->body[0], &scratch, NULL) != SQM_OK) return;
+    if (!g->ok[0] || g->kind[0] != CALC_FUNC || sqm_parse(g->src[0] + g->body[0], &scratch, NULL) != SQM_OK) return;
     int rc = sqm_diff(&scratch, "x", &scratch2);
     if (rc != SQM_OK) {
         snprintf(g->dtext, sizeof g->dtext, "d/dx y1: %s", sqm_strerror(rc));
@@ -78,8 +82,8 @@ static void compile_cross(CalcGui *g) {
         pair_of(k, &i, &j);
         g->cok[k] = 0;
         if (!g->ok[i] || !g->ok[j] || g->kind[i] != CALC_FUNC || g->kind[j] != CALC_FUNC) continue;
-        char text[340];
-        snprintf(text, sizeof text, "(%s) - (%s)", g->fx[i] + g->body[i], g->fx[j] + g->body[j]);
+        char text[820];
+        snprintf(text, sizeof text, "(%s) - (%s)", g->src[i] + g->body[i], g->src[j] + g->body[j]);
         g->cok[k] = sqm_parse(text, &scratch, NULL) == SQM_OK && sqm_compile(&scratch, names, n, &g->cprog[k]) == SQM_OK;
     }
 }
@@ -87,6 +91,39 @@ static void compile_cross(CalcGui *g) {
 /* parse part of row i (it starts at byte off of the row) and check that its
  * names other than var are defined; 0, or -1 with the row's error set */
 static int find_list(const CalcGui *g, const char *name);
+
+/* the calculator's lists for the sheet functions: mean(xs) */
+static int env_list(const void *ctx, const char *name, double *out, int cap) {
+    const CalcGui *g = (const CalcGui *)ctx;
+    int k = find_list(g, name);
+    if (k < 0) return -1;
+    int n = g->llen[k] < cap ? g->llen[k] : cap;
+    memcpy(out, g->lval[k], (size_t)n * sizeof *out);
+    return n;
+}
+
+/* what names mean to the sheet: the variables and the lists */
+static CalcEnv make_env(const CalcGui *g, const char **names) {
+    for (int i = 0; i < g->nvars; i++) names[i] = g->vname[i];
+    CalcEnv env = {names, g->vval, g->nvars, env_list, g};
+    return env;
+}
+
+/* text with cells and sheet functions worked out into out (a copy when
+ * there are none); 0, or -1 with why in msg */
+static int expand_text(const CalcGui *g, const char *text, char *out, size_t cap, char *msg, size_t msgcap) {
+    if (!calc_needs_expand(text)) {
+        if (strlen(text) >= cap) {
+            snprintf(msg, msgcap, "too long");
+            return -1;
+        }
+        snprintf(out, cap, "%s", text);
+        return 0;
+    }
+    const char *names[CALC_VARS];
+    CalcEnv env = make_env(g, names);
+    return calc_expand(text, out, cap, &g->sheet, &env, msg, msgcap);
+}
 
 static int check_part2(CalcGui *g, int i, const char *text, int off, const char *var, const char *var2) {
     SqmError err;
@@ -173,7 +210,7 @@ static void compile_relation(CalcGui *g, int i, const char *row) {
         snprintf(g->err[i], sizeof g->err[i], "one =, < or > in a row");
         return;
     }
-    char lhs[160], rhs[160];
+    char lhs[400], rhs[400];
     snprintf(lhs, sizeof lhs, "%.*s", at, row);
     snprintf(rhs, sizeof rhs, "%s", row + at + len);
     if (strspn(lhs, " ") == strlen(lhs) || strspn(rhs, " ") == strlen(rhs)) {
@@ -190,7 +227,7 @@ static void compile_relation(CalcGui *g, int i, const char *row) {
         return;
     }
     if (check_part2(g, i, lhs, 0, "x", "y") || check_part2(g, i, rhs, at + len, "x", "y")) return;
-    char f[340];
+    char f[820];
     if (op == '>') snprintf(f, sizeof f, "(%s) - (%s)", rhs, lhs); /* a > b is b - a < 0 */
     else snprintf(f, sizeof f, "(%s) - (%s)", lhs, rhs);
     g->kind[i] = op == '=' ? CALC_IMPLICIT : CALC_INEQ;
@@ -206,12 +243,21 @@ static void compile(CalcGui *g, int i) {
     g->strict[i] = 0;
     g->err[i][0] = 0;
     g->nroots[i] = 0;
-    const char *row = g->fx[i], *p = row;
+    char why[96];
+    if (expand_text(g, g->fx[i], g->src[i], sizeof g->src[i], why, sizeof why)) {
+        snprintf(g->err[i], sizeof g->err[i], "%s", why);
+        g->src[i][0] = 0;
+        if (i == 0) compile_deriv(g);
+        compile_cross(g);
+        if (g->trace_fn == i) g->trace_fn = -1;
+        return;
+    }
+    const char *row = g->src[i], *p = row;
     while (*p == ' ') p++;
     const char *q = p + 1;
     while (*q == ' ') q++;
     int close = 0, comma = pair_comma(p, &close);
-    char a[200], b[200];
+    char a[420], b[420];
     if (*p == 'r' && *q == '=') {
         /* polar: r = f(t), drawn as (f cos t, f sin t) */
         g->kind[i] = CALC_POLAR;
@@ -325,7 +371,9 @@ static double value_of(const CalcGui *g, const char *text) {
     const char *names[CALC_VARS];
     for (int i = 0; i < g->nvars; i++) names[i] = g->vname[i];
     double v;
-    if (sqm_parse(text, &scratch2, NULL) != SQM_OK || sqm_eval(&scratch2, names, g->vval, g->nvars, &v) != SQM_OK)
+    char buf[600], why[96];
+    if (expand_text(g, text, buf, sizeof buf, why, sizeof why)) return NAN;
+    if (sqm_parse(buf, &scratch2, NULL) != SQM_OK || sqm_eval(&scratch2, names, g->vval, g->nvars, &v) != SQM_OK)
         return NAN;
     return v;
 }
@@ -343,7 +391,7 @@ static int antideriv_line(CalcGui *g, const char *line, const char *rest) {
             hist_error(g, line, "that row is not a function of x");
             return -1;
         }
-        text = g->fx[fn] + g->body[fn];
+        text = g->src[fn] + g->body[fn];
     }
     if (parse_or_say(g, line, text, 0, &scratch)) return -1;
     int rc = sqm_antideriv(&scratch, "x", &scratch2);
@@ -388,7 +436,7 @@ static int integrate_line(CalcGui *g, const char *line, const char *rest) {
             hist_error(g, line, "that row is a curve, not a function of x");
             return -1;
         }
-        text = g->fx[fn] + g->body[fn];
+        text = g->src[fn] + g->body[fn];
     }
     if (parse_or_say(g, line, text, 0, &scratch)) return -1;
     const char *names[CALC_VARS + 1];
@@ -497,81 +545,164 @@ static int list_assign(CalcGui *g, const char *line, const char *name, const cha
     return 0;
 }
 
-/* two list names after a command: "xs ys" */
-static int two_lists(CalcGui *g, const char *line, const char *rest, int *a, int *b) {
-    char na[SQM_NAME_LEN], nb[SQM_NAME_LEN], extra[2];
-    if (sscanf(rest, "%15s %15s %1s", na, nb, extra) != 2) {
+/* the numbers of a list name or a sheet range (A1:A10, B:B); -1 for neither */
+static int values_of(const CalcGui *g, const char *name, double *out, int cap) {
+    int k = find_list(g, name);
+    if (k >= 0) {
+        int n = g->llen[k] < cap ? g->llen[k] : cap;
+        memcpy(out, g->lval[k], (size_t)n * sizeof *out);
+        return n;
+    }
+    int n = calc_sheet_values(&g->sheet, name, out, cap);
+    return n;
+}
+
+static int one_set(CalcGui *g, const char *line, const char *name, double *v) {
+    int n = values_of(g, name, v, CALC_LIST_MAX);
+    char msg[80];
+    if (n < 0) snprintf(msg, sizeof msg, "%.20s is not a list or a range", name);
+    else if (n == 0) snprintf(msg, sizeof msg, "%.20s has no numbers", name);
+    else return n;
+    hist_error(g, line, msg);
+    return -1;
+}
+
+/* two lists (or ranges) after a command: "xs ys" */
+static int two_sets(CalcGui *g, const char *line, const char *rest, double *xs, double *ys) {
+    char na[32], nb[32], extra[2];
+    if (sscanf(rest, "%31s %31s %1s", na, nb, extra) != 2) {
         hist_error(g, line, "name two lists: linreg xs ys");
         return -1;
     }
-    *a = find_list(g, na);
-    *b = find_list(g, nb);
-    if (*a < 0 || *b < 0) {
-        char msg[64];
-        snprintf(msg, sizeof msg, "%s is not a list", *a < 0 ? na : nb);
-        hist_error(g, line, msg);
-        return -1;
-    }
-    if (g->llen[*a] != g->llen[*b]) {
+    int n = one_set(g, line, na, xs), m = n < 0 ? -1 : one_set(g, line, nb, ys);
+    if (n < 0 || m < 0) return -1;
+    if (n != m) {
         hist_error(g, line, "the lists are not the same length");
         return -1;
     }
-    return 0;
+    return n;
 }
 
-/* stats L, plot X Y, linreg / quadreg / expreg X Y; -2 when not one of them */
+/* stats L, plot X Y, linreg / quadreg / expreg X Y, hist L [w], box L;
+ * -2 when not one of them */
 static int list_line(CalcGui *g, const char *line) {
     static const char *const FITS[3] = {"linreg", "quadreg", "expreg"};
     char out[400];
     const char *rest;
+    double xs[CALC_LIST_MAX], ys[CALC_LIST_MAX];
     if ((rest = command(line, "stats"))) {
-        char name[SQM_NAME_LEN], extra[2];
-        int k = sscanf(rest, "%15s %1s", name, extra) == 1 ? find_list(g, name) : -1;
-        CalcStats st;
-        if (k < 0 || calc_stats(g->lval[k], g->llen[k], &st)) {
+        char name[32], extra[2];
+        if (sscanf(rest, "%31s %1s", name, extra) != 1) {
             hist_error(g, line, "name one list: stats xs");
             return -1;
         }
-        char a[32], b[32], c[32], d[32], e[32], f[32];
+        int n = one_set(g, line, name, xs);
+        CalcStats st;
+        if (n < 0) return -1;
+        if (calc_stats(xs, n, &st)) {
+            hist_error(g, line, "a value is not a number");
+            return -1;
+        }
+        char a[32], b[32], c[32], d[32], e[32], f[32], q1[32], q3[32];
         sqm_format(st.mean, 6, a, sizeof a);
         sqm_format(st.sd, 6, b, sizeof b);
         sqm_format(st.min, 6, c, sizeof c);
         sqm_format(st.median, 6, d, sizeof d);
         sqm_format(st.max, 6, e, sizeof e);
         sqm_format(st.sum, 6, f, sizeof f);
+        sqm_format(st.q1, 6, q1, sizeof q1);
+        sqm_format(st.q3, 6, q3, sizeof q3);
         hist_add(g, line);
         snprintf(out, sizeof out, "  n = %d  mean = %s  sd = %s", st.n, a, b);
         hist_add(g, out);
-        snprintf(out, sizeof out, "  min = %s  median = %s  max = %s  sum = %s", c, d, e, f);
+        snprintf(out, sizeof out, "  min = %s  q1 = %s  median = %s  q3 = %s  max = %s", c, q1, d, q3, e);
+        hist_add(g, out);
+        sqm_format(st.sd_pop, 6, a, sizeof a);
+        sqm_format(st.var, 6, b, sizeof b);
+        snprintf(out, sizeof out, "  sum = %s  var = %s  population sd = %s", f, b, a);
         hist_add(g, out);
         set_var(g, "ans", st.mean);
         return 0;
     }
-    if ((rest = command(line, "plot"))) {
-        int a, b;
-        if (two_lists(g, line, rest, &a, &b)) return -1;
-        g->fit_on = 1;
-        g->fit_lx = a;
-        g->fit_ly = b;
+    if ((rest = command(line, "hist")) || (rest = command(line, "box"))) {
+        int box = !strncmp(line + strspn(line, " "), "box", 3);
+        char name[32], wtext[64] = "", extra[2];
+        int got = sscanf(rest, "%31s %63s %1s", name, wtext, extra);
+        if (got < 1 || got > 2 || (box && got != 1)) {
+            hist_error(g, line, box ? "name one list: box xs" : "name one list: hist xs [width]");
+            return -1;
+        }
+        int n = one_set(g, line, name, g->stat_v);
+        if (n < 0) return -1;
+        if (calc_stats(g->stat_v, n, &g->stat)) {
+            hist_error(g, line, "a value is not a number");
+            return -1;
+        }
+        g->stat_n = n;
+        if (box) {
+            char a[32], b[32], c[32], d[32], e[32];
+            sqm_format(g->stat.min, 6, a, sizeof a);
+            sqm_format(g->stat.q1, 6, b, sizeof b);
+            sqm_format(g->stat.median, 6, c, sizeof c);
+            sqm_format(g->stat.q3, 6, d, sizeof d);
+            sqm_format(g->stat.max, 6, e, sizeof e);
+            snprintf(out, sizeof out, "%s: %s | %s [%s] %s | %s", line, a, b, c, d, e);
+            g->stat_plot = CALC_PLOT_BOX;
+        } else {
+            double w = 0, start = 0;
+            if (got == 2) {
+                w = value_of(g, wtext);
+                if (!(w > 0) || !isfinite(w)) {
+                    hist_error(g, line, "the width is a number above 0");
+                    return -1;
+                }
+                start = floor(g->stat.min / w) * w;
+            }
+            int bins = calc_histogram(g->stat_v, n, &start, &w, g->hist_count, CALC_LIST_MAX);
+            if (bins < 0) {
+                hist_error(g, line, "no histogram for these values");
+                return -1;
+            }
+            g->hist_start = start;
+            g->hist_width = w;
+            g->hist_bins = bins;
+            char a[32], b[32];
+            sqm_format(start, 6, a, sizeof a);
+            sqm_format(w, 6, b, sizeof b);
+            snprintf(out, sizeof out, "%s: %d bins of %s from %s", line, bins, b, a);
+            g->stat_plot = CALC_PLOT_HIST;
+        }
         g->fit_view = 1;
-        snprintf(out, sizeof out, "%s: %d points", line, g->llen[a]);
+        hist_add(g, out);
+        return 0;
+    }
+    if ((rest = command(line, "plot"))) {
+        int n = two_sets(g, line, rest, xs, ys);
+        if (n < 0) return -1;
+        memcpy(g->fit_x, xs, (size_t)n * sizeof *xs);
+        memcpy(g->fit_y, ys, (size_t)n * sizeof *ys);
+        g->fit_n = n;
+        g->fit_on = 1;
+        g->fit_view = 1;
+        snprintf(out, sizeof out, "%s: %d points", line, n);
         hist_add(g, out);
         return 0;
     }
     for (int kind = 0; kind < 3; kind++) {
         if (!(rest = command(line, FITS[kind]))) continue;
-        int a, b;
-        if (two_lists(g, line, rest, &a, &b)) return -1;
+        int n = two_sets(g, line, rest, xs, ys);
+        if (n < 0) return -1;
         const char *why;
         CalcFit fit;
-        if (calc_fit(kind, g->lval[a], g->lval[b], g->llen[a], &fit, &why)) {
+        if (calc_fit(kind, xs, ys, n, &fit, &why)) {
             hist_error(g, line, why);
             return -1;
         }
         g->fit = fit;
         g->fit_on = 2;
-        g->fit_lx = a;
-        g->fit_ly = b;
+        memcpy(g->fit_x, xs, (size_t)n * sizeof *xs);
+        memcpy(g->fit_y, ys, (size_t)n * sizeof *ys);
+        g->fit_n = n;
         g->fit_view = 1;
         char eq[160], r2[32], r[32];
         calc_fit_text(&fit, eq, sizeof eq);
@@ -590,6 +721,33 @@ static int list_line(CalcGui *g, const char *line) {
         return 0;
     }
     return -2;
+}
+
+/* fill B2:B10 (or B2:F2): B2 copied over the rest, cell names moved */
+static int fill_line(CalcGui *g, const char *line) {
+    const char *rest = command(line, "fill");
+    if (!rest) return -2;
+    int r0, c0, r1, c1;
+    char a[16], b[16], extra[2];
+    const char *colon = strchr(rest, ':');
+    int n0 = calc_cell_parse(rest, &r0, &c0, NULL);
+    int n1 = colon ? calc_cell_parse(colon + 1, &r1, &c1, NULL) : 0;
+    if (!n0 || !n1 || colon != rest + n0 || sscanf(colon + 1 + n1, "%1s", extra) == 1 || r1 < r0 || c1 < c0 ||
+        (r1 > r0 && c1 > c0)) {
+        hist_error(g, line, "fill a column or a row from its first cell: fill B2:B10");
+        return -1;
+    }
+    int bad = 0;
+    for (int r = r0; r <= r1; r++)
+        for (int c = c0; c <= c1; c++)
+            if (r != r0 || c != c0) bad |= calc_sheet_copy(&g->sheet, r0, c0, r, c) != 0;
+    calc_gui_recalc(g);
+    calc_cell_name(r0, c0, a, sizeof a);
+    calc_cell_name(r1, c1, b, sizeof b);
+    char out[200];
+    snprintf(out, sizeof out, "%s: %s copied to %s%s", line, a, b, bad ? " (some names fell off the sheet: #REF)" : "");
+    hist_add(g, out);
+    return bad ? -1 : 0;
 }
 
 /* CAS lines: expand EXPR, collect VAR EXPR, d/dx EXPR, solve EQUATION [for VAR].
@@ -701,9 +859,68 @@ static int units_line(CalcGui *g, const char *line) {
     return 0;
 }
 
+static int eval_line(CalcGui *g, const char *line);
+
 int calc_gui_eval(CalcGui *g, const char *line) {
+    int rc = eval_line(g, line);
+    calc_gui_recalc(g); /* variables and lists may have changed under the cells */
+    return rc;
+}
+
+void calc_gui_recalc(CalcGui *g) {
+    const char *names[CALC_VARS];
+    CalcEnv env = make_env(g, names);
+    calc_sheet_recalc(&g->sheet, &env);
+    for (int i = 0; i < CALC_N; i++)
+        if (calc_needs_expand(g->fx[i])) compile(g, i);
+    g->cell_r = -1; /* the edit line reloads from the cell */
+}
+
+int calc_gui_cell(CalcGui *g, const char *ref, const char *text) {
+    int r, c;
+    int n = calc_cell_parse(ref, &r, &c, NULL);
+    if (!n || ref[n] || calc_sheet_set(&g->sheet, r, c, text)) return -1;
+    calc_gui_recalc(g);
+    return 0;
+}
+
+/* B2 = 5, B2 = A1 * 2 (kept as the formula =A1 * 2), B2 = "label" */
+static int cell_assign(CalcGui *g, const char *line, const char *name, const char *rhs) {
+    char text[CALC_CELL_LEN + 2], out[400];
+    rhs += strspn(rhs, " ");
+    size_t n = strlen(rhs);
+    while (n && rhs[n - 1] == ' ') n--;
+    char *end;
+    char num[CALC_CELL_LEN];
+    snprintf(num, sizeof num, "%.*s", (int)(n < sizeof num ? n : sizeof num - 1), rhs);
+    double v = strtod(num, &end);
+    if (n >= 2 && rhs[0] == '"' && rhs[n - 1] == '"') snprintf(text, sizeof text, "%.*s", (int)n - 2, rhs + 1);
+    else if (n && end != num && !*end && isfinite(v)) snprintf(text, sizeof text, "%s", num);
+    else if (n) snprintf(text, sizeof text, "=%.*s", (int)n, rhs);
+    else text[0] = 0;
+    if (strlen(text) >= CALC_CELL_LEN || calc_gui_cell(g, name, text)) {
+        hist_error(g, line, "too long for a cell");
+        return -1;
+    }
+    int r, c;
+    calc_cell_parse(name, &r, &c, NULL);
+    if (g->sheet.bad[r][c]) {
+        hist_error(g, line, g->sheet.err[r][c]);
+        return -1;
+    }
+    char val[64];
+    if (g->sheet.kind[r][c] == CALC_CELL_TEXT) snprintf(val, sizeof val, "\"%s\"", g->sheet.text[r][c]);
+    else if (g->sheet.kind[r][c] == CALC_CELL_EMPTY) snprintf(val, sizeof val, "empty");
+    else sqm_format(g->sheet.val[r][c], 12, val, sizeof val);
+    snprintf(out, sizeof out, "%s = %s", name, val);
+    hist_add(g, out);
+    return 0;
+}
+
+static int eval_line(CalcGui *g, const char *line) {
     int cas = cas_line(g, line);
     if (cas == -2) cas = list_line(g, line);
+    if (cas == -2) cas = fill_line(g, line);
     if (cas == -2) cas = units_line(g, line);
     if (cas != -2) return cas;
     {
@@ -737,6 +954,8 @@ int calc_gui_eval(CalcGui *g, const char *line) {
         }
         memcpy(name, a, len);
         name[len] = 0;
+        int cr, cc;
+        if (calc_cell_parse(name, &cr, &cc, NULL) == (int)len) return cell_assign(g, line, name, eq + 1);
         if (is_reserved(name) || !strcmp(name, "ans")) {
             snprintf(out, sizeof out, "%s: %s can't be assigned", line, name);
             hist_add(g, out);
@@ -752,7 +971,12 @@ int calc_gui_eval(CalcGui *g, const char *line) {
         }
     }
     SqmError err;
-    if (sqm_parse(expr, &scratch, &err) != SQM_OK) {
+    char ex[600], why[96];
+    if (expand_text(g, expr, ex, sizeof ex, why, sizeof why)) {
+        hist_error(g, line, why);
+        return -1;
+    }
+    if (sqm_parse(ex, &scratch, &err) != SQM_OK) {
         snprintf(out, sizeof out, "%s: %s", line, err.msg);
         hist_add(g, out);
         return -1;
@@ -804,14 +1028,30 @@ static void graph(CalcGui *g, sqg_ui *ui, sqg_rect r) {
     }
     g->graph_at = r;
     sqg_rect inner = sqg_rect_inset(r, 2);
-    if (g->fit_view && g->fit_on) { /* the points and a margin of a tenth */
-        const double *xs = g->lval[g->fit_lx], *ys = g->lval[g->fit_ly];
-        double x0 = xs[0], x1 = xs[0], y0 = ys[0], y1 = ys[0];
-        for (int k = 1; k < g->llen[g->fit_lx]; k++) {
-            x0 = fmin(x0, xs[k]);
-            x1 = fmax(x1, xs[k]);
-            y0 = fmin(y0, ys[k]);
-            y1 = fmax(y1, ys[k]);
+    if (g->fit_view && (g->fit_on || g->stat_plot)) { /* the points or the plot, and a margin of a tenth */
+        double x0, x1, y0, y1;
+        if (g->stat_plot == CALC_PLOT_HIST) {
+            x0 = g->hist_start;
+            x1 = g->hist_start + g->hist_bins * g->hist_width;
+            y0 = 0;
+            y1 = 1;
+            for (int k = 0; k < g->hist_bins; k++)
+                if (g->hist_count[k] > y1) y1 = g->hist_count[k];
+        } else if (g->stat_plot == CALC_PLOT_BOX) {
+            x0 = g->stat.min;
+            x1 = g->stat.max;
+            y0 = 0;
+            y1 = 2;
+        } else {
+            const double *xs = g->fit_x, *ys = g->fit_y;
+            x0 = x1 = xs[0];
+            y0 = y1 = ys[0];
+            for (int k = 1; k < g->fit_n; k++) {
+                x0 = fmin(x0, xs[k]);
+                x1 = fmax(x1, xs[k]);
+                y0 = fmin(y0, ys[k]);
+                y1 = fmax(y1, ys[k]);
+            }
         }
         double mx = fmax((x1 - x0) / 10, 1e-6 + fabs(x0) * 1e-9), my = fmax((y1 - y0) / 10, 1e-6 + fabs(y0) * 1e-9);
         if (x1 - x0 < 1e-9) mx = fmax(1, fabs(x0) / 10);
@@ -906,9 +1146,15 @@ static void graph(CalcGui *g, sqg_ui *ui, sqg_rect r) {
         }
     }
     /* list points, and the fitted curve */
-    if (g->fit_on && g->fit_lx < g->nlists && g->fit_ly < g->nlists && g->llen[g->fit_lx] == g->llen[g->fit_ly]) {
+    if (g->stat_plot == CALC_PLOT_HIST)
+        calc_draw_histogram(cv, inner, &g->view, g->hist_start, g->hist_width, g->hist_count, g->hist_bins, COL_BARS,
+                            COL_BAR_EDGE);
+    else if (g->stat_plot == CALC_PLOT_BOX)
+        calc_draw_boxplot(cv, inner, &g->view, g->stat.min, g->stat.q1, g->stat.median, g->stat.q3, g->stat.max, 1,
+                          0.6, COL_BARS, COL_BAR_EDGE);
+    if (g->fit_on && g->fit_n > 0) {
         if (g->fit_on == 2) calc_plot_fn(cv, inner, &g->view, fit_y, &g->fit, COL_FIT);
-        calc_mark_points(cv, inner, &g->view, g->lval[g->fit_lx], g->lval[g->fit_ly], g->llen[g->fit_lx], COL_POINTS);
+        calc_mark_points(cv, inner, &g->view, g->fit_x, g->fit_y, g->fit_n, COL_POINTS);
     }
     /* crossings of each pair, in view */
     g->ncross = 0;
@@ -1002,6 +1248,152 @@ static void table(CalcGui *g, sqg_ui *ui, sqg_rect r) {
 }
 
 /* the roots and the crossings in view, or the hint */
+/* ---- the sheet ---- */
+
+static void load_cell_line(CalcGui *g) {
+    snprintf(g->cell_line, sizeof g->cell_line, "%s", g->sheet.text[g->sel_r][g->sel_c]);
+    g->cell_r = g->sel_r;
+    g->cell_c = g->sel_c;
+}
+
+/* the edit line into its cell, when it was changed */
+static void commit_cell(CalcGui *g) {
+    if (g->cell_r < 0 || strcmp(g->cell_line, g->sheet.text[g->cell_r][g->cell_c]) == 0) return;
+    calc_sheet_set(&g->sheet, g->cell_r, g->cell_c, g->cell_line);
+    calc_gui_recalc(g);
+}
+
+static void select_cell(CalcGui *g, int r, int c) {
+    commit_cell(g);
+    if (r < 0) r = 0;
+    if (r >= CALC_SHEET_ROWS) r = CALC_SHEET_ROWS - 1;
+    if (c < 0) c = 0;
+    if (c >= CALC_SHEET_COLS) c = CALC_SHEET_COLS - 1;
+    g->sel_r = r;
+    g->sel_c = c;
+    load_cell_line(g);
+}
+
+/* what a cell shows: its value, its label, or #ERR */
+static void cell_display(const CalcGui *g, int r, int c, char *out, size_t cap, int *right, uint32_t *col) {
+    const CalcSheet *sh = &g->sheet;
+    *right = 0;
+    *col = 0xFF202020u;
+    switch (sh->kind[r][c]) {
+    case CALC_CELL_EMPTY: out[0] = 0; break;
+    case CALC_CELL_TEXT: snprintf(out, cap, "%s", sh->text[r][c]); break;
+    default:
+        if (sh->bad[r][c]) {
+            snprintf(out, cap, "#ERR");
+            *col = COL_ERR;
+        } else {
+            sqm_format(sh->val[r][c], 8, out, cap);
+            *right = 1;
+            if (sh->kind[r][c] == CALC_CELL_FORMULA) *col = 0xFF2050A0u;
+        }
+    }
+}
+
+static void sheet_view(CalcGui *g, sqg_ui *ui, sqg_rect r) {
+    sqg_canvas *cv = ui->cv;
+    int lh = sqg_line_h(ui);
+    sqg_id fid = sqg_id_str("cell");
+    if (g->cell_r != g->sel_r || g->cell_c != g->sel_c) load_cell_line(g);
+    /* keys while the edit line has the keyboard: Up, Down, Tab move */
+    if (ui->focus == fid) {
+        int k = ui->in.key;
+        if (k == SQG_KEY_UP || k == SQG_KEY_DOWN || k == SQG_KEY_TAB) {
+            select_cell(g, g->sel_r + (k == SQG_KEY_DOWN) - (k == SQG_KEY_UP), g->sel_c + (k == SQG_KEY_TAB));
+            ui->in.key = 0;
+            ui->cursor = (int)strlen(g->cell_line);
+        }
+    }
+    char name[16], head[32];
+    calc_cell_name(g->sel_r, g->sel_c, name, sizeof name);
+    snprintf(head, sizeof head, "%s", name);
+    sqg_row row = sqg_row_begin(sqg_rect_make(r.x, r.y, r.w, lh), 4);
+    sqg_label(ui, sqg_row_take(&row, sqg_text_width("H50 ", 1) + 4), head, SQG_ALIGN_LEFT);
+    if (sqg_textfield(ui, fid, sqg_row_take(&row, 0), g->cell_line, sizeof g->cell_line)) {
+        select_cell(g, g->sel_r + 1, g->sel_c); /* Enter: in, and down a row */
+        ui->cursor = (int)strlen(g->cell_line);
+    }
+    int ey = r.y + lh + 2;
+    const CalcSheet *sh = &g->sheet;
+    if (sh->kind[g->sel_r][g->sel_c] == CALC_CELL_FORMULA) {
+        char t[120];
+        if (sh->bad[g->sel_r][g->sel_c]) snprintf(t, sizeof t, "%s: %s", name, sh->err[g->sel_r][g->sel_c]);
+        else {
+            char v[40];
+            sqm_format(sh->val[g->sel_r][g->sel_c], 12, v, sizeof v);
+            snprintf(t, sizeof t, "%s = %s", name, v);
+        }
+        sqg_text(cv, r.x + 4, ey + 1, t, sh->bad[g->sel_r][g->sel_c] ? COL_ERR : 0xFF2050A0u, 1);
+    }
+    sqg_rect body = sqg_rect_make(r.x, ey + 14, r.w, r.h - (ey + 14 - r.y));
+    if (body.h < 40 || body.w < 80) return;
+    sqg_bevel(cv, body, 1, 0, ui->theme);
+    sqg_rect in = sqg_rect_inset(body, 2);
+    g->sheet_at = in;
+    sqg_fill(cv, in, 0xFFFFFFFFu);
+    int rh = 16, nw = 30, cw = (in.w - nw) / CALC_SHEET_COLS, rows = (in.h - rh) / rh;
+    if (cw < 8 || rows < 1) return;
+    if (sqg_rect_contains(in, ui->in.mx, ui->in.my)) g->sheet_top -= ui->in.wheel * 3;
+    if (g->sel_r != g->sheet_seen_r) { /* follow a new selection; leave a scroll alone */
+        if (g->sel_r < g->sheet_top) g->sheet_top = g->sel_r;
+        if (g->sel_r >= g->sheet_top + rows) g->sheet_top = g->sel_r - rows + 1;
+        g->sheet_seen_r = g->sel_r;
+    }
+    if (g->sheet_top > CALC_SHEET_ROWS - rows) g->sheet_top = CALC_SHEET_ROWS - rows;
+    if (g->sheet_top < 0) g->sheet_top = 0;
+    /* a click picks a cell and gives the edit line the keyboard */
+    if (ui->in.pressed && sqg_rect_contains(in, ui->in.mx, ui->in.my) && ui->in.mx >= in.x + nw &&
+        ui->in.my >= in.y + rh) {
+        int c = (ui->in.mx - in.x - nw) / cw, k = (ui->in.my - in.y - rh) / rh;
+        if (c < CALC_SHEET_COLS && g->sheet_top + k < CALC_SHEET_ROWS) {
+            select_cell(g, g->sheet_top + k, c);
+            ui->focus = fid;
+            ui->cursor = (int)strlen(g->cell_line);
+        }
+    }
+    sqg_rect old = sqg_clip(cv, in);
+    sqg_fill(cv, sqg_rect_make(in.x, in.y, in.w, rh), 0xFFE8ECF0u);
+    sqg_fill(cv, sqg_rect_make(in.x, in.y, nw, in.h), 0xFFE8ECF0u);
+    for (int c = 0; c < CALC_SHEET_COLS; c++) {
+        char t[2] = {(char)('A' + c), 0};
+        int x = in.x + nw + c * cw;
+        sqg_text(cv, x + cw / 2 - 3, in.y + 4, t, 0xFF404040u, 1);
+        sqg_vline(cv, x, in.y, in.y + rh + rows * rh, 0xFFD0D6DCu);
+    }
+    for (int k = 0; k < rows && g->sheet_top + k < CALC_SHEET_ROWS; k++) {
+        int rr = g->sheet_top + k, y = in.y + rh + k * rh;
+        char t[16];
+        snprintf(t, sizeof t, "%d", rr + 1);
+        sqg_text(cv, in.x + nw - 4 - sqg_text_width(t, 1), y + 4, t, 0xFF404040u, 1);
+        sqg_hline(cv, in.x, in.x + nw + CALC_SHEET_COLS * cw, y, 0xFFD0D6DCu);
+        for (int c = 0; c < CALC_SHEET_COLS; c++) {
+            sqg_rect cell = sqg_rect_make(in.x + nw + c * cw + 1, y + 1, cw - 1, rh - 1);
+            if (rr == g->sel_r && c == g->sel_c) {
+                sqg_fill(cv, cell, 0xFFDCE8FAu);
+                sqg_frame(cv, cell, 0xFF2060D0u);
+            }
+            char v[CALC_CELL_LEN];
+            int right;
+            uint32_t col;
+            cell_display(g, rr, c, v, sizeof v, &right, &col);
+            if (!v[0]) continue;
+            sqg_rect cc = sqg_clip(cv, sqg_rect_intersect(cell, in));
+            int tw = sqg_text_width(v, 1);
+            if (right && tw > cell.w - 6) { /* a number that does not fit */
+                snprintf(v, sizeof v, "###");
+                tw = sqg_text_width(v, 1);
+            }
+            sqg_text(cv, right ? cell.x + cell.w - 3 - tw : cell.x + 3, cell.y + 4, v, col, 1);
+            cv->clip = cc;
+        }
+    }
+    cv->clip = old;
+}
+
 static void make_status(CalcGui *g) {
     char s[200] = "";
     size_t k = 0;
@@ -1125,12 +1517,19 @@ void calc_gui_frame(CalcGui *g, sqg_ui *ui) {
         if (sqg_button(ui, sqg_id_str("zin"), sqg_row_take(&grow, sqg_button_w(ui, "+")), "+"))
             calc_view_zoom(&g->view, 1.5, cx, cy);
         if (sqg_button(ui, sqg_id_str("reset"), sqg_row_take(&grow, sqg_button_w(ui, "Reset")), "Reset"))
-            g->view_ready = g->area_on = g->fit_on = 0;
+            g->view_ready = g->area_on = g->fit_on = g->stat_plot = 0;
         if (sqg_button(ui, sqg_id_str("square"), sqg_row_take(&grow, sqg_button_w(ui, "Square")), "Square"))
             calc_view_square(&g->view, g->graph_at.w, g->graph_at.h);
-        sqg_toggle(ui, sqg_id_str("table"), sqg_row_take(&grow, sqg_button_w(ui, "Table")), "Table", &g->show_table);
+        if (sqg_toggle(ui, sqg_id_str("table"), sqg_row_take(&grow, sqg_button_w(ui, "Table")), "Table",
+                       &g->show_table) && g->show_table)
+            g->show_sheet = 0;
+        if (sqg_toggle(ui, sqg_id_str("sheet"), sqg_row_take(&grow, sqg_button_w(ui, "Sheet")), "Sheet",
+                       &g->show_sheet)) {
+            if (g->show_sheet) g->show_table = 0;
+            else commit_cell(g);
+        }
         char pos[80] = "";
-        if (g->mouse_in && !g->show_table) {
+        if (g->mouse_in && !g->show_table && !g->show_sheet) {
             char a[32], b[32];
             sqm_format(g->mouse_x, 5, a, sizeof a);
             sqm_format(g->mouse_y, 5, b, sizeof b);
@@ -1140,7 +1539,10 @@ void calc_gui_frame(CalcGui *g, sqg_ui *ui) {
         int top = pad + lh + 4;
         sqg_rect area = sqg_rect_make(gx, top, gw, status_y - pad - top);
         if (area.h > 20) {
-            if (g->show_table) {
+            if (g->show_sheet) {
+                g->mouse_in = 0;
+                sheet_view(g, ui, area);
+            } else if (g->show_table) {
                 g->mouse_in = 0;
                 table(g, ui, area);
             } else {

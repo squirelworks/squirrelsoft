@@ -10,6 +10,7 @@
 #define CALCGUI_H
 
 #include "calcgraph.h"
+#include "calcsheet.h"
 #include "calcstats.h"
 
 #define CALC_N 4      /* functions */
@@ -20,6 +21,8 @@
 #define CALC_SLIDERS 4 /* variables shown with a slider */
 #define CALC_LISTS 4   /* named lists of numbers */
 
+enum { CALC_PLOT_HIST = 1, CALC_PLOT_BOX = 2 };
+
 /* y = f(x), (x(t), y(t)), r = f(t), an equation in x and y (x^2 + y^2 = 25),
  * an inequality (y < x^2, x^2 + y^2 >= 4) */
 enum { CALC_FUNC, CALC_PARAM, CALC_POLAR, CALC_IMPLICIT, CALC_INEQ };
@@ -27,6 +30,7 @@ enum { CALC_FUNC, CALC_PARAM, CALC_POLAR, CALC_IMPLICIT, CALC_INEQ };
 typedef struct {
     char fx[CALC_N][160];      /* what is typed for y1..y4 */
     char seen[CALC_N][160];    /* the text last compiled */
+    char src[CALC_N][400];     /* what was compiled: seen with cells and sheet functions worked out */
     SqmProgram prog[CALC_N];  /* f(x), or x(t) for a curve */
     SqmProgram prog2[CALC_N]; /* y(t) for a curve */
     int kind[CALC_N];         /* CALC_FUNC .. CALC_INEQ */
@@ -78,9 +82,28 @@ typedef struct {
     int llen[CALC_LISTS];
     int nlists;
     int fit_on;    /* 0, 1 points only, 2 points and the fitted curve; Reset clears */
-    int fit_lx, fit_ly; /* which lists */
+    double fit_x[CALC_LIST_MAX], fit_y[CALC_LIST_MAX]; /* the points */
+    int fit_n;
     int fit_view;       /* move the view onto the points at the next frame */
     CalcFit fit;
+    /* hist L [width] and box L: drawn on the graph until Reset */
+    int stat_plot; /* 0, CALC_PLOT_HIST or CALC_PLOT_BOX */
+    double stat_v[CALC_LIST_MAX];
+    int stat_n;
+    CalcStats stat;
+    double hist_start, hist_width;
+    int hist_count[CALC_LIST_MAX];
+    int hist_bins;
+    /* the spreadsheet, shown in place of the graph */
+    CalcSheet sheet;
+    int show_sheet;
+    int sel_r, sel_c;               /* the selected cell */
+    char cell_line[CALC_CELL_LEN];  /* what the edit line holds */
+    int cell_r, cell_c;             /* which cell cell_line was loaded from */
+    int sheet_top;                  /* the first row shown */
+    int sheet_seen_r;               /* the selected row the view last followed */
+    sqg_rect sheet_at;              /* the grid in the last frame: a 30-pixel row-number
+                                       column, then 8 columns; 16-pixel rows under a header */
     char status[200];
 } CalcGui;
 
@@ -95,9 +118,21 @@ void calc_gui_set(CalcGui *g, int i, const char *text);
  * "integrate y1 from 0 to 2" (any expression of x; it also shades the area),
  * "integrate x e^x" (the symbolic integral), "factor x^3 - x", "apart 1/(x^2 - 1)".
  * Lists: "xs = {1, 2, 3}", "stats xs", "plot xs ys", and the fits "linreg xs ys",
- * "quadreg xs ys" and "expreg xs ys" (drawn with the points). Adds the result
- * to the history. Returns 0, or -1 on an error (also in the history). */
+ * "quadreg xs ys" and "expreg xs ys" (drawn with the points), "hist xs [width]"
+ * and "box xs". Wherever a list goes, a sheet range does too (A1:A10, B:B).
+ * The sheet: "B2 = 5" or "B2 = A1 * 2" (a formula) sets a cell, "fill B2:B10"
+ * copies B2 down the range with its cell names moved, and expressions may
+ * name cells and use sum(A1:A5), mean(xs), normalcdf(-1, 1) and the other
+ * calcsheet.h functions. Adds the result to the history. Returns 0, or -1 on
+ * an error (also in the history). */
 int calc_gui_eval(CalcGui *g, const char *line);
+
+/* Set a cell ("B2") as typed in the sheet and recalculate; 0, or -1 for a
+ * bad cell name or text too long */
+int calc_gui_cell(CalcGui *g, const char *ref, const char *text);
+/* Recalculate the sheet and recompile the rows that use it (after loading
+ * a CSV into g->sheet, say) */
+void calc_gui_recalc(CalcGui *g);
 
 /* Value of a user variable, or NAN */
 double calc_gui_var(const CalcGui *g, const char *name);
