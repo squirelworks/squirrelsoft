@@ -29,6 +29,16 @@ $C --let a=3 --fn "(a cos(t), 2 sin(t))" --fn "r = 1 + cos(t)" --snapshot "$B/sn
 err=$($C --fn "(x, t)" --snapshot "$B/snap9.ppm" 2>&1 >/dev/null)
 echo "$err" | grep -q "curves use t, not x" || fail "x in a curve: $err"
 
+$C --fn "x^2 + y^2 = 25" --fn "y < sin(x)" --fn "x y >= 4" --snapshot "$B/snap10.ppm" >/dev/null || fail "relations"
+err=$($C --fn "x^2 + y" --snapshot "$B/snap11.ppm" 2>&1 >/dev/null)
+echo "$err" | grep -q "with y, write an equation" || fail "y without =: $err"
+out=$($C --line "xs = {1, 2, 3, 4}" --line "ys = {3, 5, 7, 9}" --line "linreg xs ys" --line "stats ys" \
+    --snapshot "$B/snap12.ppm") || fail "lists"
+echo "$out" | grep -q "^  y = 2 x + 1$" || fail "linreg line: $out"
+echo "$out" | grep -q "r^2 = 1  r = 1" || fail "linreg r^2: $out"
+echo "$out" | grep -q "n = 4  mean = 6" || fail "stats: $out"
+echo "$out" | grep -q "Fit y = 2 x + 1" || fail "fit in the status: $out"
+
 err=$($C --fn "sin(" --snapshot "$B/snap3.ppm" 2>&1 >/dev/null)
 echo "$err" | grep -q "y1:" || fail "parse error reported: $err"
 $C --let "x=1" --snapshot "$B/snap4.ppm" >/dev/null 2>&1; [ $? -eq 1 ] || fail "--let x=1 should exit 1"

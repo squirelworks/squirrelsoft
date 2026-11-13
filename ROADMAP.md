@@ -83,7 +83,7 @@ Every item is a checkbox. Tick it in the PR that merges its last piece. Nested b
   - [x] Desktop graphing window: four functions of x, variables from the calculator line, roots, d/dx, pan and zoom, `--snapshot` headless render
   - [x] Tables, integrals with shading, crossings and trace in the window
   - [x] Parametric and polar curves, sliders for variables
-  - [ ] Implicit curves and inequalities, lists and regression
+  - [x] Implicit curves and inequalities, lists and regression
   - [x] CAS in the calculator line: `expand`, `collect`, `d/dx`, `solve ... [for v]`
   - [ ] Geometry, stats, spreadsheet, notebooks
 - [ ] S5.2 SquirrelPaint

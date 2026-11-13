@@ -501,6 +501,316 @@ static void test_curves(void) {
         if (!strcmp(g.vname[i], "a")) CHECK(g.vlo[i] == -200 && g.vhi[i] == 200);
 }
 
+static int compile_xy2(const char *text, SqmProgram *p) {
+    static SqmExpr e;
+    SqmError err;
+    const char *names[] = {"x", "y"};
+    if (sqm_parse(text, &e, &err) != SQM_OK) return -1;
+    return sqm_compile(&e, names, 2, p) == SQM_OK ? 0 : -1;
+}
+
+static void clear(void) { memset(px, 0xFF, sizeof px); }
+
+/* the pixel of the plane point (x, y) on r for v */
+static int pxx(const CalcView *v, sqg_rect r, double x) { return (int)calc_px_x(v, r, x); }
+static int pxy(const CalcView *v, sqg_rect r, double y) { return (int)calc_px_y(v, r, y); }
+
+static void test_implicit(void) {
+    sqg_canvas_init(&cv, px, W, H, W);
+    sqg_rect r = sqg_rect_make(100, 100, 400, 400);
+    CalcView v;
+    calc_view_default(&v, r.w, r.h);
+    const uint32_t RED = 0xFFFF0000u;
+    SqmProgram p;
+    double xy[2];
+
+    /* the circle of radius 5: on it at (3, 4), (-5, 0), (0, -5); not at the
+     * centre or out at (8, 8) */
+    clear();
+    CHECK(compile_xy2("x^2 + y^2 - 25", &p) == 0);
+    int pieces = calc_plot_implicit(&cv, r, &v, &p, xy, 0, 1, 3, 0, RED);
+    CHECK(pieces > 100);
+    CHECK(count(sqg_rect_make(pxx(&v, r, 3) - 2, pxy(&v, r, 4) - 2, 5, 5), RED) > 0);
+    CHECK(count(sqg_rect_make(pxx(&v, r, -5) - 2, pxy(&v, r, 0) - 2, 5, 5), RED) > 0);
+    CHECK(count(sqg_rect_make(pxx(&v, r, 0) - 2, pxy(&v, r, -5) - 2, 5, 5), RED) > 0);
+    CHECK(count(sqg_rect_make(pxx(&v, r, -3), pxy(&v, r, 3), 6 * 20, 6 * 20), RED) == 0); /* inside stays clear */
+    CHECK(count(sqg_rect_make(pxx(&v, r, 7), pxy(&v, r, 9), 40, 40), RED) == 0);
+    CHECK(px[0] != RED && count(sqg_rect_make(0, 0, 100, H), RED) == 0); /* nothing outside r */
+
+    /* dashed: fewer pieces drawn, but still some */
+    clear();
+    int dashed = calc_plot_implicit(&cv, r, &v, &p, xy, 0, 1, 3, 1, RED);
+    CHECK(dashed == pieces);
+    int solid_px = 0, dash_px = count(r, RED);
+    clear();
+    calc_plot_implicit(&cv, r, &v, &p, xy, 0, 1, 3, 0, RED);
+    solid_px = count(r, RED);
+    CHECK(dash_px > solid_px / 4 && dash_px < solid_px * 3 / 4);
+
+    /* x y = 0 is both axes: every cell along them is a saddle or an edge */
+    clear();
+    CHECK(compile_xy2("x y", &p) == 0);
+    calc_plot_implicit(&cv, r, &v, &p, xy, 0, 1, 4, 0, RED);
+    CHECK(count(sqg_rect_make(pxx(&v, r, 0) - 2, r.y + 10, 5, r.h - 20), RED) > r.h - 40);
+    CHECK(count(sqg_rect_make(r.x + 10, pxy(&v, r, 0) - 2, r.w - 20, 5), RED) > r.w - 40);
+
+    /* y = 1/x: no line down the pole at x = 0 */
+    clear();
+    CHECK(compile_xy2("y - 1/x", &p) == 0);
+    CHECK(calc_plot_implicit(&cv, r, &v, &p, xy, 0, 1, 3, 0, RED) > 50);
+    /* (beyond |y| = 5 the branches themselves come within 3 pixels of x = 0) */
+    CHECK(count(sqg_rect_make(pxx(&v, r, 0) - 2, pxy(&v, r, 5), 5, pxy(&v, r, -5) - pxy(&v, r, 5)), RED) == 0);
+    CHECK(count(sqg_rect_make(pxx(&v, r, 1) - 3, pxy(&v, r, 1) - 3, 7, 7), RED) > 0);
+
+    /* x = 3: a vertical line */
+    clear();
+    CHECK(compile_xy2("x - 3", &p) == 0);
+    calc_plot_implicit(&cv, r, &v, &p, xy, 0, 1, 3, 0, RED);
+    CHECK(count(sqg_rect_make(pxx(&v, r, 3) - 2, r.y, 5, r.h), RED) > r.h - 10);
+    CHECK(count(r, RED) < 3 * r.h);
+
+    /* nothing: x^2 + y^2 + 1 = 0, and an empty program */
+    clear();
+    CHECK(compile_xy2("x^2 + y^2 + 1", &p) == 0);
+    CHECK(calc_plot_implicit(&cv, r, &v, &p, xy, 0, 1, 3, 0, RED) == 0);
+    SqmProgram none;
+    memset(&none, 0, sizeof none);
+    CHECK(calc_plot_implicit(&cv, r, &v, &none, xy, 0, 1, 3, 0, RED) == 0);
+    CHECK(calc_shade_region(&cv, r, &v, &none, xy, 0, 1, 3, RED) == 0);
+    /* a huge cell count is capped by a coarser grid, not an overflow */
+    sqg_rect wide = sqg_rect_make(0, 0, W, 10);
+    CHECK(compile_xy2("x", &p) == 0);
+    CHECK(calc_plot_implicit(&cv, wide, &v, &p, xy, 0, 1, 0, 0, RED) >= 1);
+
+    /* the disc x^2 + y^2 < 9: blocks shaded add up to its area */
+    clear();
+    CHECK(compile_xy2("x^2 + y^2 - 9", &p) == 0);
+    int blocks = calc_shade_region(&cv, r, &v, &p, xy, 0, 1, 2, 0x80000000u);
+    double per_block = (20.0 / 400 * 2) * (20.0 / 400 * 2);
+    NEAR(blocks * per_block, 9 * 3.14159265358979, 0.5);
+    CHECK(px[pxy(&v, r, 0) * W + pxx(&v, r, 0)] != 0xFFFFFFFFu);
+    CHECK(px[pxy(&v, r, 8) * W + pxx(&v, r, 8)] == 0xFFFFFFFFu);
+
+    /* a fitted curve through a C function: y = x */
+    clear();
+    CalcFit f = {CALC_FIT_LINEAR, {0, 1, 0}, 1, 1, 2};
+    extern double test_fit_y(const void *ctx, double x);
+    CHECK(calc_plot_fn(&cv, r, &v, test_fit_y, &f, RED) >= 2 * r.w - 2);
+    CHECK(count(sqg_rect_make(297, 297, 6, 6), RED) > 0);
+}
+
+double test_fit_y(const void *ctx, double x) { return calc_fit_eval((const CalcFit *)ctx, x); }
+
+static void test_stats(void) {
+    CalcStats st;
+    const double odd[] = {5, 1, 4, 2, 3}, even[] = {10, 2, 4, 8};
+    CHECK(calc_stats(odd, 5, &st) == 0 && st.n == 5);
+    NEAR(st.mean, 3, 1e-15);
+    NEAR(st.median, 3, 0);
+    NEAR(st.sd, sqrt(2.5), 1e-15);
+    CHECK(st.min == 1 && st.max == 5 && st.sum == 15);
+    CHECK(calc_stats(even, 4, &st) == 0);
+    NEAR(st.median, 6, 0);
+    CHECK(calc_stats(even, 1, &st) == 0 && st.sd == 0 && st.median == 10);
+    const double bad[] = {1, NAN};
+    CHECK(calc_stats(bad, 2, &st) == -1 && calc_stats(odd, 0, &st) == -1 && calc_stats(odd, 101, &st) == -1);
+
+    /* the worked example (checked against an independent fit) */
+    const double xs[] = {1, 2, 3, 4, 5, 6}, ys[] = {2.1, 3.9, 6.2, 7.8, 10.1, 12.2};
+    CalcFit f;
+    const char *why = NULL;
+    char t[160];
+    CHECK(calc_fit(CALC_FIT_LINEAR, xs, ys, 6, &f, &why) == 0);
+    NEAR(f.c[1], 2.02, 1e-12);
+    NEAR(f.c[0], -0.02, 1e-12);
+    NEAR(f.r2, 0.9982106661074994, 1e-12);
+    NEAR(f.r * f.r, f.r2, 1e-12);
+    calc_fit_text(&f, t, sizeof t);
+    CHECK(!strcmp(t, "y = 2.02 x - 0.02"));
+    CHECK(calc_fit(CALC_FIT_QUAD, xs, ys, 6, &f, &why) == 0);
+    NEAR(f.c[2], 0.0267857142857, 1e-10);
+    NEAR(f.c[1], 1.8325, 1e-10);
+    NEAR(f.c[0], 0.23, 1e-10);
+    calc_fit_text(&f, t, sizeof t);
+    CHECK(!strcmp(t, "y = 0.0267857 x^2 + 1.8325 x + 0.23"));
+    const double y2[] = {1, 2.7, 7.4, 20, 54.6, 148};
+    CHECK(calc_fit(CALC_FIT_EXP, xs, y2, 6, &f, &why) == 0);
+    NEAR(f.c[0], 0.3671024566006578, 1e-12);
+    NEAR(f.c[1], 1.0000188563253194, 1e-12);
+    NEAR(f.r2, 0.9999982178959937, 1e-12);
+    calc_fit_text(&f, t, sizeof t);
+    CHECK(!strcmp(t, "y = 0.367102 e^(1.00002 x)"));
+
+    /* exact data, far from 0 (the quadratic stays well conditioned) */
+    double qx[8], qy[8];
+    for (int i = 0; i < 8; i++) {
+        qx[i] = 1000 + 0.5 * i;
+        qy[i] = 3 * qx[i] * qx[i] - 2 * qx[i] + 1;
+    }
+    CHECK(calc_fit(CALC_FIT_QUAD, qx, qy, 8, &f, NULL) == 0);
+    NEAR(f.c[2], 3, 1e-6);
+    NEAR(f.c[1], -2, 1e-2);
+    NEAR(calc_fit_eval(&f, 1001.25), 3 * 1001.25 * 1001.25 - 2 * 1001.25 + 1, 1e-4);
+    NEAR(f.r2, 1, 1e-12);
+    for (int i = 0; i < 8; i++) qy[i] = 4 * exp(-0.5 * qx[i] / 1000);
+    CHECK(calc_fit(CALC_FIT_EXP, qx, qy, 8, &f, NULL) == 0);
+    NEAR(f.c[1], -0.0005, 1e-12);
+    NEAR(f.c[0], 4, 1e-9);
+    const double flat[] = {2, 2, 2};
+    CHECK(calc_fit(CALC_FIT_LINEAR, xs, flat, 3, &f, NULL) == 0 && f.c[1] == 0 && f.r2 == 1);
+    calc_fit_text(&f, t, sizeof t);
+    CHECK(!strcmp(t, "y = 0 x + 2"));
+
+    /* refusals */
+    CHECK(calc_fit(CALC_FIT_LINEAR, xs, ys, 1, &f, &why) == -1 && contains(why, "2 points"));
+    CHECK(calc_fit(CALC_FIT_QUAD, xs, ys, 2, &f, &why) == -1 && contains(why, "3 points"));
+    const double same[] = {1, 1, 1}, two[] = {1, 1, 2};
+    CHECK(calc_fit(CALC_FIT_LINEAR, same, ys, 3, &f, &why) == -1 && contains(why, "all the same"));
+    CHECK(calc_fit(CALC_FIT_QUAD, two, ys, 3, &f, &why) == -1 && contains(why, "3 different"));
+    const double neg[] = {1, -1, 2};
+    CHECK(calc_fit(CALC_FIT_EXP, xs, neg, 3, &f, &why) == -1 && contains(why, "above 0"));
+    CHECK(calc_fit(CALC_FIT_LINEAR, xs, bad, 2, &f, &why) == -1 && contains(why, "number"));
+    CHECK(calc_fit(7, xs, ys, 3, &f, &why) == -1);
+}
+
+static void test_relations_gui(void) {
+    sqg_canvas_init(&cv, px, W, H, W);
+    sqg_ui_init(&ui, NULL, 1);
+    memset(&in, 0, sizeof in);
+    in.mx = in.my = -1;
+    calc_gui_init(&g);
+
+    calc_gui_set(&g, 0, "x^2 + y^2 = 25");
+    CHECK(g.ok[0] && g.kind[0] == CALC_IMPLICIT);
+    calc_gui_set(&g, 1, "y < sin(x)");
+    CHECK(g.ok[1] && g.kind[1] == CALC_INEQ && g.strict[1]);
+    calc_gui_set(&g, 2, "x y >= 4");
+    CHECK(g.ok[2] && g.kind[2] == CALC_INEQ && !g.strict[2]);
+    calc_gui_set(&g, 3, " y = x^2 - 4");
+    CHECK(g.ok[3] && g.kind[3] == CALC_FUNC && g.body[3] == 4);
+    g.show_roots = 1;
+    frame();
+    CHECK(g.nroots[3] == 2 && g.nroots[0] == 0); /* roots of y4 only */
+    NEAR(fabs(g.roots[3][0]), 2, 1e-9);
+    sqg_rect inner = sqg_rect_inset(g.graph_at, 2);
+    /* the circle at (0, 5), y < sin x shaded at (0, -5) but not at (0, 5)... */
+    CHECK(count(sqg_rect_make(pxx(&g.view, inner, 0) - 3, pxy(&g.view, inner, 5) - 3, 7, 7), 0xFF2060D0u) > 0);
+    uint32_t below = px[pxy(&g.view, inner, -7) * W + pxx(&g.view, inner, 2)];
+    uint32_t above = px[pxy(&g.view, inner, 7) * W + pxx(&g.view, inner, -2)];
+    CHECK(below != 0xFFFFFFFFu && above == 0xFFFFFFFFu);
+    /* ...and x y >= 4 shaded at (5, 5) */
+    CHECK(px[pxy(&g.view, inner, 5) * W + pxx(&g.view, inner, 5)] != 0xFFFFFFFFu);
+    CHECK(calc_gui_eval(&g, "integrate y4 from 0 to 3") == 0 && contains(g.hist, "= -3"));
+    CHECK(calc_gui_eval(&g, "integrate y1 from 0 to 3") == -1);
+    /* d/dx and crossings use the function's body */
+    calc_gui_set(&g, 0, "y = x^3");
+    g.show_deriv = 1;
+    frame();
+    CHECK(g.dok && !strcmp(g.dtext, "y1' = 3*x^2"));
+    calc_gui_set(&g, 1, "y = 2 x");
+    calc_gui_set(&g, 2, "");
+    calc_gui_set(&g, 3, "");
+    g.show_cross = 1;
+    frame();
+    CHECK(g.ncross == 3);
+
+    /* the other side, x alone, constants and variables */
+    calc_gui_set(&g, 0, "2 > x");
+    CHECK(g.ok[0] && g.kind[0] == CALC_INEQ);
+    calc_gui_set(&g, 0, "x = 3");
+    CHECK(g.ok[0] && g.kind[0] == CALC_IMPLICIT);
+    calc_gui_set(&g, 0, "y = y^2 - x");
+    CHECK(g.ok[0] && g.kind[0] == CALC_IMPLICIT);
+    CHECK(calc_gui_eval(&g, "k = 2") == 0);
+    calc_gui_set(&g, 0, "x^2 + y^2 <= k");
+    CHECK(g.ok[0] && g.kind[0] == CALC_INEQ);
+    frame();
+
+    /* errors */
+    calc_gui_set(&g, 0, "x < y < 2");
+    CHECK(!g.ok[0] && contains(g.err[0], "one ="));
+    calc_gui_set(&g, 0, "= 3");
+    CHECK(!g.ok[0] && contains(g.err[0], "missing beside ="));
+    calc_gui_set(&g, 0, "x^2 + y");
+    CHECK(!g.ok[0] && contains(g.err[0], "with y, write an equation"));
+    calc_gui_set(&g, 0, "x + q = y");
+    CHECK(!g.ok[0] && contains(g.err[0], "define q first"));
+    calc_gui_set(&g, 0, "y = x +");
+    CHECK(!g.ok[0] && contains(g.err[0], "(at 8)"));
+    calc_gui_set(&g, 0, "x^2 + y^2 = (1");
+    CHECK(!g.ok[0] && g.err[0][0]);
+    CHECK(calc_gui_eval(&g, "y = 2") == -1 && contains(g.hist, "y can't be assigned"));
+    frame();
+}
+
+static void test_lists_gui(void) {
+    sqg_canvas_init(&cv, px, W, H, W);
+    sqg_ui_init(&ui, NULL, 1);
+    memset(&in, 0, sizeof in);
+    in.mx = in.my = -1;
+    calc_gui_init(&g);
+    CHECK(calc_gui_eval(&g, "xs = {1, 2, 3, 4, 5, 6}") == 0 && contains(g.hist, "xs = {1, 2, 3, 4, 5, 6}"));
+    CHECK(calc_gui_eval(&g, "ys = [2.1, 3.9, 6.2, 7.8, 10.1, 12.2]") == 0 && g.nlists == 2 && g.llen[1] == 6);
+    CHECK(calc_gui_eval(&g, "a = 2") == 0);
+    CHECK(calc_gui_eval(&g, "zs = {a, a^2, sqrt(16), (1, 2)}") == -1); /* a pair is not a number */
+    CHECK(calc_gui_eval(&g, "zs = {a, a^2, max(3, 4)}") == 0 && contains(g.hist, "zs = {2, 4, 4}"));
+    CHECK(calc_gui_eval(&g, "stats ys") == 0 && contains(g.hist, "n = 6  mean = 7.05  sd = 3.78246") &&
+          contains(g.hist, "median = 7  max = 12.2  sum = 42.3"));
+    NEAR(calc_gui_var(&g, "ans"), 7.05, 1e-12);
+    CHECK(calc_gui_eval(&g, "linreg xs ys") == 0 && contains(g.hist, "  y = 2.02 x - 0.02") &&
+          contains(g.hist, "r^2 = 0.998211  r = 0.999105"));
+    CHECK(g.fit_on == 2 && g.fit.kind == CALC_FIT_LINEAR);
+    NEAR(calc_gui_var(&g, "ans"), 0.9982106661074994, 1e-12);
+    /* drawn: the view moves onto the points, which are ringed, and the line */
+    frame();
+    CHECK(g.view.xmin < 1 && g.view.xmin > 0 && g.view.xmax > 6 && g.view.xmax < 7);
+    CHECK(g.view.ymin < 2.1 && g.view.ymax > 12.2 && g.view.ymax < 14);
+    sqg_rect inner = sqg_rect_inset(g.graph_at, 2);
+    CHECK(count(sqg_rect_make(pxx(&g.view, inner, 4) - 2, pxy(&g.view, inner, 7.8) - 2, 5, 5), 0xFF303030u) > 0);
+    CHECK(count(sqg_rect_make(pxx(&g.view, inner, 5.5) - 3, pxy(&g.view, inner, 11.09) - 3, 7, 7), 0xFFE07000u) > 0);
+    CHECK(contains(g.status, "Fit y = 2.02 x - 0.02, r^2 = 0.99821"));
+    /* panning afterwards is not undone */
+    double x0 = g.view.xmin;
+    frame();
+    CHECK(g.view.xmin == x0);
+    CHECK(calc_gui_eval(&g, "plot xs zs") == -1 && contains(g.hist, "not the same length"));
+    CHECK(calc_gui_eval(&g, "ys2 = {1, 2.7, 7.4, 20, 54.6, 148}") == 0);
+    CHECK(calc_gui_eval(&g, "expreg xs ys2") == 0 && contains(g.hist, "y = 0.367102 e^(1.00002 x)"));
+    CHECK(calc_gui_eval(&g, "quadreg xs ys") == 0 && contains(g.hist, "0.0267857 x^2 + 1.8325 x + 0.23"));
+    CHECK(calc_gui_eval(&g, "plot xs ys2") == 0 && g.fit_on == 1);
+    frame();
+    CHECK(g.view.ymax > 148 && !contains(g.status, "Fit"));
+    CHECK(calc_gui_eval(&g, "xs") == 0 && contains(g.hist + strlen(g.hist) - 25, "xs = {1, 2, 3, 4, 5, 6}"));
+
+    /* errors */
+    CHECK(calc_gui_eval(&g, "ws = {1, 2") == -1 && contains(g.hist, "a list ends with }"));
+    CHECK(calc_gui_eval(&g, "ws = {1, q}") == -1 && contains(g.hist, "item 2 has no value"));
+    CHECK(calc_gui_eval(&g, "ws = {}") == -1 && contains(g.hist, "a list needs a value"));
+    CHECK(calc_gui_eval(&g, "a = {1}") == -1 && contains(g.hist, "is a number already"));
+    CHECK(calc_gui_eval(&g, "xs = 3") == -1 && contains(g.hist, "xs is a list"));
+    CHECK(calc_gui_eval(&g, "ws = {1}") == -1 && contains(g.hist, "no room for more lists"));
+    CHECK(calc_gui_eval(&g, "xs = {7, 8}") == 0 && g.llen[0] == 2); /* replaced in place */
+    CHECK(calc_gui_eval(&g, "linreg xs") == -1 && contains(g.hist, "name two lists"));
+    CHECK(calc_gui_eval(&g, "linreg xs nope") == -1 && contains(g.hist, "nope is not a list"));
+    CHECK(calc_gui_eval(&g, "stats") == -1 || contains(g.hist, "stats"));
+    CHECK(calc_gui_eval(&g, "stats nope") == -1 && contains(g.hist, "name one list"));
+    CHECK(calc_gui_eval(&g, "zs = {1, -2, 3}") == 0);
+    CHECK(calc_gui_eval(&g, "expreg zs zs") == -1 && contains(g.hist, "above 0"));
+    CHECK(calc_gui_eval(&g, "quadreg xs xs") == -1 && contains(g.hist, "3 points"));
+    calc_gui_set(&g, 0, "xs x");
+    CHECK(!g.ok[0] && contains(g.err[0], "xs is a list"));
+    /* a list of 100, and one too many */
+    char big[1200];
+    size_t at = (size_t)snprintf(big, sizeof big, "zs = {");
+    for (int i = 0; i < 101; i++) at += (size_t)snprintf(big + at, sizeof big - at, "%s%d", i ? "," : "", i);
+    snprintf(big + at, sizeof big - at, "}");
+    CHECK(calc_gui_eval(&g, big) == -1 && contains(g.hist, "holds 100"));
+    char *last = strrchr(big, ',');
+    last[0] = '}';
+    last[1] = 0;
+    CHECK(calc_gui_eval(&g, big) == 0 && g.llen[2] == 100 && contains(g.hist, "(100 items)"));
+}
+
 int main(int argc, char **argv) {
     const char *dir = argc > 1 ? argv[1] : ".";
     test_steps();
@@ -509,6 +819,10 @@ int main(int argc, char **argv) {
     test_gui(dir);
     test_analysis();
     test_curves();
+    test_implicit();
+    test_stats();
+    test_relations_gui();
+    test_lists_gui();
     printf("test_calc: %d checks, %d failed\n", checks, failures);
     return failures != 0;
 }

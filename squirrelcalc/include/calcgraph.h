@@ -68,4 +68,20 @@ int calc_mark_points(sqg_canvas *c, sqg_rect r, const CalcView *v, const double 
 int calc_shade(sqg_canvas *c, sqg_rect r, const CalcView *v, const SqmProgram *p, double *values, int slot,
                double a, double b, uint32_t argb);
 
+/* The curve f(x, y) = 0, where values[xslot] and values[yslot] are x and y,
+ * by marching squares on a grid of cell pixels (saddles settled by the
+ * centre, and no line across a pole where f jumps sign). dashed leaves
+ * every other pair of cells out. Returns the pieces drawn. */
+int calc_plot_implicit(sqg_canvas *c, sqg_rect r, const CalcView *v, const SqmProgram *p, double *values, int xslot,
+                       int yslot, int cell, int dashed, uint32_t color);
+
+/* Blend argb over every cell-pixel block whose centre has f(x, y) < 0.
+ * Returns the blocks shaded. */
+int calc_shade_region(sqg_canvas *c, sqg_rect r, const CalcView *v, const SqmProgram *p, double *values, int xslot,
+                      int yslot, int cell, uint32_t argb);
+
+/* y = f(ctx, x) for a C function (a fitted curve); returns segments drawn */
+int calc_plot_fn(sqg_canvas *c, sqg_rect r, const CalcView *v, double (*f)(const void *ctx, double x),
+                 const void *ctx, uint32_t color);
+
 #endif
