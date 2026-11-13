@@ -7,10 +7,12 @@
 
 static void usage(FILE *f) {
     fputs("usage: squirrelcalc [options]\n"
-          "  --fn EXPR        graph EXPR as the next of y1..y4 (a function of x)\n"
+          "  --fn EXPR        graph EXPR as the next of y1..y4: a function of x, a curve\n"
+          "                   of t, an equation (x^2 + y^2 = 25) or inequality (y < x)\n"
           "  --let NAME=EXPR  define a variable first (--let a=2)\n"
           "  --line TEXT      run a calculator line first: \"a = 2\", \"solve x^2 = 2\",\n"
-          "                   \"expand (x+1)^3\" (with --snapshot the history is printed)\n"
+          "                   \"expand (x+1)^3\", \"xs = {1, 2, 3}\", \"linreg xs ys\"\n"
+          "                   (with --snapshot the history is printed)\n"
           "  --roots          mark the roots\n"
           "  --crossings      mark where the functions cross\n"
           "  --table          show the table of values instead of the graph\n"

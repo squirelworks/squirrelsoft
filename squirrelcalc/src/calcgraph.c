@@ -275,3 +275,147 @@ int calc_shade(sqg_canvas *c, sqg_rect r, const CalcView *v, const SqmProgram *p
     c->clip = old;
     return cols;
 }
+
+/* ---- implicit curves and regions ---- */
+
+#define IMPLICIT_MAX_NODES 1025 /* grid nodes across */
+
+/* f at the plane point under pixel position (px, py) */
+static double f_at(const CalcView *v, sqg_rect r, const SqmProgram *p, double *values, int xs, int ys, double px,
+                   double py) {
+    values[xs] = calc_x_at(v, r, px);
+    values[ys] = calc_y_at(v, r, py);
+    return sqm_run(p, values);
+}
+
+/* Where f crosses 0 on the edge from (x0, y0) to (x1, y1), pixel positions,
+ * found by bisection. 0, or -1 when f does not go to 0 there: a pole or a
+ * jump, where f changes sign without passing through 0. */
+static int edge_root(const CalcView *v, sqg_rect r, const SqmProgram *p, double *values, int xs, int ys, double x0,
+                     double y0, double f0, double x1, double y1, double f1, double *ex, double *ey) {
+    double lo = 0, hi = 1, flo = f0;
+    for (int k = 0; k < 12; k++) {
+        double m = (lo + hi) / 2, fm = f_at(v, r, p, values, xs, ys, x0 + (x1 - x0) * m, y0 + (y1 - y0) * m);
+        if (!isfinite(fm)) return -1;
+        if ((fm > 0) == (flo > 0)) {
+            lo = m;
+            flo = fm;
+        } else {
+            hi = m;
+        }
+    }
+    double m = (lo + hi) / 2;
+    *ex = x0 + (x1 - x0) * m;
+    *ey = y0 + (y1 - y0) * m;
+    double fm = f_at(v, r, p, values, xs, ys, *ex, *ey);
+    return isfinite(fm) && fabs(fm) <= 0.1 * fmax(fabs(f0), fabs(f1)) ? 0 : -1;
+}
+
+/* one piece of contour between two edge crossings, unless either is bad */
+static int contour_piece(sqg_canvas *c, const int *bad, const double *ex, const double *ey, int k0, int k1, int dash,
+                         uint32_t color) {
+    if (bad[k0] || bad[k1]) return 0;
+    if (dash) return 1; /* counted, not drawn: a gap in a dashed line */
+    thick(c, (int)lround(ex[k0]), (int)lround(ey[k0]), (int)lround(ex[k1]), (int)lround(ey[k1]), color);
+    return 1;
+}
+
+int calc_plot_implicit(sqg_canvas *c, sqg_rect r, const CalcView *v, const SqmProgram *p, double *values, int xslot,
+                       int yslot, int cell, int dashed, uint32_t color) {
+    if (r.w <= 0 || r.h <= 0 || p->nops == 0) return 0;
+    if (cell < 1) cell = 1;
+    while (r.w / cell + 2 > IMPLICIT_MAX_NODES) cell++;
+    int nx = r.w / cell + 2, ny = r.h / cell + 2;
+    double row0[IMPLICIT_MAX_NODES], row1[IMPLICIT_MAX_NODES];
+    sqg_rect old = c->clip;
+    sqg_clip(c, r);
+    int drawn = 0;
+    for (int i = 0; i < nx; i++) row0[i] = f_at(v, r, p, values, xslot, yslot, r.x + i * cell, r.y);
+    for (int j = 0; j + 1 < ny; j++) {
+        double y0 = r.y + j * cell, y1 = y0 + cell;
+        for (int i = 0; i < nx; i++) row1[i] = f_at(v, r, p, values, xslot, yslot, r.x + i * cell, y1);
+        for (int i = 0; i + 1 < nx; i++) {
+            double x0 = r.x + i * cell, x1 = x0 + cell;
+            /* corners: a top left, b top right, cc bottom right, d bottom left */
+            double fa = row0[i], fb = row0[i + 1], fc = row1[i + 1], fd = row1[i];
+            if (!isfinite(fa) || !isfinite(fb) || !isfinite(fc) || !isfinite(fd)) continue;
+            int sa = fa > 0, sb = fb > 0, sc = fc > 0, sd = fd > 0;
+            if (sa == sb && sb == sc && sc == sd) continue;
+            /* where f crosses each edge: top, right, bottom, left */
+            double ex[4], ey[4];
+            int has[4] = {sa != sb, sb != sc, sd != sc, sa != sd}, bad[4] = {0, 0, 0, 0};
+            if (has[0]) bad[0] = edge_root(v, r, p, values, xslot, yslot, x0, y0, fa, x1, y0, fb, &ex[0], &ey[0]);
+            if (has[1]) bad[1] = edge_root(v, r, p, values, xslot, yslot, x1, y0, fb, x1, y1, fc, &ex[1], &ey[1]);
+            if (has[2]) bad[2] = edge_root(v, r, p, values, xslot, yslot, x0, y1, fd, x1, y1, fc, &ex[2], &ey[2]);
+            if (has[3]) bad[3] = edge_root(v, r, p, values, xslot, yslot, x0, y0, fa, x0, y1, fd, &ex[3], &ey[3]);
+            int dash = dashed && ((i + j) / 2) % 2;
+            if (has[0] && has[1] && has[2] && has[3]) {
+                /* a saddle: the centre says which corners join */
+                double fm = f_at(v, r, p, values, xslot, yslot, x0 + cell / 2.0, y0 + cell / 2.0);
+                if ((fm > 0) == sa) { /* a and cc join: cut off b and d */
+                    drawn += contour_piece(c, bad, ex, ey, 0, 1, dash, color);
+                    drawn += contour_piece(c, bad, ex, ey, 2, 3, dash, color);
+                } else {
+                    drawn += contour_piece(c, bad, ex, ey, 3, 0, dash, color);
+                    drawn += contour_piece(c, bad, ex, ey, 1, 2, dash, color);
+                }
+            } else {
+                int k0 = -1, k1 = -1;
+                for (int k = 0; k < 4; k++)
+                    if (has[k]) {
+                        if (k0 < 0) k0 = k;
+                        else k1 = k;
+                    }
+                if (k1 >= 0) drawn += contour_piece(c, bad, ex, ey, k0, k1, dash, color);
+            }
+        }
+        memcpy(row0, row1, (size_t)nx * sizeof *row0);
+    }
+    c->clip = old;
+    return drawn;
+}
+
+int calc_shade_region(sqg_canvas *c, sqg_rect r, const CalcView *v, const SqmProgram *p, double *values, int xslot,
+                      int yslot, int cell, uint32_t argb) {
+    if (r.w <= 0 || r.h <= 0 || p->nops == 0) return 0;
+    if (cell < 1) cell = 1;
+    sqg_rect old = c->clip;
+    sqg_clip(c, r);
+    int shaded = 0;
+    for (int py = r.y; py < r.y + r.h; py += cell)
+        for (int px = r.x; px < r.x + r.w; px += cell) {
+            double f = f_at(v, r, p, values, xslot, yslot, px + cell / 2.0, py + cell / 2.0);
+            if (!(f < 0)) continue;
+            sqg_blend(c, sqg_rect_make(px, py, cell, cell), argb);
+            shaded++;
+        }
+    c->clip = old;
+    return shaded;
+}
+
+int calc_plot_fn(sqg_canvas *c, sqg_rect r, const CalcView *v, double (*f)(const void *ctx, double x),
+                 const void *ctx, uint32_t color) {
+    if (r.w <= 0 || r.h <= 0) return 0;
+    sqg_rect old = c->clip;
+    sqg_clip(c, r);
+    int drawn = 0, have = 0;
+    double ax = 0, ay = 0;
+    for (int i = 0; i <= 2 * r.w; i++) {
+        double bx = r.x + i / 2.0, y = f(ctx, calc_x_at(v, r, bx));
+        if (!isfinite(y)) {
+            have = 0;
+            continue;
+        }
+        double by = calc_px_y(v, r, y);
+        if (have && !((ay < r.y && by < r.y) || (ay >= r.y + r.h && by >= r.y + r.h))) {
+            thick(c, px_int(ax, r.x, r.x + r.w), px_int(ay, r.y, r.y + r.h), px_int(bx, r.x, r.x + r.w),
+                  px_int(by, r.y, r.y + r.h), color);
+            drawn++;
+        }
+        ax = bx;
+        ay = by;
+        have = 1;
+    }
+    c->clip = old;
+    return drawn;
+}

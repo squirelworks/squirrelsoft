@@ -18,7 +18,7 @@ else
 GUI_RUN = $(BUILD)/calc_nosdl.o
 endif
 
-OBJ = $(BUILD)/calcgraph.o $(BUILD)/calcgui.o
+OBJ = $(BUILD)/calcgraph.o $(BUILD)/calcgui.o $(BUILD)/calcstats.o
 HDR = $(wildcard include/*.h) $(SQMATH)/include/sqmath.h $(SQGUI)/include/sqgui.h
 SQMATH_LIB = $(SQMATH)/build/libsqmath.a
 SQGUI_LIB = $(SQGUI)/build/libsqgui.a

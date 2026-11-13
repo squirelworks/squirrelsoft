@@ -1,6 +1,8 @@
 /* calcgui: the SquirrelCalc window panel (libs/sqgui): four rows graphed
- * together, each a function of x, a curve "(cos(t), sin(t))" or a polar
- * curve "r = 1 + cos(t)" (t from tmin to tmax: 0 to 2 pi unless defined).
+ * together, each a function of x ("x^2" or "y = x^2"), a curve
+ * "(cos(t), sin(t))", a polar curve "r = 1 + cos(t)" (t from tmin to tmax:
+ * 0 to 2 pi unless defined), an equation in x and y "x^2 + y^2 = 25", or an
+ * inequality "y < sin(x)", "x^2 + y^2 >= 4" (shaded; < and > dash the edge).
  * Variables defined in the calculator line are used by the graphs (a = 2,
  * then y1 = a sin(x)) and get sliders. Roots, crossings, the derivative of
  * y1, trace, integrals, a table, pan and zoom. Drawn the same on the desktop and off screen in tests. */
@@ -8,6 +10,7 @@
 #define CALCGUI_H
 
 #include "calcgraph.h"
+#include "calcstats.h"
 
 #define CALC_N 4      /* functions */
 #define CALC_VARS 8   /* user variables, ans included */
@@ -15,15 +18,20 @@
 #define CALC_PAIRS 6  /* pairs of functions, for crossings */
 #define CALC_CROSS 16 /* crossings kept */
 #define CALC_SLIDERS 4 /* variables shown with a slider */
+#define CALC_LISTS 4   /* named lists of numbers */
 
-enum { CALC_FUNC, CALC_PARAM, CALC_POLAR }; /* y = f(x), (x(t), y(t)), r = f(t) */
+/* y = f(x), (x(t), y(t)), r = f(t), an equation in x and y (x^2 + y^2 = 25),
+ * an inequality (y < x^2, x^2 + y^2 >= 4) */
+enum { CALC_FUNC, CALC_PARAM, CALC_POLAR, CALC_IMPLICIT, CALC_INEQ };
 
 typedef struct {
     char fx[CALC_N][160];      /* what is typed for y1..y4 */
     char seen[CALC_N][160];    /* the text last compiled */
     SqmProgram prog[CALC_N];  /* f(x), or x(t) for a curve */
     SqmProgram prog2[CALC_N]; /* y(t) for a curve */
-    int kind[CALC_N];         /* CALC_FUNC, CALC_PARAM or CALC_POLAR */
+    int kind[CALC_N];         /* CALC_FUNC .. CALC_INEQ */
+    int body[CALC_N];         /* where f(x) starts in fx: after "y =" */
+    int strict[CALC_N];       /* an inequality with < or >: its edge is dashed */
     int ok[CALC_N];
     char err[CALC_N][96];      /* why a function is not drawn, or "" */
     int show_roots, show_deriv;
@@ -64,6 +72,15 @@ typedef struct {
     int show_table;
     char tstart[32], tstep[32];
     int table_top;
+    /* lists, "xs = {1, 2, 3}", and the points and fit from plot / linreg */
+    char lname[CALC_LISTS][SQM_NAME_LEN];
+    double lval[CALC_LISTS][CALC_LIST_MAX];
+    int llen[CALC_LISTS];
+    int nlists;
+    int fit_on;    /* 0, 1 points only, 2 points and the fitted curve; Reset clears */
+    int fit_lx, fit_ly; /* which lists */
+    int fit_view;       /* move the view onto the points at the next frame */
+    CalcFit fit;
     char status[200];
 } CalcGui;
 
@@ -75,7 +92,9 @@ void calc_gui_set(CalcGui *g, int i, const char *text);
 /* Run a calculator line: "2+3", "a = 2" (defines a for the graphs too),
  * "ans*2", or a CAS command: "expand (x+1)^2", "collect x a x + b x",
  * "d/dx x^3", "solve x^2 - x = 1" (for x, or "... for a"), or
- * "integrate y1 from 0 to 2" (any expression of x; it also shades the area). Adds the result
+ * "integrate y1 from 0 to 2" (any expression of x; it also shades the area).
+ * Lists: "xs = {1, 2, 3}", "stats xs", "plot xs ys", and the fits "linreg xs ys",
+ * "quadreg xs ys" and "expreg xs ys" (drawn with the points). Adds the result
  * to the history. Returns 0, or -1 on an error (also in the history). */
 int calc_gui_eval(CalcGui *g, const char *line);
 
