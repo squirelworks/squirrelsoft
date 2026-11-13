@@ -128,12 +128,14 @@ class LevelsTest {
     fun defaultRangeAndClamp() {
         assertEquals(-120f, Levels.DEFAULT_MIN_DB, 0f)
         assertEquals(-20f, Levels.DEFAULT_MAX_DB, 0f)
-        assertEquals(-140f to 0f, Levels.clampRange(-200f, 30f))
+        // Above 0 dBFS is allowed up to CEIL_DB, for a positive calibration offset.
+        assertEquals(-140f to 30f, Levels.clampRange(-200f, 30f))
+        assertEquals(-140f to Levels.CEIL_DB, Levels.clampRange(-200f, 90f))
         val (lo, hi) = Levels.clampRange(-50f, -48f)
         assertEquals(Levels.MIN_SPAN_DB, hi - lo, 0.001f)
-        val (lo2, hi2) = Levels.clampRange(-3f, -1f)
-        assertEquals(0f, hi2, 0f)
-        assertEquals(-Levels.MIN_SPAN_DB, lo2, 0f)
+        val (lo2, hi2) = Levels.clampRange(Levels.CEIL_DB - 3f, Levels.CEIL_DB - 1f)
+        assertEquals(Levels.CEIL_DB, hi2, 0f)
+        assertEquals(Levels.CEIL_DB - Levels.MIN_SPAN_DB, lo2, 0f)
     }
 
     @Test

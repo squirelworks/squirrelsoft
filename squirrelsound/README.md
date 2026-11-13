@@ -16,7 +16,11 @@ picking, THD, and SNR estimates.
 - **Live mode**: demo / WAV loop / mic / system audio (loopback) / ALSA → SDL spectrum + waterfall
   (pinch/wheel zoom, max-hold, peak marker) or `--headless` for CI
 - **Android phone app** under `android/` (`works.squirrel.sound`) — mic FFT +
-  waterfall (QR scanning lives in `../squirrelqr/`)
+  waterfall (QR scanning lives in `../squirrelqr/`). Like the desktop it has
+  Octave and 1/3 octave bar views (bands from `libs/sqdsp` through JNI), a
+  calibration offset per mic source (Advanced tab), and **Rec**, which saves
+  what is captured as a 16-bit mono WAV in the app's Music folder and offers
+  to share it.
 
 ## Build
 
@@ -29,6 +33,10 @@ make test
 make android
 make android-test
 ```
+
+`make test` also builds the Android JNI bridge (`android/app/src/main/cpp/sqdsp_jni.c`)
+for this machine and drives each native entry point from a JVM
+(`android/jni-smoke/`). It is skipped when there is no JDK.
 
 ## Examples
 

@@ -45,7 +45,8 @@ Every item is a checkbox. Tick it in the PR that merges its last piece. Nested b
 - [x] `libs/sqgui` (C): tiny immediate-mode widget layer over SDL2 for desktop, designed to port to Squirrel OS/2's wm/gfx: a 32-bit canvas core with no OS calls, Warp-grey widgets, the OS/2 5x7 font, and an SDL2 window back end.
 - [ ] JNI smoke tests for every Android app that uses a core (each lib already has `make test` unit tests).
   - [x] SquirrelQR: `make test` builds `sqqr_jni.c` for the host and drives it from a JVM (`squirrelqr/android/jni-smoke`)
-  - [ ] SquirrelSound (`sqdsp_jni.c`)
+  - [x] SquirrelSound: the same for `sqdsp_jni.c` (`squirrelsound/android/jni-smoke`)
+  - [ ] SquirrelSuica analysis (`sqfelica_jni.c`)
 
 ## S3 — Native front-ends, desktop parity (#30, #31)
 - [x] S3.1 Retire the SquirrelQR PWA as a product: moved to `squirrelqr/web-demo/` with a "not a product" README (#66).
@@ -96,15 +97,15 @@ Every item is a checkbox. Tick it in the PR that merges its last piece. Nested b
   - [ ] Peak hold markers
     - [x] Desktop: labelled peaks on the live or held trace (`live_engine_peaks`)
     - [ ] Android
-  - [ ] Octave / 1-3 octave bars
+  - [x] Octave / 1-3 octave bars
     - [x] Shared core: `sqdsp_octave_bands` / `sqdsp_band_levels_db` (IEC 61260 base 10, ENBW-corrected); desktop Octave and 1/3 Oct views
-    - [ ] Android (through the JNI bridge)
-  - [ ] WAV record
+    - [x] Android: Octave and 1/3 octave views through the JNI bridge, with band hold
+  - [x] WAV record
     - [x] Desktop: Rec / `--record`, gap-free tap on the capture ring, streaming WAV writer
-    - [ ] Android
-  - [ ] Calibration offset per device
+    - [x] Android: Rec writes 16-bit mono WAV from the capture thread, then Share
+  - [x] Calibration offset per device
     - [x] Desktop: `-`/`=` and `--cal`, saved per input in `live.conf`
-    - [ ] Android
+    - [x] Android: Cal slider (±60 dB) saved per mic source
   - [x] Desktop scope view (the oscilloscope of #28 on the desktop; Android stays under S0.4)
 - SquirrelQR
   - [x] Generate QR

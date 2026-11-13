@@ -69,4 +69,20 @@
     <string name="mic_permission">Microphone permission required for live spectrum</string>
     <string name="range_applied">Range %1$.0f–%2$.0f Hz</string>
     <string name="range_invalid">Enter valid fMin / fMax (Hz)</string>
+    <string name="view_label">View</string>
+    <string name="view_spectrum">Spectrum</string>
+    <string name="view_octave">Octave bands</string>
+    <string name="view_third">1/3 octave bands</string>
+    <string name="record">Rec</string>
+    <string name="record_stop">■ %1$s</string>
+    <string name="record_need_live">Start the mic or the demo tone first</string>
+    <string name="record_failed">Could not start recording: %1$s</string>
+    <string name="record_saved_title">Recording saved</string>
+    <string name="record_saved">%1$s\n%2$s at %3$d Hz, 16-bit mono</string>
+    <string name="record_full">\nStopped at the WAV size limit.</string>
+    <string name="share">Share</string>
+    <string name="close">Close</string>
+    <string name="share_failed">Could not share the recording</string>
+    <string name="cal_label">Cal %1$+d dB</string>
+    <string name="cal_help">Calibration adds a fixed offset to every reading for the selected mic, to match a reference meter. Remembered per mic source.</string>
 </resources>

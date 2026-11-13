@@ -13,15 +13,18 @@ object Levels {
     const val DEFAULT_MIN_DB = -120f
     const val DEFAULT_MAX_DB = -20f
 
+    /** Highest display level: room for a positive calibration offset. */
+    const val CEIL_DB = 60f
+
     /** Smallest allowed gap between display min and max. */
     const val MIN_SPAN_DB = 10f
 
-    /** Clamp a display range into FLOOR_DB..0 with at least MIN_SPAN_DB between ends. */
+    /** Clamp a display range into FLOOR_DB..CEIL_DB with at least MIN_SPAN_DB between ends. */
     fun clampRange(minDb: Float, maxDb: Float): Pair<Float, Float> {
-        var lo = minDb.coerceIn(FLOOR_DB, -MIN_SPAN_DB)
-        var hi = maxDb.coerceIn(FLOOR_DB + MIN_SPAN_DB, 0f)
+        var lo = minDb.coerceIn(FLOOR_DB, CEIL_DB - MIN_SPAN_DB)
+        var hi = maxDb.coerceIn(FLOOR_DB + MIN_SPAN_DB, CEIL_DB)
         if (hi - lo < MIN_SPAN_DB) {
-            hi = (lo + MIN_SPAN_DB).coerceAtMost(0f)
+            hi = (lo + MIN_SPAN_DB).coerceAtMost(CEIL_DB)
             lo = hi - MIN_SPAN_DB
         }
         return lo to hi

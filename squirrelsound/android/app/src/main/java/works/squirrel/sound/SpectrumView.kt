@@ -47,6 +47,14 @@ class SpectrumView @JvmOverloads constructor(
         textSize = 22f
     }
     private val wfPaint = Paint(Paint.FILTER_BITMAP_FLAG)
+    private val barPaint = Paint().apply {
+        color = Color.parseColor("#3A9FC0")
+        style = Paint.Style.FILL
+    }
+    private val barHoldPaint = Paint().apply {
+        color = Color.parseColor("#FFB43C")
+        strokeWidth = 3f
+    }
 
     private var db: FloatArray? = null
     private var hold: FloatArray? = null
@@ -55,6 +63,22 @@ class SpectrumView @JvmOverloads constructor(
     private var peakDb = Levels.FLOOR_DB
     private var rmsDb = Levels.FLOOR_DB
     private var maxHoldEnabled = false
+
+    /** Spectrum line, or octave / third-octave bars (computed with libs/sqdsp). */
+    var viewMode: SpectrumControls.ViewMode = SpectrumControls.ViewMode.DEFAULT
+        set(value) {
+            if (field == value) return
+            field = value
+            bandSet = null
+            bandHold = null
+            invalidate()
+        }
+    private var bandSet: Bands.Set? = null
+    private var bandKey = ""
+    private var bandDb = FloatArray(0)
+    private var bandHold: FloatArray? = null
+    private var enbwSize = 0
+    private var enbw = 1.5
 
     // LOFARgram: a ring of bitmap rows, one row per screen pixel of the waterfall
     // area. [wfHead] is the newest row; older rows follow it (wrapping), so a new
@@ -140,11 +164,15 @@ class SpectrumView @JvmOverloads constructor(
 
     fun setMaxHold(on: Boolean) {
         maxHoldEnabled = on
-        if (!on) hold = null
+        if (!on) {
+            hold = null
+            bandHold = null
+        }
     }
 
     fun resetHold() {
         hold = null
+        bandHold = null
     }
 
     fun clearWaterfall() {
@@ -206,12 +234,65 @@ class SpectrumView @JvmOverloads constructor(
                 for (i in frame.db.indices) if (frame.db[i] > h[i]) h[i] = frame.db[i]
             }
         }
+        if (viewMode.isBands) updateBands(frame)
         try {
             frame.waterfallRow?.let { pushWaterfallRow(it) }
         } catch (_: Exception) {
             // Bitmap / size races during layout — skip this row.
         }
         invalidate()
+    }
+
+    /** Band levels of this frame over the visible range (bands rebuilt when the range changes). */
+    private fun updateBands(frame: SpectrumFrame) {
+        val key = "${viewMode.fraction}:${fMin.toInt()}:${fMax.toInt()}"
+        var set = bandSet
+        if (set == null || key != bandKey) {
+            set = SqDsp.octaveBands(viewMode.fraction, fMin.toDouble(), fMax.toDouble())
+            bandSet = set
+            bandKey = key
+            bandHold = null
+        }
+        if (enbwSize != frame.fftSize) {
+            enbw = Bands.enbw(Fft.hann(frame.fftSize))
+            enbwSize = frame.fftSize
+        }
+        if (bandDb.size != set.size) bandDb = FloatArray(set.size)
+        SqDsp.bandLevels(frame.db, frame.sampleRate.toDouble() / frame.fftSize, set, enbw, bandDb)
+        if (maxHoldEnabled) {
+            val h = bandHold
+            if (h == null || h.size != bandDb.size) {
+                bandHold = bandDb.copyOf()
+            } else {
+                for (i in bandDb.indices) if (bandDb[i] > h[i]) h[i] = bandDb[i]
+            }
+        }
+    }
+
+    /** Bars for the band levels across the full width, labelled under them. */
+    private fun drawBands(canvas: Canvas, w: Float, spectrumH: Float, yOf: (Float) -> Float) {
+        val set = bandSet ?: return
+        val n = minOf(set.size, bandDb.size)
+        if (n == 0) return
+        val per = w / n
+        val gap = (per * 0.15f).coerceIn(1f, 6f)
+        val base = yOf(dbMin)
+        val stride = SpectrumControls.labelStride(n, w, axisPaint.measureText("12.5k") + 8f)
+        val hd = bandHold
+        for (i in 0 until n) {
+            val x0 = i * per + gap / 2
+            val x1 = (i + 1) * per - gap / 2
+            canvas.drawRect(x0, yOf(bandDb[i]), x1, base, barPaint)
+            if (maxHoldEnabled && hd != null && i < hd.size) {
+                val y = yOf(hd[i])
+                canvas.drawLine(x0, y, x1, y, barHoldPaint)
+            }
+            if (i % stride == 0) {
+                val label = Bands.label(set.centre[i])
+                val lx = (x0 + x1) / 2 - axisPaint.measureText(label) / 2
+                canvas.drawText(label, lx.coerceAtLeast(0f), spectrumH - 8f, axisPaint)
+            }
+        }
     }
 
     /** Legacy overload used by older call sites / tests. */
@@ -319,15 +400,20 @@ class SpectrumView @JvmOverloads constructor(
             canvas.drawText(label, w - 8f - axisPaint.measureText(label), ly, axisPaint)
         }
 
-        spectrumPath.reset()
-        spectrumPath.moveTo(xOf(b0), yOf(data[b0]))
-        for (i in b0 + 1 until b1) {
-            spectrumPath.lineTo(xOf(i), yOf(data[i]))
+        val bands = viewMode.isBands
+        if (bands) {
+            drawBands(canvas, w, spectrumH, ::yOf)
+        } else {
+            spectrumPath.reset()
+            spectrumPath.moveTo(xOf(b0), yOf(data[b0]))
+            for (i in b0 + 1 until b1) {
+                spectrumPath.lineTo(xOf(i), yOf(data[i]))
+            }
+            canvas.drawPath(spectrumPath, spectrumPaint)
         }
-        canvas.drawPath(spectrumPath, spectrumPaint)
 
         val hd = hold
-        if (maxHoldEnabled && hd != null && hd.size == data.size) {
+        if (!bands && maxHoldEnabled && hd != null && hd.size == data.size) {
             spectrumPath.reset()
             spectrumPath.moveTo(xOf(b0), yOf(hd[b0]))
             for (i in b0 + 1 until b1) {
@@ -348,7 +434,7 @@ class SpectrumView @JvmOverloads constructor(
             20f, 50f, 100f, 250f, 500f, 1000f, 2000f, 4000f, 8000f, 16000f, 20000f
         )
         for (hz in ticks) {
-            if (hz < lo || hz > hi) continue
+            if (bands || hz < lo || hz > hi) continue
             val bin = ((hz / ny) * n).toInt().coerceIn(b0, b1)
             val x = xOf(bin)
             canvas.drawLine(x, spectrumH - 6f, x, spectrumH, gridPaint)

@@ -24,7 +24,7 @@ LIB_OBJ = $(BUILD)/wavio.o $(BUILD)/synth.o $(BUILD)/spectrogram.o \
 	$(BUILD)/live_audio.o $(BUILD)/live_engine.o $(BUILD)/live_prefs.o \
 	$(BUILD)/live_view_headless.o $(BUILD)/live_view_sdl.o $(BUILD)/live_gui.o $(BUILD)/live_record.o
 
-.PHONY: all test clean android android-test
+.PHONY: all test test-jni clean android android-test
 
 all: $(BUILD)/squirrelsound $(BUILD)/test_sqdsp $(BUILD)/test_live $(BUILD)/test_live_gui
 
@@ -97,7 +97,7 @@ $(BUILD)/test_live: tests/test_live.c $(LIB_OBJ) $(DEPS) | $(BUILD)
 $(BUILD)/test_live_gui: tests/test_live_gui.c $(LIB_OBJ) $(DEPS) | $(BUILD)
 	$(CC) $(CFLAGS) tests/test_live_gui.c $(LINK) -o $@ $(LDFLAGS)
 
-test: $(BUILD)/test_sqdsp $(BUILD)/test_live $(BUILD)/test_live_gui $(BUILD)/squirrelsound
+test: $(BUILD)/test_sqdsp $(BUILD)/test_live $(BUILD)/test_live_gui $(BUILD)/squirrelsound test-jni
 	$(BUILD)/test_sqdsp
 	$(BUILD)/test_live
 	$(BUILD)/test_live_gui $(BUILD)/live_gui.ppm
@@ -118,6 +118,22 @@ test: $(BUILD)/test_sqdsp $(BUILD)/test_live $(BUILD)/test_live_gui $(BUILD)/squ
 	$(BUILD)/squirrelsound live --source demo --headless --frames 10 --freq 1000 --harmonics 1 --record $(BUILD)/live_rec.wav | grep -q '^recorded' && \
 	$(BUILD)/squirrelsound pitch $(BUILD)/live_rec.wav | grep -qE 'autocorr\) ~= (99[0-9]|10[0-2][0-9])\.' && \
 	test -s $$svg && echo "squirrelsound cli smoke ok"
+
+# The Android JNI bridge built for this machine and driven from a JVM
+# (android/jni-smoke): skipped when there is no JDK.
+JDK ?= $(shell if [ -n "$$JAVA_HOME" ]; then echo "$$JAVA_HOME"; \
+	elif command -v javac >/dev/null; then dirname "$$(dirname "$$(readlink -f "$$(command -v javac)")")"; fi)
+
+test-jni: | $(BUILD)
+	@if [ -n "$(JDK)" ] && [ -f "$(JDK)/include/jni.h" ] && [ -x "$(JDK)/bin/javac" ]; then \
+		set -e; plat=$$(ls -d "$(JDK)"/include/*/ | head -1); \
+		$(CC) -std=c11 -O2 -Wall -Wextra -Werror -D_POSIX_C_SOURCE=200809L -shared -fPIC \
+			-I"$(JDK)/include" -I"$$plat" -I$(SQDSP)/include \
+			android/app/src/main/cpp/sqdsp_jni.c $(SQDSP)/src/sqdsp.c -lm -o $(BUILD)/libsqdsp_jni.so; \
+		mkdir -p $(BUILD)/jni-smoke; \
+		"$(JDK)/bin/javac" -d $(BUILD)/jni-smoke android/jni-smoke/works/squirrel/sound/SqDsp.java; \
+		"$(JDK)/bin/java" -cp $(BUILD)/jni-smoke works.squirrel.sound.SqDsp "$$(pwd)/$(BUILD)/libsqdsp_jni.so"; \
+	else echo "squirrelsound: no JDK, JNI smoke test skipped"; fi
 
 clean:
 	rm -rf $(BUILD)

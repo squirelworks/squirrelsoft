@@ -39,6 +39,31 @@ object SpectrumControls {
         }
     }
 
+    /**
+     * What the top half shows: the FFT spectrum, or fractional-octave band
+     * levels ([fraction] 1 = octaves, 3 = third octaves) as bars.
+     */
+    enum class ViewMode(val id: String, val fraction: Int) {
+        SPECTRUM("spectrum", 0),
+        OCTAVE("octave", 1),
+        THIRD_OCTAVE("third", 3);
+
+        val isBands: Boolean get() = fraction > 0
+
+        companion object {
+            val DEFAULT = SPECTRUM
+
+            fun fromId(id: String?): ViewMode = values().firstOrNull { it.id == id } ?: DEFAULT
+        }
+    }
+
+    /** Label every k-th of [count] bars so labels about [labelPx] wide don't touch in [widthPx]. */
+    fun labelStride(count: Int, widthPx: Float, labelPx: Float): Int {
+        if (count <= 0 || widthPx <= 0f) return 1
+        val per = widthPx / count
+        return ceil((labelPx / per).toDouble()).toInt().coerceAtLeast(1)
+    }
+
     /** How the view's height is shared between the live spectrum and the LOFARgram. */
     enum class SplitRatio(val id: String, val spectrumFraction: Float) {
         EVEN("50_50", 0.5f),

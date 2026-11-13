@@ -31,6 +31,40 @@ object SqDsp {
         return nativeSpectrumDb(windowed, windowSum, floorDb, outDb)
     }
 
+    @JvmStatic
+    private external fun nativeOctaveBands(
+        fraction: Int, fmin: Double, fmax: Double, centre: DoubleArray, lo: DoubleArray, hi: DoubleArray,
+    ): Int
+
+    @JvmStatic
+    private external fun nativeBandLevels(
+        magDb: FloatArray, binHz: Double, lo: DoubleArray, hi: DoubleArray, nbands: Int,
+        enbw: Double, floorDb: Double, outDb: FloatArray,
+    ): Boolean
+
+    /** IEC 61260-1 bands ([fraction] 1 = octave, 3 = third octave) centred in [fmin]..[fmax]: libs/sqdsp, else [Bands]. */
+    fun octaveBands(fraction: Int, fmin: Double, fmax: Double): Bands.Set {
+        if (available) {
+            val cap = Bands.MAX_BANDS
+            val c = DoubleArray(cap)
+            val lo = DoubleArray(cap)
+            val hi = DoubleArray(cap)
+            val n = nativeOctaveBands(fraction, fmin, fmax, c, lo, hi).coerceIn(0, cap)
+            return Bands.Set(fraction, c.copyOf(n), lo.copyOf(n), hi.copyOf(n))
+        }
+        return Bands.octaveBands(fraction, fmin, fmax)
+    }
+
+    /** Band levels of a one-sided dB spectrum (bin k at k * [binHz]) into [out]: libs/sqdsp, else [Bands]. */
+    fun bandLevels(magDb: FloatArray, binHz: Double, bands: Bands.Set, enbw: Double, out: FloatArray,
+                   floorDb: Float = Levels.FLOOR_DB) {
+        val n = bands.size
+        if (available && out.size >= n &&
+            nativeBandLevels(magDb, binHz, bands.lo, bands.hi, n, enbw, floorDb.toDouble(), out)
+        ) return
+        Bands.levels(magDb, binHz, bands, enbw, out, floorDb)
+    }
+
     /** [SqDsp.spectrumDb] when it can, otherwise [Fft] (which overwrites [re] and [im]). */
     fun spectrumDbOrKotlin(re: FloatArray, im: FloatArray, windowSum: Float, outDb: FloatArray) {
         if (spectrumDb(re, windowSum, outDb)) return
