@@ -14,7 +14,6 @@
 #define SQ_SEP '/'
 #endif
 
-#define DIRECTION_KEY "direction="
 
 int live_prefs_path(char *buf, size_t n) {
     const char *over = getenv("SQSOUND_PREFS");
@@ -37,23 +36,29 @@ int live_prefs_path(char *buf, size_t n) {
     return (w < 0 || (size_t)w >= n) ? -1 : 0;
 }
 
-int live_prefs_load_direction(const char *path, LiveDirection *out) {
-    if (!path || !out) return -1;
+int live_prefs_get(const char *path, const char *key, char *val, size_t n) {
+    if (!path || !key || !val || n == 0) return -1;
     FILE *f = fopen(path, "r");
     if (!f) return -1;
-    char line[256];
+    char line[1024];
+    size_t kl = strlen(key);
     int rc = -1;
     while (fgets(line, sizeof line, f)) {
         line[strcspn(line, "\r\n")] = '\0';
-        if (strncmp(line, DIRECTION_KEY, strlen(DIRECTION_KEY)) != 0) continue;
-        const char *v = line + strlen(DIRECTION_KEY);
-        if (strcmp(v, "waterfall") == 0 || strcmp(v, "fountain") == 0) {
-            *out = live_direction_parse(v, LIVE_DIR_WATERFALL);
-            rc = 0;
-        }
+        if (strncmp(line, key, kl) != 0 || line[kl] != '=') continue;
+        int w = snprintf(val, n, "%s", line + kl + 1);
+        rc = (w < 0 || (size_t)w >= n) ? -1 : 0; /* the last one wins */
     }
     fclose(f);
     return rc;
+}
+
+int live_prefs_load_direction(const char *path, LiveDirection *out) {
+    char v[32];
+    if (!out || live_prefs_get(path, "direction", v, sizeof v) != 0) return -1;
+    if (strcmp(v, "waterfall") != 0 && strcmp(v, "fountain") != 0) return -1;
+    *out = live_direction_parse(v, LIVE_DIR_WATERFALL);
+    return 0;
 }
 
 /* mkdir -p for the directory part of path. */
@@ -75,16 +80,18 @@ static void make_parent_dirs(const char *path) {
     (void)SQ_MKDIR(tmp);
 }
 
-int live_prefs_save_direction(const char *path, LiveDirection d) {
-    if (!path) return -1;
-    /* Keep other keys: read existing lines, drop old direction=. */
+int live_prefs_set(const char *path, const char *key, const char *value) {
+    if (!path || !key || !*key || !value || strpbrk(key, "=\r\n") || strpbrk(value, "\r\n"))
+        return -1;
+    size_t kl = strlen(key);
+    /* Keep other keys: read existing lines, drop the old key=. */
     char *kept = NULL;
     size_t kept_len = 0;
     FILE *f = fopen(path, "r");
     if (f) {
-        char line[256];
+        char line[1024];
         while (fgets(line, sizeof line, f)) {
-            if (strncmp(line, DIRECTION_KEY, strlen(DIRECTION_KEY)) == 0) continue;
+            if (strncmp(line, key, kl) == 0 && line[kl] == '=') continue;
             size_t l = strlen(line);
             char *grown = (char *)realloc(kept, kept_len + l + 1);
             if (!grown) {
@@ -108,7 +115,35 @@ int live_prefs_save_direction(const char *path, LiveDirection d) {
         fputs(kept, f);
         if (kept[kept_len - 1] != '\n') fputc('\n', f);
     }
-    fprintf(f, "%s%s\n", DIRECTION_KEY, live_direction_name(d));
+    fprintf(f, "%s=%s\n", key, value);
     free(kept);
     return fclose(f) == 0 ? 0 : -1;
+}
+
+int live_prefs_save_direction(const char *path, LiveDirection d) {
+    return live_prefs_set(path, "direction", live_direction_name(d));
+}
+
+/* cal.<source>: the source name with '=' and spaces made safe */
+static void cal_key(char *key, size_t n, const char *source) {
+    snprintf(key, n, "cal.%s", source && *source ? source : "default");
+    for (char *p = key; *p; p++)
+        if (*p == '=' || *p == ' ' || *p == '\t' || *p == '\r' || *p == '\n') *p = '_';
+}
+
+int live_prefs_load_cal(const char *path, const char *source, double *db) {
+    char key[300], v[64], *end;
+    cal_key(key, sizeof key, source);
+    if (!db || live_prefs_get(path, key, v, sizeof v) != 0) return -1;
+    double x = strtod(v, &end);
+    if (end == v || *end || x != x || x < -100 || x > 100) return -1;
+    *db = x;
+    return 0;
+}
+
+int live_prefs_save_cal(const char *path, const char *source, double db) {
+    char key[300], v[64];
+    cal_key(key, sizeof key, source);
+    snprintf(v, sizeof v, "%.2f", db);
+    return live_prefs_set(path, key, v);
 }

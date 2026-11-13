@@ -450,3 +450,52 @@ SqdspWindow sqdsp_window_parse(const char *name) {
     if (!strcmp(name, "flattop")) return SQDSP_WIN_FLATTOP;
     return SQDSP_WIN_HANN;
 }
+
+double sqdsp_window_enbw(const double *w, size_t n) {
+    double s = 0, s2 = 0;
+    for (size_t i = 0; i < n; i++) {
+        s += w[i];
+        s2 += w[i] * w[i];
+    }
+    return s != 0 ? (double)n * s2 / (s * s) : 1.0;
+}
+
+size_t sqdsp_octave_bands(int fraction, double fmin, double fmax, double *centre,
+                          double *lo, double *hi, size_t cap) {
+    if (fraction < 1 || !(fmax >= fmin) || fmax <= 0) return 0;
+    double g = pow(10.0, 0.3);
+    double b = (double)fraction;
+    /* band index x for a frequency: fm = 1000 * g^(x/b) (odd b; even b
+     * shifts by half a band, also per IEC 61260-1) */
+    double shift = (fraction % 2) ? 0.0 : 0.5;
+    double lo_f = fmin > 1e-3 ? fmin : 1e-3;
+    long x0 = (long)ceil(b * log(lo_f / 1000.0) / log(g) - shift - 1e-9);
+    long x1 = (long)floor(b * log(fmax / 1000.0) / log(g) - shift + 1e-9);
+    size_t n = 0;
+    for (long x = x0; x <= x1; x++, n++) {
+        if (n >= cap) continue;
+        double fm = 1000.0 * pow(g, ((double)x + shift) / b);
+        double e = pow(g, 1.0 / (2.0 * b));
+        if (centre) centre[n] = fm;
+        if (lo) lo[n] = fm / e;
+        if (hi) hi[n] = fm * e;
+    }
+    return n;
+}
+
+void sqdsp_band_levels_db(const double *mag_db, const double *freq, size_t nbins,
+                          const double *lo, const double *hi, size_t nbands, double enbw,
+                          double floor_db, double *out_db) {
+    if (enbw <= 0) enbw = 1.0;
+    for (size_t j = 0; j < nbands; j++) {
+        double p = 0;
+        int any = 0;
+        for (size_t k = 0; k < nbins; k++) {
+            if (freq[k] < lo[j] || freq[k] >= hi[j]) continue;
+            p += pow(10.0, mag_db[k] / 10.0);
+            any = 1;
+        }
+        double db = any && p > 0 ? 10.0 * log10(p / enbw) : floor_db;
+        out_db[j] = db < floor_db ? floor_db : db;
+    }
+}

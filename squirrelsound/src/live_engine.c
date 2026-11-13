@@ -24,9 +24,10 @@ int live_engine_init(LiveEngine *e, const LiveEngineConfig *cfg) {
     e->mag = (double *)calloc(e->bins, sizeof(double));
     e->mag_hold = (double *)calloc(e->bins, sizeof(double));
     e->freq = (double *)malloc(e->bins * sizeof(double));
+    e->time = (double *)calloc(cfg->fft_size, sizeof(double));
     e->waterfall = (float *)calloc(e->wf_rows * e->bins, sizeof(float));
     if (!e->window || !e->frame || !e->scratch || !e->mag || !e->mag_hold || !e->freq ||
-        !e->waterfall) {
+        !e->time || !e->waterfall) {
         live_engine_free(e);
         return -1;
     }
@@ -49,6 +50,7 @@ void live_engine_free(LiveEngine *e) {
     free(e->mag);
     free(e->mag_hold);
     free(e->freq);
+    free(e->time);
     free(e->waterfall);
     memset(e, 0, sizeof(*e));
 }
@@ -78,6 +80,7 @@ size_t live_engine_hz_to_bin(const LiveEngine *e, double hz) {
 int live_engine_process(LiveEngine *e, const double *samples) {
     if (!e || !samples) return -1;
     memcpy(e->frame, samples, e->cfg.fft_size * sizeof(double));
+    memcpy(e->time, samples, e->cfg.fft_size * sizeof(double));
     sqdsp_apply_window(e->frame, e->window, e->cfg.fft_size);
     size_t nb = sqdsp_magnitude_spectrum(e->frame, e->cfg.fft_size, e->mag, e->scratch);
     if (nb != e->bins) return -1;
@@ -90,7 +93,7 @@ int live_engine_process(LiveEngine *e, const double *samples) {
     for (size_t k = 0; k < e->bins; k++) {
         double scale = (k == 0 || (double)k == half) ? 1.0 / e->window_sum
                                                      : 2.0 / e->window_sum;
-        double db = 20.0 * log10(e->mag[k] * scale + 1e-20);
+        double db = 20.0 * log10(e->mag[k] * scale + 1e-20) + e->cfg.cal_db;
         if (db < LIVE_DB_FLOOR) db = LIVE_DB_FLOOR;
         e->mag[k] = db;
         if (e->cfg.max_hold) {
@@ -156,4 +159,61 @@ unsigned int live_color_argb(float t) {
         c |= (unsigned int)(v + 0.5f) << (16 - 8 * ch);
     }
     return c;
+}
+
+size_t live_engine_bands(const LiveEngine *e, int fraction, double *centre, double *db,
+                         size_t cap) {
+    enum { MAXB = 64 };
+    double c[MAXB], lo[MAXB], hi[MAXB], lv[MAXB];
+    size_t n = sqdsp_octave_bands(fraction, e->cfg.f_min_hz, e->cfg.f_max_hz, c, lo, hi, MAXB);
+    if (n > MAXB) n = MAXB;
+    if (n > cap) n = cap;
+    double enbw = sqdsp_window_enbw(e->window, e->cfg.fft_size);
+    sqdsp_band_levels_db(e->mag, e->freq, e->bins, lo, hi, n, enbw, LIVE_DB_FLOOR, lv);
+    for (size_t i = 0; i < n; i++) {
+        if (centre) centre[i] = c[i];
+        if (db) db[i] = lv[i];
+    }
+    return n;
+}
+
+size_t live_engine_peaks(const LiveEngine *e, const double *spec, size_t max_n,
+                         double min_sep_hz, double *hz, double *db) {
+    size_t n = 0;
+    if (!spec || max_n == 0) return 0;
+    size_t b0 = live_engine_hz_to_bin(e, e->cfg.f_min_hz);
+    size_t b1 = live_engine_hz_to_bin(e, e->cfg.f_max_hz);
+    if (b0 < 1) b0 = 1;
+    double thresh = e->cfg.db_min + 10.0;
+    for (size_t k = b0; k <= b1 && k + 1 < e->bins; k++) {
+        double v = spec[k];
+        if (v < thresh || v < spec[k - 1] || v <= spec[k + 1]) continue;
+        double bin = sqdsp_parabolic_bin(spec, e->bins, k);
+        double f = bin * e->cfg.sample_rate / (double)e->cfg.fft_size;
+        /* keep the loudest of peaks closer than min_sep_hz */
+        size_t j;
+        for (j = 0; j < n; j++)
+            if (fabs(hz[j] - f) < min_sep_hz) break;
+        if (j < n) {
+            if (v <= db[j]) continue;
+            for (size_t m = j; m + 1 < n; m++) {
+                hz[m] = hz[m + 1];
+                db[m] = db[m + 1];
+            }
+            n--;
+        }
+        /* insert sorted by level, loudest first */
+        size_t at = n;
+        while (at > 0 && db[at - 1] < v) at--;
+        if (at >= max_n) continue;
+        size_t end = n < max_n ? n : max_n - 1;
+        for (size_t m = end; m > at; m--) {
+            hz[m] = hz[m - 1];
+            db[m] = db[m - 1];
+        }
+        hz[at] = f;
+        db[at] = v;
+        if (n < max_n) n++;
+    }
+    return n;
 }

@@ -13,6 +13,10 @@
 enum { LIVE_RANGE_HUMAN, LIVE_RANGE_MUSIC, LIVE_RANGE_BASS, LIVE_RANGE_SPEECH, LIVE_RANGE_FULL,
        LIVE_RANGE_COUNT };
 enum { LIVE_SPEED_SLOW, LIVE_SPEED_NORMAL, LIVE_SPEED_FAST };
+/* What the top half shows */
+enum { LIVE_VIEW_SPECTRUM, LIVE_VIEW_OCTAVE, LIVE_VIEW_THIRD, LIVE_VIEW_SCOPE, LIVE_VIEW_COUNT };
+#define LIVE_GUI_MAX_BANDS 64
+#define LIVE_GUI_MAX_PEAKS 5
 
 typedef struct {
     int paused;
@@ -21,7 +25,15 @@ typedef struct {
     int fountain;       /* 1: newest row at the bottom */
     int dir_changed;    /* set when the direction was switched; the caller saves it */
     int scroll_phase;   /* frames since the last waterfall push */
+    int view;           /* LIVE_VIEW_* */
+    int peaks;          /* label the loudest peaks in the spectrum view */
+    int record;         /* Rec is down; the caller opens and closes the file */
+    int record_changed; /* set when Rec was switched; the caller clears it */
+    int cal_changed;    /* set when the calibration offset moved; the caller saves it */
     const char *source; /* shown in the status line */
+    const char *rec_info; /* set by the caller while recording, e.g. "REC 0:12 take.wav" */
+    double band_hold[LIVE_GUI_MAX_BANDS]; /* max hold of the band bars */
+    int band_n, band_frac;
     sqg_rect spectrum, waterfall; /* where the plots went in the last frame */
 } LiveGui;
 
@@ -36,11 +48,15 @@ int live_gui_scroll_skip(const LiveGui *g);
 int live_gui_take_frame(LiveGui *g);
 
 void live_gui_set_range(LiveGui *g, LiveEngine *e, int range);
+void live_gui_reset_hold(LiveGui *g, LiveEngine *e);
+void live_gui_set_cal(LiveGui *g, LiveEngine *e, double db);
 
 /* Keyboard shortcuts, as on the earlier SDL view: space pause, m max
  * hold, r reset hold, 1-5 range presets, 8/9/0 slow/normal/fast, w
- * waterfall/fountain, [ and ] zoom; key is the ASCII character or one
- * of SQG_KEY_LEFT / SQG_KEY_RIGHT (pan). Returns 1 if q or Esc. */
+ * waterfall/fountain, [ and ] zoom; and v next view, p peak labels,
+ * R record, - and = (or +) calibration -1/+1 dB. key is the ASCII
+ * character or one of SQG_KEY_LEFT / SQG_KEY_RIGHT (pan). Returns 1 if
+ * q or Esc. */
 int live_gui_key(LiveGui *g, LiveEngine *e, int ascii, int sqg_key);
 
 /* Zoom by factor (< 1 in, > 1 out) around frequency fraction t (0..1) */

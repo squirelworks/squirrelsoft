@@ -25,4 +25,16 @@ int live_prefs_load_direction(const char *path, LiveDirection *out);
  * parent directory if needed. Returns 0 on success, -1 on failure. */
 int live_prefs_save_direction(const char *path, LiveDirection d);
 
+/* Generic key=value access (keys without '=' or line breaks). get copies
+ * the value into val and returns 0, or -1 if missing or too long; set
+ * replaces the key and keeps the other lines. */
+int live_prefs_get(const char *path, const char *key, char *val, size_t n);
+int live_prefs_set(const char *path, const char *key, const char *value);
+
+/* Calibration offset in dB for one input, keyed by its source name
+ * (e.g. "mic: USB Audio"), stored as cal.<source>=<dB>. Load returns -1
+ * when there is none or it is out of -100..100. */
+int live_prefs_load_cal(const char *path, const char *source, double *db);
+int live_prefs_save_cal(const char *path, const char *source, double db);
+
 #endif

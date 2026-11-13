@@ -11,10 +11,15 @@
 #define COL_TRACE   0xFF50DCFFu
 #define COL_HOLD    0xFFFFB43Cu
 #define COL_PEAK    0xFFFF5078u
+#define COL_BAR     0xFF3CA0E0u
+#define COL_SCOPE   0xFF60FF90u
+#define COL_LABEL   0xFFE8E8E8u
 
 static const char *const range_names[LIVE_RANGE_COUNT] = { "Human", "Music", "Bass", "Speech",
                                                             "Full" };
 static const char *const speed_names[3] = { "Slow", "Normal", "Fast" };
+static const char *const view_names[LIVE_VIEW_COUNT] = { "Spectrum", "Octave", "1/3 Oct",
+                                                         "Scope" };
 
 void live_gui_init(LiveGui *g, LiveEngine *e, LiveDirection dir, const char *source)
 {
@@ -22,7 +27,35 @@ void live_gui_init(LiveGui *g, LiveEngine *e, LiveDirection dir, const char *sou
     g->speed = LIVE_SPEED_FAST;
     g->fountain = dir == LIVE_DIR_FOUNTAIN;
     g->source = source ? source : "";
+    g->peaks = 1;
     live_gui_set_range(g, e, LIVE_RANGE_HUMAN);
+}
+
+void live_gui_reset_hold(LiveGui *g, LiveEngine *e)
+{
+    live_engine_reset_hold(e);
+    g->band_n = 0;
+}
+
+void live_gui_set_cal(LiveGui *g, LiveEngine *e, double db)
+{
+    if (db < -100)
+        db = -100;
+    if (db > 100)
+        db = 100;
+    if (db == e->cfg.cal_db)
+        return;
+    double d = db - e->cfg.cal_db;
+    e->cfg.cal_db = db;
+    /* shift what is on screen too, so the trace does not jump at the next frame */
+    for (size_t k = 0; k < e->bins; k++) {
+        e->mag[k] += d;
+        if (e->mag_hold[k] > -1e299)
+            e->mag_hold[k] += d;
+    }
+    e->peak_db += d;
+    g->band_n = 0;
+    g->cal_changed = 1;
 }
 
 LiveDirection live_gui_direction(const LiveGui *g)
@@ -89,9 +122,14 @@ int live_gui_key(LiveGui *g, LiveEngine *e, int ascii, int sqg_key)
     case 'm':
         e->cfg.max_hold = !e->cfg.max_hold;
         if (!e->cfg.max_hold)
-            live_engine_reset_hold(e);
+            live_gui_reset_hold(g, e);
         break;
-    case 'r': live_engine_reset_hold(e); break;
+    case 'r': live_gui_reset_hold(g, e); break;
+    case 'v': g->view = (g->view + 1) % LIVE_VIEW_COUNT; break;
+    case 'p': g->peaks = !g->peaks; break;
+    case 'R': g->record = !g->record; g->record_changed = 1; break;
+    case '-': live_gui_set_cal(g, e, e->cfg.cal_db - 1); break;
+    case '=': case '+': live_gui_set_cal(g, e, e->cfg.cal_db + 1); break;
     case '1': case '2': case '3': case '4': case '5':
         live_gui_set_range(g, e, ascii - '1');
         break;
@@ -133,27 +171,36 @@ static void toolbar(LiveGui *g, sqg_ui *ui, LiveEngine *e, sqg_rect area)
                    &hold)) {
         e->cfg.max_hold = hold;
         if (!hold)
-            live_engine_reset_hold(e);
+            live_gui_reset_hold(g, e);
     }
     if (sqg_button(ui, sqg_id_str("reset"), sqg_row_take(&row, sqg_button_w(ui, "Reset")),
                    "Reset"))
-        live_engine_reset_hold(e);
+        live_gui_reset_hold(g, e);
+    sqg_toggle(ui, sqg_id_str("peaks"), sqg_row_take(&row, sqg_button_w(ui, "Peaks")), "Peaks",
+               &g->peaks);
     if (sqg_toggle(ui, sqg_id_str("fountain"),
                    sqg_row_take(&row, sqg_button_w(ui, "Fountain")), "Fountain", &g->fountain))
         g->dir_changed = 1;
-    char lo[16], hi[16], status[200];
+    if (sqg_toggle(ui, sqg_id_str("rec"), sqg_row_take(&row, sqg_button_w(ui, "Rec")), "Rec",
+                   &g->record))
+        g->record_changed = 1;
+    char lo[16], hi[16], cal[32] = "", status[300];
     fmt_hz(lo, sizeof lo, e->cfg.f_min_hz);
     fmt_hz(hi, sizeof hi, e->cfg.f_max_hz);
-    snprintf(status, sizeof status, "peak %.1f Hz %.1f dBFS  %s-%s Hz  %s%s", e->peak_hz,
-             e->peak_db, lo, hi, g->source, g->paused ? "  (stopped)" : "");
+    if (e->cfg.cal_db != 0)
+        snprintf(cal, sizeof cal, "  cal %+.1f dB", e->cfg.cal_db);
+    snprintf(status, sizeof status, "%s%speak %.1f Hz %.1f dB%s  %s-%s Hz  %s%s",
+             g->record && g->rec_info ? g->rec_info : "", g->record && g->rec_info ? "  " : "",
+             e->peak_hz, e->peak_db, cal, lo, hi, g->source, g->paused ? "  (stopped)" : "");
     sqg_label(ui, sqg_row_take(&row, 0), status, SQG_ALIGN_RIGHT);
 
     sqg_row row2 = sqg_row_begin(r2, 8);
-    int rw = r2.w * 3 / 5;
     int range = g->range;
-    if (sqg_segments(ui, sqg_id_str("range"), sqg_row_take(&row2, rw), range_names,
+    if (sqg_segments(ui, sqg_id_str("range"), sqg_row_take(&row2, r2.w * 2 / 5), range_names,
                      LIVE_RANGE_COUNT, &range))
         live_gui_set_range(g, e, range);
+    sqg_segments(ui, sqg_id_str("view"), sqg_row_take(&row2, r2.w * 7 / 20), view_names,
+                 LIVE_VIEW_COUNT, &g->view);
     sqg_segments(ui, sqg_id_str("speed"), sqg_row_take(&row2, 0), speed_names, 3, &g->speed);
 }
 
@@ -219,6 +266,162 @@ static void spectrum(sqg_ui *ui, LiveEngine *e, sqg_rect r, size_t b0, size_t b1
     cv->clip = old;
 }
 
+/* Small triangles with "frequency level" labels on the loudest peaks */
+static void peak_labels(sqg_ui *ui, LiveEngine *e, sqg_rect r)
+{
+    sqg_canvas *cv = ui->cv;
+    double hz[LIVE_GUI_MAX_PEAKS], db[LIVE_GUI_MAX_PEAKS];
+    double flo = e->cfg.f_min_hz, fhi = e->cfg.f_max_hz;
+    if (fhi <= flo)
+        return;
+    const double *spec = e->cfg.max_hold ? e->mag_hold : e->mag;
+    size_t n = live_engine_peaks(e, spec, LIVE_GUI_MAX_PEAKS, (fhi - flo) / 40, hz, db);
+    sqg_rect old = sqg_clip(cv, r);
+    sqg_rect placed[LIVE_GUI_MAX_PEAKS];
+    int np = 0;
+    for (size_t i = 0; i < n; i++) {
+        int x = r.x + (int)((hz[i] - flo) / (fhi - flo) * (r.w - 1));
+        int y = db_to_y(db[i], e->cfg.db_min, e->cfg.db_max, r) - 3;
+        if (y < r.y + 4)
+            y = r.y + 4;
+        for (int k = 0; k < 4; k++)
+            sqg_hline(cv, x - k, x + k, y - 3 + k, COL_PEAK);
+        char f[16], t[40];
+        fmt_hz(f, sizeof f, hz[i]);
+        snprintf(t, sizeof t, "%s %.0f", f, db[i]);
+        int tw = sqg_text_width(t, 1);
+        int tx = x - tw / 2;
+        if (tx < r.x + 2)
+            tx = r.x + 2;
+        if (tx + tw > r.x + r.w - 2)
+            tx = r.x + r.w - 2 - tw;
+        int ty = y - 13;
+        if (ty < r.y + 2)
+            ty = y + 4;
+        /* loudest first: a quieter label steps down until it is clear */
+        sqg_rect lr = sqg_rect_make(tx - 1, ty - 1, tw + 2, 10);
+        for (int tries = 0; tries < 8; tries++) {
+            int hit = 0;
+            for (int j = 0; j < np; j++)
+                if (sqg_rect_intersect(lr, placed[j]).w > 0 &&
+                    sqg_rect_intersect(lr, placed[j]).h > 0)
+                    hit = 1;
+            if (!hit)
+                break;
+            lr.y += 10;
+        }
+        placed[np++] = lr;
+        sqg_text(cv, lr.x + 1, lr.y + 1, t, COL_LABEL, 1);
+    }
+    cv->clip = old;
+}
+
+static void level_grid(sqg_canvas *cv, const LiveEngine *e, sqg_rect r)
+{
+    double dmin = e->cfg.db_min, dmax = e->cfg.db_max;
+    for (int db = -140; db <= 40; db += 20) {
+        if (db <= dmin || db >= dmax)
+            continue;
+        int y = db_to_y(db, dmin, dmax, r);
+        sqg_hline(cv, r.x, r.x + r.w - 1, y, COL_GRID);
+        char t[8];
+        snprintf(t, sizeof t, "%d", db);
+        sqg_text(cv, r.x + 2, y + 2, t, COL_AXIS, 1);
+    }
+}
+
+/* Octave or third-octave bars, one equal-width bar per band */
+static void bands(LiveGui *g, sqg_ui *ui, LiveEngine *e, sqg_rect r, int fraction)
+{
+    sqg_canvas *cv = ui->cv;
+    double c[LIVE_GUI_MAX_BANDS], db[LIVE_GUI_MAX_BANDS];
+    sqg_fill(cv, r, COL_BG);
+    level_grid(cv, e, r);
+    size_t n = live_engine_bands(e, fraction, c, db, LIVE_GUI_MAX_BANDS);
+    if (n == 0) {
+        sqg_text(cv, r.x + 40, r.y + r.h / 2, "no bands in this range", COL_AXIS, 1);
+        return;
+    }
+    if ((int)n != g->band_n || fraction != g->band_frac) {
+        g->band_n = (int)n;
+        g->band_frac = fraction;
+        for (size_t i = 0; i < n; i++)
+            g->band_hold[i] = -1e300;
+    }
+    int left = 30, label_h = 12;
+    sqg_rect plot = sqg_rect_make(r.x + left, r.y + 4, r.w - left - 4, r.h - 4 - label_h);
+    if (plot.w < (int)n || plot.h < 8)
+        return;
+    sqg_rect old = sqg_clip(cv, r);
+    int last_label = -1000;
+    for (size_t i = 0; i < n; i++) {
+        int x0 = plot.x + plot.w * (int)i / (int)n, x1 = plot.x + plot.w * ((int)i + 1) / (int)n;
+        int gap = (x1 - x0) > 6 ? 2 : (x1 - x0) > 2 ? 1 : 0;
+        int y = db_to_y(db[i], e->cfg.db_min, e->cfg.db_max, plot);
+        sqg_fill(cv, sqg_rect_make(x0 + gap, y, x1 - x0 - 2 * gap, plot.y + plot.h - y), COL_BAR);
+        if (e->cfg.max_hold) {
+            if (db[i] > g->band_hold[i])
+                g->band_hold[i] = db[i];
+            int hy = db_to_y(g->band_hold[i], e->cfg.db_min, e->cfg.db_max, plot);
+            sqg_hline(cv, x0 + gap, x1 - gap - 1, hy, COL_HOLD);
+        }
+        char t[16];
+        fmt_hz(t, sizeof t, c[i]);
+        int tw = sqg_text_width(t, 1), tx = (x0 + x1) / 2 - tw / 2;
+        if (tx > last_label + 4) {
+            sqg_text(cv, tx, plot.y + plot.h + 3, t, COL_AXIS, 1);
+            last_label = tx + tw;
+        }
+    }
+    cv->clip = old;
+}
+
+/* The last frame's samples, one min-max line per column, started on a
+ * rising zero crossing so a steady tone stands still */
+static void scope(sqg_ui *ui, LiveEngine *e, sqg_rect r)
+{
+    sqg_canvas *cv = ui->cv;
+    sqg_fill(cv, r, COL_BG);
+    int mid = r.y + r.h / 2;
+    sqg_hline(cv, r.x, r.x + r.w - 1, mid, COL_GRID);
+    sqg_hline(cv, r.x, r.x + r.w - 1, r.y + r.h / 4, COL_GRID);
+    sqg_hline(cv, r.x, r.x + r.w - 1, r.y + 3 * r.h / 4, COL_GRID);
+    size_t n = e->cfg.fft_size, start = 0, span = n / 2;
+    for (size_t i = 1; i < n - span; i++)
+        if (e->time[i - 1] < 0 && e->time[i] >= 0) {
+            start = i;
+            break;
+        }
+    char t[48];
+    snprintf(t, sizeof t, "%.1f ms", 1000.0 * (double)span / e->cfg.sample_rate);
+    sqg_text(cv, r.x + r.w - sqg_text_width(t, 1) - 4, r.y + 4, t, COL_AXIS, 1);
+    sqg_text(cv, r.x + 2, r.y + 2, "+1", COL_AXIS, 1);
+    sqg_text(cv, r.x + 2, r.y + r.h - 10, "-1", COL_AXIS, 1);
+    sqg_rect old = sqg_clip(cv, r);
+    int half = r.h / 2 - 1, prev = mid;
+    for (int x = 0; x < r.w; x++) {
+        size_t a = start + span * (size_t)x / (size_t)r.w;
+        size_t b = start + span * (size_t)(x + 1) / (size_t)r.w;
+        if (b <= a)
+            b = a + 1;
+        double lo = 1e9, hi = -1e9;
+        for (size_t i = a; i < b && i < n; i++) {
+            if (e->time[i] < lo)
+                lo = e->time[i];
+            if (e->time[i] > hi)
+                hi = e->time[i];
+        }
+        int y0 = mid - (int)(hi * half), y1 = mid - (int)(lo * half);
+        if (prev < y0)
+            y0 = prev;
+        if (prev > y1)
+            y1 = prev;
+        sqg_vline(cv, r.x + x, y0, y1, COL_SCOPE);
+        prev = mid - (int)((lo + hi) / 2 * half);
+    }
+    cv->clip = old;
+}
+
 static void lofargram(sqg_ui *ui, LiveEngine *e, sqg_rect r, size_t b0, size_t b1,
                       LiveDirection dir)
 {
@@ -258,7 +461,16 @@ void live_gui_frame(LiveGui *g, sqg_ui *ui, LiveEngine *e)
     size_t b1 = live_engine_hz_to_bin(e, e->cfg.f_max_hz);
     if (b1 <= b0)
         b1 = b0 + 1;
-    spectrum(ui, e, g->spectrum, b0, b1);
+    switch (g->view) {
+    case LIVE_VIEW_OCTAVE: bands(g, ui, e, g->spectrum, 1); break;
+    case LIVE_VIEW_THIRD: bands(g, ui, e, g->spectrum, 3); break;
+    case LIVE_VIEW_SCOPE: scope(ui, e, g->spectrum); break;
+    default:
+        spectrum(ui, e, g->spectrum, b0, b1);
+        if (g->peaks)
+            peak_labels(ui, e, g->spectrum);
+        break;
+    }
     lofargram(ui, e, g->waterfall, b0, b1, live_gui_direction(g));
     sqg_hline(cv, 0, cv->w - 1, g->waterfall.y, COL_AXIS);
 }

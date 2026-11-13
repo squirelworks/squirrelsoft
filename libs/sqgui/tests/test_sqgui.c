@@ -263,6 +263,22 @@ static void test_slider(void)
     in.wheel = -2;                                          /* two steps down */
     frame_begin(); sqg_slider(&ui, 1, r, &v, -100, 0); frame_end();
     CHECK(v == -10);
+
+    /* the wheel over the slider does nothing while another widget holds the button */
+    sqg_rect b = sqg_rect_make(0, 40, 50, 16);
+    move(10, 48);
+    press();
+    frame_begin(); sqg_button(&ui, 2, b, "B"); sqg_slider(&ui, 1, r, &v, -100, 0); frame_end();
+    CHECK(ui.active == 2);
+    move(54, 8);
+    in.wheel = 3;
+    frame_begin(); sqg_button(&ui, 2, b, "B"); ch = sqg_slider(&ui, 1, r, &v, -100, 0); frame_end();
+    CHECK(!ch && v == -10);
+    release();
+    frame_begin(); sqg_button(&ui, 2, b, "B"); sqg_slider(&ui, 1, r, &v, -100, 0); frame_end();
+    in.wheel = 1;
+    frame_begin(); sqg_slider(&ui, 1, r, &v, -100, 0); frame_end();
+    CHECK(v == -5);
 }
 
 static void test_list(void)
@@ -331,6 +347,47 @@ static void test_textfield(void)
     CHECK(strcmp(buf, "bcdef") == 0);
 }
 
+/* UTF-8 in the text field: whole characters go in, move and delete together */
+static void test_textfield_utf8(void)
+{
+    sqg_ui_init(&ui, NULL, 1);
+    memset(&in, 0, sizeof in);
+    clear(0xFF000000u);
+    char buf[16] = "";
+    sqg_rect r = sqg_rect_make(0, 0, 100, 16);
+    click_at(10, 8);
+    frame_begin(); sqg_textfield(&ui, 9, r, buf, sizeof buf); frame_end();
+    release();
+    strcpy(in.text, "a\xC3\xA9\xE3\x81\x82\xF0\x9F\x90\xBF");   /* a e-acute hiragana-a squirrel */
+    frame_begin(); sqg_textfield(&ui, 9, r, buf, sizeof buf); frame_end();
+    CHECK(strcmp(buf, "a\xC3\xA9\xE3\x81\x82\xF0\x9F\x90\xBF") == 0);
+    CHECK(ui.cursor == 10);
+    /* the cursor is drawn after four characters */
+    CHECK(sqg_get(&cv, 4 + 4 * SQG_GLYPH_W - 1, 8) == ui.theme->window_text);
+    in.key = SQG_KEY_LEFT;
+    frame_begin(); sqg_textfield(&ui, 9, r, buf, sizeof buf); frame_end();
+    CHECK(ui.cursor == 6);
+    in.key = SQG_KEY_BACKSPACE;                              /* removes all three bytes */
+    frame_begin(); sqg_textfield(&ui, 9, r, buf, sizeof buf); frame_end();
+    CHECK(strcmp(buf, "a\xC3\xA9\xF0\x9F\x90\xBF") == 0 && ui.cursor == 3);
+    in.key = SQG_KEY_DELETE;                                 /* the 4-byte squirrel */
+    frame_begin(); sqg_textfield(&ui, 9, r, buf, sizeof buf); frame_end();
+    CHECK(strcmp(buf, "a\xC3\xA9") == 0);
+    /* invalid bytes, overlongs and surrogates are dropped; good text around them stays */
+    strcpy(in.text, "\xFFx\xC0\xAFy\xED\xA0\x80z\x80");
+    frame_begin(); sqg_textfield(&ui, 9, r, buf, sizeof buf); frame_end();
+    CHECK(strcmp(buf, "a\xC3\xA9xyz") == 0);
+    /* a character that does not fit whole is not split */
+    strcpy(in.text, "12345678\xE3\x81\x82");
+    frame_begin(); sqg_textfield(&ui, 9, r, buf, sizeof buf); frame_end();
+    CHECK(strlen(buf) == 14 && strcmp(buf + 6, "12345678") == 0);
+    /* clicking puts the cursor on a character boundary */
+    click_at(4 + 2 * SQG_GLYPH_W + 1, 8);
+    frame_begin(); sqg_textfield(&ui, 9, r, buf, sizeof buf); frame_end();
+    release();
+    CHECK(ui.cursor == 3);
+}
+
 static void test_textbox_and_rows(void)
 {
     sqg_ui_init(&ui, NULL, 1);
@@ -391,6 +448,7 @@ int main(int argc, char **argv)
     test_slider();
     test_list();
     test_textfield();
+    test_textfield_utf8();
     test_textbox_and_rows();
     test_golden(argc > 1 ? argv[1] : NULL);
     printf("sqgui: %d checks, %d failed\n", checks, fails);

@@ -173,7 +173,8 @@ int sqg_slider(sqg_ui *ui, sqg_id id, sqg_rect r, double *v, double lo, double h
         if (f > 1)
             f = 1;
         *v = lo + f * (hi - lo);
-    } else if (over && ui->in.wheel) {
+    } else if (over && ui->in.wheel && (!ui->active || ui->active == id)) {
+        /* not while another widget holds the button (a drag elsewhere) */
         *v += ui->in.wheel * (hi - lo) / 20.0;
     }
     if (lo < hi) {
@@ -275,48 +276,121 @@ int sqg_list(sqg_ui *ui, sqg_id id, sqg_rect r, const char *const *rows, int n, 
     return changed;
 }
 
+/* UTF-8 helpers for the text field: the buffer holds UTF-8, ui->cursor
+ * is a byte offset that always sits on a character boundary. */
+static int utf8_len(const unsigned char *p)
+{
+    unsigned c = p[0];
+    int n;
+    if (c < 0x80)
+        return 1;
+    if (c >= 0xC2 && c <= 0xDF)
+        n = 2;
+    else if (c >= 0xE0 && c <= 0xEF)
+        n = 3;
+    else if (c >= 0xF0 && c <= 0xF4)
+        n = 4;
+    else
+        return 0;
+    for (int i = 1; i < n; i++)
+        if ((p[i] & 0xC0) != 0x80)
+            return 0;
+    /* no overlongs, surrogates or code points past U+10FFFF */
+    if ((c == 0xE0 && p[1] < 0xA0) || (c == 0xED && p[1] > 0x9F) ||
+        (c == 0xF0 && p[1] < 0x90) || (c == 0xF4 && p[1] > 0x8F))
+        return 0;
+    return n;
+}
+
+static int prev_char(const char *buf, int i)
+{
+    if (i > 0)
+        i--;
+    while (i > 0 && ((unsigned char)buf[i] & 0xC0) == 0x80)
+        i--;
+    return i;
+}
+
+static int next_char(const char *buf, int i, int len)
+{
+    if (i < len)
+        i++;
+    while (i < len && ((unsigned char)buf[i] & 0xC0) == 0x80)
+        i++;
+    return i;
+}
+
+static int chars_before(const char *buf, int i)
+{
+    int n = 0;
+    for (int k = 0; k < i; k++)
+        n += ((unsigned char)buf[k] & 0xC0) != 0x80;
+    return n;
+}
+
+static int byte_of_char(const char *buf, int len, int ch)
+{
+    int i = 0;
+    while (ch-- > 0 && i < len)
+        i = next_char(buf, i, len);
+    return i;
+}
+
 int sqg_textfield(sqg_ui *ui, sqg_id id, sqg_rect r, char *buf, size_t cap)
 {
     const sqg_theme *t = ui->theme;
     int enter = 0;
     int len = (int)strlen(buf);
+    int cw = SQG_GLYPH_W * ui->scale;
     if (ui->in.pressed && sqg_rect_contains(r, ui->in.mx, ui->in.my)) {
         ui->focus = id;
-        int cw = SQG_GLYPH_W * ui->scale;
         int c = (ui->in.mx - r.x - 4 + cw / 2) / cw;
-        ui->cursor = c < 0 ? 0 : c > len ? len : c;
+        ui->cursor = byte_of_char(buf, len, c < 0 ? 0 : c);
     }
     if (ui->focus == id) {
         if (ui->cursor > len)
             ui->cursor = len;
-        for (const unsigned char *p = (const unsigned char *)ui->in.text; *p; p++) {
-            if (*p < 0x20 || *p > 0x7E || (size_t)len + 1 >= cap)
+        while (ui->cursor > 0 && ((unsigned char)buf[ui->cursor] & 0xC0) == 0x80)
+            ui->cursor--;
+        const unsigned char *p = (const unsigned char *)ui->in.text;
+        while (*p) {
+            int n = utf8_len(p);
+            if (n == 0) {           /* stray byte: drop it */
+                p++;
                 continue;
-            memmove(buf + ui->cursor + 1, buf + ui->cursor, (size_t)(len - ui->cursor + 1));
-            buf[ui->cursor++] = (char)*p;
-            len++;
+            }
+            if ((n == 1 && (*p < 0x20 || *p == 0x7F)) || (size_t)(len + n) >= cap) {
+                p += n;
+                continue;
+            }
+            memmove(buf + ui->cursor + n, buf + ui->cursor, (size_t)(len - ui->cursor + 1));
+            memcpy(buf + ui->cursor, p, (size_t)n);
+            ui->cursor += n;
+            len += n;
+            p += n;
         }
+        int j;
         switch (ui->in.key) {
         case SQG_KEY_BACKSPACE:
             if (ui->cursor > 0) {
-                memmove(buf + ui->cursor - 1, buf + ui->cursor, (size_t)(len - ui->cursor + 1));
-                ui->cursor--;
-                len--;
+                j = prev_char(buf, ui->cursor);
+                memmove(buf + j, buf + ui->cursor, (size_t)(len - ui->cursor + 1));
+                len -= ui->cursor - j;
+                ui->cursor = j;
             }
             break;
         case SQG_KEY_DELETE:
             if (ui->cursor < len) {
-                memmove(buf + ui->cursor, buf + ui->cursor + 1, (size_t)(len - ui->cursor));
-                len--;
+                j = next_char(buf, ui->cursor, len);
+                memmove(buf + ui->cursor, buf + j, (size_t)(len - j + 1));
+                len -= j - ui->cursor;
             }
             break;
         case SQG_KEY_LEFT:
-            if (ui->cursor > 0)
-                ui->cursor--;
+            ui->cursor = prev_char(buf, ui->cursor);
             break;
         case SQG_KEY_RIGHT:
-            if (ui->cursor < len)
-                ui->cursor++;
+            ui->cursor = next_char(buf, ui->cursor, len);
             break;
         case SQG_KEY_HOME:
             ui->cursor = 0;
@@ -336,14 +410,14 @@ int sqg_textfield(sqg_ui *ui, sqg_id id, sqg_rect r, char *buf, size_t cap)
     sqg_fill(ui->cv, inner, t->window);
     sqg_rect old = sqg_clip(ui->cv, sqg_rect_intersect(inner, ui->cv->clip));
     int ty = r.y + (r.h - 7 * ui->scale) / 2;
-    int cw = SQG_GLYPH_W * ui->scale;
-    /* keep the cursor in view */
+    /* keep the cursor in view; positions count characters, not bytes */
+    int at = ui->focus == id ? chars_before(buf, ui->cursor) : 0;
     int shift = 0, fit = (inner.w - 4) / cw;
-    if (ui->focus == id && ui->cursor > fit)
-        shift = ui->cursor - fit;
+    if (ui->focus == id && at > fit)
+        shift = at - fit;
     sqg_text(ui->cv, r.x + 4 - shift * cw, ty, buf, t->window_text, ui->scale);
     if (ui->focus == id) {
-        int cx = r.x + 4 + (ui->cursor - shift) * cw - 1;
+        int cx = r.x + 4 + (at - shift) * cw - 1;
         sqg_vline(ui->cv, cx, ty - 1, ty + 7 * ui->scale, t->window_text);
     }
     ui->cv->clip = old;

@@ -22,7 +22,7 @@ endif
 
 LIB_OBJ = $(BUILD)/wavio.o $(BUILD)/synth.o $(BUILD)/spectrogram.o \
 	$(BUILD)/live_audio.o $(BUILD)/live_engine.o $(BUILD)/live_prefs.o \
-	$(BUILD)/live_view_headless.o $(BUILD)/live_view_sdl.o $(BUILD)/live_gui.o
+	$(BUILD)/live_view_headless.o $(BUILD)/live_view_sdl.o $(BUILD)/live_gui.o $(BUILD)/live_record.o
 
 .PHONY: all test clean android android-test
 
@@ -73,13 +73,16 @@ $(BUILD)/live_engine.o: src/live_engine.c include/live_engine.h | $(BUILD)
 $(BUILD)/live_prefs.o: src/live_prefs.c include/live_prefs.h include/live_engine.h | $(BUILD)
 	$(CC) $(CFLAGS) -c src/live_prefs.c -o $@
 
+$(BUILD)/live_record.o: src/live_record.c include/live_record.h include/live_audio.h include/wavio.h | $(BUILD)
+	$(CC) $(CFLAGS) -c src/live_record.c -o $@
+
 $(BUILD)/live_gui.o: src/live_gui.c include/live_gui.h include/live_engine.h $(SQGUI)/include/sqgui.h | $(BUILD)
 	$(CC) $(CFLAGS) -c src/live_gui.c -o $@
 
-$(BUILD)/live_view_headless.o: src/live_view_headless.c include/live_view.h include/live_gui.h | $(BUILD)
+$(BUILD)/live_view_headless.o: src/live_view_headless.c include/live_view.h include/live_gui.h include/live_record.h | $(BUILD)
 	$(CC) $(CFLAGS) -c src/live_view_headless.c -o $@
 
-$(BUILD)/live_view_sdl.o: src/live_view_sdl.c include/live_view.h include/live_gui.h include/live_prefs.h | $(BUILD)
+$(BUILD)/live_view_sdl.o: src/live_view_sdl.c include/live_view.h include/live_gui.h include/live_prefs.h include/live_record.h | $(BUILD)
 	$(CC) $(CFLAGS) -c src/live_view_sdl.c -o $@
 
 $(BUILD)/squirrelsound: src/main.c $(LIB_OBJ) $(DEPS) | $(BUILD)
@@ -108,6 +111,12 @@ test: $(BUILD)/test_sqdsp $(BUILD)/test_live $(BUILD)/test_live_gui $(BUILD)/squ
 	$(BUILD)/squirrelsound live --source demo --headless --frames 20 --fft 2048 --freq 440 && \
 	$(BUILD)/squirrelsound live --source demo --gui-snapshot $(BUILD)/live_snap.ppm --frames 20 --freq 440 && \
 	test -s $(BUILD)/live_snap.ppm && \
+	for v in octave third scope; do \
+		$(BUILD)/squirrelsound live --source demo --gui-snapshot $(BUILD)/live_$$v.ppm --view $$v --cal 3 --frames 10 >/dev/null || exit 1; \
+	done && \
+	! $(BUILD)/squirrelsound live --source demo --headless --view sideways 2>/dev/null && \
+	$(BUILD)/squirrelsound live --source demo --headless --frames 10 --freq 1000 --harmonics 1 --record $(BUILD)/live_rec.wav | grep -q '^recorded' && \
+	$(BUILD)/squirrelsound pitch $(BUILD)/live_rec.wav | grep -qE 'autocorr\) ~= (99[0-9]|10[0-2][0-9])\.' && \
 	test -s $$svg && echo "squirrelsound cli smoke ok"
 
 clean:

@@ -1,6 +1,8 @@
 #include "live_audio.h"
 #include "live_engine.h"
 #include "live_prefs.h"
+#include "live_record.h"
+#include "wavio.h"
 
 #include <math.h>
 #include <stdio.h>
@@ -117,6 +119,29 @@ static void test_prefs(void) {
     d = LIVE_DIR_FOUNTAIN;
     expect(live_prefs_load_direction(path, &d) == -1 && d == LIVE_DIR_FOUNTAIN, "bad value ignored");
 
+    /* calibration per input, alongside the direction */
+    double cal = 0;
+    expect(live_prefs_load_cal(path, "mic: USB Audio", &cal) == -1, "no cal yet");
+    expect(live_prefs_save_cal(path, "mic: USB Audio", 3.25) == 0, "save cal");
+    expect(live_prefs_save_cal(path, "demo", -1.5) == 0, "save another cal");
+    expect(live_prefs_load_cal(path, "mic: USB Audio", &cal) == 0 && cal == 3.25, "load cal");
+    expect(live_prefs_load_cal(path, "demo", &cal) == 0 && cal == -1.5, "cal per input");
+    expect(live_prefs_save_cal(path, "mic: USB Audio", 4) == 0 &&
+               live_prefs_load_cal(path, "mic: USB Audio", &cal) == 0 && cal == 4,
+           "cal replaced");
+    expect(live_prefs_save_cal(path, "a=b\nc", 1) == 0 && live_prefs_load_cal(path, "a=b\nc", &cal) == 0 &&
+               cal == 1, "odd names are made safe");
+    char v[32];
+    expect(live_prefs_get(path, "direction", v, sizeof v) == 0 && strcmp(v, "sideways") == 0,
+           "get returns the raw value");
+    expect(live_prefs_get(path, "direction", v, 4) == -1, "too long for the buffer");
+    expect(live_prefs_set(path, "k=x", "1") == -1 && live_prefs_set(path, "k", "a\nb") == -1,
+           "keys with = and values with newlines refused");
+    f = fopen(path, "a");
+    if (f) { fputs("cal.demo=banana\ncal.big=500\n", f); fclose(f); }
+    expect(live_prefs_load_cal(path, "demo", &cal) == -1, "bad cal value ignored");
+    expect(live_prefs_load_cal(path, "big", &cal) == -1, "out-of-range cal ignored");
+
     remove(path);
     char sub[256];
     snprintf(sub, sizeof sub, "%s/nested", dir);
@@ -154,8 +179,122 @@ static void test_pick_loopback(void) {
     expect(live_pick_loopback(names, 0, NULL, NULL) == -1, "no devices");
 }
 
+/* Bands, peaks and the calibration offset, on synthetic frames */
+static void test_bands_peaks_cal(void) {
+    LiveEngineConfig c;
+    memset(&c, 0, sizeof c);
+    c.fft_size = 4096;
+    c.window = SQDSP_WIN_HANN;
+    c.sample_rate = 48000;
+    c.db_min = LIVE_DB_DEFAULT_MIN;
+    c.db_max = LIVE_DB_DEFAULT_MAX;
+    c.f_min_hz = 20;
+    c.f_max_hz = 20000;
+    LiveEngine e;
+    expect(live_engine_init(&e, &c) == 0, "bands engine init");
+    double *x = (double *)malloc(4096 * sizeof(double));
+    for (int i = 0; i < 4096; i++)
+        x[i] = 0.5 * sin(2 * M_PI * 1000.0 * i / 48000.0) + 0.05 * sin(2 * M_PI * 5000.0 * i / 48000.0);
+    live_engine_process(&e, x);
+    expect(memcmp(e.time, x, 4096 * sizeof(double)) == 0, "time copy is the unwindowed frame");
+
+    double cen[64], db[64];
+    size_t n = live_engine_bands(&e, 3, cen, db, 64);
+    expect(n == 30, "30 third-octave bands 25 Hz..20 kHz");
+    expect(fabs(cen[16] - 1000) < 1e-6 && fabs(db[16] + 6.02) < 0.3, "1 kHz band at -6 dBFS");
+    expect(fabs(cen[23] - 5011.9) < 0.5 && fabs(db[23] + 26.02) < 0.5, "5 kHz band at -26 dBFS");
+    n = live_engine_bands(&e, 1, cen, db, 64);
+    expect(n == 10 && fabs(db[5] + 6.02) < 0.3, "octave bands");
+    expect(live_engine_bands(&e, 3, cen, db, 4) == 4, "cap respected");
+
+    double hz[5], pdb[5];
+    n = live_engine_peaks(&e, e.mag, 5, 100, hz, pdb);
+    expect(n == 2, "two peaks");
+    expect(n >= 2 && fabs(hz[0] - 1000) < 2 && fabs(hz[1] - 5000) < 2 && pdb[0] > pdb[1],
+           "peaks loudest first, interpolated");
+    n = live_engine_peaks(&e, e.mag, 1, 100, hz, pdb);
+    expect(n == 1 && fabs(hz[0] - 1000) < 2, "max_n 1 keeps the loudest");
+    live_engine_set_freq_range(&e, 2000, 20000);
+    n = live_engine_peaks(&e, e.mag, 5, 100, hz, pdb);
+    expect(n == 1 && fabs(hz[0] - 5000) < 2, "peaks only inside the range");
+    expect(live_engine_peaks(&e, NULL, 5, 100, hz, pdb) == 0, "NULL spectrum");
+
+    double p0 = e.peak_db;
+    e.cfg.cal_db = 10;
+    live_engine_process(&e, x);
+    expect(fabs(e.peak_db - p0 - 10) < 1e-6, "cal offset adds to levels");
+    free(x);
+    live_engine_free(&e);
+}
+
+/* The recording tap sees every sample once, and the WAV holds them in order */
+static void test_record(void) {
+    LiveAudioConfig a;
+    memset(&a, 0, sizeof a);
+    a.kind = LIVE_SRC_DEMO;
+    a.sample_rate = 48000;
+    a.demo_freq_hz = 1000;
+    a.demo_harmonics = 1;
+    LiveAudio *la = live_audio_open(&a);
+    expect(la != NULL, "record: open demo");
+    if (!la) return;
+    live_audio_start(la);
+    double tmp[8192], newest[1024];
+    size_t dropped = 7;
+    expect(live_audio_take(la, tmp, 8192, &dropped) == 0 && dropped == 0, "nothing yet");
+    live_audio_poll(la);
+    live_audio_poll(la);
+    size_t got = live_audio_take(la, tmp, 8192, &dropped);
+    live_audio_read(la, newest, 1024);
+    expect(got == 2048 && dropped == 0, "two polls, 2048 samples");
+    expect(memcmp(tmp + 1024, newest, sizeof newest) == 0, "tap order matches the ring");
+    expect(live_audio_take(la, tmp, 8192, &dropped) == 0, "each sample once");
+    for (int i = 0; i < 70; i++) live_audio_poll(la); /* more than the ring holds */
+    got = live_audio_take(la, tmp, 8192, &dropped);
+    expect(got == 8192 && dropped == 70 * 1024 - 65536, "overflow skips the oldest and says so");
+    live_audio_take_reset(la);
+    expect(live_audio_take(la, tmp, 8192, &dropped) == 0, "reset starts at now");
+
+    char path[] = "/tmp/sqsound_rec_XXXXXX";
+    int fd = mkstemp(path);
+    if (fd >= 0) close(fd);
+    LiveRecorder r;
+    expect(live_record_start(&r, la, path) == 0 && live_record_active(&r), "record start");
+    for (int i = 0; i < 10; i++) {
+        live_audio_poll(la);
+        live_record_pump(&r, la);
+    }
+    char info[200];
+    live_record_info(&r, info, sizeof info);
+    expect(strncmp(info, "REC 0:00 sqsound_rec_", 21) == 0, "status text");
+    expect(fabs(live_record_seconds(&r) - 10240.0 / 48000) < 1e-9, "seconds so far");
+    live_audio_poll(la);
+    double ring_tail[1024];
+    live_audio_read(la, ring_tail, 1024);
+    expect(live_record_stop(&r, la) == 0 && !live_record_active(&r), "record stop pumps the rest");
+    WavBuffer w;
+    memset(&w, 0, sizeof w);
+    expect(wav_read(path, &w) == 0 && w.n_samples == 11 * 1024 && w.sample_rate == 48000,
+           "WAV header patched with the real length");
+    if (w.samples && w.n_samples >= 1024) {
+        /* the file ends with exactly what the ring ends with (to 16-bit precision) */
+        double maxerr = 0;
+        for (int i = 0; i < 1024; i++) {
+            double d = fabs(w.samples[w.n_samples - 1024 + i] - ring_tail[i]);
+            if (d > maxerr) maxerr = d;
+        }
+        expect(maxerr < 1.0 / 32000, "recording ends with the newest samples, in order");
+    }
+    wav_free(&w);
+    remove(path);
+    expect(live_record_start(&r, la, "/nonexistent/dir/x.wav") == -1, "unwritable path refused");
+    live_audio_close(la);
+}
+
 int main(void) {
     test_direction();
+    test_bands_peaks_cal();
+    test_record();
     test_dbfs_and_colour();
     test_pick_loopback();
 #ifndef _WIN32

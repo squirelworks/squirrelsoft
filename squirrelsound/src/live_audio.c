@@ -25,6 +25,7 @@ struct LiveAudio {
     double ring[LIVE_RING];
     size_t wpos;
     size_t available;
+    unsigned long long written, taken; /* totals, for live_audio_take */
     int running;
     /* demo */
     double phase;
@@ -59,6 +60,7 @@ static void ring_write(LiveAudio *la, const double *x, size_t n) {
         la->ring[la->wpos] = x[i];
         la->wpos = (la->wpos + 1) % LIVE_RING;
         if (la->available < LIVE_RING) la->available++;
+        la->written++;
     }
 }
 
@@ -295,6 +297,26 @@ size_t live_audio_read(LiveAudio *la, double *out, size_t max_n) {
     size_t start = (la->wpos + LIVE_RING - n) % LIVE_RING;
     for (size_t i = 0; i < n; i++) out[i] = la->ring[(start + i) % LIVE_RING];
     return n;
+}
+
+size_t live_audio_take(LiveAudio *la, double *out, size_t max_n, size_t *dropped) {
+    if (dropped) *dropped = 0;
+    if (!la || !out) return 0;
+    unsigned long long pending = la->written - la->taken;
+    if (pending > LIVE_RING) {
+        if (dropped) *dropped = (size_t)(pending - LIVE_RING);
+        la->taken = la->written - LIVE_RING;
+        pending = LIVE_RING;
+    }
+    size_t n = pending < max_n ? (size_t)pending : max_n;
+    size_t start = (la->wpos + LIVE_RING - (size_t)pending) % LIVE_RING;
+    for (size_t i = 0; i < n; i++) out[i] = la->ring[(start + i) % LIVE_RING];
+    la->taken += n;
+    return n;
+}
+
+void live_audio_take_reset(LiveAudio *la) {
+    if (la) la->taken = la->written;
 }
 
 double live_audio_sample_rate(const LiveAudio *la) {

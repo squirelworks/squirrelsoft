@@ -92,9 +92,18 @@ Every item is a checkbox. Tick it in the PR that merges its last piece. Nested b
 - SquirrelSound
   - [ ] Multi-resolution FFT
   - [ ] Peak hold markers
+    - [x] Desktop: labelled peaks on the live or held trace (`live_engine_peaks`)
+    - [ ] Android
   - [ ] Octave / 1-3 octave bars
+    - [x] Shared core: `sqdsp_octave_bands` / `sqdsp_band_levels_db` (IEC 61260 base 10, ENBW-corrected); desktop Octave and 1/3 Oct views
+    - [ ] Android (through the JNI bridge)
   - [ ] WAV record
+    - [x] Desktop: Rec / `--record`, gap-free tap on the capture ring, streaming WAV writer
+    - [ ] Android
   - [ ] Calibration offset per device
+    - [x] Desktop: `-`/`=` and `--cal`, saved per input in `live.conf`
+    - [ ] Android
+  - [x] Desktop scope view (the oscilloscope of #28 on the desktop; Android stays under S0.4)
 - SquirrelQR
   - [ ] Generate QR
   - [ ] Wi-Fi / vCard parsing
