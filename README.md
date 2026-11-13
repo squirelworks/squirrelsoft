@@ -64,6 +64,13 @@ squirrelsoft/
 └── squirrelcalc/      # graphing calculator window (sqmath + sqgui)
 ```
 
+## License
+
+Squirrelsoft is free software under the GNU General Public License,
+version 3 ([LICENSE](LICENSE)). The Gradle wrapper scripts and jars in the
+Android projects (`gradlew`, `gradlew.bat`, `gradle/wrapper/`) are Gradle's
+own files under the Apache License 2.0, as their headers say.
+
 ## License posture
 
 Original Squirrelsoft source. Do not drop proprietary MicroStation, AutoCAD,
