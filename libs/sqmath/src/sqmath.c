@@ -40,6 +40,7 @@ const char *sqm_strerror(int code) {
         case SQM_ERR_RANGE: return "numbers too big to keep exact";
         case SQM_ERR_SOLVE: return "can't solve this exactly";
         case SQM_ERR_NOFORM: return "no exact form found";
+        case SQM_ERR_UNITS: return "units don't match";
         default: return "error";
     }
 }

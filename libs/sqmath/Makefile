@@ -5,7 +5,7 @@ CFLAGS ?= -std=c11 -Wall -Wextra -O2
 CFLAGS += -Iinclude
 AR ?= ar
 BUILD = build
-OBJ = $(BUILD)/sqmath.o $(BUILD)/sqmath_sym.o $(BUILD)/sqmath_num.o $(BUILD)/sqmath_poly.o $(BUILD)/sqmath_integ.o
+OBJ = $(BUILD)/sqmath.o $(BUILD)/sqmath_sym.o $(BUILD)/sqmath_num.o $(BUILD)/sqmath_poly.o $(BUILD)/sqmath_integ.o $(BUILD)/sqmath_units.o
 HDR = include/sqmath.h src/sqmath_internal.h
 
 .PHONY: all test clean

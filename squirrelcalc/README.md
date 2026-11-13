@@ -51,6 +51,9 @@ build/squirrelcalc --fn "x^2 - 2" --fn "2 sin(x)" --roots
     the fit and r² (and r for the line) and draw the fit through the points.
     The view moves onto the points, and Reset clears them.
   - r² is measured on y itself, also for the exponential fit.
+- **Units:** `5 ft to m`, `65 mph -> km/h`, `20 degC to degF`,
+  `35.681236 deg to dms`, or `units 5 kg * 9.81 m/s^2` (shown as `49.05 N`).
+  `convert` works like `units`, and the number lands in `ans`.
 - **Integrals:** `integrate y1 from 0 to 2` (or any expression of x, with
   bounds such as `pi/2` or a variable) gives the value and shades the area
   between the curve and the x axis. Reset clears the shading.

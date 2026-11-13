@@ -379,6 +379,16 @@ static void test_analysis(void) {
     CHECK(calc_gui_eval(&g, "integrate x from 0 to q") == -1 && contains(g.hist, "the bounds need values"));
     CHECK(calc_gui_eval(&g, "integrate q x from 0 to 1") == -1 && contains(g.hist, "a name has no value"));
     CHECK(calc_gui_eval(&g, "integrate y1 from 0 to 1") == 0 && g.area_fn == 0);
+    /* units */
+    CHECK(calc_gui_eval(&g, "5 ft to m") == 0 && contains(g.hist, "5 ft to m = 1.524 m"));
+    CHECK(calc_gui_eval(&g, "ans * 2") == 0 && contains(g.hist, "= 3.048"));
+    CHECK(calc_gui_eval(&g, "65 mph -> km/h") == 0 && contains(g.hist, "= 104.60736 km/h"));
+    CHECK(calc_gui_eval(&g, "units 5 kg * 9.81 m/s^2") == 0 && contains(g.hist, "= 49.05 N"));
+    CHECK(calc_gui_eval(&g, "convert 20 degC to degF") == 0 && contains(g.hist, "= 68 degF"));
+    CHECK(calc_gui_eval(&g, "35.681236 deg to dms") == 0 && contains(g.hist, "= 35\xc2\xb0" "40'52.45\""));
+    CHECK(calc_gui_eval(&g, "5 m to kg") == -1 && contains(g.hist, "units don't match"));
+    CHECK(calc_gui_eval(&g, "3 m + 2 s to m") == -1 && contains(g.hist, "adding different kinds of units"));
+    CHECK(calc_gui_eval(&g, "units 2 furlong") == -1 && contains(g.hist, "unknown unit at \"furlong\""));
     calc_gui_set(&g, 0, "x^2 - 3"); /* the area was of the old y1 */
     CHECK(!g.area_on);
     calc_gui_set(&g, 0, "x^2 - 2");

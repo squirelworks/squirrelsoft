@@ -12,6 +12,7 @@
  *   sqcalc --solve x -5 5 "x^2 - 2"  every sign-change root in [-5, 5]
  *   sqcalc --integrate x 0 pi "sin(x)"
  *   sqcalc --table x 0 1 0.25 "x^2"
+ *   sqcalc --units "3 ft + 2 in to cm"   unit arithmetic and conversion: 96.52 cm
  *   --digits N                       significant digits shown (default 12)
  *
  * Exit status: 0 done, 1 the expression has an error, 2 bad usage.
@@ -43,6 +44,7 @@ static void usage(FILE *f) {
             "       sqcalc --solve VAR LO HI EXPR [name=value ...]\n"
             "       sqcalc --integrate VAR A B EXPR [name=value ...]\n"
             "       sqcalc --table VAR FROM TO STEP EXPR [name=value ...]\n"
+            "       sqcalc --units \"EXPR [to UNIT]\"           (5 ft to m, 65 mph to km/h, 30.5 deg to dms)\n"
             "Operators + - * / ^ ! and implied multiplication (2x, 3(x+1)); constants pi, e;\n"
             "functions sin cos tan asin acos atan sinh cosh tanh exp ln log sqrt cbrt abs\n"
             "floor ceil round sign, and atan2 hypot min max mod with two arguments.\n");
@@ -145,6 +147,17 @@ int main(int argc, char **argv) {
     const char *mode = argv[i];
     if (!strcmp(mode, "--help") || !strcmp(mode, "-h")) return usage(stdout), 0;
 
+    if (!strcmp(mode, "--units")) {
+        if (i + 2 != argc) return usage(stderr), 2;
+        char b[256];
+        SqmError err;
+        if (sqm_units_line(argv[i + 1], digits, b, sizeof b, &err) != SQM_OK) {
+            fprintf(stderr, "sqcalc: %s\n  %s\n  %*s^\n", err.msg, argv[i + 1], err.pos, "");
+            return 1;
+        }
+        puts(b);
+        return 0;
+    }
     if (!strcmp(mode, "--simplify")) {
         if (i + 2 != argc) return usage(stderr), 2;
         if (parse(argv[i + 1], &ex)) return 1;
