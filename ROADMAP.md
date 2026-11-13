@@ -44,7 +44,8 @@ Every item is a checkbox. Tick it in the PR that merges its last piece. Nested b
 - [ ] `libs/sqmath` (C): expression engine/CAS core for the calculator suite.
   - [x] Step 1: parser (implied multiplication, factorial, error positions), evaluation, compiled programs, symbolic derivatives with simplification, printing, roots, integrals, number display; `sqcalc` CLI
   - [x] Step 2: expansion and collection with exact fractions, exact equation solving (linear, quadratic, rational roots, symbolic coefficients), equations as `left = right`; `sqcalc --expand/--collect/--solve-for`
-  - [ ] Step 3: units, factoring, partial fractions, symbolic integrals
+  - [x] Step 3: factoring over the rationals, partial fractions, symbolic integrals; `sqcalc --factor/--apart/--antideriv`, SquirrelCalc `factor`, `apart`, `integrate EXPR`
+  - [ ] Step 4: units
 - [x] `libs/sqgui` (C): tiny immediate-mode widget layer over SDL2 for desktop, designed to port to Squirrel OS/2's wm/gfx: a 32-bit canvas core with no OS calls, Warp-grey widgets, the OS/2 5x7 font, and an SDL2 window back end.
 - [ ] JNI smoke tests for every Android app that uses a core (each lib already has `make test` unit tests).
   - [x] SquirrelQR: `make test` builds `sqqr_jni.c` for the host and drives it from a JVM (`squirrelqr/android/jni-smoke`)

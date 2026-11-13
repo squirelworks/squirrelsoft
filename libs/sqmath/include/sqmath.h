@@ -32,7 +32,8 @@ enum {
     SQM_ERR_DIFF = -6,    /* no derivative rule (min, max, mod, factorial) */
     SQM_ERR_NAME = -7,    /* name too long */
     SQM_ERR_RANGE = -8,   /* numbers too big for exact fractions */
-    SQM_ERR_SOLVE = -9    /* no exact method for this equation */
+    SQM_ERR_SOLVE = -9,   /* no exact method for this equation */
+    SQM_ERR_NOFORM = -10  /* no exact form found (factor, apart, integral) */
 };
 
 typedef enum {
@@ -180,6 +181,38 @@ typedef struct {
  * of degree 3 or more is left; the solutions found so far are still written.
  */
 int sqm_solve_for(const SqmExpr *eq, const char *var, SqmSolution *out, int cap, int *count);
+
+/*
+ * Factor over the rationals in var (NULL: the expression's only variable).
+ * The expression must be a polynomial or a ratio of polynomials in var with
+ * number coefficients. Common factors of the numerator and denominator
+ * cancel; each is written as a number times var^k, the rational linear
+ * factors (2*x - 1), and square-free parts left whole (x^2 + 1, x^4 + 1):
+ * x^3 - x is x*(x - 1)*(x + 1), and (x^2 - 1)/(x^2 + 2x + 1) is
+ * (x - 1)/(x + 1). SQM_ERR_NOFORM when it is not of that kind. Like
+ * sqm_expand, it uses about 100 KB of stack.
+ */
+int sqm_factor(const SqmExpr *in, const char *var, SqmExpr *out);
+
+/*
+ * Partial fractions in var (NULL: the only variable) of a ratio of
+ * polynomials with number coefficients: the polynomial part, then
+ * A/(linear)^k and (B x + C)/(quadratic)^k, exactly. 1/(x^2 - 1) is
+ * 1/(2*(x - 1)) - 1/(2*(x + 1)). SQM_ERR_NOFORM when the denominator keeps
+ * a factor of degree 3 or more over the rationals.
+ */
+int sqm_apart(const SqmExpr *in, const char *var, SqmExpr *out);
+
+/*
+ * A symbolic integral in var, simplified, with no constant added: sums and
+ * constant multiples; powers, e^u, b^u and sin cos tan sinh cosh tanh exp
+ * ln log sqrt cbrt atan asin acos abs of a linear u = a x + b; substitution
+ * f(g) k g' and g'/g; a polynomial times exp, sin or cos of a linear u, or
+ * times ln(x), by parts; (B x + C)/(quadratic); and ratios of polynomials
+ * through partial fractions (powers of quadratics excepted). Otherwise
+ * SQM_ERR_NOFORM. Not reentrant (it keeps about 40 KB of static scratch).
+ */
+int sqm_antideriv(const SqmExpr *in, const char *var, SqmExpr *out);
 
 /* ---- numeric ---- */
 

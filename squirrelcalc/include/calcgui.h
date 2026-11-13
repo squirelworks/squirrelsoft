@@ -92,7 +92,8 @@ void calc_gui_set(CalcGui *g, int i, const char *text);
 /* Run a calculator line: "2+3", "a = 2" (defines a for the graphs too),
  * "ans*2", or a CAS command: "expand (x+1)^2", "collect x a x + b x",
  * "d/dx x^3", "solve x^2 - x = 1" (for x, or "... for a"), or
- * "integrate y1 from 0 to 2" (any expression of x; it also shades the area).
+ * "integrate y1 from 0 to 2" (any expression of x; it also shades the area),
+ * "integrate x e^x" (the symbolic integral), "factor x^3 - x", "apart 1/(x^2 - 1)".
  * Lists: "xs = {1, 2, 3}", "stats xs", "plot xs ys", and the fits "linreg xs ys",
  * "quadreg xs ys" and "expreg xs ys" (drawn with the points). Adds the result
  * to the history. Returns 0, or -1 on an error (also in the history). */

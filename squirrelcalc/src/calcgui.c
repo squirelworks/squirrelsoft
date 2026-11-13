@@ -333,10 +333,35 @@ static double value_of(const CalcGui *g, const char *text) {
 static void load_values(const CalcGui *g, double *values);
 
 /* integrate EXPR from A to B: EXPR is y1..y4 or any expression of x */
+/* integrate EXPR (no bounds): the symbolic integral, plus C */
+static int antideriv_line(CalcGui *g, const char *line, const char *rest) {
+    const char *text = rest;
+    char out[400], f[200];
+    if (rest[0] == 'y' && rest[1] >= '1' && rest[1] <= '0' + CALC_N && rest[2 + strspn(rest + 2, " ")] == 0) {
+        int fn = rest[1] - '1';
+        if (!g->ok[fn] || g->kind[fn] != CALC_FUNC) {
+            hist_error(g, line, "that row is not a function of x");
+            return -1;
+        }
+        text = g->fx[fn] + g->body[fn];
+    }
+    if (parse_or_say(g, line, text, 0, &scratch)) return -1;
+    int rc = sqm_antideriv(&scratch, "x", &scratch2);
+    if (rc != SQM_OK) {
+        hist_error(g, line, rc == SQM_ERR_NOFORM ? "no exact integral found (try from A to B)" : sqm_strerror(rc));
+        return -1;
+    }
+    sqm_print(&scratch2, f, sizeof f);
+    snprintf(out, sizeof out, "%.200s = %.180s + C", line, f);
+    hist_add(g, out);
+    return 0;
+}
+
 static int integrate_line(CalcGui *g, const char *line, const char *rest) {
     char expr[200], a_text[64], b_text[64], out[400];
     const char *from = strstr(rest, " from "), *to = from ? strstr(from + 6, " to ") : NULL;
-    if (!from || !to || from == rest || (size_t)(from - rest) >= sizeof expr || (size_t)(to - from - 6) >= sizeof a_text ||
+    if (!from) return antideriv_line(g, line, rest);
+    if (!to || from == rest || (size_t)(from - rest) >= sizeof expr || (size_t)(to - from - 6) >= sizeof a_text ||
         strlen(to + 4) >= sizeof b_text) {
         hist_error(g, line, "write integrate EXPR from A to B");
         return -1;
@@ -573,10 +598,13 @@ static int cas_line(CalcGui *g, const char *line) {
     char out[400], text[200];
     const char *rest;
     int rc;
-    if ((rest = command(line, "expand")) || (rest = command(line, "d/dx"))) {
-        int diff = !command(line, "expand");
+    if ((rest = command(line, "expand")) || (rest = command(line, "d/dx")) || (rest = command(line, "factor")) ||
+        (rest = command(line, "apart"))) {
         if (parse_or_say(g, line, rest, 0, &scratch)) return -1;
-        rc = diff ? sqm_diff(&scratch, "x", &scratch2) : sqm_expand(&scratch, &scratch2);
+        if (command(line, "expand")) rc = sqm_expand(&scratch, &scratch2);
+        else if (command(line, "factor")) rc = sqm_factor(&scratch, "x", &scratch2);
+        else if (command(line, "apart")) rc = sqm_apart(&scratch, "x", &scratch2);
+        else rc = sqm_diff(&scratch, "x", &scratch2);
     } else if ((rest = command(line, "collect"))) {
         char var[SQM_NAME_LEN];
         size_t n = strcspn(rest, " ");

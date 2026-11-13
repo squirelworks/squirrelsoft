@@ -6,6 +6,9 @@
  *   sqcalc --expand "(x + 1)^3"
  *   sqcalc --collect x "a x^2 + b x^2 + x"
  *   sqcalc --solve-for x "x^2 - x = 1"   exact solutions: x = (1 - sqrt(5))/2 ...
+ *   sqcalc --factor x "x^3 - x"      x*(x - 1)*(x + 1)
+ *   sqcalc --apart x "1/(x^2 - 1)"   partial fractions
+ *   sqcalc --antideriv x "x e^x"     a symbolic integral: (x - 1)*e^x
  *   sqcalc --solve x -5 5 "x^2 - 2"  every sign-change root in [-5, 5]
  *   sqcalc --integrate x 0 pi "sin(x)"
  *   sqcalc --table x 0 1 0.25 "x^2"
@@ -34,6 +37,9 @@ static void usage(FILE *f) {
             "       sqcalc --expand EXPR\n"
             "       sqcalc --collect VAR EXPR\n"
             "       sqcalc --solve-for VAR EQUATION      (exact: x^2 = 2 gives x = -sqrt(2) / x = sqrt(2))\n"
+            "       sqcalc --factor VAR EXPR                (over the rationals)\n"
+            "       sqcalc --apart VAR EXPR                 (partial fractions)\n"
+            "       sqcalc --antideriv VAR EXPR             (a symbolic integral; add a constant)\n"
             "       sqcalc --solve VAR LO HI EXPR [name=value ...]\n"
             "       sqcalc --integrate VAR A B EXPR [name=value ...]\n"
             "       sqcalc --table VAR FROM TO STEP EXPR [name=value ...]\n"
@@ -154,6 +160,19 @@ int main(int argc, char **argv) {
         if (i + 2 + collect != argc) return usage(stderr), 2;
         if (parse(argv[i + 1 + collect], &ex)) return 1;
         int rc = collect ? sqm_collect(&ex, argv[i + 1], &ex2) : sqm_expand(&ex, &ex2);
+        if (rc) return fprintf(stderr, "sqcalc: %s\n", sqm_strerror(rc)), 1;
+        char b[4096];
+        sqm_print(&ex2, b, sizeof b);
+        puts(b);
+        return 0;
+    }
+    if (!strcmp(mode, "--factor") || !strcmp(mode, "--apart") || !strcmp(mode, "--antideriv")) {
+        if (i + 3 != argc) return usage(stderr), 2;
+        if (parse(argv[i + 2], &ex)) return 1;
+        const char *var = argv[i + 1];
+        int rc = !strcmp(mode, "--factor")  ? sqm_factor(&ex, var, &ex2)
+                 : !strcmp(mode, "--apart") ? sqm_apart(&ex, var, &ex2)
+                                            : sqm_antideriv(&ex, var, &ex2);
         if (rc) return fprintf(stderr, "sqcalc: %s\n", sqm_strerror(rc)), 1;
         char b[4096];
         sqm_print(&ex2, b, sizeof b);

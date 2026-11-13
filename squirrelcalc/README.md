@@ -34,7 +34,10 @@ build/squirrelcalc --fn "x^2 - 2" --fn "2 sin(x)" --roots
   changes), and `ans` is the last result. Anything not finite shows as
   `undefined`.
 - **CAS lines** in the calculator: `expand (x+1)^3`, `collect x a x + b x`,
-  `d/dx sin(x)^2`, and `solve x^2 - x = 1` (or `solve a t + 1 = 0 for t`).
+  `d/dx sin(x)^2`, `solve x^2 - x = 1` (or `solve a t + 1 = 0 for t`),
+  `factor x^4 - 1`, `apart 1/(x^2 - 1)` (partial fractions), and
+  `integrate x e^x` or `integrate y1` with no bounds for the symbolic
+  integral (`e^x*(x - 1) + C`).
   Answers stay exact (`(1 - sqrt(5))/2`) with the value beside them, and a
   symbolic answer gets a value once its names are defined.
 - **Lists and regression** in the calculator:
