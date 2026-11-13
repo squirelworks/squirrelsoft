@@ -23,8 +23,8 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
-      - name: Install SDL2 / SDL_ttf / ALSA / X11 / PC/SC / libusb headers, Xvfb, PulseAudio and the vpcd virtual reader (optional backends and their tests)
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libsdl2-dev libsdl2-ttf-dev fonts-wqy-microhei fonts-droid-fallback libasound2-dev libx11-dev xvfb xauth libpcsclite-dev pcscd vsmartcard-vpcd libusb-1.0-0-dev pulseaudio pulseaudio-utils
+      - name: Install SDL2 / SDL_ttf / ALSA / X11 / PC/SC / libusb headers, Xvfb, PulseAudio, the vpcd virtual reader, and QEMU with NASM for SquirrelDebug (optional backends and their tests)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libsdl2-dev libsdl2-ttf-dev fonts-wqy-microhei fonts-droid-fallback libasound2-dev libx11-dev xvfb xauth libpcsclite-dev pcscd vsmartcard-vpcd libusb-1.0-0-dev pulseaudio pulseaudio-utils qemu-system-x86 nasm
       - name: Start pcscd with the virtual reader
         run: |
           sudo systemctl stop pcscd.socket pcscd.service || true
