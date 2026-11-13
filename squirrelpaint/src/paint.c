@@ -53,6 +53,7 @@ static void undo_reset(PaintDoc *d) {
     d->active = 0;
     d->sel.w = d->sel.h = d->from.w = 0;
     d->floating = d->sel_mode = 0;
+    d->multi = 0;
     paint__dirty_reset(d);
 }
 
@@ -67,6 +68,7 @@ int paint_new(PaintDoc *d, int w, int h) {
     d->size = 4;
     d->filled = 0;
     d->tolerance = 32;
+    d->seed = 0x5EED1234u;
     d->changed = 0;
     undo_reset(d);
     return 0;
@@ -339,10 +341,12 @@ void paint__push_whole(PaintDoc *d, int ow, int oh) {
     add_step(d, (PaintRect){0, 0, ow, oh}, cap, 1);
 }
 
-int paint_can_undo(const PaintDoc *d) { return d->done > 0 && !d->active; }
-int paint_can_redo(const PaintDoc *d) { return d->done < d->nsteps && !d->active; }
+int paint_can_undo(const PaintDoc *d) { return (d->done > 0 || (d->multi && d->dirty.w)) && !d->active; }
+int paint_can_redo(const PaintDoc *d) { return d->done < d->nsteps && !d->active && !(d->multi && d->dirty.w); }
 
 int paint_undo(PaintDoc *d) {
+    if (d->active) return -1;
+    paint_finish(d);
     if (d->floating) paint_drop(d); /* what floats is a step of its own first */
     if (!paint_can_undo(d)) return -1;
     swap_step(d, &d->step[--d->done]);
@@ -352,6 +356,8 @@ int paint_undo(PaintDoc *d) {
 }
 
 int paint_redo(PaintDoc *d) {
+    if (d->multi && !d->dirty.w) paint__multi_cancel(d); /* nothing drawn yet: it can wait */
+    if (d->active || d->multi) return -1;
     if (d->floating) paint_drop(d);
     if (!paint_can_redo(d)) return -1;
     swap_step(d, &d->step[d->done++]);
@@ -363,12 +369,13 @@ int paint_redo(PaintDoc *d) {
 /* ---- the tools ---- */
 
 void paint__save_before(PaintDoc *d) {
+    paint_finish(d); /* what is under way is kept before anything else */
     memcpy(d->before, d->px, (size_t)d->w * (size_t)d->h * sizeof d->px[0]);
     paint__dirty_reset(d);
 }
 
 /* what the press has drawn so far, taken back */
-static void restore_dirty(PaintDoc *d) {
+void paint__restore_dirty(PaintDoc *d) {
     PaintRect r = d->dirty;
     for (int j = 0; j < r.h; j++) {
         size_t o = (size_t)(r.y + j) * (size_t)d->w + (size_t)r.x;
@@ -405,7 +412,7 @@ static uint32_t ink(const PaintDoc *d) {
 
 /* the shape tools: the shape from the press to (x, y), in place of the last */
 static void shape(PaintDoc *d, int x, int y, int square) {
-    restore_dirty(d);
+    paint__restore_dirty(d);
     if (square) constrain(d, &x, &y);
     uint32_t c = ink(d);
     if (d->tool == PAINT_LINE) paint_line(d, d->x0, d->y0, x, y, d->size, c);
@@ -414,10 +421,18 @@ static void shape(PaintDoc *d, int x, int y, int square) {
 }
 
 static int stroke_size(const PaintDoc *d) { return d->tool == PAINT_PENCIL ? 1 : d->size; }
+static int is_stroke(int tool) { return tool == PAINT_PENCIL || tool == PAINT_BRUSH || tool == PAINT_ERASER; }
+static int is_multi(int tool) { return tool == PAINT_POLYGON || tool == PAINT_CURVE || tool == PAINT_TEXT; }
 
 void paint_press(PaintDoc *d, int x, int y, int button, int square) {
     if (d->active) paint_release(d, d->lx, d->ly, square);
     button = button == 2 ? 2 : 1;
+    if (d->multi && d->multi != d->tool) paint_finish(d);
+    if (is_multi(d->tool)) {
+        if (d->floating) paint_drop(d);
+        paint__multi_press(d, x, y, button, square);
+        return;
+    }
     if (d->tool == PAINT_SELECT) {
         paint__sel_press(d, x, y);
         return;
@@ -437,8 +452,8 @@ void paint_press(PaintDoc *d, int x, int y, int button, int square) {
     d->active = button;
     d->x0 = d->lx = x;
     d->y0 = d->ly = y;
-    if (d->tool == PAINT_PENCIL || d->tool == PAINT_BRUSH || d->tool == PAINT_ERASER)
-        paint_line(d, x, y, x, y, stroke_size(d), ink(d));
+    if (is_stroke(d->tool)) paint_line(d, x, y, x, y, stroke_size(d), ink(d));
+    else if (d->tool == PAINT_SPRAY) paint_spray(d, x, y, d->size, ink(d));
     else
         shape(d, x, y, square);
 }
@@ -449,8 +464,12 @@ void paint_drag(PaintDoc *d, int x, int y, int square) {
         return;
     }
     if (!d->active || (x == d->lx && y == d->ly)) return;
-    if (d->tool == PAINT_PENCIL || d->tool == PAINT_BRUSH || d->tool == PAINT_ERASER)
-        paint_line(d, d->lx, d->ly, x, y, stroke_size(d), ink(d));
+    if (d->multi) {
+        paint__multi_drag(d, x, y, square);
+        return;
+    }
+    if (is_stroke(d->tool)) paint_line(d, d->lx, d->ly, x, y, stroke_size(d), ink(d));
+    else if (d->tool == PAINT_SPRAY) paint_spray(d, x, y, d->size, ink(d));
     else
         shape(d, x, y, square);
     d->lx = x;
@@ -463,6 +482,10 @@ void paint_release(PaintDoc *d, int x, int y, int square) {
         return;
     }
     if (!d->active) return;
+    if (d->multi) {
+        paint__multi_release(d, x, y, square);
+        return;
+    }
     if (d->tool == PAINT_LINE || d->tool == PAINT_RECT || d->tool == PAINT_ELLIPSE) shape(d, x, y, square);
     else paint_drag(d, x, y, square);
     d->active = 0;
@@ -472,8 +495,12 @@ void paint_release(PaintDoc *d, int x, int y, int square) {
 void paint_cancel(PaintDoc *d) {
     if (d->sel_mode == 1) d->sel.w = d->sel.h = 0; /* a rectangle half drawn */
     d->sel_mode = 0;
+    if (d->multi) {
+        paint__multi_cancel(d);
+        return;
+    }
     if (!d->active) return;
-    restore_dirty(d);
+    paint__restore_dirty(d);
     d->active = 0;
 }
 
@@ -538,12 +565,16 @@ int paint_command(PaintDoc *d, const char *line, char *msg, size_t msgcap) {
     size_t n = paint__word(&p, &w);
     paint__say(msg, msgcap, "", "");
     if (!n) return 0;
-    static const char *const tools[] = {"pencil", "brush", "eraser", "line", "rect", "ellipse", "fill", "pick"};
+    /* a press in progress ends first; a selection being dragged stays where it is */
+    if (d->active) paint_release(d, d->lx, d->ly, 0);
+    d->sel_mode = 0;
+    static const char *const tools[] = {"pencil", "brush", "eraser", "line", "rect", "ellipse", "fill", "pick", "", "spray"};
     int tool = -1;
     for (int k = 0; k < (int)(sizeof tools / sizeof tools[0]); k++)
         if (paint__is(w, n, tools[k])) tool = k;
     int rc;
     if (paint__sel_command(d, w, n, p, &rc, msg, msgcap)) return rc;
+    if (paint__tools_command(d, w, n, p, &rc, msg, msgcap)) return rc;
     if (paint__is(w, n, "undo") || paint__is(w, n, "redo")) {
         int redo = lower(w[0]) == 'r';
         if (paint__word(&p, &w)) {
@@ -620,10 +651,10 @@ int paint_command(PaintDoc *d, const char *line, char *msg, size_t msgcap) {
         return 0;
     }
     if (tool < 0) {
-        paint__say(msg, msgcap, "unknown: try line, rect, ellipse, brush, fill, color, undo", "");
+        paint__say(msg, msgcap, "unknown: try line, rect, ellipse, brush, fill, text, color, undo", "");
         return -1;
     }
-    int stroke = tool <= PAINT_ERASER, two = tool >= PAINT_LINE && tool <= PAINT_ELLIPSE;
+    int stroke = tool <= PAINT_ERASER || tool == PAINT_SPRAY, two = tool >= PAINT_LINE && tool <= PAINT_ELLIPSE;
     if ((stroke && (nv < 2 || nv % 2)) || (two && nv != 4) || (!stroke && !two && nv != 2) || onoff >= 0) {
         paint__say(msg, msgcap, tools[tool],
             stroke ? ": X Y [X Y ...]" : two ? ": X0 Y0 X1 Y1 [square]" : ": X Y");

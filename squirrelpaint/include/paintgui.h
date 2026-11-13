@@ -8,7 +8,13 @@
  * move the view too (or nudge a selection). Ctrl+Z undoes, Ctrl+Y redoes,
  * Ctrl+S saves, Ctrl+X, C, V and A cut, copy, paste and select all, Delete
  * clears the selection, Escape takes back a stroke in progress or puts the
- * selection down; the letters P B E L R O F I S pick a tool. The edit and
+ * selection down; the letters P B E L R O F I S A G C T pick a tool.
+ * Polygon: a drag for the first side, then a click for each corner, ended
+ * by a click on the first or twice on the last, or Enter. Curve: a drag,
+ * then two drags to bend it. Text: a click, then typing; Enter starts a
+ * line, a click elsewhere or another tool keeps it, Escape takes it back.
+ * The first colour can be typed as RRGGBB or set with its R, G and B
+ * sliders, and Shift and a click put it into the palette. The edit and
  * image buttons work on the selection, or the whole picture without one.
  * Files go through the open and save hooks, so this file has no stdio.
  */
@@ -34,6 +40,8 @@ struct PaintGui {
     char path[200];          /* the file for Open and Save */
     char new_w[12], new_h[12]; /* the size for New */
     double size_v, tol_v;    /* the sliders */
+    double rgb_v[3];         /* the first colour's red, green and blue sliders */
+    char hex[12];            /* the first colour, typed */
     uint32_t palette[PAINT_PALETTE];
     char status[160];
     /* the files: return 0, or -1 with why in msg */

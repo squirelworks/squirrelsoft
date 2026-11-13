@@ -6,7 +6,7 @@
  * undo. paint_command runs the same tools from a line of text.
  *
  * Freestanding C11: no allocation, no stdio, nothing from libc but
- * memcpy, memmove and memset, so it moves to Squirrel OS/2 as it is. The
+ * memcpy, memmove, memset and strlen, so it moves to Squirrel OS/2 as it is. The
  * PaintDoc is large (the picture, the picture as it was at the press, and
  * the undo store): keep it static.
  */
@@ -27,6 +27,10 @@
 #endif
 #define PAINT_UNDO_STEPS 64
 #define PAINT_SIZE_MAX 64 /* the widest brush */
+#define PAINT_POLY_MAX 256 /* the most corners a polygon has */
+#define PAINT_TEXT_MAX 512 /* the most characters one text holds */
+#define PAINT_GLYPH_W 6    /* a character's advance and a line's height, at scale 1 */
+#define PAINT_GLYPH_H 9
 
 enum {
     PAINT_PENCIL,  /* one pixel wide, whatever the size */
@@ -38,6 +42,11 @@ enum {
     PAINT_FILL,    /* flood fill, within tolerance */
     PAINT_PICKER,  /* takes the colour under it */
     PAINT_SELECT,  /* a rectangle; dragged inside, it moves what it holds */
+    PAINT_SPRAY,   /* dots at random within size of the pointer, for as long as it is held */
+    PAINT_POLYGON, /* a drag for the first side, then a click for each corner; closed by a
+                      click on the first corner or twice on the last, or by paint_finish */
+    PAINT_CURVE,   /* a drag for a line, then two drags that bend it (a cubic Bezier) */
+    PAINT_TEXT,    /* a click, then typing (paint_text_key) in the 5x7 font at size / 2 */
     PAINT_TOOLS
 };
 
@@ -89,6 +98,16 @@ typedef struct {
     uint32_t clip[PAINT_MAX_W * PAINT_MAX_H];
     int clip_w, clip_h;
     int changed;       /* drawn on since this was last cleared (by the caller, after a save) */
+    /* the tools that take more than one press: the polygon, curve or text
+     * under way (PAINT_POLYGON, PAINT_CURVE, PAINT_TEXT; 0 for none), drawn
+     * over the picture as it was (in before) until it is finished, as one
+     * step. Anything else that changes the picture finishes it first. */
+    int multi, mbutton;
+    int npts, stage;   /* polygon: its corners so far; curve: the presses done (0 to 2) */
+    int pts[PAINT_POLY_MAX][2]; /* polygon: corners; curve: its ends, then its two bends */
+    char text[PAINT_TEXT_MAX + 1];
+    int ntext, tx, ty; /* text: how much, and its top-left */
+    uint32_t seed;     /* spray's random numbers */
 } PaintDoc;
 
 /* A white w x h picture (at most PAINT_MAX_W x PAINT_MAX_H, at least 1x1),
@@ -104,8 +123,22 @@ uint32_t paint_get(const PaintDoc *d, int x, int y); /* 0 off the picture */
 void paint_press(PaintDoc *d, int x, int y, int button, int square);
 void paint_drag(PaintDoc *d, int x, int y, int square);
 void paint_release(PaintDoc *d, int x, int y, int square);
-/* Put the picture back as it was at the press (Escape, say) */
+/* Put the picture back as it was at the press (Escape, say); a polygon,
+ * curve or text under way goes too */
 void paint_cancel(PaintDoc *d);
+/* Keep the polygon (closed), curve or text under way as one step; a no-op
+ * with none. Saving, undo, and the drawing of anything else do it first. */
+void paint_finish(PaintDoc *d);
+/* Another tool, finishing what the last one has under way */
+void paint_set_tool(PaintDoc *d, int tool);
+/* Time passing with the button held: the spray keeps spraying */
+void paint_tick(PaintDoc *d);
+/* A key for the text under way: a character from ' ' to '~', '\n' for a new
+ * line, '\b' to take the last one back. 0, or -1 with no text under way */
+int paint_text_key(PaintDoc *d, int ch);
+/* Where the next character of the text under way goes, and its height: 0,
+ * or -1 with none */
+int paint_text_caret(const PaintDoc *d, int *x, int *y, int *h);
 
 /* 1 when there is a step to undo / to redo; undo and redo return 0, or -1
  * when there is none */
@@ -159,6 +192,16 @@ void paint_rect(PaintDoc *d, int x0, int y0, int x1, int y1, int size, int fille
 void paint_ellipse(PaintDoc *d, int x0, int y0, int x1, int y1, int size, int filled, uint32_t c);
 /* Returns the pixels changed */
 long paint_flood(PaintDoc *d, int x, int y, uint32_t c, int tolerance);
+/* dots within size of x, y (at least 2), seeded from d->seed */
+void paint_spray(PaintDoc *d, int x, int y, int size, uint32_t c);
+/* closed through n corners: its outline size wide, or filled */
+void paint_polygon(PaintDoc *d, const int (*pts)[2], int n, int size, int filled, uint32_t c);
+/* from x0, y0 to x1, y1, bent towards bx0, by0 and then bx1, by1 */
+void paint_curve(PaintDoc *d, int x0, int y0, int x1, int y1, int bx0, int by0, int bx1, int by1, int size,
+                 uint32_t c);
+/* s in the 5x7 font, each dot scale square, its top-left at x, y; '\n'
+ * starts a line. Characters outside ' ' to '~' show as '?' */
+void paint_text(PaintDoc *d, int x, int y, const char *s, size_t n, int scale, uint32_t c);
 
 /* One line of drawing, for scripts and tests (numbers are whole pixels):
  *   new W H                      a white picture
@@ -166,7 +209,9 @@ long paint_flood(PaintDoc *d, int x, int y, uint32_t c, int tolerance);
  *   size N   tolerance N   fill on|off   (fill on: shapes are filled)
  *   pencil|brush|eraser X Y [X Y ...]   a stroke through the points
  *   line|rect|ellipse X0 Y0 X1 Y1 [square]
- *   fill X Y   pick X Y
+ *   fill X Y   pick X Y   spray X Y [X Y ...]
+ *   polygon X Y X Y X Y [...]   curve X0 Y0 X1 Y1 [BX BY [BX BY]]
+ *   text X Y WORDS...            (the rest of the line, at size / 2)
  *   undo   redo   clear (the background colour all over, as one step)
  *   select X0 Y0 X1 Y1 | select all | select none
  *   copy   cut   paste [X Y]   delete   move DX DY   drop

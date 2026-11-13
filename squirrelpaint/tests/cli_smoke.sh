@@ -93,6 +93,16 @@ for y in range(h):
 PY
 fi
 
+# the tools that take more than one press, by command: the same picture through PNG
+printf 'size 4\ntext 2 2 Hi!\nfill on\npolygon 5 20 40 20 20 45\nfill off\ncurve 0 47 63 47 30 0\nspray 50 10\n' > "$B/tools.txt"
+$P --new 64x48 --script "$B/tools.txt" --save "$B/t.png" || fail "text, polygon, curve and spray"
+$P --new 64x48 --script "$B/tools.txt" --save "$B/t.bmp" || fail "the same as a BMP"
+$P "$B/t.png" --save "$B/t2.bmp" || fail "open t.png"
+cmp -s "$B/t.bmp" "$B/t2.bmp" || fail "the tools through PNG changed the picture"
+cmp -s "$B/t.bmp" "$B/a.bmp" && fail "the tools drew nothing"
+err=$($P --new 10x10 --do "polygon 1 1 2 2" 2>&1); [ $? -eq 1 ] || fail "a two-corner polygon should exit 1"
+echo "$err" | grep -q "three corners or more" || fail "polygon message: $err"
+
 # errors
 err=$($P --new 10x10 --do "line 1 2 3" 2>&1); [ $? -eq 1 ] || fail "a bad command should exit 1"
 echo "$err" | grep -q "line 1 2 3: line: X0 Y0 X1 Y1" || fail "bad command message: $err"
