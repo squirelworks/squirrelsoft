@@ -1,5 +1,6 @@
 /* squirrelgnss: command line over sqgnss. Original code. */
 #include "sqgnss.h"
+#include "sqrecv.h"
 #include "sqrinex.h"
 #include "sqrtk.h"
 
@@ -28,11 +29,16 @@ static void usage(FILE *f) {
           "  squirrelgnss demo-track [EPOCHS] [--at LAT,LON,H] [--noise M] [--fault PRN:METRES]\n"
           "                          [--mask DEG] [--out FILE.sqobs]\n"
           "  squirrelgnss rinex-demo OBS NAV [EPOCHS] [--at LAT,LON,H] [--noise M] [--seed N]\n"
-          "  squirrelgnss solve OBS NAV [--mask DEG] [--truth LAT,LON,H] [--average]\n"
+          "                          [--dual] [--l5] [--iono M]\n"
+          "  squirrelgnss solve OBS NAV [--mask DEG] [--truth LAT,LON,H] [--average] [--iono-free]\n"
           "  squirrelgnss guide HERE TARGET [--tol M]  which way and how far to the target\n"
           "  squirrelgnss rtk-demo [EPOCHS] [--baseline E,N,U] [--noise M] [--dual] [--iono M]\n"
           "                       [--kinematic] [--write BASE_OBS ROVER_OBS NAV]\n"
           "  squirrelgnss rtk BASE_OBS ROVER_OBS NAV --base-at LAT,LON,H [--truth LAT,LON,H] [--kinematic]\n"
+          "  squirrelgnss receiver PORT|FILE|- [--baud N] [--configure] [--epochs N] [--iono-free]\n"
+          "                       [--mask DEG] [--truth LAT,LON,H] [--nmea] [--rinex OBS NAV]\n"
+          "  squirrelgnss ubx-demo FILE [EPOCHS] [--at LAT,LON,H] [--noise M] [--iono M] [--dual] [--l5]\n"
+          "                       [--no-nmea] [--junk]\n"
           "  squirrelgnss help\n"
           "demo-track solves a synthetic 30-satellite sky; --fault adds a bias to one\n"
           "satellite, which the fault detection should exclude.\n"
@@ -45,7 +51,14 @@ static void usage(FILE *f) {
           "integer least squares when the ratio test passes. With L2 (--dual, or in\n"
           "the files) the wide lanes are fixed first and both carriers are used.\n"
           "--kinematic follows a moving rover epoch by epoch (the demo drives a\n"
-          "100 m circle at 5 m/s); --write saves the demo as RINEX for rtk.\n",
+          "100 m circle at 5 m/s); --write saves the demo as RINEX for rtk.\n"
+          "receiver reads a receiver live (a serial port, 9600 baud by default) or a\n"
+          "recording: NMEA for its own fix, and u-blox UBX RXM-RAWX, RXM-SFRBX and\n"
+          "NAV-PVT for raw measurements, the broadcast orbits and its solution. Raw\n"
+          "epochs are solved here and set beside the receiver's fix; --configure\n"
+          "asks a u-blox receiver (CFG-MSG) for those messages; --rinex logs RINEX.\n"
+          "ubx-demo writes such a stream from the synthetic sky. --iono-free solves\n"
+          "from L1/L2 (or L1/L5) code, without the ionosphere.\n",
           f);
 }
 
@@ -83,9 +96,14 @@ static int rinex_demo(int argc, char **argv) {
     double noise = 0.5;
     unsigned seed = 777u;
     SqgGeodetic truth = HOME;
+    int dual = 0, l5 = 0;
+    double iono = 0;
     for (int i = 4; i < argc; i++) {
         int more = i + 1 < argc;
-        if (!strcmp(argv[i], "--noise") && more) noise = atof(argv[++i]);
+        if (!strcmp(argv[i], "--dual")) dual = 1;
+        else if (!strcmp(argv[i], "--l5")) l5 = 1;
+        else if (!strcmp(argv[i], "--iono") && more) iono = atof(argv[++i]);
+        else if (!strcmp(argv[i], "--noise") && more) noise = atof(argv[++i]);
         else if (!strcmp(argv[i], "--seed") && more) seed = (unsigned)strtoul(argv[++i], NULL, 10) * 7919u;
         else if (!strcmp(argv[i], "--at") && more) {
             if (!parse_llh(argv[++i], &truth)) return usage(stderr), 2;
@@ -110,11 +128,13 @@ static int rinex_demo(int argc, char **argv) {
     sqr_write_nav(nav, ephs, n_eph);
     SqgEcef approx;
     sqg_geodetic_to_ecef(truth, &approx);
-    sqr_write_obs_header(obs, &approx);
+    int bands = SQR_BANDS_L2 | (l5 ? SQR_BANDS_L5 : 0);
+    sqr_write_obs_header_bands(obs, &approx, bands);
     for (int k = 0; k < n; k++) {
         SqgEpoch ep;
-        sqg_demo_epoch(ephs, n_eph, truth, t0 + 30.0 * k, 15.0, 5.0, noise, seed + (unsigned)k, &ep);
-        sqr_write_obs_epoch(obs, week, &ep);
+        SqgDemoOptions o = {15.0, 5.0, noise, seed + (unsigned)k, 0, dual, iono, l5};
+        sqg_demo_epoch_opt(ephs, n_eph, truth, t0 + 30.0 * k, &o, &ep);
+        sqr_write_obs_epoch_bands(obs, week, &ep, bands);
     }
     int bad = ferror(nav) || ferror(obs);
     bad |= fclose(nav) != 0;
@@ -136,6 +156,7 @@ static int solve(int argc, char **argv) {
     for (int i = 4; i < argc; i++) {
         int more = i + 1 < argc;
         if (!strcmp(argv[i], "--average")) average = 1;
+        else if (!strcmp(argv[i], "--iono-free")) opt.iono_free = 1;
         else if (!strcmp(argv[i], "--mask") && more) opt.elev_mask_deg = atof(argv[++i]);
         else if (!strcmp(argv[i], "--truth") && more) {
             if (!parse_llh(argv[++i], &truth)) return usage(stderr), 2;
@@ -305,8 +326,8 @@ static int rtk_demo(int argc, char **argv) {
         SqgEcef p;
         sqg_enu_to_ecef(base_pos, HOME, at, &p);
         sqg_ecef_to_geodetic(p, &where[k]);
-        SqgDemoOptions ob = {400.0 + k, 5.0, noise, 31u + (unsigned)k, 11, dual, iono};
-        SqgDemoOptions orv = {-900.0 - 2.0 * k, 5.0, noise, 5003u + (unsigned)k, 22, dual, iono};
+        SqgDemoOptions ob = {400.0 + k, 5.0, noise, 31u + (unsigned)k, 11, dual, iono, 0};
+        SqgDemoOptions orv = {-900.0 - 2.0 * k, 5.0, noise, 5003u + (unsigned)k, 22, dual, iono, 0};
         sqg_demo_epoch_opt(ephs, n_eph, HOME, t0 + dt * k, &ob, &rtk_base[k]);
         sqg_demo_epoch_opt(ephs, n_eph, where[k], t0 + dt * k, &orv, &rtk_rover[k]);
     }
@@ -456,6 +477,271 @@ static int rtk(int argc, char **argv) {
     return rc;
 }
 
+/* ---- a receiver ---- */
+
+static int has_band_l5(const SqgEpoch *ep) {
+    for (int i = 0; i < ep->n_obs; i++)
+        if (ep->obs[i].has_l5) return 1;
+    return 0;
+}
+
+static void gps_clock(int week, double tow, char *buf, size_t cap) {
+    int y, mo, d, h, mi;
+    double sec;
+    sqr_calendar(week, tow, &y, &mo, &d, &h, &mi, &sec);
+    snprintf(buf, cap, "%04d-%02d-%02d %02d:%02d:%04.1f", y, mo, d, h, mi, sec);
+}
+
+static SqrxReceiver rx;
+
+static int receiver(int argc, char **argv) {
+    if (argc < 3) return usage(stderr), 2;
+    const char *src = argv[2], *obs_path = NULL, *nav_path = NULL;
+    int baud = 9600, configure = 0, max_epochs = 0, nmea_lines = 0, have_truth = 0;
+    SqgGeodetic truth;
+    SqgPvtOptions opt;
+    sqg_pvt_options_default(&opt);
+    for (int i = 3; i < argc; i++) {
+        int more = i + 1 < argc;
+        if (!strcmp(argv[i], "--baud") && more) baud = atoi(argv[++i]);
+        else if (!strcmp(argv[i], "--configure")) configure = 1;
+        else if (!strcmp(argv[i], "--epochs") && more) max_epochs = atoi(argv[++i]);
+        else if (!strcmp(argv[i], "--iono-free")) opt.iono_free = 1;
+        else if (!strcmp(argv[i], "--mask") && more) opt.elev_mask_deg = atof(argv[++i]);
+        else if (!strcmp(argv[i], "--nmea")) nmea_lines = 1;
+        else if (!strcmp(argv[i], "--truth") && more) {
+            if (!parse_llh(argv[++i], &truth)) return usage(stderr), 2;
+            have_truth = 1;
+        } else if (!strcmp(argv[i], "--rinex") && i + 2 < argc) {
+            obs_path = argv[++i];
+            nav_path = argv[++i];
+        } else return usage(stderr), 2;
+    }
+    char err[256];
+    int fd = sqrx_serial_open(src, baud, configure, err, sizeof err);
+    if (fd < 0) {
+        fprintf(stderr, "squirrelgnss: %s\n", err);
+        return 1;
+    }
+    if (configure) {
+        /* raw measurements, subframes and the receiver's solution, every epoch */
+        static const int msgs[3][2] = {{SQRX_UBX_RXM, SQRX_UBX_RXM_RAWX},
+                                       {SQRX_UBX_RXM, SQRX_UBX_RXM_SFRBX},
+                                       {SQRX_UBX_NAV, SQRX_UBX_NAV_PVT}};
+        for (int k = 0; k < 3; k++) {
+            unsigned char m[16];
+            size_t n = sqrx_ubx_cfg_msg(m, sizeof m, msgs[k][0], msgs[k][1], 1);
+            if (sqrx_serial_write(fd, m, n)) {
+                fprintf(stderr, "squirrelgnss: could not configure the receiver on %s\n", src);
+                sqrx_serial_close(fd);
+                return 1;
+            }
+        }
+    }
+    sqrx_receiver_init(&rx);
+    static SqgStream stream;
+    sqg_stream_init(&stream, &opt);
+    SqgEcef truth_ecef = {0, 0, 0};
+    if (have_truth) sqg_geodetic_to_ecef(truth, &truth_ecef);
+    FILE *obs = NULL;
+    int rc = 0, epochs = 0, fixed = 0, ggas = 0, done = 0, bands = SQR_BANDS_L2;
+    unsigned char buf[4096];
+    long got;
+    while (!done && (got = sqrx_serial_read(fd, buf, sizeof buf)) > 0) {
+        for (long i = 0; i < got && !done; i++) {
+            int ev = sqrx_receiver_byte(&rx, buf[i]);
+            if ((ev & SQRX_EV_NMEA) && (nmea_lines || rx.n_epochs == 0)) {
+                const SqrxNmea *n = &rx.nmea;
+                /* a GGA just read: the receiver's fix */
+                static double last_utc = -1;
+                if (n->utc_s != last_utc && (n->have_pos || n->quality == 0)) {
+                    last_utc = n->utc_s;
+                    int s = (int)n->utc_s;
+                    printf("nmea %02d:%02d:%04.1f", s / 3600, s / 60 % 60, fmod(n->utc_s, 60));
+                    if (n->have_pos)
+                        printf(" fix=%d sats=%d lat=%.8f lon=%.8f h=%.3f hdop=%.1f\n", n->quality, n->sats_used,
+                               n->pos.lat_deg, n->pos.lon_deg, n->pos.height_m, n->hdop);
+                    else
+                        printf(" no fix\n");
+                    ggas++;
+                    if (rx.n_epochs == 0 && max_epochs > 0 && ggas >= max_epochs) done = 1;
+                }
+            }
+            if (!(ev & SQRX_EV_EPOCH)) continue;
+            epochs++;
+            SqgEphemeris ephs[32];
+            int n_eph = sqrx_receiver_ephemerides(&rx, ephs, 32);
+            char when[40];
+            gps_clock(rx.week, rx.epoch.t_receiver, when, sizeof when);
+            printf("%s", when);
+            if (nav_path && !obs) {
+                obs = fopen(obs_path, "w");
+                if (!obs) {
+                    fprintf(stderr, "squirrelgnss: could not write %s\n", obs_path);
+                    rc = 1;
+                    done = 1;
+                    break;
+                }
+                /* the types are fixed by the first epoch: L5 only if it has some */
+                bands = SQR_BANDS_L2 | (has_band_l5(&rx.epoch) ? SQR_BANDS_L5 : 0);
+                sqr_write_obs_header_bands(obs, NULL, bands);
+            }
+            if (obs) sqr_write_obs_epoch_bands(obs, rx.week, &rx.epoch, bands);
+            if (sqg_stream_push(&stream, &rx.epoch, ephs, n_eph)) {
+                printf(" no fix (%d observations, %d ephemerides)\n", rx.epoch.n_obs, n_eph);
+            } else {
+                fixed++;
+                const SqgPvt *p = &stream.pvt;
+                SqgGeodetic g;
+                sqg_ecef_to_geodetic(p->pos, &g);
+                printf(" used=%d lat=%.8f lon=%.8f h=%.3f hdop=%.2f rms=%.2f", p->n_used, g.lat_deg, g.lon_deg,
+                       g.height_m, p->hdop, p->rms_m);
+                /* beside the receiver's own: its NAV-PVT, else its last GGA */
+                const SqgGeodetic *own = rx.have_navpvt && rx.navpvt.fix_type >= 2 ? &rx.navpvt.pos
+                                         : rx.nmea.have_pos                       ? &rx.nmea.pos
+                                                                                  : NULL;
+                if (own) {
+                    SqgEnu d = sqg_stakeout_delta(*own, g);
+                    printf(" vs-receiver=%.2f m", sqrt(d.e * d.e + d.n * d.n + d.u * d.u));
+                }
+                if (have_truth) {
+                    SqgEnu e;
+                    char t1[40], t2[40], t3[40];
+                    sqg_ecef_to_enu(truth_ecef, p->pos, truth, &e);
+                    printf(" err E=%s N=%s U=%s", num(e.e, 2, t1), num(e.n, 2, t2), num(e.u, 2, t3));
+                }
+                if (p->excluded_prn > 0) printf(" excluded=PRN%02d", p->excluded_prn);
+                printf("\n");
+            }
+            if (max_epochs > 0 && epochs >= max_epochs) done = 1;
+        }
+        fflush(stdout);
+    }
+    sqrx_serial_close(fd);
+    if (obs) {
+        int bad = ferror(obs) != 0;
+        bad |= fclose(obs) != 0;
+        FILE *nav = fopen(nav_path, "w");
+        if (nav) {
+            SqgEphemeris ephs[32];
+            int n_eph = sqrx_receiver_ephemerides(&rx, ephs, 32);
+            sqr_write_nav(nav, ephs, n_eph);
+            bad |= ferror(nav) != 0;
+            bad |= fclose(nav) != 0;
+        }
+        if (bad || !nav) {
+            fprintf(stderr, "squirrelgnss: could not write %s\n", bad ? obs_path : nav_path);
+            rc = 1;
+        }
+    }
+    const SqrxFramer *f = &rx.framer;
+    printf("# %ld bytes: nmea %ld (%ld bad), ubx %ld (%ld bad), %ld stray; %d epochs, %d fixed, %d ephemerides\n",
+           f->bytes, f->nmea_ok, f->nmea_bad, f->ubx_ok, f->ubx_bad, f->junk, epochs, fixed, rx.n_eph_decoded);
+    return rc;
+}
+
+/* A u-blox-style stream of the synthetic sky: the navigation message, then
+ * every second NAV-PVT, NMEA (GGA, RMC, GSV) and RXM-RAWX. */
+static int ubx_demo(int argc, char **argv) {
+    if (argc < 3) return usage(stderr), 2;
+    const char *path = argv[2];
+    int n = 10, dual = 0, l5 = 0, nmea = 1, junk = 0;
+    double noise = 0.5, iono = 0;
+    SqgGeodetic truth = HOME;
+    for (int i = 3; i < argc; i++) {
+        int more = i + 1 < argc;
+        if (!strcmp(argv[i], "--dual")) dual = 1;
+        else if (!strcmp(argv[i], "--l5")) l5 = 1;
+        else if (!strcmp(argv[i], "--no-nmea")) nmea = 0;
+        else if (!strcmp(argv[i], "--junk")) junk = 1;
+        else if (!strcmp(argv[i], "--noise") && more) noise = atof(argv[++i]);
+        else if (!strcmp(argv[i], "--iono") && more) iono = atof(argv[++i]);
+        else if (!strcmp(argv[i], "--at") && more) {
+            if (!parse_llh(argv[++i], &truth)) return usage(stderr), 2;
+        } else if (argv[i][0] != '-' && i == 3) n = atoi(argv[i]);
+        else return usage(stderr), 2;
+    }
+    if (n < 1) n = 1;
+    if (n > 3600) n = 3600;
+    const int week = 2444;
+    const double t0 = 432000.0, leap = 18.0;
+    SqgEphemeris ephs[SQG_DEMO_SATS], dec[SQG_DEMO_SATS];
+    int n_eph;
+    sqg_demo_ephemerides(ephs, &n_eph, t0);
+    FILE *f = fopen(path, "wb");
+    if (!f) {
+        fprintf(stderr, "squirrelgnss: could not write %s\n", path);
+        return 1;
+    }
+    static unsigned char buf[1 << 16];
+    size_t len;
+    for (int i = 0; i < n_eph; i++) {
+        ephs[i].week = week;
+        SqrxSubframe sf[3];
+        if (sqrx_lnav_encode(&ephs[i], 1 + i, t0 - 18, sf)) {
+            fprintf(stderr, "squirrelgnss: PRN%02d does not fit the navigation message\n", ephs[i].prn);
+            fclose(f);
+            return 1;
+        }
+        sqrx_lnav_decode((const SqrxSubframe *)sf, week, &dec[i]); /* the sky as broadcast */
+        dec[i].prn = ephs[i].prn;
+        for (int k = 0; k < 3; k++) {
+            len = sqrx_ubx_sfrbx(buf, sizeof buf, ephs[i].prn, sf[k]);
+            fwrite(buf, 1, len, f);
+        }
+    }
+    SqgEcef rxe;
+    sqg_geodetic_to_ecef(truth, &rxe);
+    for (int k = 0; k < n; k++) {
+        double t = t0 + k;
+        SqgDemoOptions o = {30.0 + 0.1 * k, 5.0, noise, 101u + (unsigned)k, 5, dual, iono, l5};
+        SqgEpoch ep;
+        sqg_demo_epoch_opt(dec, n_eph, truth, t, &o, &ep);
+        int y, mo, d, h, mi;
+        double sec;
+        sqr_calendar(week, t - leap, &y, &mo, &d, &h, &mi, &sec);
+        SqrxNavPvt v = {t, y, mo, d, h, mi, sec, 3, ep.n_obs, truth, 1.0, 1.5, 0, 0, 1.4};
+        len = sqrx_ubx_navpvt(buf, sizeof buf, &v);
+        fwrite(buf, 1, len, f);
+        if (nmea) {
+            double utc = fmod(t - leap, 86400.0);
+            char s[2048];
+            len = sqrx_nmea_gga(s, sizeof s, utc, truth, 1, ep.n_obs, 0.9);
+            fwrite(s, 1, len, f);
+            len = sqrx_nmea_rmc(s, sizeof s, utc, y, mo, d, truth, 0, 0);
+            fwrite(s, 1, len, f);
+            SqrxSatView sv[SQG_MAX_SATS];
+            for (int i = 0; i < ep.n_obs; i++) {
+                const SqgEphemeris *e = NULL;
+                for (int j = 0; j < n_eph; j++)
+                    if (dec[j].prn == ep.obs[i].prn) e = &dec[j];
+                SqgAzEl ae = sqg_az_el(rxe, truth, sqg_sat_position(e, t - 0.07));
+                sv[i] = (SqrxSatView){'P', ep.obs[i].prn, ae.el_deg, ae.az_deg, ep.obs[i].snr_dbhz};
+            }
+            len = sqrx_nmea_gsv(s, sizeof s, sv, ep.n_obs);
+            fwrite(s, 1, len, f);
+        }
+        len = sqrx_ubx_rawx(buf, sizeof buf, &ep, week);
+        fwrite(buf, 1, len, f);
+        if (junk) {
+            /* line noise, and a message with a broken checksum */
+            static const unsigned char noise_bytes[] = {0x00, 0xFF, 0xB5, 0x13, '$', 'G', 'P', 0x07};
+            fwrite(noise_bytes, 1, sizeof noise_bytes, f);
+            len = sqrx_ubx_navpvt(buf, sizeof buf, &v);
+            buf[20] ^= 0x5A;
+            fwrite(buf, 1, len, f);
+        }
+    }
+    int bad = ferror(f) != 0;
+    bad |= fclose(f) != 0;
+    if (bad) {
+        fprintf(stderr, "squirrelgnss: write failed\n");
+        return 1;
+    }
+    printf("wrote %s (%d epochs, %d satellites)\n", path, n, n_eph);
+    return 0;
+}
+
 int main(int argc, char **argv) {
     if (argc < 2) {
         usage(stderr);
@@ -568,6 +854,8 @@ int main(int argc, char **argv) {
     if (!strcmp(cmd, "solve")) return solve(argc, argv);
     if (!strcmp(cmd, "rtk-demo")) return rtk_demo(argc, argv);
     if (!strcmp(cmd, "rtk")) return rtk(argc, argv);
+    if (!strcmp(cmd, "receiver")) return receiver(argc, argv);
+    if (!strcmp(cmd, "ubx-demo")) return ubx_demo(argc, argv);
     if (!strcmp(cmd, "guide")) {
         SqgGeodetic here, target;
         double tol = 0.02;

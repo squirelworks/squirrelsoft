@@ -157,6 +157,20 @@ void sqg_pvt_options_default(SqgPvtOptions *o) {
     o->weighted = 1;
     o->raim = 1;
     o->raim_limit_m = 15.0;
+    o->iono_free = 0;
+}
+
+/* the code range a solution uses: L1, or ionosphere-free; 0 when there is none */
+static int code_range(const SqgObservation *o, int iono_free, double *pr) {
+    if (!iono_free) {
+        *pr = o->pseudorange_m;
+        return 1;
+    }
+    double f2 = o->has_l2 ? SQG_L2_HZ : SQG_L5_HZ, p2 = o->has_l2 ? o->pseudorange2_m : o->pseudorange5_m;
+    if (!o->has_l2 && !o->has_l5) return 0;
+    double g = (SQG_L1_HZ / f2) * (SQG_L1_HZ / f2);
+    *pr = (g * o->pseudorange_m - p2) / (g - 1);
+    return 1;
 }
 
 static int find_eph(const SqgEphemeris *ephs, int n, int prn) {
@@ -182,11 +196,14 @@ static int solve_core(const SqgEpoch *ep, const SqgEphemeris *ephs, int n_eph, S
         for (int k = 0; k < ep->n_obs && used < SQG_MAX_SATS; k++) {
             const SqgObservation *o = &ep->obs[k];
             int ei = o->valid && o->prn != skip ? find_eph(ephs, n_eph, o->prn) : -1;
-            if (ei < 0) continue;
+            double pr;
+            if (ei < 0 || !code_range(o, opt->iono_free, &pr)) continue;
             const SqgEphemeris *eph = &ephs[ei];
-            /* transmit time, with the satellite clock read at that time */
-            double t_tx = ep->t_receiver - o->pseudorange_m / SQG_C_LIGHT, dts = 0;
-            for (int j = 0; j < 2; j++) dts = sqg_sat_clock(eph, t_tx - dts);
+            /* transmit time, with the satellite clock read at that time (the
+             * broadcast clock is for L1/L2 ionosphere-free: L1 alone takes
+             * the group delay off, which sqg_sat_clock does) */
+            double t_tx = ep->t_receiver - pr / SQG_C_LIGHT, dts = 0;
+            for (int j = 0; j < 2; j++) dts = sqg_sat_clock(eph, t_tx - dts) + (opt->iono_free ? eph->tgd : 0);
             t_tx -= dts;
             SqgEcef s = sqg_sat_position(eph, t_tx);
             /* the Earth turns while the signal flies */
@@ -208,7 +225,7 @@ static int solve_core(const SqgEpoch *ep, const SqgEphemeris *ephs, int n_eph, S
             h[used][1] = -dy / rho;
             h[used][2] = -dz / rho;
             h[used][3] = 1.0;
-            res[used] = o->pseudorange_m - (rho + cb - SQG_C_LIGHT * dts);
+            res[used] = pr - (rho + cb - SQG_C_LIGHT * dts);
             w[used] = wt;
             prn[used++] = o->prn;
         }
@@ -429,6 +446,7 @@ void sqg_demo_epoch_opt(const SqgEphemeris *ephs, int n_eph, SqgGeodetic truth, 
         if (!s) s = 1;
     }
     const double g = (SQG_L1_HZ / SQG_L2_HZ) * (SQG_L1_HZ / SQG_L2_HZ); /* L2 delay over L1 delay */
+    const double g5 = (SQG_L1_HZ / SQG_L5_HZ) * (SQG_L1_HZ / SQG_L5_HZ);
     for (int i = 0; i < n_eph && out->n_obs < SQG_MAX_SATS; i++) {
         double t_tx = t_true - 0.075, rho = 0;
         SqgEcef sr = {0, 0, 0};
@@ -461,15 +479,24 @@ void sqg_demo_epoch_opt(const SqgEphemeris *ephs, int n_eph, SqgGeodetic truth, 
         if (o->dual) {
             long amb2 = o->receiver ? sqg_demo_receiver_ambiguity(o->receiver, ephs[i].prn, 2)
                                     : sqg_demo_ambiguity(rx, ephs[i].prn) + 77;
-            ob->pseudorange2_m = geo + g * iono + o->noise_m * gauss(&s);
+            /* the group delay: L1 code is late by c tgd (geo has it, through
+             * the clock), L2 by g c tgd, so L1/L2 ionosphere-free has none */
+            ob->pseudorange2_m = geo + g * iono + (g - 1) * SQG_C_LIGHT * ephs[i].tgd + o->noise_m * gauss(&s);
             ob->carrier2_cyc = (geo - g * iono) / SQG_L2_LAMBDA + amb2 + o->noise_m / 100 * gauss(&s) / SQG_L2_LAMBDA;
             ob->has_l2 = 1;
+        }
+        if (o->l5) {
+            long amb5 = o->receiver ? sqg_demo_receiver_ambiguity(o->receiver, ephs[i].prn, 5)
+                                    : sqg_demo_ambiguity(rx, ephs[i].prn) + 115;
+            ob->pseudorange5_m = geo + g5 * iono + (g5 - 1) * SQG_C_LIGHT * ephs[i].tgd + o->noise_m * gauss(&s);
+            ob->carrier5_cyc = (geo - g5 * iono) / SQG_L5_LAMBDA + amb5 + o->noise_m / 100 * gauss(&s) / SQG_L5_LAMBDA;
+            ob->has_l5 = ob->has_l5_carrier = 1;
         }
     }
 }
 
 void sqg_demo_epoch(const SqgEphemeris *ephs, int n_eph, SqgGeodetic truth, double t_true, double clock_bias_m,
                     double mask_deg, double noise_m, unsigned seed, SqgEpoch *out) {
-    SqgDemoOptions o = {clock_bias_m, mask_deg, noise_m, seed, 0, 0, 0};
+    SqgDemoOptions o = {clock_bias_m, mask_deg, noise_m, seed, 0, 0, 0, 0};
     sqg_demo_epoch_opt(ephs, n_eph, truth, t_true, &o, out);
 }

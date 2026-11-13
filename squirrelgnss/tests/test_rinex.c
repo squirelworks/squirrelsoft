@@ -329,7 +329,7 @@ static void test_errors(void) {
 static void test_dual(void) {
     FILE *f = tmpfile();
     sqr_write_obs_header(f, NULL);
-    SqgDemoOptions o = {25.0, 5.0, 0.3, 9, 77, 1, 4.0};
+    SqgDemoOptions o = {25.0, 5.0, 0.3, 9, 77, 1, 4.0, 0};
     SqgEpoch a;
     sqg_demo_epoch_opt(eph, n_eph, HOME, T0, &o, &a);
     a.obs[2].slip = 1;

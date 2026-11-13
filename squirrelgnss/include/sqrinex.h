@@ -48,6 +48,8 @@ typedef struct {
     int carrier_index; /* L1C, L1, L1W or L1P, or -1 */
     int code2_index;   /* C2W, C2L, C2X, C2S, P2 or C2, or -1 */
     int carrier2_index; /* L2W, L2L, L2X, L2S or L2, or -1 */
+    int code5_index;    /* C5Q, C5X, C5I or C5, or -1 */
+    int carrier5_index; /* L5Q, L5X, L5I or L5, or -1 */
     char code_name[4];
     double approx[3]; /* APPROX POSITION XYZ, or 0 */
 } SqrObs;
@@ -58,13 +60,19 @@ int sqr_obs_open(SqrObs *r, const char *text, SqrError *err);
 
 /* The next epoch with GPS pseudoranges: 1, or 0 at the end, or -1 with err.
  * week receives the GPS week of the epoch. Event records are skipped. L2
- * code and carrier are read when the file has both; a loss-of-lock flag on
- * either carrier sets the observation's slip. */
+ * code and carrier are read when the file has both; L5 code when it has it,
+ * with the carrier when there is one. A loss-of-lock flag on any carrier
+ * sets the observation's slip. */
 int sqr_obs_next(SqrObs *r, SqgEpoch *ep, int *week, SqrError *err);
 
-/* RINEX 3.04 writers */
+/* RINEX 3.04 writers. The observation types are C1C L1C S1C, then C2W L2W
+ * with SQR_BANDS_L2 and C5Q L5Q with SQR_BANDS_L5; give the header and the
+ * epochs the same bands. The plain ones write L2. */
+enum { SQR_BANDS_L2 = 1, SQR_BANDS_L5 = 2 };
 void sqr_write_nav(FILE *f, const SqgEphemeris *ephs, int n);
 void sqr_write_obs_header(FILE *f, const SqgEcef *approx);
 void sqr_write_obs_epoch(FILE *f, int week, const SqgEpoch *ep);
+void sqr_write_obs_header_bands(FILE *f, const SqgEcef *approx, int bands);
+void sqr_write_obs_epoch_bands(FILE *f, int week, const SqgEpoch *ep, int bands);
 
 #endif

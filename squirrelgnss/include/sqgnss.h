@@ -27,6 +27,8 @@
 #define SQG_L2_HZ 1227.60e6
 #define SQG_L2_LAMBDA (SQG_C_LIGHT / SQG_L2_HZ)                 /* about 0.244 m */
 #define SQG_WL_LAMBDA (SQG_C_LIGHT / (SQG_L1_HZ - SQG_L2_HZ))   /* the wide lane, about 0.862 m */
+#define SQG_L5_HZ 1176.45e6
+#define SQG_L5_LAMBDA (SQG_C_LIGHT / SQG_L5_HZ) /* about 0.255 m */
 
 typedef struct {
     double x, y, z;
@@ -80,6 +82,10 @@ typedef struct {
     double carrier2_cyc;
     int has_l2;
     int slip; /* the receiver lost lock on a carrier since the last epoch */
+    /* L5, when has_l5: code, and the carrier when has_l5_carrier */
+    double pseudorange5_m;
+    double carrier5_cyc;
+    int has_l5, has_l5_carrier;
 } SqgObservation;
 
 typedef struct {
@@ -105,6 +111,11 @@ typedef struct {
     int weighted;         /* weight by sin^2(elevation) */
     int raim;             /* detect one faulty satellite and exclude it */
     double raim_limit_m;  /* residual RMS above this means a fault */
+    /* Use the ionosphere-free code combination: L1/L2 where a satellite has
+     * L2, else L1/L5; satellites with neither are left out. The broadcast
+     * clock is for L1/L2 (no group delay applied); the L5 inter-signal
+     * corrections of CNAV are not, so L1/L5 carries the satellite's L5 bias. */
+    int iono_free;
 } SqgPvtOptions;
 
 typedef struct {
@@ -168,9 +179,10 @@ typedef struct {
      * receiver wherever it is, so a moving receiver keeps them. */
     long receiver;
     int dual;        /* also L2 code and carrier */
-    double iono_m;   /* L1 ionospheric delay at the zenith: code late, carrier early, x (77/60)^2 on L2 */
+    double iono_m;   /* L1 ionospheric delay at the zenith: code late, carrier early, x (f1/f)^2 on L2 and L5 */
+    int l5;          /* also L5 code and carrier */
 } SqgDemoOptions;
-/* The whole-cycle ambiguity of a receiver (not 0) on band 1 or 2. */
+/* The whole-cycle ambiguity of a receiver (not 0) on band 1, 2 or 5. */
 long sqg_demo_receiver_ambiguity(long receiver, int prn, int band);
 /* With o->dual 0, o->iono_m 0 and o->receiver 0 this gives exactly what
  * sqg_demo_epoch gives. */

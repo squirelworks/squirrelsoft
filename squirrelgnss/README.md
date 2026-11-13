@@ -34,6 +34,33 @@ formulas. None of it comes from vendor receiver firmware.
   flag on either carrier marks a slip. Event blocks are skipped.
   Errors give the line number. A RINEX 3 writer makes synthetic files to
   match.
+- **L5 and the ionosphere-free solution:** observations carry L5 code and
+  carrier beside L1 and L2. RINEX reads C5Q (then C5X, C5I, C5) and L5Q
+  (then L5X, L5I, L5); the writer adds `C5Q L5Q` when asked. With
+  `iono_free` (`--iono-free`), point positioning uses the L1/L2
+  ionosphere-free code where a satellite has L2, else L1/L5, and the
+  broadcast clock without the group delay (it is referenced to L1/L2). The
+  CNAV inter-signal corrections for L5 are not applied, so L1/L5 keeps each
+  satellite's L5 bias, a few decimetres on real satellites.
+- **A receiver (sqrecv), live or recorded:** one byte stream with NMEA and
+  u-blox UBX mixed, as receivers send them, framed with checksums checked;
+  line noise, broken sentences and corrupt messages are counted and
+  skipped.
+  - NMEA 0183 from any talker: GGA (fix, satellites, HDOP, height above the
+    ellipsoid from MSL plus the geoid separation), RMC (date, speed,
+    course), GSA (fix mode, satellites used, DOPs) and GSV (satellites in
+    view, gathered set by set and kept per system). Writers for GGA, RMC and
+    GSV.
+  - UBX RXM-RAWX: GPS L1 C/A, L2 CL/CM and L5 I/Q code and carrier into an
+    epoch; a carrier counts only when valid with its half cycle resolved,
+    and a lock time that goes back marks a slip.
+  - UBX RXM-SFRBX: the LNAV subframes 1 to 3 decoded to ephemerides (with
+    the issue numbers matched and the 10-bit week resolved), so the stream
+    carries its own orbits. An encoder writes the same message.
+  - UBX NAV-PVT: the receiver's own solution, set beside ours. CFG-MSG asks
+    a u-blox M8-class receiver for RAWX, SFRBX and NAV-PVT.
+  - A POSIX serial port (raw 8N1, 4800 to 921600 baud), a recording or
+    standard input.
 - **Track:** an epoch track seeded from the last fix, and a `.sqobs` log.
 - **Epoch stream:** fixes epoch after epoch, each started from the last.
   It keeps a running mean and spread of an occupation (east/north/up about
@@ -68,8 +95,9 @@ formulas. None of it comes from vendor receiver firmware.
   pseudoranges and L1 carrier phase (with whole-cycle ambiguities that
   differ by site and satellite) for any site, clock bias, mask and seeded
   noise. `sqg_demo_epoch_opt` adds L2, an ionosphere (code late, carrier
-  early, 1.65 times more on L2) and ambiguities that belong to a receiver
-  wherever it goes. It's for tests and demos.
+  early, (f1/f)² times more on L2 and L5), L5, the satellite group delay on
+  L2 and L5 code, and ambiguities that belong to a receiver wherever it
+  goes. It's for tests and demos.
 
 ## Build
 
@@ -98,7 +126,23 @@ make test
 ./build/squirrelgnss rtk-demo --kinematic --dual --write b.26o r.26o n.26n   # ... saved as RINEX
 ./build/squirrelgnss rtk base.obs rover.obs brdc.nav --base-at 35.681236,139.767125,40
 ./build/squirrelgnss rtk base.obs rover.obs brdc.nav --base-at 35.681236,139.767125,40 --kinematic
+./build/squirrelgnss rinex-demo l5.26o l5.26n --dual --l5 --iono 4   # three frequencies
+./build/squirrelgnss solve l5.26o l5.26n --iono-free               # the ionosphere taken out
+./build/squirrelgnss receiver /dev/ttyACM0 --baud 115200 --configure --rinex log.26o log.26n
+./build/squirrelgnss receiver /dev/ttyUSB0 --nmea                  # an NMEA-only receiver's fixes
+./build/squirrelgnss ubx-demo demo.ubx 30 --dual --l5 --junk       # a synthetic receiver stream
+./build/squirrelgnss receiver demo.ubx --iono-free                 # ... read back and solved
 ```
+
+`receiver` prints the receiver's NMEA fixes until raw epochs arrive (always
+with `--nmea`), then one line per raw epoch solved here: GPS time,
+satellites used, position, HDOP, residual RMS, `vs-receiver` (the distance
+to the receiver's own NAV-PVT or GGA fix) and the error with `--truth`. It
+ends with what the stream held: bytes, good and bad sentences and
+messages, stray bytes, epochs, fixes and ephemerides. `--configure` sends
+CFG-MSG (u-blox M8 and older; F9 receivers take CFG-VALSET, so enable
+RAWX, SFRBX and NAV-PVT there with u-center). `--rinex` logs the raw epochs
+and the decoded ephemerides as RINEX 3 for `solve` and `rtk`.
 
 `rtk` pairs the base and rover epochs by time and prints `fixed` or
 `float`, the ratio, `L1` or `L1+L2`, the rover position and the float
@@ -114,8 +158,8 @@ is published by the IGS data centres.
 
 ## Tests
 
-`make test` runs `tests/test_sqgnss.c` (with `tests/test_rinex.c` and
-`tests/test_rtk.c`) and
+`make test` runs `tests/test_sqgnss.c` (with `tests/test_rinex.c`,
+`tests/test_rtk.c` and `tests/test_recv.c`) and
 `tests/cli_smoke.sh`. The unit
 tests cover:
 
@@ -155,3 +199,14 @@ tests cover:
   every fixed epoch, the true ambiguities, a millimetre without noise;
   slips flagged and unflagged (on L1, and on both carriers), an unflagged
   L1-only slip dropped rather than trusted, and a lost reference
+- receiver streams: NMEA sentences (the textbook GGA and RMC, southern and
+  western, no fix, bad checksums and numbers, GSA, GSV sets across two
+  systems and out of order) and the writers read back; framing through
+  line noise, a corrupt message and an impossible length; CFG-MSG against
+  bytes worked out by hand; the navigation message round trip for all 30
+  satellites (orbits within 10 cm, clocks within 15 cm over 4 hours), the
+  week either side of a rollover, mismatched issues and values that do not
+  fit; RAWX on three frequencies with a slip and a satellite without L1;
+  NAV-PVT; a whole stream solved to under a centimetre ionosphere-free
+  through 6 m of ionosphere (L1 alone is metres off), L1/L5 alone, and
+  RINEX L5 round trips with and without L2

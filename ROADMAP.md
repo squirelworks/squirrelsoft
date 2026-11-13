@@ -158,8 +158,8 @@ These milestones predate the suite roadmap and remain open. Formats stay owned b
 - [x] RTK double-difference math: code DGNSS, static L1 carrier float + integer fix with ratio test (`squirrelgnss rtk`)
 - [x] Dual-frequency (L2) observations and wide-lane fixing; LAMBDA-style decorrelated search (`sqg_ils`)
 - [x] Kinematic RTK (moving rover epoch by epoch, cycle slips, `rtk --kinematic`)
-- [ ] L5 observations
-- [ ] Serial receiver input
+- [x] L5 observations: RINEX in and out, the synthetic sky, the ionosphere-free point position from L1/L2 or L1/L5 (`--iono-free`)
+- [x] Serial receiver input (`squirrelgnss receiver`): NMEA fixes and satellites in view, u-blox RXM-RAWX/RXM-SFRBX/NAV-PVT with the navigation message decoded to ephemerides, solved live beside the receiver and logged as RINEX
 
 ### SquirrelSound desktop (sqdsp)
 - [x] Radix-2 FFT, windows, periodogram, Welch PSD, STFT; pitch, THD, SNR; WAV I/O, CLI reports, SVG plots; live SDL spectrum/waterfall + ALSA mic (done)
