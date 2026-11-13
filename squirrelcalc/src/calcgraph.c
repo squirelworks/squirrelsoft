@@ -419,3 +419,64 @@ int calc_plot_fn(sqg_canvas *c, sqg_rect r, const CalcView *v, double (*f)(const
     c->clip = old;
     return drawn;
 }
+
+/* the pixel rectangle of plane box x0..x1, y0..y1 (any order), kept near r */
+static sqg_rect plane_rect(const CalcView *v, sqg_rect r, double x0, double x1, double y0, double y1) {
+    int a = px_int(calc_px_x(v, r, x0), r.x, r.x + r.w), b = px_int(calc_px_x(v, r, x1), r.x, r.x + r.w);
+    int c = px_int(calc_px_y(v, r, y0), r.y, r.y + r.h), d = px_int(calc_px_y(v, r, y1), r.y, r.y + r.h);
+    if (a > b) {
+        int t = a;
+        a = b;
+        b = t;
+    }
+    if (c > d) {
+        int t = c;
+        c = d;
+        d = t;
+    }
+    return sqg_rect_make(a, c, b - a + 1, d - c + 1);
+}
+
+int calc_draw_histogram(sqg_canvas *c, sqg_rect r, const CalcView *v, double start, double width, const int *counts,
+                        int n, uint32_t argb, uint32_t edge) {
+    if (r.w <= 0 || r.h <= 0 || !(width > 0)) return 0;
+    sqg_rect old = c->clip;
+    sqg_clip(c, r);
+    int shown = 0;
+    for (int k = 0; k < n; k++) {
+        if (counts[k] <= 0) continue;
+        double x0 = start + k * width, x1 = x0 + width;
+        sqg_rect b = plane_rect(v, r, x0, x1, 0, counts[k]);
+        sqg_rect in = sqg_rect_intersect(b, r);
+        if (in.w <= 0 || in.h <= 0) continue;
+        shown++;
+        sqg_blend(c, b, argb);
+        sqg_frame(c, b, edge);
+    }
+    c->clip = old;
+    return shown;
+}
+
+int calc_draw_boxplot(sqg_canvas *c, sqg_rect r, const CalcView *v, double lo, double q1, double med, double q3,
+                      double hi, double y, double h, uint32_t argb, uint32_t edge) {
+    if (r.w <= 0 || r.h <= 0) return 0;
+    sqg_rect old = c->clip;
+    sqg_clip(c, r);
+    sqg_rect box = plane_rect(v, r, q1, q3, y - h / 2, y + h / 2);
+    sqg_rect all = plane_rect(v, r, lo, hi, y - h / 2, y + h / 2);
+    int mid = px_int(calc_px_y(v, r, y), r.y, r.y + r.h);
+    int xl = px_int(calc_px_x(v, r, lo), r.x, r.x + r.w), xh = px_int(calc_px_x(v, r, hi), r.x, r.x + r.w);
+    int xm = px_int(calc_px_x(v, r, med), r.x, r.x + r.w);
+    int cap = box.h / 4;
+    sqg_hline(c, xl, box.x, mid, edge);
+    sqg_hline(c, box.x + box.w - 1, xh, mid, edge);
+    sqg_vline(c, xl, mid - cap, mid + cap, edge);
+    sqg_vline(c, xh, mid - cap, mid + cap, edge);
+    sqg_blend(c, box, argb);
+    sqg_frame(c, box, edge);
+    sqg_vline(c, xm, box.y, box.y + box.h - 1, edge);
+    sqg_vline(c, xm + 1, box.y, box.y + box.h - 1, edge);
+    c->clip = old;
+    sqg_rect in = sqg_rect_intersect(all, r);
+    return in.w > 0 && in.h > 0;
+}

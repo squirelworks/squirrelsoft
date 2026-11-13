@@ -18,7 +18,7 @@ else
 GUI_RUN = $(BUILD)/calc_nosdl.o
 endif
 
-OBJ = $(BUILD)/calcgraph.o $(BUILD)/calcgui.o $(BUILD)/calcstats.o
+OBJ = $(BUILD)/calcgraph.o $(BUILD)/calcgui.o $(BUILD)/calcsheet.o $(BUILD)/calcstats.o
 HDR = $(wildcard include/*.h) $(SQMATH)/include/sqmath.h $(SQGUI)/include/sqgui.h
 SQMATH_LIB = $(SQMATH)/build/libsqmath.a
 SQGUI_LIB = $(SQGUI)/build/libsqgui.a
@@ -50,7 +50,11 @@ $(BUILD)/squirrelcalc: src/main.c $(OBJ) $(GUI_RUN) $(LIBS) | $(BUILD)
 $(BUILD)/test_calc: tests/test_calc.c $(OBJ) $(LIBS) | $(BUILD)
 	$(CC) $(CFLAGS) $< $(OBJ) $(SQMATH_LIB) $(SQGUI_LIB) -o $@ -lm
 
-test: $(BUILD)/test_calc $(BUILD)/squirrelcalc
+$(BUILD)/test_sheet: tests/test_sheet.c $(BUILD)/calcsheet.o $(BUILD)/calcstats.o $(SQMATH_LIB) | $(BUILD)
+	$(CC) $(CFLAGS) $< $(BUILD)/calcsheet.o $(BUILD)/calcstats.o $(SQMATH_LIB) -o $@ -lm
+
+test: $(BUILD)/test_calc $(BUILD)/test_sheet $(BUILD)/squirrelcalc
+	$(BUILD)/test_sheet
 	$(BUILD)/test_calc $(BUILD)
 	sh tests/cli_smoke.sh $(BUILD)
 	@if [ "$(HAS_SDL)" = 1 ]; then \

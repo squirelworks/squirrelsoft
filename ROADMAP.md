@@ -86,7 +86,8 @@ Every item is a checkbox. Tick it in the PR that merges its last piece. Nested b
   - [x] Parametric and polar curves, sliders for variables
   - [x] Implicit curves and inequalities, lists and regression
   - [x] CAS in the calculator line: `expand`, `collect`, `d/dx`, `solve ... [for v]`
-  - [ ] Geometry, stats, spreadsheet, notebooks
+  - [x] Spreadsheet and statistics: Sheet view (A1:H50, formulas, fill, CSV), quartiles, histograms, box plots, normal/binomial/Poisson distributions, functions of ranges and lists
+  - [ ] Geometry, notebooks
 - [ ] S5.2 SquirrelPaint
 - [ ] S5.3 SquirrelGames (Solitaire, FreeCell, Hearts, Bridge, Chess, Minesweeper-class, Mahjongg)
 - [ ] S5.4 SquirrelDebug (desktop debugger UI for Squirrel OS/2 over serial/QEMU gdbstub)
