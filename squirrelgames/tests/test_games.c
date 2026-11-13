@@ -1500,6 +1500,9 @@ static void test_bridge(void) {
     bridge_new(&br, 1); /* North deals */
     const char *why;
     CHECK(bridge_can_call(&br, BRIDGE_DOUBLE, &why) == -1 && strstr(why, "opponent's bid"));
+    CHECK(bridge_can_call(&br, 3, &why) == -1 && strstr(why, "not a call") &&
+          bridge_can_call(&br, 4, &why) == -1 && bridge_can_call(&br, -1, &why) == -1 &&
+          bridge_can_call(&br, BRIDGE_BID(7, BRIDGE_NOTRUMP) + 1, &why) == -1 && bridge_call(&br, 3) == -1);
     CHECK(calls("1H"));
     CHECK(bridge_can_call(&br, BRIDGE_BID(1, BRIDGE_DIAMONDS), &why) == -1 && strstr(why, "higher"));
     CHECK(bridge_can_call(&br, BRIDGE_REDOUBLE, &why) == -1 && strstr(why, "opponent's double"));
