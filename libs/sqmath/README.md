@@ -49,7 +49,7 @@ double y = sqm_run(&p, (double[]){0.25});
   skips poles such as tan at pi/2), and integrals by adaptive Simpson
   (`sqm_integrate`).
 - **Calculator display** of a number (`sqm_format`): N significant digits, no
-  trailing zeros, `undefined` for NaN.
+  trailing zeros, and `undefined` for anything not finite (0/0, sqrt(-1), 1/0, overflow).
 
 ## Command line
 

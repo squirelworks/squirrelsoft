@@ -162,8 +162,9 @@ int sqm_roots(const SqmProgram *p, double *values, int slot, double lo, double h
 double sqm_integrate(const SqmProgram *p, double *values, int slot, double a, double b, double tol, int *ok);
 
 /* A calculator display of x: up to `digits` significant digits (1..17),
- * no trailing zeros, exponent form outside 1e-6 .. 1e15, "-0" as "0",
- * "undefined" for NaN, "inf" / "-inf". Returns the length like snprintf. */
+ * no trailing zeros, exponent form outside 1e-6 .. 1e15, "-0" as "0", and
+ * "undefined" for anything not finite (0/0, sqrt(-1), 1/0, overflow), as
+ * graphing calculators show it. Returns the length like snprintf. */
 size_t sqm_format(double x, int digits, char *out, size_t cap);
 
 #endif

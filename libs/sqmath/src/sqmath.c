@@ -662,10 +662,9 @@ size_t sqm_format(double x, int digits, char *out, size_t cap) {
     char t[64];
     if (digits < 1) digits = 1;
     if (digits > 17) digits = 17;
-    if (isnan(x)) {
+    if (!isfinite(x)) {
+        /* one word for every value that isn't a number: 0/0, sqrt(-1), 1/0, overflow */
         snprintf(t, sizeof t, "undefined");
-    } else if (isinf(x)) {
-        snprintf(t, sizeof t, x > 0 ? "inf" : "-inf");
     } else if (x == 0) {
         snprintf(t, sizeof t, "0");
     } else {

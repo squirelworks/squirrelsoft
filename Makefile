@@ -1,6 +1,6 @@
 # Top-level squirrelsoft build
 LIBS = libs/sqdsp libs/sqfelica libs/sqqr libs/sqgui libs/sqmath
-PROGRAMS = squirrelstation squirrelcad squirrelgnss squirrelsound squirrelqr squirrelsuica
+PROGRAMS = squirrelstation squirrelcad squirrelgnss squirrelsound squirrelqr squirrelsuica squirrelcalc
 PY_PROGRAMS = squirrelsuica-analysis
 
 .PHONY: all test clean $(PROGRAMS) $(PY_PROGRAMS)

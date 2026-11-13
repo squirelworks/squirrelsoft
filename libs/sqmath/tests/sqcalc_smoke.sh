@@ -38,6 +38,7 @@ expect "$(printf 'x = -1.41421356237\nx = 1.41421356237')" --solve x -5 5 "x^2 -
 expect 2 --integrate x 0 pi "sin(x)"
 expect "$(printf '0\t0\n0.5\t0.25\n1\t1')" --table x 0 1 0.5 "x^2"
 expect undefined "sqrt(-1)"
+expect undefined "1/0"
 status 0 --help
 status 1 "2 +"
 status 1 "y + 1"
