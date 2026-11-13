@@ -108,6 +108,11 @@ typedef struct {
     int wheel;          /* wheel steps this frame, + is up/away */
     int key;            /* one SQG_KEY_* this frame, or 0 */
     char text[32];      /* UTF-8 typed this frame (ASCII is drawn) */
+    int down2;          /* the secondary (right) button is held */
+    int pressed2;       /* it went down this frame */
+    int released2;      /* it went up this frame */
+    int shift, ctrl;    /* held now */
+    int ctrl_key;       /* a letter typed with Ctrl this frame ('z'), or 0 */
 } sqg_input;
 
 /* Widget identity: any non-zero value unique within a frame */

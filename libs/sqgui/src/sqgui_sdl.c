@@ -89,6 +89,8 @@ int sqg_window_poll(sqg_window *s, sqg_input *in)
 {
     int alive = 1;
     in->pressed = in->released = 0;
+    in->pressed2 = in->released2 = 0;
+    in->ctrl_key = 0;
     in->wheel = 0;
     in->key = 0;
     in->text[0] = 0;
@@ -109,6 +111,11 @@ int sqg_window_poll(sqg_window *s, sqg_input *in)
                 in->my = ev.button.y;
                 in->down = 1;
                 in->pressed = 1;
+            } else if (ev.button.button == SDL_BUTTON_RIGHT) {
+                in->mx = ev.button.x;
+                in->my = ev.button.y;
+                in->down2 = 1;
+                in->pressed2 = 1;
             }
             break;
         case SDL_MOUSEBUTTONUP:
@@ -117,6 +124,11 @@ int sqg_window_poll(sqg_window *s, sqg_input *in)
                 in->my = ev.button.y;
                 in->down = 0;
                 in->released = 1;
+            } else if (ev.button.button == SDL_BUTTON_RIGHT) {
+                in->mx = ev.button.x;
+                in->my = ev.button.y;
+                in->down2 = 0;
+                in->released2 = 1;
             }
             break;
         case SDL_MOUSEWHEEL:
@@ -127,6 +139,9 @@ int sqg_window_poll(sqg_window *s, sqg_input *in)
                 in->key = map_key(ev.key.keysym.sym);
             if (!s->rawkey)
                 s->rawkey = (int)ev.key.keysym.sym;
+            if ((ev.key.keysym.mod & KMOD_CTRL) && ev.key.keysym.sym >= SDLK_a &&
+                ev.key.keysym.sym <= SDLK_z && !in->ctrl_key)
+                in->ctrl_key = 'a' + (int)(ev.key.keysym.sym - SDLK_a);
             break;
         case SDL_TEXTINPUT: {
             size_t n = strlen(in->text), m = strlen(ev.text.text);
@@ -144,6 +159,9 @@ int sqg_window_poll(sqg_window *s, sqg_input *in)
             break;
         }
     }
+    SDL_Keymod mod = SDL_GetModState();
+    in->shift = (mod & KMOD_SHIFT) != 0;
+    in->ctrl = (mod & KMOD_CTRL) != 0;
     return alive;
 }
 
