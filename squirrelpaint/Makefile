@@ -17,9 +17,9 @@ GUI_RUN = $(BUILD)/paint_nosdl.o
 endif
 
 # The core: no allocation, no stdio (it goes to Squirrel OS/2 as it is)
-CORE = $(BUILD)/paint.o $(BUILD)/paintio.o
+CORE = $(BUILD)/paint.o $(BUILD)/paintsel.o $(BUILD)/paintio.o
 OBJ = $(CORE) $(BUILD)/paintgui.o
-HDR = $(wildcard include/*.h) $(SQGUI)/include/sqgui.h
+HDR = $(wildcard include/*.h) src/paint_int.h $(SQGUI)/include/sqgui.h
 SQGUI_LIB = $(SQGUI)/build/libsqgui.a
 LIBS = $(SQGUI_SDL) $(SQGUI_LIB)
 
@@ -51,7 +51,9 @@ $(BUILD)/test_paint: tests/test_paint.c $(OBJ) $(SQGUI_LIB) | $(BUILD)
 freestanding: | $(BUILD)
 	$(CC) -std=c11 -Wall -Wextra -Werror -O2 -ffreestanding -Iinclude -c src/paint.c -o $(BUILD)/fs_paint.o
 	$(CC) -std=c11 -Wall -Wextra -Werror -O2 -ffreestanding -Iinclude -c src/paintio.c -o $(BUILD)/fs_paintio.o
-	@bad=$$(nm -u $(BUILD)/fs_paint.o $(BUILD)/fs_paintio.o | awk '$$1=="U"{print $$2}' | grep -v -x -E 'memcpy|memmove|memset|strlen' | sort -u); \
+	$(CC) -std=c11 -Wall -Wextra -Werror -O2 -ffreestanding -Iinclude -c src/paintsel.c -o $(BUILD)/fs_paintsel.o
+	$(LD) -r $(BUILD)/fs_paint.o $(BUILD)/fs_paintsel.o $(BUILD)/fs_paintio.o -o $(BUILD)/fs_core.o
+	@bad=$$(nm -u $(BUILD)/fs_core.o | awk '$$1=="U"{print $$2}' | grep -v -x -E 'memcpy|memmove|memset|strlen' | sort -u); \
 	if [ -n "$$bad" ]; then echo "the core uses: $$bad"; exit 1; fi; echo "squirrelpaint core freestanding ok"
 
 test: $(BUILD)/test_paint $(BUILD)/squirrelpaint freestanding

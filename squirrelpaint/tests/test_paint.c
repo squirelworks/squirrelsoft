@@ -363,6 +363,229 @@ static void test_commands(void) {
     CHECK(paint_parse_color("ggffff", 6, &c) == -1 && paint_parse_color("#fff", 4, &c) == -1);
 }
 
+
+/* a picture whose every pixel says where it is */
+static void numbered(int w, int h) {
+    paint_new(&d, w, h);
+    for (int y = 0; y < h; y++)
+        for (int x = 0; x < w; x++) d.px[y * w + x] = 0xFF000000u | (uint32_t)(y << 8 | x);
+}
+static uint32_t at_xy(int x, int y) { return 0xFF000000u | (uint32_t)(y << 8 | x); }
+
+static void test_selection(void) {
+    paint_new(&d, 20, 10);
+    paint_rect(&d, 2, 2, 3, 3, 1, 1, RED);
+    CHECK(paint_select(&d, 3, 3, 2, 2) == 0 && d.sel.x == 2 && d.sel.w == 2 && !d.floating);
+    CHECK(paint_move_selection(&d, 5, 0) == 0 && d.floating);
+    CHECK(paint_get(&d, 2, 2) == WHITE && paint_get(&d, 7, 2) == WHITE && paint_shown(&d, 7, 2) == RED);
+    CHECK(paint_shown(&d, 2, 2) == WHITE && paint_shown(&d, 0, 0) == WHITE);
+    paint_move_selection(&d, 1, 1); /* still one step */
+    paint_drop(&d);
+    CHECK(!d.floating && paint_get(&d, 8, 3) == RED && count(RED) == 4 && d.sel.x == 8 && d.sel.w == 2);
+    CHECK(paint_undo(&d) == 0 && paint_get(&d, 2, 2) == RED && count(RED) == 4 && paint_get(&d, 8, 3) == WHITE);
+    CHECK(!d.sel.w && paint_redo(&d) == 0 && paint_get(&d, 8, 3) == RED && paint_get(&d, 2, 2) == WHITE);
+    /* moved partly off the picture: the part on it stays */
+    paint_select(&d, 8, 3, 9, 4);
+    paint_move_selection(&d, 11, 0);
+    paint_drop(&d);
+    CHECK(count(RED) == 2 && paint_get(&d, 19, 3) == RED && d.sel.x == 19 && d.sel.w == 1);
+    paint_undo(&d);
+    CHECK(count(RED) == 4 && paint_get(&d, 9, 4) == RED);
+    /* drawing puts down what floats first */
+    paint_select(&d, 8, 3, 9, 4);
+    paint_move_selection(&d, 0, 4);
+    d.tool = PAINT_PENCIL;
+    paint_press(&d, 0, 0, 1, 0);
+    paint_release(&d, 0, 0, 0);
+    CHECK(!d.floating && paint_get(&d, 8, 7) == RED && paint_get(&d, 0, 0) == BLACK);
+    CHECK(paint_undo(&d) == 0 && paint_get(&d, 0, 0) == WHITE && paint_undo(&d) == 0 && paint_get(&d, 8, 3) == RED);
+
+    /* the clipboard */
+    d.clip_w = d.clip_h = 0;
+    paint_select_none(&d);
+    CHECK(paint_copy(&d) == -1 && paint_cut(&d) == -1 && paint_delete(&d) == -1 && paint_paste(&d, 0, 0) == -1);
+    CHECK(paint_move_selection(&d, 1, 1) == -1 && paint_lift(&d) == -1);
+    paint_select(&d, 8, 3, 9, 4);
+    CHECK(paint_copy(&d) == 0 && d.clip_w == 2 && d.clip_h == 2 && count(RED) == 4);
+    CHECK(paint_paste(&d, 15, 6) == 0 && d.floating && d.sel.x == 15 && count(RED) == 4);
+    paint_drop(&d);
+    CHECK(count(RED) == 8 && paint_get(&d, 16, 7) == RED);
+    CHECK(paint_undo(&d) == 0 && count(RED) == 4); /* the paste alone */
+    CHECK(paint_paste(&d, -5, 99) == 0 && d.sel.x == 0 && d.sel.y == 9); /* kept on the picture */
+    paint_drop(&d);
+    CHECK(count(RED) == 6); /* the one row of it on the picture */
+    paint_undo(&d);
+    paint_select(&d, 8, 3, 9, 4);
+    CHECK(paint_cut(&d) == 0 && count(RED) == 0 && !d.sel.w && d.clip_w == 2);
+    CHECK(paint_paste(&d, 0, 0) == 0);
+    paint_drop(&d);
+    CHECK(count(RED) == 4 && paint_get(&d, 1, 1) == RED);
+    paint_undo(&d);
+    paint_undo(&d);
+    CHECK(count(RED) == 4 && paint_get(&d, 8, 3) == RED);
+    /* delete: in place, or what floats (its hole stays) */
+    paint_select(&d, 8, 3, 8, 3);
+    CHECK(paint_delete(&d) == 0 && count(RED) == 3);
+    paint_undo(&d);
+    paint_select(&d, 8, 3, 9, 4);
+    paint_move_selection(&d, 2, 0);
+    CHECK(paint_delete(&d) == 0 && !d.floating && count(RED) == 0);
+    CHECK(paint_undo(&d) == 0 && count(RED) == 4 && paint_get(&d, 8, 3) == RED);
+    /* copy from what floats */
+    paint_select(&d, 8, 3, 9, 4);
+    paint_move_selection(&d, 0, 1);
+    CHECK(paint_copy(&d) == 0 && d.clip[0] == RED && d.clip[3] == RED);
+    paint_select_none(&d);
+    CHECK(!d.floating && !d.sel.w && paint_get(&d, 8, 5) == RED);
+    CHECK(paint_select(&d, 30, 30, 40, 40) == -1 && !d.sel.w);
+
+    /* the select tool: a rectangle by dragging; dragged inside, it moves; a click clears it */
+    paint_new(&d, 20, 10);
+    paint_dab(&d, 5, 5, 1, RED);
+    d.tool = PAINT_SELECT;
+    paint_press(&d, 7, 7, 1, 0);
+    paint_drag(&d, 3, 3, 0);
+    paint_release(&d, 4, 4, 0);
+    CHECK(d.sel.x == 4 && d.sel.y == 4 && d.sel.w == 4 && d.sel.h == 4 && !d.sel_mode && !d.floating);
+    paint_press(&d, 5, 5, 1, 0);
+    paint_drag(&d, 10, 6, 0);
+    CHECK(d.floating && paint_shown(&d, 10, 6) == RED && paint_get(&d, 5, 5) == WHITE);
+    paint_release(&d, 12, 5, 0);
+    CHECK(d.floating && paint_shown(&d, 12, 5) == RED && d.sel.x == 11);
+    paint_press(&d, 0, 0, 1, 0);
+    paint_release(&d, 0, 0, 0);
+    CHECK(!d.floating && !d.sel.w && paint_get(&d, 12, 5) == RED);
+    CHECK(paint_undo(&d) == 0 && paint_get(&d, 5, 5) == RED && count(RED) == 1);
+    paint_press(&d, 2, 2, 1, 0);
+    paint_drag(&d, 9, 8, 0);
+    paint_cancel(&d); /* Escape while drawing it */
+    CHECK(!d.sel.w && !d.sel_mode);
+}
+
+static void test_transforms(void) {
+    numbered(3, 2);
+    CHECK(paint_flip(&d, 0) == 0 && paint_get(&d, 0, 0) == at_xy(2, 0) && paint_get(&d, 2, 1) == at_xy(0, 1));
+    CHECK(paint_flip(&d, 1) == 0 && paint_get(&d, 0, 0) == at_xy(2, 1));
+    paint_undo(&d);
+    paint_undo(&d);
+    CHECK(paint_get(&d, 0, 0) == at_xy(0, 0));
+    /* a quarter turn clockwise: 3 x 2 becomes 2 x 3, the left column on top */
+    CHECK(paint_rotate(&d, 1) == 0 && d.w == 2 && d.h == 3);
+    CHECK(paint_get(&d, 0, 0) == at_xy(0, 1) && paint_get(&d, 1, 0) == at_xy(0, 0) && paint_get(&d, 1, 2) == at_xy(2, 0));
+    CHECK(paint_rotate(&d, -1) == 0 && d.w == 3 && paint_get(&d, 2, 1) == at_xy(2, 1));
+    CHECK(paint_rotate(&d, 2) == 0 && paint_get(&d, 0, 0) == at_xy(2, 1));
+    CHECK(paint_rotate(&d, 4) == 0 && paint_rotate(&d, 2) == 0 && paint_get(&d, 0, 0) == at_xy(0, 0));
+    /* undo and redo over size changes */
+    CHECK(paint_undo(&d) == 0 && paint_undo(&d) == 0 && paint_undo(&d) == 0 && d.w == 2 && d.h == 3);
+    CHECK(paint_get(&d, 1, 0) == at_xy(0, 0));
+    CHECK(paint_undo(&d) == 0 && d.w == 3 && d.h == 2 && paint_get(&d, 2, 1) == at_xy(2, 1));
+    CHECK(paint_redo(&d) == 0 && d.w == 2 && paint_redo(&d) == 0 && d.w == 3 && paint_get(&d, 2, 1) == at_xy(2, 1));
+    /* resize: by the nearest pixel, or smooth */
+    numbered(2, 2);
+    CHECK(paint_resize(&d, 4, 6, 0) == 0 && d.w == 4 && d.h == 6);
+    CHECK(paint_get(&d, 1, 2) == at_xy(0, 0) && paint_get(&d, 2, 3) == at_xy(1, 1) && paint_get(&d, 3, 5) == at_xy(1, 1));
+    CHECK(paint_undo(&d) == 0 && d.w == 2 && d.h == 2);
+    CHECK(paint_resize(&d, 0, 5, 0) == -1 && paint_resize(&d, PAINT_MAX_W + 1, 5, 0) == -1 && d.w == 2);
+    paint_new(&d, 2, 1);
+    d.px[0] = BLACK;
+    d.px[1] = WHITE;
+    CHECK(paint_resize(&d, 4, 1, 1) == 0);
+    CHECK(d.px[0] == BLACK && d.px[3] == WHITE && (d.px[1] & 0xFF) > 0x30 && (d.px[1] & 0xFF) < 0x50 &&
+          (d.px[2] & 0xFF) > 0xB0 && (d.px[2] & 0xFF) < 0xD0); /* a quarter and three quarters */
+    paint_new(&d, 4, 4);
+    for (int i = 0; i < 16; i++) d.px[i] = (i / 4 + i % 4) % 2 ? WHITE : BLACK; /* a checkerboard */
+    CHECK(paint_resize(&d, 1, 1, 1) == 0 && (d.px[0] & 0xFF) > 0x60 && (d.px[0] & 0xFF) < 0xA0); /* grey */
+    /* crop to the selection; canvas grows with the background colour or cuts */
+    numbered(10, 8);
+    CHECK(paint_crop(&d) == -1);
+    paint_select(&d, 2, 3, 5, 4);
+    CHECK(paint_crop(&d) == 0 && d.w == 4 && d.h == 2 && paint_get(&d, 0, 0) == at_xy(2, 3) && !d.sel.w);
+    CHECK(paint_undo(&d) == 0 && d.w == 10 && d.h == 8 && paint_get(&d, 9, 7) == at_xy(9, 7));
+    d.bg = RED;
+    CHECK(paint_canvas(&d, 12, 5) == 0 && d.w == 12 && d.h == 5 && paint_get(&d, 11, 0) == RED && paint_get(&d, 9, 4) == at_xy(9, 4));
+    CHECK(paint_canvas(&d, 0, 5) == -1 && paint_canvas(&d, 12, 5) == 0 && d.done == 1); /* the same size: no step */
+    CHECK(paint_undo(&d) == 0 && d.w == 10 && d.h == 8);
+    CHECK(paint_invert(&d) == 0 && paint_get(&d, 0, 0) == WHITE && paint_get(&d, 1, 0) == 0xFFFFFFFEu);
+    paint_undo(&d);
+    /* on a selection: only it changes, lifted, and one step with its drop */
+    numbered(10, 8);
+    paint_select(&d, 0, 0, 2, 0);
+    CHECK(paint_flip(&d, 0) == 0 && d.floating && paint_shown(&d, 0, 0) == at_xy(2, 0));
+    CHECK(paint_rotate(&d, 1) == 0 && d.sel.w == 1 && d.sel.h == 3 && paint_shown(&d, 0, 2) == at_xy(0, 0));
+    CHECK(paint_resize(&d, 2, 6, 0) == 0 && d.sel.w == 2 && d.sel.h == 6 && d.w == 10);
+    CHECK(paint_invert(&d) == 0);
+    paint_drop(&d);
+    CHECK(paint_get(&d, 1, 5) == (at_xy(0, 0) ^ 0x00FFFFFFu) && paint_get(&d, 2, 0) == d.bg);
+    CHECK(paint_undo(&d) == 0 && paint_get(&d, 2, 0) == at_xy(2, 0) && paint_get(&d, 1, 5) == at_xy(1, 5));
+    /* big ones fit the undo store as whole steps */
+    CHECK(paint_new(&d, PAINT_MAX_W, PAINT_MAX_H / 2) == 0);
+    d.px[0] = RED;
+    CHECK(paint_rotate(&d, 1) == 0 && d.w == PAINT_MAX_H / 2 && paint_get(&d, PAINT_MAX_H / 2 - 1, 0) == RED);
+    CHECK(paint_undo(&d) == 0 && d.w == PAINT_MAX_W && paint_get(&d, 0, 0) == RED);
+}
+
+static void test_selection_commands(void) {
+    numbered(16, 12);
+    cmd("select 2 2 5 5");
+    CHECK(d.sel.w == 4);
+    cmd("copy");
+    cmd("move 4 0");
+    cmd("drop");
+    CHECK(paint_get(&d, 6, 2) == at_xy(2, 2) && !d.floating);
+    cmd("paste 10 8");
+    cmd("flip h");
+    cmd("flip v");
+    cmd("drop");
+    CHECK(paint_get(&d, 13, 11) == at_xy(2, 2));
+    cmd("select all");
+    CHECK(d.sel.w == 16 && d.sel.h == 12);
+    cmd("select none");
+    cmd("rotate 270");
+    CHECK(d.w == 12 && d.h == 16);
+    cmd("rotate 90");
+    cmd("resize 32 24");
+    CHECK(d.w == 32 && d.h == 24);
+    cmd("resize 16 12 smooth");
+    cmd("select 0 0 3 3");
+    cmd("crop");
+    CHECK(d.w == 4 && d.h == 4);
+    cmd("canvas 6 6");
+    cmd("invert");
+    cmd("select 0 0 1 1");
+    cmd("cut");
+    cmd("select 2 2 3 3");
+    cmd("delete");
+    cmd("paste");
+    CHECK(d.floating && d.sel.x == 0);
+    struct {
+        const char *line, *why;
+    } bad[] = {
+        {"select 1 2 3", "select X0 Y0 X1 Y1"},
+        {"select everything", "select X0 Y0 X1 Y1"},
+        {"select 100 100 200 200", "off the picture"},
+        {"copy 1", "copy takes nothing"},
+        {"crop now", "crop takes nothing"},
+        {"paste 1", "paste, or paste X Y"},
+        {"move 1", "move DX DY"},
+        {"flip", "flip h or flip v"},
+        {"flip h v", "flip h or flip v"},
+        {"rotate 45", "rotate 90, 180, 270"},
+        {"rotate", "rotate 90, 180, 270"},
+        {"resize 10", "resize W H"},
+        {"resize 10 10 sharp", "resize W H"},
+        {"resize 0 10", "out of range"},
+        {"canvas 10 10 smooth", "canvas W H"},
+        {"canvas 2000 10", "out of range"},
+        {"invert all", "invert takes nothing"},
+    };
+    for (size_t i = 0; i < sizeof bad / sizeof bad[0]; i++) check(cmd_fails(bad[i].line, bad[i].why), bad[i].line, __LINE__);
+    cmd("select none");
+    CHECK(cmd_fails("copy", "nothing is selected") && cmd_fails("move 1 1", "nothing is selected") &&
+          cmd_fails("crop", "nothing is selected"));
+    d.clip_w = 0;
+    CHECK(cmd_fails("paste", "nothing to paste"));
+}
+
 /* ---- files ---- */
 
 static uint8_t buf[1 << 22];
@@ -613,7 +836,7 @@ static int fake_save(PaintGui *pg, const char *path, char *msg, size_t cap) {
 
 /* where the top bar's buttons are: the layout in paintgui.c */
 static int top_x(const char *label) {
-    static const char *const order[] = {"Open", "Save", "#w", "x", "#h", "New", "Undo", "Redo", "-", "+", "1:1", "Fit"};
+    static const char *const order[] = {"Open", "Save", "#w", "x", "#h", "Resize", "New", "Undo", "Redo", "-", "+", "1:1", "Fit"};
     int x = 6 + 180 + 4;
     for (size_t i = 0; i < sizeof order / sizeof order[0]; i++) {
         if (!strcmp(order[i], label)) return x + 4;
@@ -696,7 +919,7 @@ static void test_window(const char *dir) {
     frame();
     CHECK(paint_get(&d, 99, 59) == WHITE);
     /* the palette: left for the first colour, right for the second */
-    int pal_y = 6 + lh + 6 + 4 * (lh + 2) + 6 + lh + (lh + 4) + lh + (lh + 4) + (lh + 8) + 50 + (lh + 2) + 4;
+    int pal_y = 6 + lh + 6 + 5 * (lh + 2) + 4 + 4 * (lh + 2) + 6 + lh + (lh + 4) + lh + (lh + 4) + (lh + 8) + 50 + (lh + 2) + 4;
     CHECK(screen[pal_y * W + 6 + 10] == BLACK);
     int cw = (132 - 3 * 2) / 4;
     click(6 + (cw + 2) * 1 + cw / 2, pal_y + (cw / 2 + 6) * 1); /* the second row, second: red */
@@ -780,14 +1003,106 @@ static void test_window(const char *dir) {
     CHECK(sqg_write_ppm(&cv, path) == 0);
 }
 
+
+static void test_window_selection(void) {
+    int lh = sqg_line_h(&ui), ops_y = 6 + lh + 6 + 5 * (lh + 2) + 4;
+    paint_new(&d, 120, 80);
+    g.view_ready = 0;
+    frame();
+    paint_rect(&d, 10, 10, 29, 19, 1, 1, RED);
+    snprintf(in.text, sizeof in.text, "s");
+    frame();
+    CHECK(d.tool == PAINT_SELECT);
+    drag(10, 10, 29, 19, 0);
+    CHECK(d.sel.x == 10 && d.sel.y == 10 && d.sel.w == 20 && d.sel.h == 10);
+    frame();
+    CHECK(g.painting == 0 && !d.sel_mode);
+    /* the edge is drawn dashed around it */
+    int sx, sy;
+    paint_gui_to_screen(&g, 10, 10, &sx, &sy);
+    CHECK(screen[(sy - 1) * W + sx - 1] == BLACK || screen[(sy - 1) * W + sx - 1] == WHITE);
+    in.ctrl_key = 'c';
+    frame();
+    CHECK(d.clip_w == 20 && strstr(g.status, "Copied"));
+    /* drag it by its inside: it moves, floating, shown where it is */
+    drag(15, 15, 55, 45, 0);
+    CHECK(d.floating && d.sel.x == 50 && d.sel.y == 40 && paint_get(&d, 12, 12) == WHITE);
+    paint_gui_to_screen(&g, 52, 42, &sx, &sy);
+    CHECK(screen[(sy + 1) * W + sx + 1] == RED);
+    /* arrows nudge it */
+    in.key = SQG_KEY_RIGHT;
+    frame();
+    in.key = SQG_KEY_DOWN;
+    frame();
+    CHECK(d.sel.x == 51 && d.sel.y == 41);
+    /* Escape puts it down and clears the selection; Ctrl+Z takes the whole move back */
+    in.key = SQG_KEY_ESCAPE;
+    frame();
+    CHECK(!d.floating && !d.sel.w && paint_get(&d, 51, 41) == RED);
+    in.ctrl_key = 'z';
+    frame();
+    CHECK(paint_get(&d, 10, 10) == RED && paint_get(&d, 51, 41) == WHITE);
+    /* paste comes in at the top-left of the view, ready to drag */
+    d.tool = PAINT_BRUSH;
+    in.ctrl_key = 'v';
+    frame();
+    CHECK(d.floating && d.tool == PAINT_SELECT && d.sel.x == 0 && d.sel.y == 0 && strstr(g.status, "Pasted"));
+    /* Delete takes what floats away */
+    in.key = SQG_KEY_DELETE;
+    frame();
+    CHECK(!d.floating && !d.sel.w && paint_get(&d, 0, 0) == WHITE && count(RED) == 200);
+    /* Ctrl+A, then Cut from the panel */
+    in.ctrl_key = 'a';
+    frame();
+    CHECK(d.sel.w == 120 && d.sel.h == 80);
+    click(6 + 5, ops_y + lh / 2); /* Cut */
+    CHECK(count(RED) == 0 && d.clip_w == 120 && strstr(g.status, "Cut"));
+    click(6 + 5, ops_y + lh / 2);
+    CHECK(strstr(g.status, "Select something first") != NULL);
+    int third = (132 - 8) / 3;
+    click(6 + 2 * (third + 4) + 5, ops_y + lh / 2); /* Paste */
+    CHECK(d.floating && d.sel.w == 120);
+    paint_select_none(&d);
+    CHECK(count(RED) == 200);
+    /* Rot R on the whole picture: a new shape, fitted again */
+    int half = (132 - 4) / 2;
+    click(6 + half + 4 + 5, ops_y + 3 * (lh + 2) + lh / 2);
+    CHECK(d.w == 80 && d.h == 120 && paint_get(&d, 79 - 10, 10) == RED);
+    frame();
+    CHECK(g.view_ready);
+    click(6 + half + 4 + 5, ops_y + 2 * (lh + 2) + lh / 2); /* Flip V */
+    CHECK(paint_get(&d, 69, 109) == RED);
+    click(6 + third + 4 + 5, ops_y + (lh + 2) + lh / 2); /* Crop, with nothing selected */
+    CHECK(strstr(g.status, "Select what to keep first") && d.w == 80);
+    paint_select(&d, 60, 100, 79, 119);
+    click(6 + third + 4 + 5, ops_y + (lh + 2) + lh / 2);
+    CHECK(d.w == 20 && d.h == 20 && !d.sel.w);
+    /* Resize from the size fields */
+    snprintf(g.new_w, sizeof g.new_w, "40");
+    snprintf(g.new_h, sizeof g.new_h, "30");
+    click(top_x("Resize"), 6 + lh / 2);
+    CHECK(d.w == 40 && d.h == 30 && strstr(g.status, "The picture is now 40 x 30"));
+    snprintf(g.new_w, sizeof g.new_w, "0");
+    click(top_x("Resize"), 6 + lh / 2);
+    CHECK(d.w == 40 && strstr(g.status, "Resize: a size"));
+    /* the status tells the selection */
+    paint_select(&d, 1, 2, 4, 6);
+    frame();
+    CHECK(d.sel.w == 4);
+}
+
 int main(int argc, char **argv) {
     const char *dir = argc > 1 ? argv[1] : ".";
     test_shapes();
     test_tools();
     test_undo();
     test_commands();
+    test_selection();
+    test_transforms();
+    test_selection_commands();
     test_files();
     test_window(dir);
+    test_window_selection();
     printf("test_paint: %d checks, %d failed\n", checks, failures);
     return failures != 0;
 }
