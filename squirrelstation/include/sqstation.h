@@ -141,6 +141,9 @@ int sqs_in_cell(const SqsDesign *d, int id); /* 1 when the element is a cell mem
 int sqs_place_cell(SqsDesign *d, int level_id, const char *name, SqsPoint at, double scale, double rot_deg);
 const SqsCell *sqs_find_cell(const SqsDesign *d, const char *name);
 const SqsElement *sqs_find(const SqsDesign *d, int id);
+/* Remove an element (and its place in any cell definition): 0, or -1 when
+ * there is none. Elements after it move down one; ids stay. */
+int sqs_delete(SqsDesign *d, int id);
 /* attach a design file as a reference; its index, or -1 when full */
 int sqs_attach(SqsDesign *d, const char *path, SqsPoint offset, double scale);
 
@@ -161,6 +164,9 @@ int sqs_solid_mesh(const SqsElement *e, SqsPoint *pts, int cap, int *npts, uint8
  * reference index (-1 for this design). */
 typedef void (*SqsVisit)(const SqsElement *e, const SqsLevel *lv, int ref, void *ctx);
 void sqs_visit(const SqsDesign *d, const SqsDesign *const *refs, int nrefs, SqsVisit fn, void *ctx);
+/* the same walk for one element of this design (a placed cell expanded);
+ * nothing for an element that is hidden, frozen or a cell member */
+void sqs_visit_element(const SqsDesign *d, int id, SqsVisit fn, void *ctx);
 
 /* ---- snaps ---- */
 SqsSnapResult sqs_accu_snap(const SqsDesign *d, SqsPoint cursor, double tol);

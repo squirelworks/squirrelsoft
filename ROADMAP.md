@@ -138,7 +138,7 @@ These milestones predate the suite roadmap and remain open. Formats stay owned b
 - [x] Levels (on/off, frozen), cells (nested placements with scale and rotation), reference attachments (moved and scaled)
 - [x] Accu-style snaps (endpoint, midpoint, centre, intersection, keypoint, nearest; through cells and references) and keyed input (`xy=`, `dl=`, `di=`)
 - [x] `.sqdgn` text interchange (v2, reads v1) + `.sqdgnb` binary sketch, both bounds-checked; DXF export of every element kind
-- [ ] Desktop window on sqgui (views, AccuDraw compass, element selection)
+- [x] Desktop window on sqgui (`squirrelstation gui`): Top/Front/Right/Iso views with zoom and pan, Line and Circle by mouse or keyin, AccuSnap, the AccuDraw compass (indexing, Ortho lock, `dl=`/`di=` from the last point), element selection with measures, undo, save
 - [x] DXF import of polylines as one element, BLOCKS as cells, INSERT as placements, polyface and 3DFACE as meshes; export writes cells as BLOCKS
 
 ### SquirrelCAD
@@ -146,7 +146,7 @@ These milestones predate the suite roadmap and remain open. Formats stay owned b
 - [x] Model space / paper space sketch: PLOT to an SVG sheet with scale and title block
 - [x] `.sqdwg` interchange (text with spaces, damaged-file checks, unique ids)
 - [x] DXF-like export of *our* entities (layer colours, BLOCKS, INSERT; not Autodesk DXF fidelity claims)
-- [ ] Desktop window on sqgui (draw with the mouse, snaps, zoom/pan)
+- [x] Desktop window on sqgui (`squirrelcad gui`): lines, circles and polylines with the mouse, end/mid/centre and grid snaps, ortho, zoom about the pointer, pan, select and erase, the command line in the window
 - [x] DXF import of BLOCKS/INSERT (nested), R12 POLYLINE, MTEXT, 3DFACE/SOLID outlines
 
 ### SquirrelGNSS
