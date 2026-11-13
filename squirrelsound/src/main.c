@@ -28,6 +28,7 @@ static void usage(void) {
     puts("                     [--view spectrum|octave|third|scope] [--cal dB] [--record out.wav]");
     puts("                     [--gui-snapshot out.ppm [--width W] [--height H] [--frames N]]");
     puts("                     [--frames N] [--max-hold] [--direction waterfall|fountain]");
+    puts("                     [--multires [2-4]]  finer bass, faster treble (x in the window)");
     puts("  squirrelsound devices            list capture devices (mic inputs, monitor sources)");
     puts("  squirrelsound help");
     puts("");
@@ -47,6 +48,17 @@ static const char *get_opt(int argc, char **argv, const char *key, const char *d
 static int has_flag(int argc, char **argv, const char *key) {
     for (int i = 0; i < argc; i++)
         if (strcmp(argv[i], key) == 0) return 1;
+    return 0;
+}
+
+/* --multires alone is 3 levels; --multires N takes N (2 to 4); absent is 0 */
+static int multires_opt(int argc, char **argv) {
+    for (int i = 0; i < argc; i++)
+        if (strcmp(argv[i], "--multires") == 0) {
+            if (i + 1 < argc && argv[i + 1][0] >= '0' && argv[i + 1][0] <= '9' && !argv[i + 1][1])
+                return argv[i + 1][0] - '0';
+            return 3;
+        }
     return 0;
 }
 
@@ -299,6 +311,7 @@ int main(int argc, char **argv) {
         ecfg.window = sqdsp_window_parse(get_opt(argc, argv, "--window", "hann"));
         ecfg.sample_rate = live_audio_sample_rate(audio);
         ecfg.max_hold = has_flag(argc, argv, "--max-hold");
+        ecfg.multires = multires_opt(argc, argv);
         ecfg.db_min = LIVE_DB_DEFAULT_MIN;
         ecfg.db_max = LIVE_DB_DEFAULT_MAX;
         /* Default = human hearing (phone-friendly top); Full Nyquist via UI key 5. */

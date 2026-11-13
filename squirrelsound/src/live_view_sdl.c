@@ -51,7 +51,7 @@ int live_view_sdl_run(LiveAudio *audio, LiveEngine *engine, const LiveViewOption
     printf("  q/Esc quit | space pause | m max-hold | r reset hold | p peak labels\n");
     printf("  [/] zoom | arrows pan | wheel zoom | v next view | R record | -/= calibration\n");
     printf("  1 Human 20-16k | 2 Music 20-4k | 3 Bass 20-250 | 4 Speech | 5 Full\n");
-    printf("  8/9/0 scroll Slow/Normal/Fast | w waterfall/fountain\n");
+    printf("  8/9/0 scroll Slow/Normal/Fast | w waterfall/fountain | x multi-resolution\n");
     printf("  direction=%s  source=%s  fft=%zu  fs=%.0f  cal=%+.1f dB\n",
            live_direction_name(o->direction), source, nfft, engine->cfg.sample_rate,
            engine->cfg.cal_db);
@@ -125,6 +125,7 @@ int live_view_sdl_run(LiveAudio *audio, LiveEngine *engine, const LiveViewOption
         if (live_record_stop(&rec, audio) == 0) printf("recorded %.2f s to %s\n", secs, path);
     }
     live_audio_stop(audio);
+    live_gui_free(&g);
     free(buf);
     sqg_window_close(win);
     return 0;

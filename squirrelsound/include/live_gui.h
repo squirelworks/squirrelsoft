@@ -10,6 +10,8 @@
 #include "live_engine.h"
 #include "sqgui.h"
 
+#include <stdint.h>
+
 enum { LIVE_RANGE_HUMAN, LIVE_RANGE_MUSIC, LIVE_RANGE_BASS, LIVE_RANGE_SPEECH, LIVE_RANGE_FULL,
        LIVE_RANGE_COUNT };
 enum { LIVE_SPEED_SLOW, LIVE_SPEED_NORMAL, LIVE_SPEED_FAST };
@@ -35,10 +37,27 @@ typedef struct {
     double band_hold[LIVE_GUI_MAX_BANDS]; /* max hold of the band bars */
     int band_n, band_frac;
     sqg_rect spectrum, waterfall; /* where the plots went in the last frame */
+    /* LOFARgram colours, cached per engine row so a frame colours only the
+     * rows that arrived since the last one (live_gui_free releases them) */
+    struct {
+        uint32_t *px;   /* rows * w, in the engine's ring order */
+        int *bin;       /* column -> bin */
+        size_t cap_px;
+        int cap_bin, w;
+        size_t rows, bins, b0, b1;
+        const float *src;
+        float dmin, span;
+        unsigned long frames;
+        int valid;
+        long recoloured; /* rows coloured in the last frame (for the tests) */
+    } wf;
 } LiveGui;
 
 void live_gui_init(LiveGui *g, LiveEngine *e, LiveDirection dir, const char *source);
 LiveDirection live_gui_direction(const LiveGui *g);
+void live_gui_free(LiveGui *g);
+/* Switch the multi-resolution spectrum on (3 levels) or off */
+void live_gui_set_multires(LiveGui *g, LiveEngine *e, int on);
 
 /* Frames to wait between waterfall pushes: slow 4, normal 2, fast 1 */
 int live_gui_scroll_skip(const LiveGui *g);
@@ -54,7 +73,7 @@ void live_gui_set_cal(LiveGui *g, LiveEngine *e, double db);
 /* Keyboard shortcuts, as on the earlier SDL view: space pause, m max
  * hold, r reset hold, 1-5 range presets, 8/9/0 slow/normal/fast, w
  * waterfall/fountain, [ and ] zoom; and v next view, p peak labels,
- * R record, - and = (or +) calibration -1/+1 dB. key is the ASCII
+ * R record, x multi-resolution, - and = (or +) calibration -1/+1 dB. key is the ASCII
  * character or one of SQG_KEY_LEFT / SQG_KEY_RIGHT (pan). Returns 1 if
  * q or Esc. */
 int live_gui_key(LiveGui *g, LiveEngine *e, int ascii, int sqg_key);

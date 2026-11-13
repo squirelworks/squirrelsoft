@@ -61,6 +61,7 @@ for this machine and drives each native entry point from a JVM
 ./build/squirrelsound live --source mic --view third    # start on the 1/3-octave bars
 ./build/squirrelsound live --source mic --record take.wav   # record from the start (16-bit mono WAV)
 ./build/squirrelsound live --source mic --cal 4.5       # calibration offset for this run, in dB
+./build/squirrelsound live --source mic --multires      # multi-resolution spectrum (3 levels; --multires 2..4)
 ```
 
 `--source loopback` listens to the computer's own output through the
@@ -74,7 +75,7 @@ view: a toolbar with Start/Stop, Hold, Reset and Fountain, then the range
 presets (Human, Music, Bass, Speech, Full) and the scroll speed (Slow,
 Normal, Fast); the spectrum fills the top half and the LOFARgram the bottom
 half. The mouse wheel over either plot zooms around the pointer, and the
-keys from the earlier window still work (space, m, r, 1-5, 8/9/0, w, [ ],
+keys from the earlier window still work (space, m, r, 1-5, 8/9/0, w, x, [ ],
 arrows, q/Esc).
 
 The top half can show four views (the segments in the toolbar, or `v`):
@@ -85,6 +86,13 @@ The top half can show four views (the segments in the toolbar, or `v`):
   shared `libs/sqdsp` core, corrected for the window's noise bandwidth so a
   tone reads its own level. With Hold on, each bar keeps a hold tick.
 - **Scope**: the last frame's samples, started on a rising zero crossing.
+
+**MR** (or `x`) switches the spectrum to multi-resolution: the bass from
+the whole frame and the treble from its newest quarter and sixteenth, so a
+bass line keeps its fine resolution while a hi-hat shows up without being
+smeared over the frame. Tones read the same level either way (see
+`docs/numerics.md`). The LOFARgram colours only the rows that arrived
+since the last frame and copies the rest, so a large window stays cheap.
 
 **Rec** (or `R`) records what the source delivers, every sample once, to
 `squirrelsound-YYYYMMDD-HHMMSS.wav` in the current directory (or the

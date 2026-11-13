@@ -499,3 +499,104 @@ void sqdsp_band_levels_db(const double *mag_db, const double *freq, size_t nbins
         out_db[j] = db < floor_db ? floor_db : db;
     }
 }
+
+/* ---- multi-resolution spectrum ---- */
+
+int sqdsp_multires_plan(SqdspMultires *p, size_t n, double fs, int levels, double q) {
+    if (!p || !sqdsp_is_pow2(n) || n < 64 || !(fs > 0) || levels < 1 || !(q > 0)) return 0;
+    if (levels > SQDSP_MR_MAX_LEVELS) levels = SQDSP_MR_MAX_LEVELS;
+    memset(p, 0, sizeof *p);
+    p->n = n;
+    p->fs = fs;
+    int k = 0;
+    for (; k < levels; k++) {
+        size_t m = n >> (2 * k);
+        if (m < 64) break;
+        p->size[k] = m;
+        /* the shorter level's bins are fs / m wide: fine enough from q of them */
+        p->cross_hz[k] = k ? q * fs / (double)m : 0.0;
+    }
+    p->levels = k;
+    /* a crossover past Nyquist means that level never shows */
+    while (p->levels > 1 && p->cross_hz[p->levels - 1] / sqrt(2.0) >= fs / 2) p->levels--;
+    return p->levels;
+}
+
+/* dB of level spectrum lev (m points, as power) at frequency f, the power
+ * linear between bins: so a band's power sum on the fine grid is the
+ * level's own sum times the bins per level bin */
+static double level_at(const double *lev, size_t m, double fs, double f) {
+    double b = f * (double)m / fs;
+    size_t nb = m / 2 + 1;
+    double p;
+    if (b <= 0) p = lev[0];
+    else if (b >= (double)(nb - 1)) p = lev[nb - 1];
+    else {
+        size_t i = (size_t)b;
+        double t = b - (double)i;
+        p = lev[i] * (1 - t) + lev[i + 1] * t;
+    }
+    return 10.0 * log10(p + 1e-40);
+}
+
+size_t sqdsp_multires_db(const SqdspMultires *p, const double *x, SqdspWindow win, double *db_out,
+                         double *work) {
+    if (!p || p->levels < 1 || !x || !db_out || !work) return 0;
+    size_t n = p->n, nb = n / 2 + 1;
+    double *frame = work, *w = work + n, *mag = work + 2 * n;
+    for (int k = p->levels - 1; k >= 0; k--) {
+        /* coarsest first: it fills the whole grid, then each finer level
+         * takes the band below the crossover with the level before it */
+        size_t m = p->size[k], mb = m / 2 + 1;
+        sqdsp_window(w, m, win, 8.6);
+        double sum = 0;
+        for (size_t i = 0; i < m; i++) {
+            frame[i] = x[n - m + i] * w[i];
+            sum += w[i];
+        }
+        if (sum <= 0) sum = (double)m;
+        sqdsp_magnitude_spectrum(frame, m, mag, w); /* w is free again: scratch */
+        for (size_t i = 0; i < mb; i++) {
+            double scale = (i == 0 || i == m / 2) ? 1.0 / sum : 2.0 / sum;
+            double a = mag[i] * scale;
+            mag[i] = a * a;
+        }
+        if (k == p->levels - 1) {
+            /* the coarsest: everywhere to begin with */
+            for (size_t j = 0; j < nb; j++) db_out[j] = level_at(mag, m, p->fs, p->fs * (double)j / (double)n);
+            continue;
+        }
+        /* this level is finer than everything so far: it owns the band below
+         * the next level's crossover, fading out over the octave around it */
+        double c = p->cross_hz[k + 1], lo = c / sqrt(2.0), hi = c * sqrt(2.0);
+        for (size_t j = 0; j < nb; j++) {
+            double f = p->fs * (double)j / (double)n;
+            if (f >= hi) break;
+            double v = level_at(mag, m, p->fs, f);
+            if (f <= lo) db_out[j] = v;
+            else {
+                /* blend the power, so band sums stay true (sqdsp_multires_spread) */
+                double t = log(f / lo) / log(hi / lo); /* 0 at lo, 1 at hi */
+                db_out[j] = 10.0 * log10(pow(10.0, v / 10.0) * (1 - t) + pow(10.0, db_out[j] / 10.0) * t + 1e-40);
+            }
+        }
+    }
+    return nb;
+}
+
+double sqdsp_multires_spread(const SqdspMultires *p, double hz) {
+    if (!p || p->levels < 1 || !p->size[0]) return 0;
+    /* the same walk as sqdsp_multires_db, coarsest first */
+    double s = (double)p->n / (double)p->size[p->levels - 1];
+    for (int k = p->levels - 2; k >= 0; k--) {
+        double c = p->cross_hz[k + 1], lo = c / sqrt(2.0), hi = c * sqrt(2.0);
+        if (hz >= hi) break;
+        double v = (double)p->n / (double)p->size[k];
+        if (hz <= lo) s = v;
+        else {
+            double t = log(hz / lo) / log(hi / lo);
+            s = v * (1 - t) + s * t;
+        }
+    }
+    return s;
+}
