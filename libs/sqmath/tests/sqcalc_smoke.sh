@@ -44,6 +44,10 @@ expect "$(printf 'x = 2\nx = 3')" --solve-for x "x^2 + 6 = 5x"
 expect "x = -b/a" --solve-for x "a x + b = 0"
 expect "no real solution" --solve-for x "x^2 = -1"
 expect "every x" --solve-for x "2x = x + x"
+expect "x*(x - 1)*(x + 1)" --factor x "x^3 - x"
+expect "1/(2*(x - 1)) - 1/(2*(x + 1))" --apart x "1/(x^2 - 1)"
+expect "e^x*(x - 1)" --antideriv x "x e^x"
+expect "x/(2*x^2 + 2) + atan(x)/2" --antideriv x "1/(x^2 + 1)^2"
 expect undefined "sqrt(-1)"
 expect undefined "1/0"
 status 0 --help
@@ -60,6 +64,9 @@ status 1 --solve-for x "x^3 = 2"
 status 1 --solve-for x "x = 1 = 2"
 status 1 --expand "(2x+1)^64"
 status 2 --expand
+status 1 --antideriv x "e^(x^2)"
+status 1 --factor x "x + y"
+status 2 --factor x
 status 2 --solve-for x
 "$C" "2 * (3" 2>&1 | grep -q '^        \^$' || { echo "FAIL: caret under the error"; fail=1; }
 "$C" --solve x 2 3 "x^2 - 2" 2>&1 | grep -q 'no sign change' || { echo "FAIL: no-root message"; fail=1; }

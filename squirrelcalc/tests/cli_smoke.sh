@@ -20,6 +20,10 @@ out=$($C --line "solve x^2 - x = 1" --line "expand (x+1)^3" --snapshot "$B/snap5
 echo "$out" | grep -q "x = (1 + sqrt(5))/2" || fail "solve line: $out"
 echo "$out" | grep -q "= x^3 + 3\*x^2 + 3\*x + 1" || fail "expand line: $out"
 
+out=$($C --line "factor x^4 - 1" --line "integrate 1/(x^2 + 1)" --snapshot "$B/snap13.ppm") || fail "cas step 3"
+echo "$out" | grep -q "= (x - 1)\*(x + 1)\*(x^2 + 1)" || fail "factor line: $out"
+echo "$out" | grep -q "integrate 1/(x^2 + 1) = atan(x) + C" || fail "integral line: $out"
+
 out=$($C --fn "x^2 - 2" --fn x --crossings --line "integrate y1 from 0 to 3" --snapshot "$B/snap6.ppm") || fail "crossings"
 echo "$out" | grep -q "integrate y1 from 0 to 3 = 3" || fail "integrate line: $out"
 echo "$out" | grep -q "y1=y2 at (2, 2)" || fail "crossings: $out"

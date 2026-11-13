@@ -624,6 +624,200 @@ static void test_fuzz(void) {
     CHECK(expanded > parsed / 2);
 }
 
+/* the printed result of op on text, or the error */
+static const char *step3(int op, const char *text, int *rc) {
+    static char out[2048];
+    SqmError err;
+    if (sqm_parse(text, &ex2, &err) != SQM_OK) {
+        *rc = err.code;
+        return "parse";
+    }
+    *rc = op == 0 ? sqm_factor(&ex2, "x", &ex3) : op == 1 ? sqm_apart(&ex2, "x", &ex3) : sqm_antideriv(&ex2, "x", &ex3);
+    if (*rc) return sqm_strerror(*rc);
+    sqm_print(&ex3, out, sizeof out);
+    return out;
+}
+
+/* a and b agree at a few points (where both are defined) */
+static int same_values(const char *a, const char *b) {
+    static const double X[] = {-2.3, -0.71, 0.37, 1.91, 3.3, 5.5};
+    int seen = 0;
+    for (int k = 0; k < 6; k++) {
+        double u = val(a, X[k], 0), v = val(b, X[k], 0);
+        if (!isfinite(u) || !isfinite(v)) continue;
+        seen++;
+        if (!near(u, v, 1e-9)) {
+            fprintf(stderr, "  %s vs %s at %g: %.17g %.17g\n", a, b, X[k], u, v);
+            return 0;
+        }
+    }
+    return seen >= 2;
+}
+
+/* d/dx of the integral is the integrand, at a few points */
+static int integral_ok(const char *f) {
+    int rc;
+    char F[2048], dF[2048];
+    snprintf(F, sizeof F, "%s", step3(2, f, &rc));
+    if (rc) {
+        fprintf(stderr, "  integral of %s: %s\n", f, F);
+        return 0;
+    }
+    if (sqm_parse(F, &ex2, NULL) != SQM_OK || sqm_diff(&ex2, "x", &ex3) != SQM_OK) return 0;
+    sqm_print(&ex3, dF, sizeof dF);
+    int ok = same_values(dF, f);
+    if (!ok) fprintf(stderr, "  integral of %s = %s\n", f, F);
+    return ok;
+}
+
+static void test_step3(void) {
+    int rc;
+    /* factoring */
+    struct {
+        const char *in, *out;
+    } fac[] = {
+        {"x^3 - x", "x*(x - 1)*(x + 1)"},
+        {"x^4 - 1", "(x - 1)*(x + 1)*(x^2 + 1)"},
+        {"2x^2 - 2", "2*(x - 1)*(x + 1)"},
+        {"6x^2 + x - 1", "(3*x - 1)*(2*x + 1)"},
+        {"x^5 - 2x^4 + x^3", "x^3*(x - 1)^2"},
+        {"(x^2 - 1)/(x^2 + 2x + 1)", "(x - 1)/(x + 1)"},
+        {"(x + 1)/(2x^2 - 2)", "1/(2*(x - 1))"},
+        {"x^2 - 2", "x^2 - 2"},
+        {"x^4 + 4", "(x^2 - 2*x + 2)*(x^2 + 2*x + 2)"},
+        {"x^4 + 1", "x^4 + 1"},
+        {"x^6 - 1", "(x - 1)*(x + 1)*(x^2 - x + 1)*(x^2 + x + 1)"},
+        {"(x - 1)^3 (x^2 + 1)^2", "(x - 1)^3*(x^2 + 1)^2"},
+        {"x^2/4 - 1", "1/4*(x - 2)*(x + 2)"},
+        {"-x^2 + 1", "-(x - 1)*(x + 1)"},
+        {"0", "0"},
+        {"7", "7"},
+        {"x", "x"},
+    };
+    for (size_t k = 0; k < sizeof fac / sizeof fac[0]; k++) {
+        const char *got = step3(0, fac[k].in, &rc);
+        CHECK(rc == SQM_OK && !strcmp(got, fac[k].out));
+        if (rc != SQM_OK || strcmp(got, fac[k].out)) fprintf(stderr, "  factor %s: %s\n", fac[k].in, got);
+        if (rc == SQM_OK) CHECK(same_values(fac[k].in, got) || !strcmp(fac[k].in, "0") || !strcmp(fac[k].in, "7"));
+    }
+    CHECK(!strcmp(step3(0, "x^2 + y", &rc), "no exact form found") && rc == SQM_ERR_NOFORM);
+    CHECK(step3(0, "sin(x) + 1", &rc) && rc == SQM_ERR_NOFORM);
+    CHECK(step3(0, "sqrt(x)", &rc) && rc == SQM_ERR_NOFORM);
+    CHECK(sqm_parse("x^2 - 1", &ex2, NULL) == SQM_OK && sqm_factor(&ex2, NULL, &ex3) == SQM_OK);
+    CHECK(sqm_factor(&ex2, NULL, &ex2) == SQM_ERR_SYNTAX);
+
+    /* partial fractions */
+    struct {
+        const char *in, *out;
+    } ap[] = {
+        {"1/(x^2 - 1)", "1/(2*(x - 1)) - 1/(2*(x + 1))"},
+        {"(x^3 + 1)/(x^2 - 1)", "x + 1/(x - 1)"},
+        {"1/(x^3 + x)", "1/x - x/(x^2 + 1)"},
+        {"(2x + 3)/((x - 1)^2 (x + 2))", "1/(9*(x - 1)) + 5/(3*(x - 1)^2) - 1/(9*(x + 2))"},
+        {"1/(x^4 - 1)", "1/(4*(x - 1)) - 1/(4*(x + 1)) - 1/(2*(x^2 + 1))"},
+        {"x/(x^2 + x + 1)", "x/(x^2 + x + 1)"},
+        {"1/(x^2 - 2)", "1/(x^2 - 2)"},
+        {"(x^2 + 1)/(x^2 + 1)^2", "1/(x^2 + 1)"},
+        {"x^2 + 1/2", "x^2 + 1/2"},
+        {"(x^2 + 3x + 5)/(x + 1)", "x + 2 + 3/(x + 1)"},
+    };
+    for (size_t k = 0; k < sizeof ap / sizeof ap[0]; k++) {
+        const char *got = step3(1, ap[k].in, &rc);
+        CHECK(rc == SQM_OK && !strcmp(got, ap[k].out));
+        if (rc != SQM_OK || strcmp(got, ap[k].out)) fprintf(stderr, "  apart %s: %s\n", ap[k].in, got);
+        if (rc == SQM_OK) CHECK(same_values(ap[k].in, got));
+    }
+    CHECK(step3(1, "5/(x^3 - 2)", &rc) && rc == SQM_ERR_NOFORM); /* x^3 - 2 does not split */
+    CHECK(step3(1, "1/(x + y)", &rc) && rc == SQM_ERR_NOFORM);
+    CHECK(step3(1, "e^x/(x + 1)", &rc) && rc == SQM_ERR_NOFORM);
+
+    /* random ratios of products of small factors: apart, then integrate */
+    unsigned seed = 12345;
+    int done = 0, integrated = 0;
+    for (int n = 0; n < 150; n++) {
+        char text[512];
+        size_t at = 0;
+        seed = seed * 1103515245u + 12345u;
+        int deg = (int)(seed >> 16) % 4;
+        at += (size_t)snprintf(text + at, sizeof text - at, "(");
+        for (int k = 0; k <= deg; k++) {
+            seed = seed * 1103515245u + 12345u;
+            at += (size_t)snprintf(text + at, sizeof text - at, "%s%d*x^%d", k ? " + " : "", (int)((seed >> 16) % 9) - 4, k);
+        }
+        at += (size_t)snprintf(text + at, sizeof text - at, " + 1)/(");
+        seed = seed * 1103515245u + 12345u;
+        int nf = 1 + (int)(seed >> 16) % 3;
+        for (int k = 0; k < nf; k++) {
+            seed = seed * 1103515245u + 12345u;
+            int a = 1 + (int)(seed >> 16) % 3, b = (int)(seed >> 20) % 7 - 3, quad = (seed >> 24) % 4 == 0;
+            if (quad) at += (size_t)snprintf(text + at, sizeof text - at, "%s(x^2 + %d)", k ? "*" : "", 1 + (b < 0 ? -b : b));
+            else at += (size_t)snprintf(text + at, sizeof text - at, "%s(%d*x + %d)", k ? "*" : "", a, b);
+        }
+        snprintf(text + at, sizeof text - at, ")");
+        char got[2048];
+        snprintf(got, sizeof got, "%s", step3(1, text, &rc));
+        CHECK(rc == SQM_OK || rc == SQM_ERR_RANGE || rc == SQM_ERR_FULL);
+        if (rc != SQM_OK) fprintf(stderr, "  apart %s: %s\n", text, got);
+        if (rc == SQM_OK) {
+            done++;
+            CHECK(same_values(text, got));
+            if (integral_ok(text)) integrated++;
+        }
+    }
+    CHECK(done > 140);
+    CHECK(integrated == done);
+
+    /* integrals: exact text for some, d/dx checks for all */
+    struct {
+        const char *in, *out;
+    } in[] = {
+        {"x^2", "x^3/3"},
+        {"3x^2 - 2x + 1", "x^3 - x^2 + x"},
+        {"1/x", "ln(abs(x))"},
+        {"sin(2x + 1)", "-cos(2*x + 1)/2"},
+        {"x e^x", "e^x*(x - 1)"},
+        {"1/(x^2 + 1)", "atan(x)"},
+        {"1/(x^2 - 1)", "ln(abs(x - 1))/2 - ln(abs(x + 1))/2"},
+        {"ln(x)", "x*ln(x) - x"},
+        {"tan(x)", "-ln(abs(cos(x)))"},
+        {"2x cos(x^2)", "sin(x^2)"},
+        {"sin(x)^2", "x/2 - sin(2*x)/4"},
+        {"e^x sin(x)", "e^x*(sin(x) - cos(x))/2"},
+        {"1/sqrt(x)", "2*sqrt(x)"},
+        {"2^x", "2^x/ln(2)"},
+        {"a x + b", "a*x^2/2 + b*x"},
+        {"1/(a x + b)", "ln(abs(a*x + b))/a"},
+        {"7", "7*x"},
+    };
+    for (size_t k = 0; k < sizeof in / sizeof in[0]; k++) {
+        const char *got = step3(2, in[k].in, &rc);
+        CHECK(rc == SQM_OK && !strcmp(got, in[k].out));
+        if (rc != SQM_OK || strcmp(got, in[k].out)) fprintf(stderr, "  integral %s: %s\n", in[k].in, got);
+    }
+    static const char *const all[] = {
+        "x^2", "3x^2 - 2x + 1", "1/x", "sin(2x + 1)", "e^(3x)", "x e^x", "x^2 sin(x)", "x cos(2x)", "2x cos(x^2)",
+        "x/(x^2 + 1)", "1/(x^2 + 1)", "1/(x^2 - 1)", "(2x+3)/((x - 1)^2 (x + 2))", "tan(x)", "ln(x)", "x ln(x)",
+        "sqrt(2x+1)", "1/sqrt(x)", "3/sqrt(2x + 1)", "2^x", "(x+1)^5", "x (x+1)^2", "cos(x)/sin(x)",
+        "1/(x^2 + 2x + 5)", "sin(x)^2", "cos(3x)^2", "sin(x) cos(x)", "exp(-x/2)", "x^3 ln(x)", "x e^(-2x)",
+        "x sin(-x)", "1/(x^2 - 2)", "x^2/(x + 1)", "1/(2x)", "e^x sin(x)", "exp(2x) cos(3x)", "x^2 e^x",
+        "(x^2+1)/(x^3+3x)", "x e^(x^2)", "cos(x) e^(sin(x))", "ln(x)/x", "x/(x^2+1)^2", "x sqrt(x^2+1)",
+        "x/sqrt(1 - x^2)", "cos(x)/sin(x)^2", "x^2 (x^3+1)^4", "sinh(3x)", "cosh(x/2)", "tanh(x)", "atan(x)",
+        "asin(x/4)", "acos(x/4)", "log(x)", "cbrt(x)", "abs(x)", "1/(x - 1)^3", "x^(-2)", "5/(3x - 1)^2",
+        "1/(x^2 + 4)", "(3x + 1)/(x^2 + 4)", "x^4 ln(x)", "x^5 e^(-x)", "(x^2 - 1) cos(x)", "pi x^2",
+        "x (1 + x^2)^(1/3)", "1/(x (x + 1))", "1/(x^2 + x + 1)",
+    };
+    for (size_t k = 0; k < sizeof all / sizeof all[0]; k++) CHECK(integral_ok(all[k]));
+    /* no form */
+    CHECK(step3(2, "e^(x^2)", &rc) && rc == SQM_ERR_NOFORM);
+    CHECK(step3(2, "sin(x^2)", &rc) && rc == SQM_ERR_NOFORM);
+    CHECK(integral_ok("1/(x^2 + 1)^2") && integral_ok("(2x - 1)/(x^2 + x + 3)^3") && integral_ok("x/(x^2 + 4)^2"));
+    CHECK(step3(2, "1/(x^2 - 2)^2", &rc) && rc == SQM_ERR_NOFORM); /* irrational real roots, squared */
+    CHECK(step3(2, "x^x", &rc) && rc == SQM_ERR_NOFORM);
+    CHECK(step3(2, "floor(x)", &rc) && rc == SQM_ERR_NOFORM);
+    CHECK(sqm_antideriv(&ex2, NULL, &ex3) == SQM_ERR_SYNTAX && sqm_antideriv(&ex2, "x", &ex2) == SQM_ERR_SYNTAX);
+    CHECK(!strcmp(sqm_strerror(SQM_ERR_NOFORM), "no exact form found"));
+}
+
 int main(void) {
     test_eval();
     test_errors();
@@ -634,6 +828,7 @@ int main(void) {
     test_format();
     test_cas();
     test_fuzz();
+    test_step3();
     printf("test_sqmath: %d checks, %d failed\n", checks, failures);
     return failures ? 1 : 0;
 }

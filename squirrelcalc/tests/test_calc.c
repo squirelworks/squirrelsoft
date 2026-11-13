@@ -811,6 +811,20 @@ static void test_lists_gui(void) {
     CHECK(calc_gui_eval(&g, big) == 0 && g.llen[2] == 100 && contains(g.hist, "(100 items)"));
 }
 
+static void test_cas_step3(void) {
+    calc_gui_init(&g);
+    CHECK(calc_gui_eval(&g, "factor x^3 - x") == 0 && contains(g.hist, "factor x^3 - x = x*(x - 1)*(x + 1)"));
+    CHECK(calc_gui_eval(&g, "apart 1/(x^2 - 1)") == 0 && contains(g.hist, "= 1/(2*(x - 1)) - 1/(2*(x + 1))"));
+    CHECK(calc_gui_eval(&g, "integrate x e^x") == 0 && contains(g.hist, "integrate x e^x = e^x*(x - 1) + C"));
+    calc_gui_set(&g, 0, "y = cos(x)");
+    CHECK(calc_gui_eval(&g, "integrate y1") == 0 && contains(g.hist, "integrate y1 = sin(x) + C"));
+    CHECK(calc_gui_eval(&g, "integrate e^(x^2)") == -1 && contains(g.hist, "no exact integral found"));
+    calc_gui_set(&g, 1, "x^2 + y^2 = 1");
+    CHECK(calc_gui_eval(&g, "integrate y2") == -1 && contains(g.hist, "not a function of x"));
+    CHECK(calc_gui_eval(&g, "factor x + q") == -1 && contains(g.hist, "no exact form found"));
+    CHECK(calc_gui_eval(&g, "integrate y1 from 0 to pi/2") == 0 && contains(g.hist, "= 1")); /* still numeric */
+}
+
 int main(int argc, char **argv) {
     const char *dir = argc > 1 ? argv[1] : ".";
     test_steps();
@@ -823,6 +837,7 @@ int main(int argc, char **argv) {
     test_stats();
     test_relations_gui();
     test_lists_gui();
+    test_cas_step3();
     printf("test_calc: %d checks, %d failed\n", checks, failures);
     return failures != 0;
 }

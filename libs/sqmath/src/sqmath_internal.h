@@ -16,5 +16,7 @@ int sqm__name(SqmExpr *e, const char *s, size_t len);
 int sqm__find_name(const SqmExpr *e, const char *name);
 int sqm__uses_index(const SqmExpr *e, int i, int name);
 void sqm__clear(SqmExpr *e);
+/* copy node i of src (and below) into dst; its index there, or -1 when full */
+int sqm__graft(SqmExpr *dst, const SqmExpr *src, int i);
 
 #endif

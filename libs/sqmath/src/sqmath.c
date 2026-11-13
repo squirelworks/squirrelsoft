@@ -39,6 +39,7 @@ const char *sqm_strerror(int code) {
         case SQM_ERR_NAME: return "name too long";
         case SQM_ERR_RANGE: return "numbers too big to keep exact";
         case SQM_ERR_SOLVE: return "can't solve this exactly";
+        case SQM_ERR_NOFORM: return "no exact form found";
         default: return "error";
     }
 }
