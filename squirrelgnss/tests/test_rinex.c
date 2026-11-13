@@ -128,24 +128,34 @@ static void test_rinex3(void) {
     SqgEcef rough = {truth.x + 3000, truth.y - 2000, truth.z + 1000};
     sqr_write_obs_header(f, &rough);
     int total = 0;
+    SqgEpoch first;
     for (int k = 0; k < 10; k++) {
         SqgEpoch ep;
         sqg_demo_epoch(eph, n_eph, HOME, T0 + 30 * k, 25.0, 5.0, 0, 1, &ep);
+        if (k == 0) {
+            ep.obs[1].has_carrier = 0; /* one satellite without a carrier: the field stays blank */
+            first = ep;
+        }
         sqr_write_obs_epoch(f, WEEK, &ep);
         total += ep.n_obs;
     }
     const char *obs = slurp(f);
-    CHECK(strstr(obs, "G    2 C1C S1C") != NULL);
+    CHECK(strstr(obs, "G    3 C1C L1C S1C") != NULL);
     int epochs;
     double worst = solve_all(obs, &nav, &epochs);
     CHECK(epochs == 10);
     CHECK(worst < 0.01);
     SqrObs r;
-    CHECK(sqr_obs_open(&r, obs, &err) == 0 && r.version > 3.03 && !strcmp(r.code_name, "C1C") && r.snr_index == 1);
+    CHECK(sqr_obs_open(&r, obs, &err) == 0 && r.version > 3.03 && !strcmp(r.code_name, "C1C") && r.snr_index == 2 &&
+          r.carrier_index == 1);
     CHECK(fabs(r.approx[0] - rough.x) < 1e-3);
     SqgEpoch ep;
     int week, seen = 0;
     while (sqr_obs_next(&r, &ep, &week, &err) == 1) {
+        if (seen == 0) { /* carriers to the thousandth of a cycle, and the blank one */
+            CHECK(ep.obs[0].has_carrier && fabs(ep.obs[0].carrier_cyc - first.obs[0].carrier_cyc) < 6e-4);
+            CHECK(!ep.obs[1].has_carrier && ep.obs[2].has_carrier && ep.obs[1].snr_dbhz > 30);
+        }
         seen += ep.n_obs;
         CHECK(week == WEEK && ep.obs[0].snr_dbhz > 30);
     }

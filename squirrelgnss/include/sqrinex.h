@@ -45,6 +45,7 @@ typedef struct {
     int n_types;     /* GPS observation types */
     int code_index;  /* which one is the pseudorange: C1C, C1, C1W or P1 */
     int snr_index;   /* S1C or S1, or -1 */
+    int carrier_index; /* L1C, L1, L1W or L1P, or -1 */
     char code_name[4];
     double approx[3]; /* APPROX POSITION XYZ, or 0 */
 } SqrObs;

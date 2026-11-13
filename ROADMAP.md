@@ -150,8 +150,10 @@ These milestones predate the suite roadmap and remain open. Formats stay owned b
 - [x] Broadcast-ephemeris Kepler propagator with harmonic corrections, satellite clock and relativistic term
 - [x] Pseudorange least-squares PVT: elevation mask and weighting, H/V/T DOP, residuals, fault detection and exclusion
 - [x] RINEX navigation and observation input (2.11 and 3.x GPS; `squirrelgnss solve OBS NAV`)
-- [ ] Continuous epoch stream + survey stakeout helpers
-- [ ] Dual-frequency / RTK double-difference hooks (math first)
+- [x] Continuous epoch stream + survey stakeout helpers (occupation averaging, speed/course, go/cut/fill guidance)
+- [x] RTK double-difference math: code DGNSS, static L1 carrier float + integer fix with ratio test (`squirrelgnss rtk`)
+- [ ] Dual-frequency (L2/L5) observations and wide-lane fixing; LAMBDA-style decorrelated search
+- [ ] Kinematic RTK (moving rover epoch by epoch) and serial receiver input
 
 ### SquirrelSound desktop (sqdsp)
 - [x] Radix-2 FFT, windows, periodogram, Welch PSD, STFT; pitch, THD, SNR; WAV I/O, CLI reports, SVG plots; live SDL spectrum/waterfall + ALSA mic (done)

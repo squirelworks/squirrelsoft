@@ -293,6 +293,14 @@ int sqr_obs_open(SqrObs *r, const char *text, SqrError *err) {
             }
     for (int k = 0; k < have; k++)
         if (!strcmp(types[k], "S1C") || !strcmp(types[k], "S1")) r->snr_index = k;
+    static const char *PHASES[] = {"L1C", "L1", "L1W", "L1P"};
+    r->carrier_index = -1;
+    for (size_t c = 0; c < sizeof PHASES / sizeof *PHASES && r->carrier_index < 0; c++)
+        for (int k = 0; k < have; k++)
+            if (!strcmp(types[k], PHASES[c])) {
+                r->carrier_index = k;
+                break;
+            }
     if (r->code_index < 0) return fail(err, r->line, "no GPS L1 pseudorange (C1C, C1, C1W or P1)");
     return 0;
 }
@@ -398,6 +406,10 @@ int sqr_obs_next(SqrObs *r, SqgEpoch *ep, int *week, SqrError *err) {
             o->pseudorange_m = c1;
             o->snr_dbhz = r->snr_index >= 0 ? obs_value(sat, r->snr_index, &present) : 0;
             o->valid = 1;
+            if (r->carrier_index >= 0) {
+                o->carrier_cyc = obs_value(sat, r->carrier_index, &present);
+                o->has_carrier = present && o->carrier_cyc != 0;
+            }
         }
         return 1;
     }
@@ -437,7 +449,7 @@ void sqr_write_obs_header(FILE *f, const SqgEcef *approx) {
     label(f, "SYNTHETIC", "MARKER NAME");
     snprintf(t, sizeof t, "%14.4f%14.4f%14.4f", approx ? approx->x : 0, approx ? approx->y : 0, approx ? approx->z : 0);
     label(f, t, "APPROX POSITION XYZ");
-    label(f, "G    2 C1C S1C", "SYS / # / OBS TYPES");
+    label(f, "G    3 C1C L1C S1C", "SYS / # / OBS TYPES");
     label(f, "", "END OF HEADER");
 }
 
@@ -449,5 +461,11 @@ void sqr_write_obs_epoch(FILE *f, int week, const SqgEpoch *ep) {
     fprintf(f, "> %04d %02d %02d %02d %02d%11.7f  0%3d\n", y, mo, d, h, mi, s, n);
     for (int i = 0; i < ep->n_obs; i++)
         if (ep->obs[i].valid)
-            fprintf(f, "G%02d%14.3f  %14.3f  \n", ep->obs[i].prn, ep->obs[i].pseudorange_m, ep->obs[i].snr_dbhz);
+        {
+            const SqgObservation *o = &ep->obs[i];
+            fprintf(f, "G%02d%14.3f  ", o->prn, o->pseudorange_m);
+            if (o->has_carrier) fprintf(f, "%14.3f  ", o->carrier_cyc);
+            else fprintf(f, "%16s", "");
+            fprintf(f, "%14.3f  \n", o->snr_dbhz);
+        }
 }
