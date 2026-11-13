@@ -1,8 +1,8 @@
 # SquirrelGames
 
 Card and board games on `libs/sqgui`, roadmap item S5.3. So far:
-patience (Klondike and FreeCell) and Mines. The rules (`cards.c`,
-`mines.c`) are freestanding
+patience (Klondike and FreeCell), Mines and Hearts. The rules
+(`cards.c`, `mines.c`, `hearts.c`) are freestanding
 C11 with no allocation and no stdio, and `make test` checks that they
 need nothing from outside but `memcpy`, `memmove`, `memset` and
 `strlen`, so they move to Squirrel OS/2 as they are. Only `games_sdl.c`
@@ -38,6 +38,16 @@ build/squirrelgames --freecell --seed 7
   mines, Medium 16x16 with 40, Large 30x16 with 99; any field from 2x2 to
   40x24 from the command line.
 
+- **Hearts**: you (South) against three players the computer plays
+  (West, North, East). Thirteen cards each; pass three to the left, then
+  the right, then across, then keep them, in turn. The two of clubs leads
+  the first trick; follow suit if you can; the highest card of the suit
+  led takes the trick and leads the next. Each heart taken is a point,
+  the queen of spades 13; take all 26 (shooting the moon) and the other
+  three get 26 instead. No hearts or the queen on the first trick, and no
+  heart led until one has been played (unless a hand holds nothing else).
+  Once a score reaches 100, the lowest wins.
+
 A deal (or a field) is a number from 0 to 4294967295: the same number
 always gives the same deal (shuffled with SquirrelGames' own generator,
 so the numbers are its own).
@@ -60,12 +70,18 @@ so the numbers are its own).
   flags placed, the squares around it. The right button flags a square,
   then marks it with a question mark, then clears it. The counters show
   the mines less the flags, and the seconds since the first square.
+- Hearts: click three cards to pass (again to put one back), then the
+  Pass button; then click a card to play it (the ones you may not play
+  are shaded). Each name shows the points taken this hand and, in
+  brackets, the game's. The computer plays a card about every half
+  second, and a trick stays in the middle a moment once it is taken.
 
 ## Command line
 
 ```
 --klondike | --klondike3 | --freecell   the game (Klondike, draw 1, unless one of these)
 --mines SIZE     Mines: small, medium, large, or WxHxM (20x12x40)
+--hearts         Hearts
 --seed N         the deal
 --do CMD         play (see below); in order with --script
 --script FILE    commands one a line, # for comments
@@ -103,6 +119,16 @@ text, `.` is hidden, `F` a flag, `?` a question mark, a space or 1-8 an
 open square, and after a loss `*` a mine and `X` the one that went off.
 Opening a mine is not an error: the game is lost and `--show` says so.
 
+Hearts commands, after each of which the computer plays its players up
+to your turn:
+
+```
+new [SEED]     pass C C C     play C     next (the next hand, once one is over)
+```
+
+`--show` prints the scores, the trick on the table (or the last one
+taken), your hand, and what you passed and got.
+
 ## Tests
 
 `make test` runs `tests/test_games.c`: deals (every card once, the same
@@ -112,7 +138,13 @@ FreeCell, the best place, cards going home by themselves and finishing,
 undo, the commands and their errors, 200 games of random play (the cards
 stay 52, each once, and undoing everything gives the deal back), and the
 window driven by clicks, double clicks, drags, the right button and the
-top bar. For Mines: the first square clear and the counts right on 300 fields of random sizes,
-flood opening, chords, flags and question marks, winning and losing,
-the clock, the commands, and the window's clicks. Then `tests/cli_smoke.sh`, the freestanding check, and ten frames
-of the real window with `SDL_VIDEODRIVER=dummy` when SDL2 is installed.
+top bar. For Mines: the first square clear and the counts right on 300
+fields of random sizes, flood opening, chords, flags and question marks,
+winning and losing, the clock, the commands, and the window's clicks. For
+Hearts: every deal whole, the passing order, each rule and its refusal,
+who takes a trick, shooting the moon, the end of the game, the computer's
+choices, the commands, 200 games the computer plays through (every card
+allowed, the cards always 52, each hand 26 points or 78), and a hand
+played in the window by clicks. Then `tests/cli_smoke.sh`, the
+freestanding check, and ten frames of the real window with
+`SDL_VIDEODRIVER=dummy` when SDL2 is installed.

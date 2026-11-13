@@ -17,7 +17,7 @@ GUI_RUN = $(BUILD)/games_nosdl.o
 endif
 
 # The core: no allocation, no stdio (it goes to Squirrel OS/2 as it is)
-CORE = $(BUILD)/cards.o $(BUILD)/mines.o
+CORE = $(BUILD)/cards.o $(BUILD)/mines.o $(BUILD)/hearts.o
 OBJ = $(CORE) $(BUILD)/gamesgui.o
 HDR = $(wildcard include/*.h) $(SQGUI)/include/sqgui.h
 SQGUI_LIB = $(SQGUI)/build/libsqgui.a
@@ -51,7 +51,8 @@ $(BUILD)/test_games: tests/test_games.c $(OBJ) $(SQGUI_LIB) | $(BUILD)
 freestanding: | $(BUILD)
 	$(CC) -std=c11 -Wall -Wextra -Werror -O2 -ffreestanding -Iinclude -c src/cards.c -o $(BUILD)/fs_cards.o
 	$(CC) -std=c11 -Wall -Wextra -Werror -O2 -ffreestanding -Iinclude -c src/mines.c -o $(BUILD)/fs_mines.o
-	@bad=$$(nm -u $(BUILD)/fs_cards.o $(BUILD)/fs_mines.o | awk '$$1=="U"{print $$2}' | grep -v -x -E 'memcpy|memmove|memset|strlen' | sort -u); \
+	$(CC) -std=c11 -Wall -Wextra -Werror -O2 -ffreestanding -Iinclude -c src/hearts.c -o $(BUILD)/fs_hearts.o
+	@bad=$$(nm -u $(BUILD)/fs_cards.o $(BUILD)/fs_mines.o $(BUILD)/fs_hearts.o | awk '$$1=="U"{print $$2}' | grep -v -x -E 'memcpy|memmove|memset|strlen' | sort -u); \
 	if [ -n "$$bad" ]; then echo "the core uses: $$bad"; exit 1; fi; echo "squirrelgames core freestanding ok"
 
 test: $(BUILD)/test_games $(BUILD)/squirrelgames freestanding
