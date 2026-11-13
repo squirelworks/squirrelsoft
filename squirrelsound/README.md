@@ -49,6 +49,7 @@ make android-test
 ./build/squirrelsound devices                           # inputs and monitor sources
 ./build/squirrelsound live --source demo --headless --frames 30
 ./build/squirrelsound live --source demo --direction fountain
+./build/squirrelsound live --source demo --gui-snapshot live.ppm --frames 30   # the window, drawn to a file
 ```
 
 `--source loopback` listens to the computer's own output through the
@@ -57,7 +58,15 @@ another one by name). Windows (WASAPI loopback) and macOS come later in
 roadmap S3.2. `--source alsa` keeps the direct ALSA reader for systems
 without SDL.
 
-In the live window, `w` switches between **Waterfall** (newest row at the top,
+The live window (drawn with `libs/sqgui`) has the Android Live tab's split
+view: a toolbar with Start/Stop, Hold, Reset and Fountain, then the range
+presets (Human, Music, Bass, Speech, Full) and the scroll speed (Slow,
+Normal, Fast); the spectrum fills the top half and the LOFARgram the bottom
+half. The mouse wheel over either plot zooms around the pointer, and the
+keys from the earlier window still work (space, m, r, 1-5, 8/9/0, w, [ ],
+arrows, q/Esc).
+
+In the live window, `w` (or the Fountain button) switches between **Waterfall** (newest row at the top,
 history scrolls down) and **Fountain** (newest row at the bottom, history
 scrolls up). The choice is saved to `~/.config/squirrelsound/live.conf`
 (`$XDG_CONFIG_HOME` is honoured; `%APPDATA%\squirrelsound\live.conf` on

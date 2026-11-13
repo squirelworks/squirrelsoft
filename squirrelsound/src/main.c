@@ -24,6 +24,7 @@ static void usage(void) {
     puts("  squirrelsound spectrogram <in.wav> <out.svg> [--fft N] [--overlap F]");
     puts("  squirrelsound live [--source demo|wav|mic|loopback|alsa] [--file path] [--device name]");
     puts("                     [--fft N] [--window name] [--freq Hz] [--headless]");
+    puts("                     [--gui-snapshot out.ppm [--width W] [--height H] [--frames N]]");
     puts("                     [--frames N] [--max-hold] [--direction waterfall|fountain]");
     puts("  squirrelsound devices            list capture devices (mic inputs, monitor sources)");
     puts("  squirrelsound help");
@@ -313,7 +314,15 @@ int main(int argc, char **argv) {
         }
 
         int rc;
-        if (has_flag(argc, argv, "--headless")) {
+        const char *snap = get_opt(argc, argv, "--gui-snapshot", NULL);
+        if (snap) {
+            int frames = atoi(get_opt(argc, argv, "--frames", "30"));
+            LiveDirection dir = live_direction_parse(get_opt(argc, argv, "--direction", NULL),
+                                                     LIVE_DIR_WATERFALL);
+            rc = live_view_gui_snapshot(audio, &engine, dir, frames,
+                                        atoi(get_opt(argc, argv, "--width", "960")),
+                                        atoi(get_opt(argc, argv, "--height", "640")), snap);
+        } else if (has_flag(argc, argv, "--headless")) {
             int frames = atoi(get_opt(argc, argv, "--frames", "30"));
             rc = live_view_headless_run(audio, &engine, frames, 5);
         } else {

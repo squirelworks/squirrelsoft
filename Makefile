@@ -1,5 +1,5 @@
 # Top-level squirrelsoft build
-LIBS = libs/sqdsp libs/sqfelica libs/sqqr
+LIBS = libs/sqdsp libs/sqfelica libs/sqqr libs/sqgui
 PROGRAMS = squirrelstation squirrelcad squirrelgnss squirrelsound squirrelqr squirrelsuica
 PY_PROGRAMS = squirrelsuica-analysis
 

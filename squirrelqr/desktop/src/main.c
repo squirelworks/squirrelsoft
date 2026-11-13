@@ -1,6 +1,8 @@
 /* SquirrelQR desktop: decode QR codes from image files or from a rectangle of
  * the screen, with Squirrel's own decoder (libs/sqqr). */
 #include "qrcapture.h"
+#include "qrdecode.h"
+#include "qrgui_run.h"
 #include "qrimage.h"
 #include "qrtext.h"
 #include "sqqr.h"
@@ -22,12 +24,14 @@ static void usage(FILE *f) {
             "       squirrelqr [options] --select      drag a rectangle on the screen, then decode it\n"
             "       squirrelqr [options] --screen      decode the whole screen\n"
             "       squirrelqr [options] --region X,Y,W,H\n"
+            "       squirrelqr --gui [IMAGE]           a small window: select, screen, open, copy\n"
             "\n"
             "options:\n"
             "  --json        print one JSON object per result (text, charset, version, corners)\n"
             "  --raw         write the payload bytes unchanged instead of UTF-8 text\n"
             "  --wait SECS   keep capturing the screen rectangle until a code shows up\n"
             "  --save FILE   also save each screen capture as a PGM image\n"
+            "  --gui-frames N  close the window after N frames (for CI)\n"
             "  -v            print the symbol version and error correction to stderr\n"
             "\n"
             "Screen capture back end: %s. Codes on screen need about 3 pixels per module.\n"
@@ -40,33 +44,6 @@ typedef struct {
     double wait;
     const char *save;
 } Opts;
-
-/* Try the image as is, then 2x larger: small on-screen codes at 2 px/module
- * decode more reliably once each module covers several pixels. */
-static int decode_gray(const QrImage *img, SqqrResult *res) {
-    size_t need = SQQR_IMAGE_WORK(img->w, img->h);
-    void *work = malloc(need);
-    if (!work) return SQQR_ERR_SIZE;
-    int rc = sqqr_decode_image(img->gray, img->w, img->h, img->w, work, need, res);
-    free(work);
-    if (rc == SQQR_OK || (long)img->w * img->h > 1200L * 1200L) return rc;
-    int w2 = img->w * 2, h2 = img->h * 2;
-    uint8_t *big = malloc((size_t)w2 * h2);
-    need = SQQR_IMAGE_WORK(w2, h2);
-    work = malloc(need);
-    if (big && work) {
-        for (int y = 0; y < h2; y++)
-            for (int x = 0; x < w2; x++) big[(size_t)y * w2 + x] = img->gray[(size_t)(y / 2) * img->w + x / 2];
-        int rc2 = sqqr_decode_image(big, w2, h2, w2, work, need, res);
-        if (rc2 == SQQR_OK) {
-            for (int i = 0; i < 8; i++) res->corners[i] /= 2;
-            rc = rc2;
-        }
-    }
-    free(big);
-    free(work);
-    return rc;
-}
 
 static void report(const Opts *o, const char *source, const SqqrResult *res, int ox, int oy) {
     if (o->verbose)
@@ -110,7 +87,7 @@ static int do_file(const Opts *o, const char *path, SqqrResult *res) {
         fprintf(stderr, "%s: %s\n", path, err);
         return 2;
     }
-    int rc = decode_gray(&img, res);
+    int rc = qr_decode_gray(&img, res);
     qr_image_free(&img);
     if (rc != SQQR_OK) {
         fprintf(stderr, "%s: %s\n", path, sqqr_strerror(rc));
@@ -136,7 +113,7 @@ static int do_screen(const Opts *o, QrRect r, SqqrResult *res) {
             return 2;
         }
         if (o->save && qr_image_save_pgm(o->save, &img)) fprintf(stderr, "%s: cannot write\n", o->save);
-        int rc = decode_gray(&img, res);
+        int rc = qr_decode_gray(&img, res);
         qr_image_free(&img);
         if (rc == SQQR_OK) {
             report(o, "screen", res, r.w > 0 && r.h > 0 && r.x > 0 ? r.x : 0, /* qr_capture clips to the screen */
@@ -158,7 +135,7 @@ static int do_screen(const Opts *o, QrRect r, SqqrResult *res) {
 
 int main(int argc, char **argv) {
     Opts o = {0, 0, 0, 0.0, NULL};
-    int screen = 0, select = 0, nfiles = 0;
+    int screen = 0, select = 0, nfiles = 0, gui = 0, gui_frames = 0;
     QrRect r = {0, 0, 0, 0};
     char **files = argv + 1; /* file names are compacted in place; the write index never passes the read one */
     for (int i = 1; i < argc; i++) {
@@ -188,6 +165,11 @@ int main(int argc, char **argv) {
             screen = 1;
         } else if (!strcmp(a, "--wait") && i + 1 < argc) {
             o.wait = atof(argv[++i]);
+        } else if (!strcmp(a, "--gui")) {
+            gui = 1;
+        } else if (!strcmp(a, "--gui-frames") && i + 1 < argc) {
+            gui = 1;
+            gui_frames = atoi(argv[++i]);
         } else if (!strcmp(a, "--save") && i + 1 < argc) {
             o.save = argv[++i];
         } else if (a[0] == '-' && a[1]) {
@@ -197,6 +179,13 @@ int main(int argc, char **argv) {
         } else {
             files[nfiles++] = argv[i];
         }
+    }
+    if (gui) {
+        if (screen || select || nfiles > 1) {
+            usage(stderr);
+            return 2;
+        }
+        return qr_gui_run(nfiles ? files[0] : NULL, gui_frames);
     }
     if (o.json && o.raw) {
         fprintf(stderr, "--json and --raw don't mix\n");

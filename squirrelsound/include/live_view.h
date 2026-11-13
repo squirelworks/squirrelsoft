@@ -15,4 +15,9 @@ int live_view_sdl_run(LiveAudio *audio, LiveEngine *engine, LiveDirection direct
 int live_view_headless_run(LiveAudio *audio, LiveEngine *engine, int frames_max,
                            int print_every);
 
+/* Headless: process frames_max frames, then draw the Live window (the same
+ * sqgui layout as the SDL view) at w x h into a binary PPM. */
+int live_view_gui_snapshot(LiveAudio *audio, LiveEngine *engine, LiveDirection direction,
+                           int frames_max, int w, int h, const char *ppm_path);
+
 #endif

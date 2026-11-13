@@ -4,7 +4,7 @@ State as of `main` at `0449284` (2026-11-05). Android native apps (Kotlin, Andro
 **SquirrelSuica 0.0.12**, **SquirrelSuicaAnalysis 0.0.3**, **SquirrelSound 0.0.13**, **SquirrelQR 0.1.6**, all on Play closed testing.
 SquirrelSound **0.0.14** (#81) is on `main` and not yet published.
 Desktop C tools: SquirrelStation, SquirrelCAD, SquirrelGNSS, `sqdsp` + live SDL spectrum, and the new desktop readers
-`squirrelsuica/desktop/` (PC/SC) and `squirrelqr/desktop/`. Shared C cores in `libs/` (`sqdsp`, `sqfelica`, `sqqr`).
+`squirrelsuica/desktop/` (PC/SC) and `squirrelqr/desktop/`. Shared C cores in `libs/` (`sqdsp`, `sqfelica`, `sqqr`, `sqgui`).
 The SquirrelQR PWA is retired (`squirrelqr/web-demo/`, not a product). Play scripts in `scripts/`, CI in `.github/workflows/`.
 
 Principles: original code only; each app = portable core + thin native front-ends; tests on the core; real-device checks are post-merge.
@@ -42,7 +42,7 @@ Every item is a checkbox. Tick it in the PR that merges its last piece. Nested b
   - [x] Step 2: find a symbol in a grayscale image (binarization, finder search, alignment, homography, light-on-dark) (#63).
   - [x] Step 3: SquirrelQR on Android uses it through JNI when ML Kit finds nothing (#65).
 - [ ] `libs/sqmath` (C): expression engine/CAS core for the calculator suite.
-- [ ] `libs/sqgui` (C): tiny immediate-mode widget layer over SDL2 for desktop, designed to port to Squirrel OS/2's wm/gfx.
+- [x] `libs/sqgui` (C): tiny immediate-mode widget layer over SDL2 for desktop, designed to port to Squirrel OS/2's wm/gfx: a 32-bit canvas core with no OS calls, Warp-grey widgets, the OS/2 5x7 font, and an SDL2 window back end.
 - [ ] JNI smoke tests for every Android app that uses a core (each lib already has `make test` unit tests).
 
 ## S3 — Native front-ends, desktop parity (#30, #31)
@@ -51,7 +51,7 @@ Every item is a checkbox. Tick it in the PR that merges its last piece. Nested b
   - [x] Step 1: capture sources: `--source mic` (SDL2 capture), `--device`, `--source loopback` from the PulseAudio/PipeWire monitor source, `squirrelsound devices`; CI with SDL's disk driver and a null sink (#78).
   - [ ] WASAPI loopback on Windows
   - [ ] macOS system audio (ScreenCaptureKit or a virtual device)
-  - [ ] Split-view GUI window
+  - [x] Split-view GUI window on `libs/sqgui`: toolbar, spectrum over LOFARgram, `--gui-snapshot` for CI
 - [ ] S3.3 SquirrelSuica desktop: PaSoRi RC-S380/RC-S300, same `sqfelica` parsing, GUI with balance + history.
   - [x] Step 1: `squirrelsuica/desktop/`, a C reader on `sqfelica` over a transport interface, balance and history with station names, replays SuicaAnalysis dumps (#71).
   - [x] Step 2: PC/SC transport (RC-S300 and other CCID readers; pcsc-lite, macOS PCSC, winscard), `--reader`/`--wait`/`--list-readers`, CI through pcscd and a virtual reader (#76).
@@ -63,7 +63,7 @@ Every item is a checkbox. Tick it in the PR that merges its last piece. Nested b
   - [x] Step 2: PNG input with its own PNG and zlib decoder, and a Wayland note (#77).
   - [ ] Wayland portal capture
   - [ ] Windows and macOS capture
-  - [ ] Small GUI window
+  - [x] Small GUI window on `libs/sqgui` (`--gui`): select, whole screen, open, preview with outline, copy
   - [ ] Webcam
 - [ ] S3.5 Windows/macOS/Linux packaging (MSI/zip, .app, AppImage/deb) built in CI.
 
