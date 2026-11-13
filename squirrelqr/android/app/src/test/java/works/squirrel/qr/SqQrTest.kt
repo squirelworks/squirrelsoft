@@ -3,6 +3,7 @@ package works.squirrel.qr
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class SqQrTest {
@@ -40,5 +41,37 @@ class SqQrTest {
         // JVM unit tests have no libsqqr_jni.so.
         assertFalse(SqQr.available)
         assertNull(SqQr.decode(ByteArray(64 * 64), 64, 64))
+    }
+
+    @Test
+    fun withoutNativeCoreMakingAndParsingSayNoCore() {
+        val made = SqQr.encode("hello")
+        assertTrue(made is SqQr.Made.Failed && made.code == SqQr.NO_CORE)
+        assertNull(SqQr.content("WIFI:S:x;;"))
+        assertNull(SqQr.wifi("x", ""))
+    }
+
+    @Test
+    fun contentOfSplitsNulEndedUtf8() {
+        val raw = "wifi\u0000Wi-Fi network\u0000Network\u0000Nest 🐿\u0000Password\u0000acorns\u0000"
+            .toByteArray(Charsets.UTF_8)
+        val c = SqQr.contentOf(raw)!!
+        assertEquals("wifi", c.typeId)
+        assertEquals("Wi-Fi network", c.typeName)
+        assertEquals(listOf("Network" to "Nest 🐿", "Password" to "acorns"), c.fields)
+        assertEquals("acorns", c.get("Password"))
+        assertNull(c.get("Hidden"))
+        assertFalse(c.isPlainText)
+    }
+
+    @Test
+    fun contentOfPlainTextAndJunk() {
+        val plain = SqQr.contentOf("text\u0000Text\u0000".toByteArray())!!
+        assertTrue(plain.isPlainText)
+        assertTrue(plain.fields.isEmpty())
+        assertNull(SqQr.contentOf(ByteArray(0)))
+        assertNull(SqQr.contentOf("text".toByteArray())) // no terminator
+        // a label without its value is dropped
+        assertEquals(0, SqQr.contentOf("url\u0000Web link\u0000URL\u0000".toByteArray())!!.fields.size)
     }
 }

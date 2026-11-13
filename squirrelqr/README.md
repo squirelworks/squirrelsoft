@@ -9,7 +9,16 @@ reader only (not a field kit).
 ## Android APK (`android/`)
 
 Native CameraX + ML Kit scanner (`works.squirrel.qr`) with detection crosshairs
-and a bottom-half history panel (open URL / copy / clear).
+and a bottom-half history panel (open URL / copy / clear). Squirrel's own
+decoder (`libs/sqqr`, through JNI) reads the frames ML Kit misses.
+
+- **What a code means:** under the last read, Wi-Fi networks, contacts,
+  e-mail, phone, SMS, locations and links are shown as fields (the same
+  `sqqr_content` parser as `squirrelqr --details`).
+- **Make QR:** type text or a link, or fill in a Wi-Fi network (name,
+  password, security, hidden), pick the error correction level, and the app
+  draws the code with Squirrel's encoder (`sqqr_encode`). Share it, or save
+  it as `squirrelqr-YYYYMMDD-HHMMSS.png`.
 
 ```bash
 export ANDROID_HOME=/path/to/android-sdk
@@ -17,6 +26,11 @@ make android
 make android-test
 # APK: android/app/build/outputs/apk/debug/app-debug.apk
 ```
+
+`make test` also builds the JNI bridge (`android/app/src/main/cpp/sqqr_jni.c`)
+for this machine and drives every native entry point from a JVM
+(`android/jni-smoke/`), so the bridge is tested without an Android SDK. It is
+skipped when no JDK is installed.
 
 **Play Console note:** `applicationId` is `works.squirrel.qr` (version
 `0.1.5`). The previous identity `works.squirrel.field` is abandoned — create a

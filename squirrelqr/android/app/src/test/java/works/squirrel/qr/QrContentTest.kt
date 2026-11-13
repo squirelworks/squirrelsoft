@@ -29,4 +29,29 @@ class QrContentTest {
         assertEquals(40, label.length)
         assertTrue(label.endsWith("…"))
     }
+
+    @Test
+    fun detailsListFieldsUnderTheType() {
+        val wifi = SqQr.Content("wifi", "Wi-Fi network", listOf("Network" to "Nest", "Password" to "acorns"))
+        assertEquals("[Wi-Fi network]\nNetwork: Nest\nPassword: acorns", QrContent.details(wifi))
+        val note = SqQr.Content("contact", "Contact", listOf("Note" to "two\nlines"))
+        assertEquals("[Contact]\nNote: two lines", QrContent.details(note))
+    }
+
+    @Test
+    fun detailsNullForPlainTextOrNoCore() {
+        assertEquals(null, QrContent.details(SqQr.Content("text", "Text", emptyList())))
+        assertEquals(null, QrContent.details(null))
+    }
+
+    @Test
+    fun madeFileNameLooksLikeTheDesktops() {
+        val name = QrContent.madeFileName(1_700_000_000_000L)
+        assertTrue(name, Regex("squirrelqr-\\d{8}-\\d{6}\\.png").matches(name))
+    }
+
+    @Test
+    fun levelLabelsNameTheLetter() {
+        for (lv in SqQr.Level.values()) assertTrue(QrContent.levelLabel(lv).startsWith(lv.name))
+    }
 }

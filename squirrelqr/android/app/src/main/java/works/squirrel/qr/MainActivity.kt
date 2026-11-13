@@ -3,17 +3,28 @@ package works.squirrel.qr
 import android.Manifest
 import android.content.ClipData
 import android.content.ClipboardManager
+import android.content.DialogInterface
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
 import android.graphics.RectF
+import android.graphics.drawable.BitmapDrawable
 import android.media.Image
 import android.net.Uri
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
+import android.widget.ArrayAdapter
+import android.widget.CheckBox
+import android.widget.EditText
+import android.widget.ImageView
+import android.widget.LinearLayout
+import android.widget.RadioGroup
+import android.widget.Spinner
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
@@ -23,6 +34,7 @@ import androidx.camera.core.resolutionselector.AspectRatioStrategy
 import androidx.camera.core.resolutionselector.ResolutionSelector
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -32,6 +44,7 @@ import com.google.mlkit.vision.barcode.BarcodeScanning
 import com.google.mlkit.vision.barcode.common.Barcode
 import com.google.mlkit.vision.common.InputImage
 import works.squirrel.qr.databinding.ActivityMainBinding
+import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -41,7 +54,8 @@ import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
 
 /**
- * SquirrelQR = QR / barcode camera reader only.
+ * SquirrelQR: reads QR codes with the camera and makes them (text, links,
+ * Wi-Fi networks) with Squirrel's own encoder in libs/sqqr.
  * Spectrum lives in SquirrelSound; FeliCa lives in SquirrelSuica.
  */
 class MainActivity : AppCompatActivity() {
@@ -56,6 +70,21 @@ class MainActivity : AppCompatActivity() {
     @Volatile private var scanMode = ScanMode.DEFAULT
 
     private val timeFmt = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
+
+    /** The last made code, kept for Save PNG and Share. */
+    private var madeBitmap: Bitmap? = null
+
+    private val saveLauncher =
+        registerForActivityResult(ActivityResultContracts.CreateDocument("image/png")) { uri ->
+            val bmp = madeBitmap
+            if (uri == null || bmp == null) return@registerForActivityResult
+            val ok = try {
+                contentResolver.openOutputStream(uri)?.use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) } == true
+            } catch (_: Exception) {
+                false
+            }
+            Toast.makeText(this, if (ok) R.string.saved else R.string.save_failed, Toast.LENGTH_SHORT).show()
+        }
 
     private val permissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -120,6 +149,8 @@ class MainActivity : AppCompatActivity() {
             val text = lastPublished.get()
             openIfUrl(text)
         }
+
+        binding.btnMake.setOnClickListener { showMakeDialog() }
 
         binding.btnClearHistory.setOnClickListener {
             history.clear()
@@ -311,19 +342,150 @@ class MainActivity : AppCompatActivity() {
             val latest = history.firstOrNull()
             if (latest != null) {
                 lastPublished.set(latest.text)
-                binding.qrResult.text = "[${latest.format}] ${latest.text}"
-                binding.btnCopy.isEnabled = true
-                binding.btnOpen.isEnabled = QrContent.isHttpUrl(latest.text)
+                showEntry(latest)
             } else {
                 binding.qrResult.setText(R.string.qr_empty)
+                binding.qrDetails.visibility = View.GONE
                 binding.btnCopy.isEnabled = false
                 binding.btnOpen.isEnabled = false
             }
             return
         }
+        showEntry(entry)
+    }
+
+    /** The text, and under it what it means (Wi-Fi network, contact, ...) when it is structured. */
+    private fun showEntry(entry: ScanEntry) {
         binding.qrResult.text = "[${entry.format}] ${entry.text}"
+        val details = QrContent.details(SqQr.content(entry.text))
+        binding.qrDetails.text = details ?: ""
+        binding.qrDetails.visibility = if (details == null) View.GONE else View.VISIBLE
         binding.btnCopy.isEnabled = true
         binding.btnOpen.isEnabled = QrContent.isHttpUrl(entry.text)
+    }
+
+    /** Text or Wi-Fi fields and a level; Make shows the code, the dialog stays open on a problem. */
+    private fun showMakeDialog() {
+        if (!SqQr.available) {
+            Toast.makeText(this, R.string.make_unavailable, Toast.LENGTH_LONG).show()
+            return
+        }
+        val view = layoutInflater.inflate(R.layout.dialog_make, null)
+        val kind = view.findViewById<RadioGroup>(R.id.makeKind)
+        val text = view.findViewById<EditText>(R.id.makeText)
+        val wifiFields = view.findViewById<LinearLayout>(R.id.wifiFields)
+        val ssid = view.findViewById<EditText>(R.id.wifiSsid)
+        val password = view.findViewById<EditText>(R.id.wifiPassword)
+        val security = view.findViewById<Spinner>(R.id.wifiSecurity)
+        val hidden = view.findViewById<CheckBox>(R.id.wifiHidden)
+        val level = view.findViewById<Spinner>(R.id.makeLevel)
+
+        security.adapter = ArrayAdapter(
+            this, android.R.layout.simple_spinner_dropdown_item, WIFI_SECURITY.map { it.first }
+        )
+        level.adapter = ArrayAdapter(
+            this, android.R.layout.simple_spinner_dropdown_item, SqQr.Level.values().map { QrContent.levelLabel(it) }
+        )
+        val prefs = getSharedPreferences(PREFS, MODE_PRIVATE)
+        level.setSelection(prefs.getInt(KEY_MAKE_LEVEL, SqQr.Level.M.ordinal).coerceIn(0, 3))
+        kind.setOnCheckedChangeListener { _, id ->
+            val wifi = id == R.id.kindWifi
+            wifiFields.visibility = if (wifi) View.VISIBLE else View.GONE
+            text.visibility = if (wifi) View.GONE else View.VISIBLE
+        }
+
+        val dialog = AlertDialog.Builder(this)
+            .setTitle(R.string.make_qr)
+            .setView(view)
+            .setPositiveButton(R.string.make, null)
+            .setNegativeButton(R.string.cancel, null)
+            .create()
+        dialog.setOnShowListener {
+            dialog.getButton(DialogInterface.BUTTON_POSITIVE).setOnClickListener {
+                val payload: String = if (kind.checkedRadioButtonId == R.id.kindWifi) {
+                    val name = ssid.text.toString()
+                    if (name.isEmpty()) {
+                        ssid.error = getString(R.string.make_wifi_empty)
+                        return@setOnClickListener
+                    }
+                    val pass = password.text.toString()
+                    val sec = if (pass.isEmpty()) "" else WIFI_SECURITY[security.selectedItemPosition].second
+                    SqQr.wifi(name, pass, sec, hidden.isChecked) ?: return@setOnClickListener
+                } else {
+                    text.text.toString().ifEmpty {
+                        text.error = getString(R.string.make_empty)
+                        return@setOnClickListener
+                    }
+                }
+                val lv = SqQr.Level.values()[level.selectedItemPosition]
+                prefs.edit().putInt(KEY_MAKE_LEVEL, lv.ordinal).apply()
+                when (val made = SqQr.encode(payload, lv)) {
+                    is SqQr.Made.Ok -> {
+                        dialog.dismiss()
+                        showMade(made.symbol, payload, lv)
+                    }
+                    is SqQr.Made.Failed -> {
+                        val msg = if (made.code == SqQr.TOO_LONG) {
+                            getString(R.string.make_too_long)
+                        } else {
+                            getString(R.string.make_failed, made.code)
+                        }
+                        Toast.makeText(this, msg, Toast.LENGTH_LONG).show()
+                    }
+                }
+            }
+        }
+        dialog.show()
+    }
+
+    /** The made code, sharp at any size, with Share and Save PNG. */
+    private fun showMade(symbol: SqQr.Symbol, payload: String, level: SqQr.Level) {
+        val target = minOf((resources.displayMetrics.widthPixels * 0.7f).toInt(), 1024)
+        val scale = QrRender.scaleFor(symbol.size, target)
+        val side = QrRender.side(symbol.size, scale)
+        val bmp = Bitmap.createBitmap(QrRender.pixels(symbol, scale), side, side, Bitmap.Config.ARGB_8888)
+        madeBitmap = bmp
+
+        val view = layoutInflater.inflate(R.layout.dialog_made, null)
+        view.findViewById<ImageView>(R.id.madeImage).setImageDrawable(
+            BitmapDrawable(resources, bmp).apply { isFilterBitmap = false }
+        )
+        view.findViewById<TextView>(R.id.madeInfo).text =
+            getString(R.string.made_info, symbol.version, symbol.size, level.name, symbol.mask)
+        view.findViewById<TextView>(R.id.madeDetails).text =
+            QrContent.details(SqQr.content(payload)) ?: QrContent.displayLabel(payload, 240)
+
+        val dialog = AlertDialog.Builder(this)
+            .setView(view)
+            .setPositiveButton(R.string.share, null)
+            .setNeutralButton(R.string.save_png, null)
+            .setNegativeButton(R.string.close, null)
+            .create()
+        dialog.setOnShowListener {
+            dialog.getButton(DialogInterface.BUTTON_POSITIVE).setOnClickListener { shareMade(bmp) }
+            dialog.getButton(DialogInterface.BUTTON_NEUTRAL).setOnClickListener {
+                saveLauncher.launch(QrContent.madeFileName(System.currentTimeMillis()))
+            }
+        }
+        dialog.show()
+    }
+
+    private fun shareMade(bmp: Bitmap) {
+        try {
+            val dir = File(cacheDir, "shared").apply { mkdirs() }
+            val file = File(dir, "squirrelqr.png")
+            file.outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
+            val uri = FileProvider.getUriForFile(this, "$packageName.files", file)
+            val send = Intent(Intent.ACTION_SEND).apply {
+                type = "image/png"
+                putExtra(Intent.EXTRA_STREAM, uri)
+                clipData = ClipData.newRawUri("qr", uri)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            startActivity(Intent.createChooser(send, getString(R.string.share)))
+        } catch (_: Exception) {
+            Toast.makeText(this, R.string.share_failed, Toast.LENGTH_SHORT).show()
+        }
     }
 
     private fun renderHistory() {
@@ -397,5 +559,14 @@ class MainActivity : AppCompatActivity() {
     companion object {
         private const val PREFS = "squirrelqr"
         private const val KEY_SCAN_MODE = "scan_mode"
+        private const val KEY_MAKE_LEVEL = "make_level"
+
+        /** Spinner label to the WIFI: T: value (libs/sqqr sqqr_content_wifi). */
+        private val WIFI_SECURITY = listOf(
+            "WPA / WPA2" to "WPA",
+            "WPA3 (SAE)" to "SAE",
+            "WEP" to "WEP",
+            "None (open)" to "nopass",
+        )
     }
 }

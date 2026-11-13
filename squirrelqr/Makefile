@@ -44,7 +44,7 @@ SQQR_LIB = $(SQQR)/build/libsqqr.a
 SQGUI_LIB = $(SQGUI)/build/libsqgui.a
 LIBS = $(SQQR_LIB) $(SQGUI_SDL) $(SQGUI_LIB)
 
-.PHONY: all desktop test test-desktop test-x11 serve clean android android-test $(SQQR_LIB) $(SQGUI_LIB)
+.PHONY: all desktop test test-desktop test-jni test-x11 serve clean android android-test $(SQQR_LIB) $(SQGUI_LIB)
 
 all: desktop
 
@@ -75,7 +75,7 @@ $(BUILD)/test_desktop: desktop/tests/test_desktop.c $(OBJ) $(LIBS) | $(BUILD)
 $(BUILD)/test_gui: desktop/tests/test_gui.c $(OBJ) $(LIBS) | $(BUILD)
 	$(CC) $(CFLAGS) $< $(OBJ) $(LIBS) -o $@ $(LDLIBS)
 
-test: test-desktop
+test: test-desktop test-jni
 	python3 tests/test_web_static.py
 	@echo "squirrelqr tests ok"
 
@@ -90,6 +90,23 @@ test-desktop: $(BUILD)/test_desktop $(BUILD)/test_gui $(BUILD)/squirrelqr
 	@if [ "$(CAPTURE)" = x11 ] && command -v xvfb-run >/dev/null; then \
 		xvfb-run -a -s "-screen 0 800x600x24" $(BUILD)/test_desktop --x11 $(SQQR)/fixtures/symbols.txt $(BUILD); \
 	else echo "skipping the X11 capture test (no X11 build or no xvfb-run)"; fi
+
+# The Android JNI bridge built for this machine and driven from a JVM
+# (android/jni-smoke): skipped when there is no JDK.
+JDK ?= $(shell if [ -n "$$JAVA_HOME" ]; then echo "$$JAVA_HOME"; \
+	elif command -v javac >/dev/null; then dirname "$$(dirname "$$(readlink -f "$$(command -v javac)")")"; fi)
+JNI_SRC = android/app/src/main/cpp/sqqr_jni.c $(SQQR)/src/sqqr.c $(SQQR)/src/sqqr_locate.c \
+	$(SQQR)/src/sqqr_encode.c $(SQQR)/src/sqqr_content.c
+
+test-jni: | $(BUILD)
+	@if [ -n "$(JDK)" ] && [ -f "$(JDK)/include/jni.h" ] && [ -x "$(JDK)/bin/javac" ]; then \
+		set -e; plat=$$(ls -d "$(JDK)"/include/*/ | head -1); \
+		$(CC) -std=c11 -O2 -Wall -Wextra -Werror -shared -fPIC -I"$(JDK)/include" -I"$$plat" \
+			-I$(SQQR)/include $(JNI_SRC) -lm -o $(BUILD)/libsqqr_jni.so; \
+		mkdir -p $(BUILD)/jni-smoke; \
+		"$(JDK)/bin/javac" -d $(BUILD)/jni-smoke android/jni-smoke/works/squirrel/qr/SqQr.java; \
+		"$(JDK)/bin/java" -cp $(BUILD)/jni-smoke works.squirrel.qr.SqQr "$$(pwd)/$(BUILD)/libsqqr_jni.so"; \
+	else echo "squirrelqr: no JDK, JNI smoke test skipped"; fi
 
 serve:
 	python3 -m http.server 8765 --directory web-demo
