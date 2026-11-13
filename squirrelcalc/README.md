@@ -58,7 +58,7 @@ build/squirrelcalc --fn "x^2 - 2" --fn "2 sin(x)" --roots
     `linreg A:A B:B`.
 - **Functions of values and distributions**, in the calculator, the graph
   rows and the cells: `sum`, `mean`, `median`, `sd`, `var`, `count`, `min`,
-  `max`, `q1` and `q3` of a list (`mean(xs)`), a range (`sum(A1:A10)`,
+  `max`, `q1` and `q3` (in any case: `SUM` works too) of a list (`mean(xs)`), a range (`sum(A1:A10)`,
   `max(B:B)`) or several values (`sum(1, 2, a)`); `normalpdf(x, mu, sd)`
   (it graphs: `y = normalpdf(x, 100, 15)`), `normalcdf(lo, hi, mu, sd)` (use
   ±1e99 for an open end), `invnorm(p, mu, sd)`, `binompdf(n, p, k)`,
@@ -82,6 +82,22 @@ build/squirrelcalc --fn "x^2 - 2" --fn "2 sin(x)" --roots
   instead of joining across them. Esc closes the window.
 - **Table** shows x and every function from Start by Step in place of the
   graph; the wheel scrolls it.
+- **Geometry** on the graph, from the calculator line: `A = (1, 2)` is a
+  point, then `s = segment(A, B)`, `line(A, B)`, `ray(A, B)`,
+  `polygon(A, B, C)` (up to 8 corners), `circle(A, 3)`, `circle(A, B)`
+  (through B) or `circle(A, B, C)` (through all three). Constructions follow
+  what they are made from: `midpoint(A, B)` or `midpoint(s)`,
+  `intersect(f, g)` (`intersect(f, g, 2)` for the second meeting; lines,
+  segments, rays and circles), `perpendicular(l, A)`, `parallel(l, A)` and
+  `bisector(A, B)`. Drag a point made of plain numbers (it has a white
+  centre) and everything built on it moves; `A = (a, 2)` follows the
+  slider of a instead. Measurements read as numbers anywhere, graph rows
+  included: `distance(A, B)` (or to a line), `length(s)`, `slope(l)`,
+  `radius(c)`, `area(t)`, `perimeter(t)`, `angle(A, B, C)` (degrees, at B),
+  `xcoord(A)`, `ycoord(A)`. `A` alone describes it, `geometry` lists every
+  object, and `delete A` removes it with everything built on it. Something
+  that stops existing (an intersection of lines turned parallel) is kept
+  and shows again when its parts move.
 - **Sheet** shows the spreadsheet in place of the graph: columns A to H,
   rows 1 to 50. Click a cell and type into the line above the grid: a
   number, a label, or a formula starting with `=` (`=A1*2 + b`,
@@ -133,6 +149,10 @@ or no window.
   so data far from 0 stays well conditioned. The normal tails come from
   `erfc`, so `normalcdf(8, 1e99)` keeps its digits, and `invnorm` solves on
   the smaller tail.
+- `calcgeom.c`: the geometry objects, worked out in the order they were
+  made, the intersections (line, segment, ray, circle in any pair), the
+  measurements, and their drawing (lines clipped to the view, polygons
+  filled by scanline).
 - `calcsheet.c`: the sheet (cells, recalculation in dependency order,
   copying with moved names, CSV) and `calc_expand`, which rewrites cell
   names and the functions of values for `sqmath` before it parses a line.
@@ -141,7 +161,9 @@ or no window.
 
 ## Tests
 
-`make test` runs `tests/test_sheet.c` (cell names, kinds, recalculation,
+`make test` runs `tests/test_geom.c` (every construction against worked
+values, objects that stop and start existing, redefinition, dragging,
+delete, every measurement and its errors, and drawing), `tests/test_sheet.c` (cell names, kinds, recalculation,
 cycles, errors and their spread, a 50-deep chain, every function of values
 and distribution against known values, copying and `#REF`, CSV both ways,
 quartiles and histograms), `tests/test_calc.c` (tick steps and labels, view maps, zoom
@@ -153,6 +175,7 @@ saddles, poles and dashes, region areas, equation and inequality rows and
 their errors, statistics and fits checked against an independent fit,
 lists and their errors, cells from the calculator line, fill, ranges in
 stats and fits, rows that use cells, histograms and box plots, and the
-Sheet view by click, typing and keys),
+Sheet view by click, typing and keys, geometry from the calculator line,
+dragging a point on the graph and a row that measures it),
 `tests/cli_smoke.sh`, and ten frames of the real window with
 `SDL_VIDEODRIVER=dummy` when SDL2 is installed.

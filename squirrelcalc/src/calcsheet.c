@@ -323,9 +323,14 @@ static const struct {
 };
 #define NFUNCS (int)(sizeof FUNCS / sizeof FUNCS[0])
 
+/* in any case: =SUM(A1:A3) as spreadsheets write it */
 static int find_func(const char *name, size_t len) {
-    for (int i = 0; i < NFUNCS; i++)
-        if (strlen(FUNCS[i].name) == len && !strncmp(FUNCS[i].name, name, len)) return i;
+    for (int i = 0; i < NFUNCS; i++) {
+        if (strlen(FUNCS[i].name) != len) continue;
+        size_t k = 0;
+        while (k < len && tolower((unsigned char)name[k]) == FUNCS[i].name[k]) k++;
+        if (k == len) return i;
+    }
     return -1;
 }
 

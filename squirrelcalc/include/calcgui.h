@@ -9,6 +9,7 @@
 #ifndef CALCGUI_H
 #define CALCGUI_H
 
+#include "calcgeom.h"
 #include "calcgraph.h"
 #include "calcsheet.h"
 #include "calcstats.h"
@@ -102,6 +103,9 @@ typedef struct {
     int cell_r, cell_c;             /* which cell cell_line was loaded from */
     int sheet_top;                  /* the first row shown */
     int sheet_seen_r;               /* the selected row the view last followed */
+    /* geometry on the graph: A = (1, 2), c = circle(A, 3), ... */
+    CalcGeom geom;
+    int drag_geom, hot_geom; /* the point being dragged, and the one under the pointer; -1 for none */
     sqg_rect sheet_at;              /* the grid in the last frame: a 30-pixel row-number
                                        column, then 8 columns; 16-pixel rows under a header */
     char status[200];
@@ -123,7 +127,11 @@ void calc_gui_set(CalcGui *g, int i, const char *text);
  * The sheet: "B2 = 5" or "B2 = A1 * 2" (a formula) sets a cell, "fill B2:B10"
  * copies B2 down the range with its cell names moved, and expressions may
  * name cells and use sum(A1:A5), mean(xs), normalcdf(-1, 1) and the other
- * calcsheet.h functions. Adds the result to the history. Returns 0, or -1 on
+ * calcsheet.h functions. Geometry: "A = (1, 2)", "s = segment(A, B)",
+ * "c = circle(A, 3)", "M = midpoint(A, B)", "I = intersect(s, c)" and the
+ * rest of calcgeom.h, drawn on the graph (free points can be dragged);
+ * measurements such as distance(A, B) or area(p) in any expression;
+ * "delete NAME" and "geometry" (a list). Adds the result to the history. Returns 0, or -1 on
  * an error (also in the history). */
 int calc_gui_eval(CalcGui *g, const char *line);
 

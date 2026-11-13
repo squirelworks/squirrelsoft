@@ -35,6 +35,8 @@ void calc_gui_init(CalcGui *g) {
     snprintf(g->status, sizeof g->status, "%s", HINT);
     calc_sheet_init(&g->sheet);
     g->cell_r = g->cell_c = -1;
+    calc_geom_init(&g->geom);
+    g->drag_geom = g->hot_geom = -1;
 }
 
 double calc_gui_var(const CalcGui *g, const char *name) {
@@ -112,6 +114,11 @@ static CalcEnv make_env(const CalcGui *g, const char **names) {
 /* text with cells and sheet functions worked out into out (a copy when
  * there are none); 0, or -1 with why in msg */
 static int expand_text(const CalcGui *g, const char *text, char *out, size_t cap, char *msg, size_t msgcap) {
+    char measured[600];
+    if (calc_geom_needs(text)) { /* distance(A, B) and the other measurements first */
+        if (calc_geom_expand(&g->geom, text, measured, sizeof measured, msg, msgcap)) return -1;
+        text = measured;
+    }
     if (!calc_needs_expand(text)) {
         if (strlen(text) >= cap) {
             snprintf(msg, msgcap, "too long");
@@ -871,8 +878,9 @@ void calc_gui_recalc(CalcGui *g) {
     const char *names[CALC_VARS];
     CalcEnv env = make_env(g, names);
     calc_sheet_recalc(&g->sheet, &env);
+    calc_geom_update(&g->geom, &env, &g->sheet);
     for (int i = 0; i < CALC_N; i++)
-        if (calc_needs_expand(g->fx[i])) compile(g, i);
+        if (calc_needs_expand(g->fx[i]) || calc_geom_needs(g->fx[i])) compile(g, i);
     g->cell_r = -1; /* the edit line reloads from the cell */
 }
 
@@ -924,6 +932,41 @@ static int eval_line(CalcGui *g, const char *line) {
     if (cas == -2) cas = units_line(g, line);
     if (cas != -2) return cas;
     {
+        /* delete NAME, geometry: the shapes */
+        const char *rest = command(line, "delete");
+        if (rest) {
+            char nm[CALC_GEOM_NAME + 1], extra[2];
+            int n = sscanf(rest, "%16s %1s", nm, extra) == 1 ? calc_geom_delete(&g->geom, nm) : 0;
+            char out[200];
+            if (!n) {
+                hist_error(g, line, "name a point or shape: delete A");
+                return -1;
+            }
+            snprintf(out, sizeof out, "%s: %d gone", line, n);
+            hist_add(g, out);
+            g->drag_geom = g->hot_geom = -1;
+            return 0;
+        }
+        char word[16], extra[2];
+        if (sscanf(line, "%15s %1s", word, extra) == 1 && !strcmp(word, "geometry")) {
+            if (!g->geom.n) hist_add(g, "geometry: none yet; try A = (1, 2)");
+            for (int i = 0; i < g->geom.n; i++) {
+                char out[200];
+                calc_geom_describe(&g->geom, i, out, sizeof out);
+                hist_add(g, out);
+            }
+            return 0;
+        }
+        char nm[CALC_GEOM_NAME + 1];
+        int gi = sscanf(line, "%16s %1s", nm, extra) == 1 ? calc_geom_find(&g->geom, nm) : -1;
+        if (gi >= 0) {
+            char out[200];
+            calc_geom_describe(&g->geom, gi, out, sizeof out);
+            hist_add(g, out);
+            return 0;
+        }
+    }
+    {
         /* a list's name alone shows it */
         char name[SQM_NAME_LEN], extra[2];
         int k = sscanf(line, "%15s %1s", name, extra) == 1 ? find_list(g, name) : -1;
@@ -956,6 +999,32 @@ static int eval_line(CalcGui *g, const char *line) {
         name[len] = 0;
         int cr, cc;
         if (calc_cell_parse(name, &cr, &cc, NULL) == (int)len) return cell_assign(g, line, name, eq + 1);
+        if (!is_reserved(name) && strcmp(name, "ans")) {
+            int gi = calc_geom_find(&g->geom, name), rc = -2;
+            char why[96];
+            if (!isnan(calc_gui_var(g, name)) || find_list(g, name) >= 0) {
+                rc = -2; /* a number or a list keeps its kind */
+            } else {
+                const char *names[CALC_VARS];
+                CalcEnv env = make_env(g, names);
+                rc = calc_geom_define(&g->geom, name, eq + 1, &env, &g->sheet, why, sizeof why);
+            }
+            if (rc == -1) {
+                hist_error(g, line, why);
+                return -1;
+            }
+            if (rc == 0) {
+                calc_geom_describe(&g->geom, calc_geom_find(&g->geom, name), out, sizeof out);
+                hist_add(g, out);
+                return 0;
+            }
+            if (gi >= 0) {
+                snprintf(out, sizeof out, "%s: %s is a %s: delete it first", line, name,
+                         g->geom.o[gi].kind == CALC_G_POINT ? "point" : "shape");
+                hist_add(g, out);
+                return -1;
+            }
+        }
         if (is_reserved(name) || !strcmp(name, "ans")) {
             snprintf(out, sizeof out, "%s: %s can't be assigned", line, name);
             hist_add(g, out);
@@ -1070,11 +1139,32 @@ static void graph(CalcGui *g, sqg_ui *ui, sqg_rect r) {
         g->mouse_x = calc_x_at(&g->view, inner, in->mx + 0.5);
         g->mouse_y = calc_y_at(&g->view, inner, in->my + 0.5);
         if (in->wheel) calc_view_zoom(&g->view, pow(1.25, in->wheel), g->mouse_x, g->mouse_y);
-        if (in->pressed && !ui->hot) {
+        int hit = calc_geom_hit(&g->geom, inner, &g->view, in->mx + 0.5, in->my + 0.5, 7);
+        g->hot_geom = g->drag_geom >= 0 ? g->drag_geom : hit;
+        if (in->pressed && !ui->hot && hit >= 0) {
+            g->drag_geom = hit; /* a point to drag, not the plane */
+            ui->focus = 0;
+        } else if (in->pressed && !ui->hot) {
             g->dragging = 1;
             g->last_mx = g->press_mx = in->mx;
             g->last_my = g->press_my = in->my;
             ui->focus = 0;
+        }
+    }
+    if (!inside) g->hot_geom = g->drag_geom;
+    if (g->drag_geom >= 0) {
+        if (in->down) {
+            const char *names[CALC_VARS];
+            CalcEnv env = make_env(g, names);
+            double px = calc_x_at(&g->view, inner, in->mx + 0.5), py = calc_y_at(&g->view, inner, in->my + 0.5);
+            CalcGeomObj *o = &g->geom.o[g->drag_geom];
+            if (px != o->x || py != o->y) {
+                calc_geom_move(&g->geom, g->drag_geom, px, py, &env, &g->sheet);
+                for (int i = 0; i < CALC_N; i++) /* rows that measure the shapes */
+                    if (calc_geom_needs(g->fx[i])) compile(g, i);
+            }
+        } else {
+            g->drag_geom = -1;
         }
     }
     if (g->dragging && in->released && abs(in->mx - g->press_mx) + abs(in->my - g->press_my) < 4) {
@@ -1156,6 +1246,7 @@ static void graph(CalcGui *g, sqg_ui *ui, sqg_rect r) {
         if (g->fit_on == 2) calc_plot_fn(cv, inner, &g->view, fit_y, &g->fit, COL_FIT);
         calc_mark_points(cv, inner, &g->view, g->fit_x, g->fit_y, g->fit_n, COL_POINTS);
     }
+    calc_geom_draw(cv, inner, &g->view, &g->geom, g->hot_geom);
     /* crossings of each pair, in view */
     g->ncross = 0;
     for (int k = 0; k < CALC_PAIRS && g->show_cross; k++) {
