@@ -1,5 +1,6 @@
 #include "sqc_cmd.h"
 #include "sqc_dxf.h"
+#include "sqc_gui.h"
 #include "sqcad.h"
 
 #include <stdio.h>
@@ -22,6 +23,7 @@ static void usage(void) {
     puts("  PROBE <file>                     # detect dxf/dwg/sqdwg");
     puts("  run <drawing.sqdwg> [script.scr]  # the command line: LINE, CIRCLE, MOVE, PLOT, ...");
     puts("  plot <drawing.sqdwg> <out.svg> [A3] [1:100|FIT] [PORTRAIT]");
+    puts("  gui <drawing.sqdwg|in.dxf> [--snapshot out.ppm] [--frames N]   # the window");
     puts("  help");
     puts("");
     puts("AutoCAD .dwg: SAVEAS → DXF, then IMPORT-DXF.");
@@ -113,6 +115,57 @@ static int plot(int argc, char **argv) {
     return r == SQC_CMD_OK ? 0 : 1;
 }
 
+/* The window. A DXF is imported and saves next to it as .sqdwg; a missing
+ * file starts a new drawing there. --snapshot draws two frames off screen
+ * into a PPM instead of opening a window. */
+static int gui(int argc, char **argv) {
+    if (argc < 3) return usage(), 2;
+    const char *path = argv[2], *snapshot = NULL;
+    int frames = 0;
+    for (int i = 3; i < argc; i++) {
+        if (strcmp(argv[i], "--snapshot") == 0 && i + 1 < argc) snapshot = argv[++i];
+        else if (strcmp(argv[i], "--frames") == 0 && i + 1 < argc) frames = atoi(argv[++i]);
+        else return usage(), 2;
+    }
+    char save_as[256];
+    snprintf(save_as, sizeof save_as, "%s", path);
+    size_t n = strlen(save_as);
+    int dxf = n > 4 && (strcmp(save_as + n - 4, ".dxf") == 0 || strcmp(save_as + n - 4, ".DXF") == 0);
+    if (dxf && n + 2 < sizeof save_as) strcpy(save_as + n - 4, ".sqdwg");
+    sqc_session_init(&session, save_as);
+    FILE *probe = fopen(path, "r");
+    if (probe) {
+        fclose(probe);
+        int bad = dxf ? sqc_import_dxf(&session.dwg, path, NULL) : sqc_read_sqdwg(&session.dwg, path);
+        if (bad) {
+            fprintf(stderr, "cannot read %s\n", path);
+            return 1;
+        }
+    }
+    static SqcGui g;
+    sqc_gui_init(&g, &session);
+    if (!snapshot) return sqc_gui_run(&g, frames);
+    enum { W = 1000, H = 700 };
+    static uint32_t px[W * H];
+    sqg_canvas cv;
+    sqg_canvas_init(&cv, px, W, H, W);
+    sqg_ui ui;
+    sqg_ui_init(&ui, NULL, 1);
+    sqg_input in = {0};
+    in.mx = in.my = -1;
+    for (int f = 0; f < 2; f++) {
+        sqg_begin(&ui, &cv, &in);
+        sqc_gui_frame(&g, &ui);
+        sqg_end(&ui);
+    }
+    if (sqg_write_ppm(&cv, snapshot)) {
+        fprintf(stderr, "cannot write %s\n", snapshot);
+        return 1;
+    }
+    printf("wrote %s (%dx%d)\n", snapshot, W, H);
+    return 0;
+}
+
 int main(int argc, char **argv) {
     if (argc < 2) {
         usage();
@@ -126,6 +179,7 @@ int main(int argc, char **argv) {
 
     if (strcmp(cmd, "run") == 0 || strcmp(cmd, "RUN") == 0) return run(argc, argv);
     if (strcmp(cmd, "plot") == 0 || strcmp(cmd, "PLOT") == 0) return plot(argc, argv);
+    if (strcmp(cmd, "gui") == 0 || strcmp(cmd, "GUI") == 0) return gui(argc, argv);
 
     SqcDrawing *d = (SqcDrawing *)calloc(1, sizeof(SqcDrawing));
     if (!d) return 1;

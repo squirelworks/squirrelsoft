@@ -24,6 +24,31 @@ drawing.sqdwg  --EXPORT-DXF-->  file.dxf  --open in-->  AutoCAD
 Imported: `LINE`, `CIRCLE`, `ARC`, `TEXT`/`MTEXT`, `LWPOLYLINE`, `LAYER`.  
 Sample: `samples/autocad_bridge.dxf`.
 
+## The window
+
+```bash
+./build/squirrelcad gui plan.sqdwg            # or a .dxf: saves as plan.sqdwg
+./build/squirrelcad gui plan.sqdwg --snapshot plan.ppm   # off screen, for CI
+```
+
+A drawing area on black with a toolbar and a `Command:` line, on
+`libs/sqgui` (SDL2; without SDL2 only `--snapshot` works).
+
+- **Select**, **Line** (a chain; Esc ends it), **Circle** (centre, then a
+  point on it) and **PLine** (Enter ends it; clicking the first point
+  closes it). A second Esc goes back to Select.
+- Points snap to ends, midpoints, centres and quadrants (through blocks),
+  then to the grid when **Grid** is on. **Ortho** keeps a line horizontal
+  or vertical from the last point. The status line shows the point and the
+  snap.
+- The wheel zooms about the pointer, dragging empty space pans, **Fit**
+  shows the whole drawing.
+- A click selects an entity (an insert as a whole); **Erase** or Delete
+  removes it, **Undo** puts it back, **Save** writes the `.sqdwg`.
+- Every change goes through the command line, so anything the toolbar
+  lacks (`LAYER`, `MOVE`, `TEXT`, `PLOT`, ...) can be typed there, and
+  `QUIT` closes the window.
+
 ## Features
 
 - Entities: LINE, CIRCLE, ARC, PLINE, TEXT

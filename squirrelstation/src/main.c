@@ -1,4 +1,5 @@
 #include "sqs_dxf.h"
+#include "sqs_gui.h"
 #include "sqstation.h"
 
 #include <stdio.h>
@@ -30,6 +31,7 @@ static void usage(void) {
     puts("  squirrelstation import-dxf <out.sqdgn> <in.dxf>   # MicroStation bridge");
     puts("  squirrelstation export-dxf <in.sqdgn> <out.dxf>");
     puts("  squirrelstation probe <file>                     # detect dxf/dgn/sqdgn");
+    puts("  squirrelstation gui <file|in.dxf> [--view top|front|right|iso] [--snapshot out.ppm] [--frames N]");
     puts("Drawing commands take --level NAME (default: the first level).");
     puts("");
     puts("MicroStation .dgn: export DXF from MicroStation, then import-dxf.");
@@ -107,6 +109,69 @@ static int done(int id, const char *what, const char *path) {
     return save(&d, path) == 0 ? 0 : 1;
 }
 
+/* The window. A DXF is imported and saves next to it as .sqdgn; a missing
+ * file starts a new design there. References are loaded for display and
+ * snaps. --snapshot draws two frames off screen into a PPM instead. */
+static int gui(int argc, char **argv) {
+    if (argc < 3) return usage(), 1;
+    const char *path = argv[2], *snapshot = NULL;
+    int frames = 0, view = SQS_VIEW_TOP;
+    for (int i = 3; i < argc; i++) {
+        if (strcmp(argv[i], "--snapshot") == 0 && i + 1 < argc) snapshot = argv[++i];
+        else if (strcmp(argv[i], "--frames") == 0 && i + 1 < argc) frames = atoi(argv[++i]);
+        else if (strcmp(argv[i], "--view") == 0 && i + 1 < argc) {
+            const char *v = argv[++i];
+            view = !strcmp(v, "top") ? SQS_VIEW_TOP : !strcmp(v, "front") ? SQS_VIEW_FRONT
+                 : !strcmp(v, "right") ? SQS_VIEW_RIGHT : !strcmp(v, "iso") ? SQS_VIEW_ISO : -1;
+            if (view < 0) return usage(), 1;
+        } else
+            return usage(), 1;
+    }
+    char save_as[256];
+    snprintf(save_as, sizeof save_as, "%s", path);
+    int dxf = ends_with(save_as, ".dxf") || ends_with(save_as, ".DXF");
+    if (dxf) strcpy(save_as + strlen(save_as) - 4, ".sqdgn");
+    sqs_design_init(&d, "untitled");
+    FILE *probe = fopen(path, "rb");
+    if (probe) {
+        fclose(probe);
+        if (dxf ? sqs_import_dxf(&d, path, NULL) : load(&d, path)) {
+            fprintf(stderr, "cannot read %s\n", path);
+            return 1;
+        }
+    }
+    static const SqsDesign *refs[SQS_MAX_REFS];
+    for (int i = 0; i < d.ref_count; i++) {
+        if (load(&refd[i], d.refs[i].path) == 0) refs[i] = &refd[i];
+        else fprintf(stderr, "reference %s not loaded\n", d.refs[i].path);
+    }
+    static SqsGui g;
+    sqs_gui_init(&g, &d, save_as);
+    g.refs = refs;
+    g.nrefs = d.ref_count;
+    g.view = view;
+    if (!snapshot) return sqs_gui_run(&g, frames);
+    enum { W = 1000, H = 700 };
+    static uint32_t px[W * H];
+    sqg_canvas cv;
+    sqg_canvas_init(&cv, px, W, H, W);
+    sqg_ui ui;
+    sqg_ui_init(&ui, NULL, 1);
+    sqg_input in = {0};
+    in.mx = in.my = -1;
+    for (int f = 0; f < 2; f++) {
+        sqg_begin(&ui, &cv, &in);
+        sqs_gui_frame(&g, &ui);
+        sqg_end(&ui);
+    }
+    if (sqg_write_ppm(&cv, snapshot)) {
+        fprintf(stderr, "cannot write %s\n", snapshot);
+        return 1;
+    }
+    printf("wrote %s (%dx%d)\n", snapshot, W, H);
+    return 0;
+}
+
 int main(int argc, char **argv) {
     if (argc < 2) {
         usage();
@@ -117,6 +182,7 @@ int main(int argc, char **argv) {
         usage();
         return 0;
     }
+    if (strcmp(cmd, "gui") == 0) return gui(argc, argv);
     if (strcmp(cmd, "new") == 0) {
         if (argc < 3) {
             usage();

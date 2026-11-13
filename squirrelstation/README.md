@@ -48,6 +48,38 @@ comes back with its cells. Anything unread is counted as `skipped`.
   length checked; `convert` between them; ASCII DXF import and export (solids
   and meshes export as 3DFACE, curves as sampled polylines)
 
+## The window
+
+```bash
+./build/squirrelstation gui site.sqdgn --view iso      # or a .dxf: saves as site.sqdgn
+./build/squirrelstation gui site.sqdgn --snapshot site.ppm   # off screen, for CI
+```
+
+One view at a time on `libs/sqgui` (SDL2; without SDL2 only `--snapshot`
+works), with a toolbar and a `Keyin:` line.
+
+- **Top**, **Front**, **Right** and **Iso** views of everything the design
+  draws: levels, placed cells and references, solids as their edges. The
+  wheel zooms about the pointer, dragging empty space pans, **Fit** shows
+  it all. An axis triad sits in the corner.
+- **Line** (a chain) and **Circle** (centre, then a point on it) take
+  clicks or keyins. Points snap like AccuSnap: `sqs_snap` in Top view
+  (intersections and nearest too), ends, middles, centres and vertices on
+  screen in the others. Free points land on the view plane through the
+  last point (in Iso, the horizontal plane).
+- While a tool has a point, the **AccuDraw compass** sits on it: the
+  pointer indexes to an axis when within a few pixels of it, **Ortho**
+  locks to the nearer axis, `dl=dx,dy[,dz]` and `di=dist,angle` are taken
+  from that point, `xy=` is absolute. The status line shows distance and
+  angle.
+- **Select** picks an element (a placed cell as a whole) and shows its
+  type, level, length, area and volume. **Delete** removes it, **Undo**
+  puts it back, **Save** writes `.sqdgn` or `.sqdgnb` by the extension.
+- The keyin line also takes `LINE`, `CIRCLE`, `SELECT`, `TOP`, `FRONT`,
+  `RIGHT`, `ISO`, `FIT`, `UNDO`, `SAVE`, `DELETE`, `LV=name` (the level new
+  elements go on) and `QUIT`. Esc on an empty keyin line works as in the
+  view.
+
 ## Build
 
 ```bash

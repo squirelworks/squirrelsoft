@@ -20,3 +20,12 @@ that cells survive the trip.
 `.sqdgn` is line-oriented text (`SQDGN 2`, one record per line). `.sqdgnb` is
 `SQDGNB\1\0` followed by tagged little-endian records, each with its length;
 a reader that meets a short, oversized or unknown record refuses the file.
+
+## The window
+
+`sqs_gui` draws one view (Top, Front, Right or Iso) of what `sqs_visit`
+walks, so the window shows exactly what is snapped to. Picking works on
+whole top-level elements through `sqs_visit_element`, which walks one
+element the same way (a placed cell expanded). Every segment is clipped to
+the drawing area before it is drawn, so zooming far into a long line costs
+no more than drawing the visible part.

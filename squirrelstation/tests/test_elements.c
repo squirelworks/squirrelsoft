@@ -92,6 +92,13 @@ static void test_elements(void) {
     CHECK(sqs_add_level(&d, "Default", 0) == -1); /* names are unique */
 }
 
+static void count_visit(const SqsElement *e, const SqsLevel *lv, int ref, void *ctx) {
+    (void)e;
+    (void)lv;
+    (void)ref;
+    ++*(int *)ctx;
+}
+
 static void test_cells_levels(void) {
     sqs_design_init(&d, "cells");
     int L = d.levels[0].id;
@@ -117,7 +124,8 @@ static void test_cells_levels(void) {
     /* a cell of the cell */
     int m2[] = {pc};
     CHECK(sqs_define_cell(&d, "pair", P(100, 0, 0), m2, 1) > 0);
-    CHECK(sqs_place_cell(&d, L, "pair", P(0, 50, 0), 1, 180) > 0);
+    int pp = sqs_place_cell(&d, L, "pair", P(0, 50, 0), 1, 180);
+    CHECK(pp > 0);
     s = sqs_accu_snap(&d, P(0, 46, 0), 0.1);
     CHECK(s.kind == SQS_SNAP_ENDPOINT && same(s.p, P(0, 46, 0)));
     /* a cell can't hold itself */
@@ -135,6 +143,25 @@ static void test_cells_levels(void) {
     sqs_level_set(&d, "walls", 1, 0);
     CHECK(sqs_accu_snap(&d, P(0.1, 46.1, 0), 0.5).kind == SQS_SNAP_ENDPOINT);
     CHECK(sqs_level_set(&d, "roof", 1, 0) == -1);
+
+    /* one element's walk: a placement expanded, a member or a hidden one gives nothing */
+    int n = 0;
+    sqs_visit_element(&d, pp, count_visit, &n); /* "pair" placed: door's three members */
+    CHECK(n == 3);
+    n = 0;
+    sqs_visit_element(&d, l1, count_visit, &n);
+    CHECK(n == 0);
+    sqs_visit_element(&d, 999, count_visit, &n);
+    CHECK(n == 0);
+    /* deleting: gone, ids kept, and out of the cell that held it */
+    int before = d.element_count, last_id = d.elements[d.element_count - 1].id;
+    CHECK(sqs_delete(&d, a1) == 0);
+    CHECK(d.element_count == before - 1 && !sqs_find(&d, a1) && sqs_find(&d, last_id));
+    CHECK(sqs_find_cell(&d, "door")->member_count == 2);
+    n = 0;
+    sqs_visit_element(&d, pp, count_visit, &n);
+    CHECK(n == 2);
+    CHECK(sqs_delete(&d, a1) == -1);
 }
 
 static void test_snaps_keyins(void) {

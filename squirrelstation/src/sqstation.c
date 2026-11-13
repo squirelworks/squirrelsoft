@@ -171,6 +171,22 @@ const SqsElement *sqs_find(const SqsDesign *d, int id) {
     return NULL;
 }
 
+int sqs_delete(SqsDesign *d, int id) {
+    int i = 0;
+    while (i < d->element_count && d->elements[i].id != id) i++;
+    if (i == d->element_count) return -1;
+    memmove(&d->elements[i], &d->elements[i + 1], (size_t)(d->element_count - i - 1) * sizeof d->elements[0]);
+    d->element_count--;
+    for (int c = 0; c < d->cell_count; c++) {
+        SqsCell *cell = &d->cells[c];
+        int k = 0;
+        for (int j = 0; j < cell->member_count; j++)
+            if (cell->member_ids[j] != id) cell->member_ids[k++] = cell->member_ids[j];
+        cell->member_count = k;
+    }
+    return 0;
+}
+
 const SqsCell *sqs_find_cell(const SqsDesign *d, const char *name) {
     for (int i = 0; i < d->cell_count; i++)
         if (strcmp(d->cells[i].name, name) == 0) return &d->cells[i];
@@ -491,6 +507,13 @@ void sqs_visit(const SqsDesign *d, const SqsDesign *const *refs, int nrefs, SqsV
         for (int i = 0; i < rd->element_count; i++)
             if (!in[i]) emit(rd, &rd->elements[i], NULL, &x, 1, r, 0, &w);
     }
+}
+
+void sqs_visit_element(const SqsDesign *d, int id, SqsVisit fn, void *ctx) {
+    const SqsElement *e = sqs_find(d, id);
+    if (!e || sqs_in_cell(d, id)) return;
+    Walk w = {fn, ctx, VISIT_BUDGET};
+    emit(d, e, NULL, NULL, 0, -1, 0, &w);
 }
 
 /* ---- snaps ---- */
