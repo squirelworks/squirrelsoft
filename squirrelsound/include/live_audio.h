@@ -35,6 +35,14 @@ void live_audio_stop(LiveAudio *la);
 /* Copy up to max_n newest samples into out (oldest→newest). Returns count. */
 size_t live_audio_read(LiveAudio *la, double *out, size_t max_n);
 
+/* Recording tap: every sample in order, each once. Copies up to max_n
+ * samples that arrived since the last take (oldest first) and returns the
+ * count; if more than the ring holds piled up, the oldest are skipped and
+ * *dropped (when not NULL) says how many. live_audio_take_reset() starts
+ * the tap at "now". */
+size_t live_audio_take(LiveAudio *la, double *out, size_t max_n, size_t *dropped);
+void live_audio_take_reset(LiveAudio *la);
+
 double live_audio_sample_rate(const LiveAudio *la);
 LiveSourceKind live_audio_kind(const LiveAudio *la);
 const char *live_audio_kind_name(LiveSourceKind k);

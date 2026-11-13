@@ -22,6 +22,7 @@ typedef struct {
     double db_max; /* e.g. 0 */
     double f_min_hz;
     double f_max_hz;
+    double cal_db;  /* calibration offset added to every level (per device) */
 } LiveEngineConfig;
 
 typedef struct {
@@ -32,6 +33,7 @@ typedef struct {
     double *mag;
     double *mag_hold;
     double *freq;
+    double *time;  /* last frame's samples, before the window (scope view) */
     float *waterfall; /* rows * bins, newest at row 0 after scroll */
     double window_sum; /* sum of window coefficients, for dBFS scaling */
     size_t bins;
@@ -52,6 +54,18 @@ void live_engine_set_freq_range(LiveEngine *e, double fmin, double fmax);
 /* Opaque 0xAARRGGBB colour for t in 0..1: black > blue > cyan > green >
  * yellow > red > white, black at the floor. Out-of-range t is clamped. */
 unsigned int live_color_argb(float t);
+
+/* Fractional-octave band levels of the current spectrum (fraction 1 or 3),
+ * for bands centred inside the frequency range. Writes up to cap centres
+ * and levels and returns the band count. Includes cal_db like mag. */
+size_t live_engine_bands(const LiveEngine *e, int fraction, double *centre, double *db,
+                         size_t cap);
+
+/* Up to max_n peaks of spec (e->mag or e->mag_hold) inside the frequency
+ * range, loudest first: local maxima at least 10 dB above db_min and
+ * min_sep_hz apart. Frequencies are interpolated. Returns the count. */
+size_t live_engine_peaks(const LiveEngine *e, const double *spec, size_t max_n,
+                         double min_sep_hz, double *hz, double *db);
 
 /* Map frequency to bin index in current FFT. */
 size_t live_engine_hz_to_bin(const LiveEngine *e, double hz);

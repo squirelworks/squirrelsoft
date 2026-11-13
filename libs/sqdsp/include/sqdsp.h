@@ -73,4 +73,24 @@ int sqdsp_linfit(const double *x, const double *y, size_t n, double *a, double *
 
 SqdspWindow sqdsp_window_parse(const char *name);
 
+/* Equivalent noise bandwidth of window w, in bins: n * sum(w^2) / sum(w)^2
+ * (1.0 rectangular, 1.5 Hann). */
+double sqdsp_window_enbw(const double *w, size_t n);
+
+/* Fractional-octave bands, base 10 (IEC 61260-1): centres 1000 * G^(x/b)
+ * with G = 10^(3/10), edges at G^(+-1/(2b)) around each centre. fraction
+ * is b: 1 for octaves, 3 for third octaves. Writes the bands whose centre
+ * lies in [fmin, fmax] (up to cap) and returns how many there are. Any of
+ * the output arrays may be NULL. */
+size_t sqdsp_octave_bands(int fraction, double fmin, double fmax, double *centre,
+                          double *lo, double *hi, size_t cap);
+
+/* Band levels from a dB spectrum (one value per bin, e.g. dBFS of a
+ * sine's amplitude): sums the power of the bins whose frequency lies in
+ * [lo, hi) and divides by enbw (the window's ENBW in bins) so a pure tone
+ * reads its own level. Bands with no bins, or below floor_db, get floor_db. */
+void sqdsp_band_levels_db(const double *mag_db, const double *freq, size_t nbins,
+                          const double *lo, const double *hi, size_t nbands, double enbw,
+                          double floor_db, double *out_db);
+
 #endif

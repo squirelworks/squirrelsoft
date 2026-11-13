@@ -1,6 +1,7 @@
 #include "live_audio.h"
 #include "live_engine.h"
 #include "live_prefs.h"
+#include "live_gui.h"
 #include "live_view.h"
 #include "spectrogram.h"
 #include "sqdsp.h"
@@ -24,6 +25,7 @@ static void usage(void) {
     puts("  squirrelsound spectrogram <in.wav> <out.svg> [--fft N] [--overlap F]");
     puts("  squirrelsound live [--source demo|wav|mic|loopback|alsa] [--file path] [--device name]");
     puts("                     [--fft N] [--window name] [--freq Hz] [--headless]");
+    puts("                     [--view spectrum|octave|third|scope] [--cal dB] [--record out.wav]");
     puts("                     [--gui-snapshot out.ppm [--width W] [--height H] [--frames N]]");
     puts("                     [--frames N] [--max-hold] [--direction waterfall|fountain]");
     puts("  squirrelsound devices            list capture devices (mic inputs, monitor sources)");
@@ -314,25 +316,48 @@ int main(int argc, char **argv) {
         }
 
         int rc;
-        const char *snap = get_opt(argc, argv, "--gui-snapshot", NULL);
-        if (snap) {
-            int frames = atoi(get_opt(argc, argv, "--frames", "30"));
-            LiveDirection dir = live_direction_parse(get_opt(argc, argv, "--direction", NULL),
-                                                     LIVE_DIR_WATERFALL);
-            rc = live_view_gui_snapshot(audio, &engine, dir, frames,
-                                        atoi(get_opt(argc, argv, "--width", "960")),
-                                        atoi(get_opt(argc, argv, "--height", "640")), snap);
+        char label[300];
+        live_view_source_label(audio, label, sizeof label);
+        char prefs[1024];
+        const char *prefs_path = live_prefs_path(prefs, sizeof prefs) == 0 ? prefs : NULL;
+        /* --cal wins for this run; otherwise the saved offset for this input */
+        const char *cal = get_opt(argc, argv, "--cal", NULL);
+        if (cal) engine.cfg.cal_db = atof(cal);
+        else if (prefs_path) (void)live_prefs_load_cal(prefs_path, label, &engine.cfg.cal_db);
+
+        LiveViewOptions vo;
+        memset(&vo, 0, sizeof vo);
+        vo.source_label = label;
+        vo.record_path = get_opt(argc, argv, "--record", NULL);
+        vo.frames = atoi(get_opt(argc, argv, "--frames", "30"));
+        vo.print_every = 5;
+        vo.width = atoi(get_opt(argc, argv, "--width", "960"));
+        vo.height = atoi(get_opt(argc, argv, "--height", "640"));
+        vo.snapshot = get_opt(argc, argv, "--gui-snapshot", NULL);
+        const char *view = get_opt(argc, argv, "--view", "spectrum");
+        if (strcmp(view, "octave") == 0) vo.view = LIVE_VIEW_OCTAVE;
+        else if (strcmp(view, "third") == 0) vo.view = LIVE_VIEW_THIRD;
+        else if (strcmp(view, "scope") == 0) vo.view = LIVE_VIEW_SCOPE;
+        else if (strcmp(view, "spectrum") == 0) vo.view = LIVE_VIEW_SPECTRUM;
+        else {
+            fprintf(stderr, "unknown --view %s (spectrum, octave, third, scope)\n", view);
+            live_engine_free(&engine);
+            live_audio_close(audio);
+            return 1;
+        }
+        if (vo.snapshot) {
+            vo.direction = live_direction_parse(get_opt(argc, argv, "--direction", NULL),
+                                                LIVE_DIR_WATERFALL);
+            rc = live_view_gui_snapshot(audio, &engine, &vo);
         } else if (has_flag(argc, argv, "--headless")) {
-            int frames = atoi(get_opt(argc, argv, "--frames", "30"));
-            rc = live_view_headless_run(audio, &engine, frames, 5);
+            rc = live_view_headless_run(audio, &engine, &vo);
         } else {
             /* --direction wins for this run; otherwise use the saved choice. */
-            char prefs[1024];
-            const char *prefs_path = live_prefs_path(prefs, sizeof prefs) == 0 ? prefs : NULL;
+            vo.prefs_path = prefs_path;
             LiveDirection dir = LIVE_DIR_WATERFALL;
             if (prefs_path) (void)live_prefs_load_direction(prefs_path, &dir);
-            dir = live_direction_parse(get_opt(argc, argv, "--direction", NULL), dir);
-            rc = live_view_sdl_run(audio, &engine, dir, prefs_path);
+            vo.direction = live_direction_parse(get_opt(argc, argv, "--direction", NULL), dir);
+            rc = live_view_sdl_run(audio, &engine, &vo);
         }
         live_engine_free(&engine);
         live_audio_close(audio);

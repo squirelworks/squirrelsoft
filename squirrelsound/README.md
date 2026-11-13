@@ -50,6 +50,9 @@ make android-test
 ./build/squirrelsound live --source demo --headless --frames 30
 ./build/squirrelsound live --source demo --direction fountain
 ./build/squirrelsound live --source demo --gui-snapshot live.ppm --frames 30   # the window, drawn to a file
+./build/squirrelsound live --source mic --view third    # start on the 1/3-octave bars
+./build/squirrelsound live --source mic --record take.wav   # record from the start (16-bit mono WAV)
+./build/squirrelsound live --source mic --cal 4.5       # calibration offset for this run, in dB
 ```
 
 `--source loopback` listens to the computer's own output through the
@@ -65,6 +68,22 @@ Normal, Fast); the spectrum fills the top half and the LOFARgram the bottom
 half. The mouse wheel over either plot zooms around the pointer, and the
 keys from the earlier window still work (space, m, r, 1-5, 8/9/0, w, [ ],
 arrows, q/Esc).
+
+The top half can show four views (the segments in the toolbar, or `v`):
+
+- **Spectrum**, with the loudest peaks labelled with frequency and level
+  (**Peaks**, or `p`; with Hold on they follow the held trace).
+- **Octave** and **1/3 Oct**: IEC 61260 base-10 band levels from the
+  shared `libs/sqdsp` core, corrected for the window's noise bandwidth so a
+  tone reads its own level. With Hold on, each bar keeps a hold tick.
+- **Scope**: the last frame's samples, started on a rising zero crossing.
+
+**Rec** (or `R`) records what the source delivers, every sample once, to
+`squirrelsound-YYYYMMDD-HHMMSS.wav` in the current directory (or the
+`--record` file the first time). `-` and `=` move the calibration offset by
+1 dB; it is saved per input (`cal.<source>=` in the prefs file below) and
+loaded the next time the same input is used. `--cal` overrides it for one
+run.
 
 In the live window, `w` (or the Fountain button) switches between **Waterfall** (newest row at the top,
 history scrolls down) and **Fountain** (newest row at the bottom, history

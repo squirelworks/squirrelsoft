@@ -79,6 +79,15 @@ static void feed(double hz, int frames)
     free(buf);
 }
 
+static int count_col(sqg_rect r, uint32_t col)
+{
+    int n = 0;
+    for (int y = r.y; y < r.y + r.h; y++)
+        for (int x = r.x; x < r.x + r.w; x++)
+            n += px[y * W + x] == col;
+    return n;
+}
+
 static int peak_x(void)
 {
     double lo = e.cfg.f_min_hz, hi = e.cfg.f_max_hz;
@@ -156,7 +165,11 @@ int main(int argc, char **argv)
     x += sqg_button_w(&ui, "Hold") + 4;
     int reset_x = x + sqg_button_w(&ui, "Reset") / 2;
     x += sqg_button_w(&ui, "Reset") + 4;
+    int peaks_x = x + sqg_button_w(&ui, "Peaks") / 2;
+    x += sqg_button_w(&ui, "Peaks") + 4;
     int fountain_x = x + sqg_button_w(&ui, "Fountain") / 2;
+    x += sqg_button_w(&ui, "Fountain") + 4;
+    int rec_x = x + sqg_button_w(&ui, "Rec") / 2;
 
     click(run_x, y1);
     CHECK(g.paused == 1);
@@ -180,21 +193,93 @@ int main(int argc, char **argv)
     CHECK(get(pxk, bot) != get(W - 2, bot));
     CHECK(get(pxk, top) == get(W - 2, top));
 
-    /* toolbar row 2: range presets over three fifths, then speed */
-    int y2 = 8 + lh + lh / 2, rw = (W - 8) * 3 / 5;
+    /* toolbar row 2: range presets over two fifths, the views, then speed */
+    int y2 = 8 + lh + lh / 2, rw = (W - 8) * 2 / 5, vw = (W - 8) * 7 / 20;
     click(4 + rw * 5 / 10, y2); /* Bass, the middle of five */
     CHECK(g.range == LIVE_RANGE_BASS);
     CHECK(e.cfg.f_min_hz == 20 && e.cfg.f_max_hz == 250);
     click(4 + rw * 7 / 10, y2); /* Speech */
     CHECK(g.range == LIVE_RANGE_SPEECH);
     CHECK(e.cfg.f_min_hz == 100 && e.cfg.f_max_hz == 8000);
-    int sx = 4 + rw + 8, sw = W - 4 - sx;
+    int sx = 4 + rw + 8 + vw + 8, sw = W - 4 - sx;
     click(sx + sw / 6, y2); /* Slow */
     CHECK(g.speed == LIVE_SPEED_SLOW && live_gui_scroll_skip(&g) == 4);
     int taken = 0;
     for (int i = 0; i < 8; i++)
         taken += live_gui_take_frame(&g);
     CHECK(taken == 2);
+
+    /* Peaks and Rec toggles */
+    CHECK(g.peaks == 1);
+    click(peaks_x, y1);
+    CHECK(g.peaks == 0);
+    click(peaks_x, y1);
+    CHECK(g.peaks == 1);
+    click(rec_x, y1);
+    CHECK(g.record == 1 && g.record_changed == 1);
+    g.record_changed = 0;
+    g.rec_info = "REC 0:01 take.wav";
+    frame();
+    g.rec_info = NULL;
+    live_gui_key(&g, &e, 'R', 0);
+    CHECK(g.record == 0 && g.record_changed == 1);
+    g.record_changed = 0;
+
+    /* views: click each segment; every view draws its own thing */
+    int vx = 4 + rw + 8;
+    live_gui_set_range(&g, &e, LIVE_RANGE_HUMAN);
+    feed(1000, 4);
+    click(vx + vw * 3 / 8, y2); /* Octave, the second of four */
+    CHECK(g.view == LIVE_VIEW_OCTAVE);
+    CHECK(count_col(g.spectrum, 0xFF3CA0E0u) > 1000);
+    CHECK(g.band_n == 10 && g.band_frac == 1); /* 31.5 Hz..16 kHz in 20 Hz..16 kHz */
+    click(vx + vw * 5 / 8, y2); /* 1/3 Oct */
+    CHECK(g.view == LIVE_VIEW_THIRD && g.band_n == 29);
+    /* the 1 kHz band is the tallest bar: its column has the most bar pixels */
+    {
+        int best = -1, best_n = 0;
+        for (int b = 0; b < g.band_n; b++) {
+            int left = 30, pw = g.spectrum.w - left - 4;
+            int cx = g.spectrum.x + left + pw * (2 * b + 1) / (2 * g.band_n);
+            int n = 0;
+            for (int yy = g.spectrum.y; yy < g.spectrum.y + g.spectrum.h; yy++)
+                n += get(cx, yy) == 0xFF3CA0E0u;
+            if (n > best_n) {
+                best_n = n;
+                best = b;
+            }
+        }
+        CHECK(best == 16); /* 25 Hz is band 0: ..., 800, 1000 */
+    }
+    click(vx + vw * 7 / 8, y2); /* Scope */
+    CHECK(g.view == LIVE_VIEW_SCOPE);
+    CHECK(count_col(g.spectrum, 0xFF60FF90u) > g.spectrum.w);
+    live_gui_key(&g, &e, 'v', 0);
+    CHECK(g.view == LIVE_VIEW_SPECTRUM);
+
+    /* peak labels: white text appears near the 1 kHz peak only with Peaks on */
+    frame();
+    int lab_on = count_col(g.spectrum, 0xFFE8E8E8u);
+    g.peaks = 0;
+    frame();
+    CHECK(lab_on > 20 && count_col(g.spectrum, 0xFFE8E8E8u) == 0);
+    g.peaks = 1;
+
+    /* calibration: +/- keys move every level and the trace with it */
+    double before = e.peak_db;
+    live_gui_key(&g, &e, '=', 0);
+    live_gui_key(&g, &e, '+', 0);
+    CHECK(e.cfg.cal_db == 2 && g.cal_changed);
+    CHECK(fabs(e.peak_db - before - 2) < 1e-9);
+    feed(1000, 2);
+    CHECK(fabs(e.peak_db - before - 2) < 0.2);
+    live_gui_key(&g, &e, '-', 0);
+    live_gui_key(&g, &e, '-', 0);
+    CHECK(e.cfg.cal_db == 0);
+    live_gui_set_cal(&g, &e, 500);
+    CHECK(e.cfg.cal_db == 100);
+    live_gui_set_cal(&g, &e, 0);
+    g.cal_changed = 0;
 
     /* keyboard shortcuts */
     CHECK(live_gui_key(&g, &e, '5', 0) == 0);

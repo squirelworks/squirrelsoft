@@ -117,11 +117,7 @@ static void wr_u16(FILE *f, uint16_t v) {
     fwrite(b, 1, 2, f);
 }
 
-int wav_write_pcm16(const char *path, const double *samples, size_t n,
-                    uint32_t sample_rate) {
-    FILE *f = fopen(path, "wb");
-    if (!f) return -1;
-    uint32_t data_bytes = (uint32_t)(n * 2);
+static void wr_header(FILE *f, uint32_t sample_rate, uint32_t data_bytes) {
     fwrite("RIFF", 1, 4, f);
     wr_u32(f, 36 + data_bytes);
     fwrite("WAVE", 1, 4, f);
@@ -135,14 +131,68 @@ int wav_write_pcm16(const char *path, const double *samples, size_t n,
     wr_u16(f, 16);
     fwrite("data", 1, 4, f);
     wr_u32(f, data_bytes);
+}
+
+static int wr_samples(FILE *f, const double *samples, size_t n) {
     for (size_t i = 0; i < n; i++) {
         double v = samples[i];
         if (v > 1.0) v = 1.0;
         if (v < -1.0) v = -1.0;
         int16_t s = (int16_t)lrint(v * 32767.0);
         unsigned char b[2] = {(unsigned char)(s & 255), (unsigned char)((s >> 8) & 255)};
-        fwrite(b, 1, 2, f);
+        if (fwrite(b, 1, 2, f) != 2) return -1;
     }
-    fclose(f);
     return 0;
+}
+
+int wav_write_pcm16(const char *path, const double *samples, size_t n,
+                    uint32_t sample_rate) {
+    FILE *f = fopen(path, "wb");
+    if (!f) return -1;
+    wr_header(f, sample_rate, (uint32_t)(n * 2));
+    int rc = wr_samples(f, samples, n);
+    return fclose(f) == 0 && rc == 0 ? 0 : -1;
+}
+
+struct WavStream {
+    FILE *f;
+    uint32_t rate;
+    uint64_t frames;
+    int err;
+};
+
+WavStream *wav_stream_open(const char *path, uint32_t sample_rate) {
+    WavStream *w = (WavStream *)calloc(1, sizeof *w);
+    if (!w) return NULL;
+    w->f = fopen(path, "wb");
+    if (!w->f) {
+        free(w);
+        return NULL;
+    }
+    w->rate = sample_rate;
+    wr_header(w->f, sample_rate, 0);
+    return w;
+}
+
+int wav_stream_write(WavStream *w, const double *samples, size_t n) {
+    if (!w || w->err) return -1;
+    /* 16-bit mono RIFF tops out just under 4 GiB of data */
+    if (w->frames + n > 0x7FFFFFF0ull) n = (size_t)(0x7FFFFFF0ull - w->frames);
+    if (wr_samples(w->f, samples, n) != 0) w->err = 1;
+    w->frames += n;
+    return w->err ? -1 : 0;
+}
+
+double wav_stream_seconds(const WavStream *w) {
+    return w && w->rate ? (double)w->frames / (double)w->rate : 0.0;
+}
+
+int wav_stream_close(WavStream *w) {
+    if (!w) return -1;
+    int rc = w->err ? -1 : 0;
+    if (fseek(w->f, 0, SEEK_SET) == 0) wr_header(w->f, w->rate, (uint32_t)(w->frames * 2));
+    else rc = -1;
+    if (fclose(w->f) != 0) rc = -1;
+    free(w);
+    return rc;
 }

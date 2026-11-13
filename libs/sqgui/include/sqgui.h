@@ -146,7 +146,8 @@ int sqg_slider(sqg_ui *ui, sqg_id id, sqg_rect r, double *v, double lo, double h
 int sqg_segments(sqg_ui *ui, sqg_id id, sqg_rect r, const char *const *labels, int n, int *sel);
 /* Scrolling list; returns 1 when *sel changed. *top is the first row shown. */
 int sqg_list(sqg_ui *ui, sqg_id id, sqg_rect r, const char *const *rows, int n, int *sel, int *top);
-/* Single-line text field; returns 1 when Enter is pressed in it */
+/* Single-line text field holding UTF-8 (characters outside the font draw
+ * as ?); returns 1 when Enter is pressed in it */
 int sqg_textfield(sqg_ui *ui, sqg_id id, sqg_rect r, char *buf, size_t cap);
 /* Sunken read-only text area with wrapping; returns the lines used */
 int sqg_textbox(sqg_ui *ui, sqg_rect r, const char *text);
