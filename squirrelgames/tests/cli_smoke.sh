@@ -49,6 +49,17 @@ $P --mines 50x10x3 >/dev/null 2>&1; [ $? -eq 2 ] || fail "too wide a field shoul
 $P --mines huge >/dev/null 2>&1; [ $? -eq 2 ] || fail "a bad size should exit 2"
 $P --mines medium --seed 5 --snapshot "$B/mines.ppm" || fail "mines snapshot"
 
+# Hearts: your hand, a pass, a card; the computer plays the rest of the trick
+out=$($P --hearts --seed 7 --show) || fail "hearts"
+echo "$out" | grep -q "^Hearts  game 7  hand 1  pass left  pass three cards" || fail "hearts heading: $out"
+[ "$(echo "$out" | grep '^Hand ' | wc -w)" -eq 14 ] || fail "thirteen cards: $out"
+out=$($P --hearts --seed 7 --do "pass AH KS KD" --do "play 4C" --show) || fail "hearts play"
+echo "$out" | grep -q "^Passed AH KS KD to West; got" || fail "the pass: $out"
+[ "$(echo "$out" | grep '^Hand ' | wc -w)" -eq 13 ] || fail "a card played: $out"
+err=$($P --hearts --seed 7 --do "pass AH KS KD" --do "play 4D" 2>&1); [ $? -eq 1 ] || fail "not following suit should exit 1"
+echo "$err" | grep -q "play 4D: follow suit" || fail "follow suit message: $err"
+$P --hearts --seed 7 --do "pass AH KS KD" --do "play 4C" --snapshot "$B/hearts.ppm" || fail "hearts snapshot"
+
 # a picture of the window
 $P --freecell --seed 7 --snapshot "$B/snap.ppm" || fail "snapshot"
 [ "$(head -c 15 "$B/snap.ppm")" = "$(printf 'P6\n960 680\n255')" ] || fail "snapshot header"

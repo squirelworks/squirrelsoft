@@ -1,7 +1,8 @@
-/* SquirrelGames tests: the rules of both games, the commands, and the
+/* SquirrelGames tests: the rules of each game, the commands, and the
  * window driven by simulated input. */
 #include "cards.h"
 #include "gamesgui.h"
+#include "hearts.h"
 #include "mines.h"
 
 #include <stdio.h>
@@ -20,6 +21,7 @@ static void check(int ok, const char *what, int line) {
 
 static Game g;
 static Mines mn;
+static Hearts hh;
 
 /* a pile from names: "AS 2H #KD" (# for face down) */
 static void set(int pile, const char *cards) {
@@ -510,7 +512,7 @@ static void drag_card(int pile, int index, int to) {
 }
 static int top_x(const char *label) { /* the top bar's buttons, by what the window draws: find the label */
     static const char *const order[] = {"Klondike/FreeCell", "Draw 3", "Deal", "#seed", "Play", "New", "Restart", "Undo", "Home"};
-    int x = 6 + 240 + 4;
+    int x = 6 + 320 + 4;
     int lh = sqg_line_h(&ui);
     (void)lh;
     for (size_t k = 1; k < sizeof order / sizeof order[0]; k++) {
@@ -531,7 +533,7 @@ static void test_window(const char *dir) {
     sqg_ui_init(&ui, NULL, 1);
     memset(&in, 0, sizeof in);
     game_new(&g, GAME_KLONDIKE, 1, 42);
-    games_gui_init(&gg, &g, &mn);
+    games_gui_init(&gg, &g, &mn, &hh);
     frame();
     int lh = sqg_line_h(&ui), x, y;
     /* the cards are drawn: the AH on column 5, face up, white with red */
@@ -638,14 +640,14 @@ static void test_window(const char *dir) {
 static void test_window_mines(void) {
     int lh = sqg_line_h(&ui);
     game_new(&g, GAME_KLONDIKE, 1, 42);
-    games_gui_init(&gg, &g, &mn);
+    games_gui_init(&gg, &g, &mn, &hh);
     gg.ms = 1000;
     frame();
-    click(6 + 240 * 5 / 6, 6 + lh / 2); /* Mines */
+    click(6 + 320 * 5 / 8, 6 + lh / 2); /* Mines */
     CHECK(gg.kind == GAMES_MINES && mn.w == 9 && mn.seed == 42 && strstr(gg.status, "Mines, field 42"));
-    click(6 + 240 + 4 + 180 * 5 / 6, 6 + lh / 2); /* Large */
+    click(6 + 320 + 4 + 180 * 5 / 6, 6 + lh / 2); /* Large */
     CHECK(gg.mines_size == MINES_LARGE && mn.w == 30 && mn.mines == 99);
-    click(6 + 240 + 4 + 180 / 6, 6 + lh / 2); /* Small again */
+    click(6 + 320 + 4 + 180 / 6, 6 + lh / 2); /* Small again */
     CHECK(mn.w == 9);
     /* a click opens; the clock runs from then */
     sqg_rect r = games_gui_square_rect(&gg, 4, 4);
@@ -683,13 +685,299 @@ static void test_window_mines(void) {
             }
     CHECK(mn.state == MINES_WON && strstr(gg.status, "Cleared in 1 seconds"));
     /* Restart: the same field again, hidden; New: another */
-    int bx = 6 + 240 + 4 + 180 + 4 + 6 + 4 + sqg_text_width("Deal", 1) + 4 + 4 + 90 + 4 + sqg_button_w(&ui, "Play") + 4;
+    int bx = 6 + 320 + 4 + 180 + 4 + 6 + 4 + sqg_text_width("Deal", 1) + 4 + 4 + 90 + 4 + sqg_button_w(&ui, "Play") + 4;
     int newx = bx + sqg_button_w(&ui, "New") / 2;
     int againx = bx + sqg_button_w(&ui, "New") + 4 + sqg_button_w(&ui, "Restart") / 2;
     click(againx, 6 + lh / 2);
     CHECK(mn.seed == 42 && !mn.laid && mn.opened == 0 && mn.state == MINES_PLAYING && mn.ticks == 0);
     click(newx, 6 + lh / 2);
     CHECK(mn.seed != 42 && !mn.laid && mn.w == 9 && gg.kind == GAMES_MINES);
+}
+
+/* ---- hearts ---- */
+
+static uint8_t card_named(const char *s) {
+    const char *R = "A23456789TJQK", *S = "CDHS";
+    return CARD((int)(strchr(R, s[0]) - R) + 1, (int)(strchr(S, s[1]) - S));
+}
+
+/* a player's hand from names, "2C QS AH" */
+static void hset(int p, const char *cards) {
+    hh.n[p] = 0;
+    for (const char *s = cards; *s;) {
+        while (*s == ' ') s++;
+        if (!*s) break;
+        hh.hand[p][hh.n[p]++] = card_named(s);
+        s += 2;
+    }
+}
+
+/* a hand in play with these cards, player turn to lead (tricks taken already) */
+static void hplay(int tricks, int turn, const char *p0, const char *p1, const char *p2, const char *p3) {
+    hearts_new(&hh, 1);
+    hh.phase = HEARTS_PLAYING;
+    hh.tricks = tricks;
+    hh.turn = hh.leader = turn;
+    hset(0, p0), hset(1, p1), hset(2, p2), hset(3, p3);
+}
+
+static int hok(const char *line) {
+    char msg[120];
+    int rc = hearts_command(&hh, line, msg, sizeof msg);
+    if (rc) printf("  %s: %s\n", line, msg);
+    return rc == 0;
+}
+static int hfails(const char *line, const char *why) {
+    char msg[120];
+    int rc = hearts_command(&hh, line, msg, sizeof msg);
+    if (rc == 0 || !strstr(msg, why)) {
+        printf("  %s: rc %d, said \"%s\"\n", line, rc, msg);
+        return 0;
+    }
+    return 1;
+}
+
+static int why_is(uint8_t c, const char *want) {
+    const char *why;
+    int rc = hearts_can_play(&hh, c, &why);
+    if (!want) return rc == 0;
+    return rc == -1 && strstr(why, want);
+}
+
+static void test_hearts(void) {
+    /* deals: 52 cards once, 13 each, sorted; the same seed the same deal */
+    int good = 1;
+    for (uint32_t seed = 0; seed < 50; seed++) {
+        hearts_new(&hh, seed);
+        for (int hand = 0; hand < 4; hand++) {
+            uint64_t seen = 0;
+            for (int p = 0; p < 4; p++) {
+                good &= hh.n[p] == 13;
+                for (int i = 0; i < 13; i++) {
+                    uint8_t c = hh.hand[p][i];
+                    int b = CARD_SUIT(c) * 13 + CARD_RANK(c) - 1;
+                    good &= !(seen >> b & 1) && CARD_RANK(c) >= 1 && CARD_RANK(c) <= 13;
+                    seen |= (uint64_t)1 << b;
+                }
+            }
+            good &= seen == ((uint64_t)1 << 52) - 1;
+            hh.phase = HEARTS_HAND_OVER;
+            hearts_next_hand(&hh);
+        }
+    }
+    CHECK(good);
+    static Hearts a, b;
+    hearts_new(&a, 9), hearts_new(&b, 9);
+    CHECK(!memcmp(&a, &b, sizeof a));
+    hearts_new(&b, 10);
+    CHECK(memcmp(a.hand, b.hand, sizeof a.hand) != 0);
+    hearts_new(&hh, 7);
+    CHECK(hh.hand[0][0] == card_named("4C") && hh.hand[0][12] == card_named("AH")); /* clubs first, hearts last, aces high */
+    /* passing: left, right, across, none */
+    CHECK(hh.phase == HEARTS_PASSING && hearts_pass_dir(&hh) == HEARTS_PASS_LEFT && hearts_pass_to(&hh, 0) == 1 &&
+          hearts_pass_to(&hh, 3) == 0);
+    hh.hand_no = 1;
+    CHECK(hearts_pass_to(&hh, 0) == 3 && hearts_pass_to(&hh, 1) == 0);
+    hh.hand_no = 2;
+    CHECK(hearts_pass_to(&hh, 0) == 2 && hearts_pass_to(&hh, 1) == 3);
+    hh.hand_no = 3;
+    CHECK(hearts_pass_dir(&hh) == HEARTS_PASS_NONE && hearts_pass_to(&hh, 2) == 2);
+    hearts_new(&hh, 7);
+    uint8_t bad[3] = {card_named("AH"), card_named("AH"), card_named("KS")};
+    CHECK(hearts_pass(&hh, bad) == -1);
+    bad[1] = card_named("2C"); /* not ours */
+    CHECK(hearts_pass(&hh, bad) == -1 && hh.phase == HEARTS_PASSING);
+    uint8_t three[3] = {card_named("AH"), card_named("KS"), card_named("KD")};
+    uint8_t east[3];
+    hearts_ai_pass(&hh, 3, east);
+    CHECK(hearts_pass(&hh, three) == 0 && hh.phase == HEARTS_PLAYING);
+    CHECK(hh.n[0] == 13 && hh.n[1] == 13 && hh.n[2] == 13 && hh.n[3] == 13);
+    CHECK(hearts_has(&hh, 1, three[0]) && hearts_has(&hh, 1, three[1]) && !hearts_has(&hh, 0, three[2]));
+    CHECK(hearts_has(&hh, 0, east[0]) && hearts_has(&hh, 0, east[1]) && hearts_has(&hh, 0, east[2]));
+    CHECK(hearts_has(&hh, hh.turn, card_named("2C")));
+    /* the hand with no pass starts at once */
+    hearts_new(&hh, 7);
+    for (int k = 0; k < 3; k++) hh.phase = HEARTS_HAND_OVER, hearts_next_hand(&hh);
+    CHECK(hh.hand_no == 3 && hh.phase == HEARTS_PLAYING && hearts_has(&hh, hh.turn, card_named("2C")));
+
+    /* the first trick: the two of clubs leads; no points on it unless nothing else */
+    hplay(0, 0, "2C 5C QS", "3C 4D AH", "KD 2H 3H", "JH QH KH");
+    CHECK(why_is(card_named("5C"), "two of clubs") && why_is(card_named("2C"), NULL));
+    CHECK(hearts_play(&hh, card_named("2C")) == 0 && hh.turn == 1);
+    CHECK(why_is(card_named("4D"), "follow suit") && why_is(card_named("3C"), NULL));
+    hearts_play(&hh, card_named("3C"));
+    CHECK(why_is(card_named("2H"), "no points") && why_is(card_named("KD"), NULL));
+    hearts_play(&hh, card_named("KD"));
+    CHECK(why_is(card_named("QH"), NULL)); /* nothing but hearts: allowed */
+    hearts_play(&hh, card_named("QH"));
+    CHECK(hh.ntrick == 0 && hh.tricks == 1 && hh.last_winner == 1 && hh.taken[1] == 1 && hh.turn == 1 && hh.broken);
+    CHECK(hh.last[0] == card_named("2C") && hh.last[3] == card_named("QH"));
+    /* hearts not broken: no heart led unless nothing else */
+    hplay(3, 2, "5C", "6C", "2H 3D", "7C");
+    CHECK(why_is(card_named("2H"), "not broken") && why_is(card_named("3D"), NULL));
+    hplay(3, 2, "5C", "6C", "2H 3H", "7C");
+    CHECK(why_is(card_named("2H"), NULL));
+    CHECK(why_is(card_named("AS"), "not in the hand"));
+    /* the highest of the suit led takes it, an ace high; off suit never */
+    hplay(5, 0, "5D", "AS", "KD", "AD");
+    hset(1, "AS QS");
+    hh.broken = 1;
+    hearts_play(&hh, card_named("5D"));
+    hearts_play(&hh, card_named("QS"));
+    hearts_play(&hh, card_named("KD"));
+    hearts_play(&hh, card_named("AD"));
+    CHECK(hh.last_winner == 3 && hh.taken[3] == 13 && hh.turn == 3);
+    /* the last trick scores the hand; all 26 to one: the moon */
+    hplay(12, 1, "2D", "AH", "3D", "4D");
+    hh.taken[1] = 25;
+    hearts_play(&hh, card_named("AH"));
+    hearts_play(&hh, card_named("3D"));
+    hearts_play(&hh, card_named("4D"));
+    hearts_play(&hh, card_named("2D"));
+    CHECK(hh.phase == HEARTS_HAND_OVER && hh.moon == 1 && hh.hand_score[1] == 0 && hh.hand_score[0] == 26 &&
+          hh.score[0] == 26 && hh.score[2] == 26 && hh.score[1] == 0);
+    CHECK(hearts_play(&hh, card_named("2D")) == -1 && hearts_winner(&hh) == -1);
+    CHECK(hearts_next_hand(&hh) == 0 && hh.hand_no == 1 && hh.score[0] == 26 && hh.phase == HEARTS_PASSING);
+    CHECK(hearts_next_hand(&hh) == -1);
+    /* to 100: the game is over, the lowest wins */
+    hplay(12, 0, "AH", "2H", "3H", "4H");
+    hh.score[0] = 60, hh.score[1] = 99, hh.score[2] = 30, hh.score[3] = 40;
+    hh.taken[2] = 10, hh.taken[1] = 3;
+    hearts_play(&hh, card_named("AH")), hearts_play(&hh, card_named("2H"));
+    hearts_play(&hh, card_named("3H")), hearts_play(&hh, card_named("4H"));
+    CHECK(hh.phase == HEARTS_GAME_OVER && hh.score[0] == 64 && hh.score[2] == 40 && hearts_winner(&hh) == 2);
+    CHECK(hearts_next_hand(&hh) == -1);
+
+    /* the computer: rids itself of the queen when it can, and ducks under */
+    hplay(4, 0, "5D", "QS 2C 9H", "4D KD", "3D 9D");
+    hh.broken = 1;
+    hearts_play(&hh, card_named("5D"));
+    CHECK(hearts_ai_card(&hh) == card_named("QS"));
+    hearts_play(&hh, card_named("QS"));
+    CHECK(hearts_ai_card(&hh) == card_named("4D")); /* under the five */
+    hearts_play(&hh, card_named("4D"));
+    CHECK(hearts_ai_card(&hh) == card_named("3D"));
+    hplay(4, 1, "4C", "2H 5C 9C", "KC", "3C");
+    hh.broken = 1;
+    CHECK(hearts_ai_card(&hh) == card_named("5C")); /* leads low, not a heart */
+
+    /* the commands */
+    hearts_new(&hh, 7);
+    CHECK(hfails("play 2C", "pass three cards first"));
+    CHECK(hfails("pass AH KS", "pass C C C") && hfails("pass AH KS 2C", "from your hand"));
+    CHECK(hfails("pass AH KS XX", "pass C C C") && hfails("jump", "unknown") && hfails("next", "not over"));
+    CHECK(hfails("play AH KH", "play C") && hfails("new 4294967296", "new [SEED]") && hfails("new 1 2", "new [SEED]"));
+    CHECK(hok("pass ah ks kd") && hh.phase == HEARTS_PLAYING && hh.turn == 0 && hh.ntrick == 3);
+    CHECK(hfails("pass 4C TC JC", "passed already"));
+    CHECK(hfails("play 2C", "not in your hand") && hfails("play 4D", "follow suit"));
+    CHECK(hok("play 4C") && hh.tricks >= 1 && (hh.turn == 0 || hh.phase != HEARTS_PLAYING));
+    char text[2048];
+    hearts_text(&hh, text, sizeof text);
+    CHECK(strstr(text, "Hearts  game 7  hand 1  pass left  your turn") && strstr(text, "Passed AH KS KD to West; got") &&
+          strstr(text, "\nHand  "));
+    CHECK(hearts_text(&hh, text, 8) > 8 && strlen(text) == 7);
+    CHECK(hok("new 12") && hh.seed == 12 && hh.hand_no == 0 && hok("new") && hh.seed == 13);
+    hh.hand_no = 3;
+    hh.phase = HEARTS_PLAYING;
+    CHECK(hfails("pass 2C 3C 4C", "no passing"));
+
+    /* the computer plays 200 games through: every card it picks is allowed,
+     * the cards stay 52, each hand gives 26 (or 78 for the moon) */
+    int legal = 1, sums = 1, ends = 1, cards = 1;
+    for (uint32_t seed = 0; seed < 200; seed++) {
+        hearts_new(&hh, seed);
+        int guard = 0;
+        while (hh.phase != HEARTS_GAME_OVER && guard++ < 2000) {
+            if (hh.phase == HEARTS_PASSING) {
+                uint8_t c[3];
+                hearts_ai_pass(&hh, 0, c);
+                legal &= hearts_pass(&hh, c) == 0;
+            } else if (hh.phase == HEARTS_PLAYING) {
+                legal &= hearts_play(&hh, hearts_ai_card(&hh)) == 0;
+                int held = hh.ntrick;
+                for (int p = 0; p < 4; p++) held += hh.n[p];
+                cards &= held + 4 * hh.tricks == 52;
+            } else {
+                int s = hh.hand_score[0] + hh.hand_score[1] + hh.hand_score[2] + hh.hand_score[3];
+                sums &= s == (hh.moon >= 0 ? 78 : 26);
+                hearts_next_hand(&hh);
+            }
+        }
+        ends &= hh.phase == HEARTS_GAME_OVER && hearts_winner(&hh) >= 0;
+    }
+    CHECK(legal && sums && ends && cards);
+}
+
+static void test_window_hearts(void) {
+    int lh = sqg_line_h(&ui);
+    game_new(&g, GAME_KLONDIKE, 1, 5);
+    games_gui_init(&gg, &g, &mn, &hh);
+    gg.ms = 1000;
+    frame();
+    click(6 + 320 * 7 / 8, 6 + lh / 2); /* Hearts */
+    CHECK(gg.kind == GAMES_HEARTS && hh.seed == 5 && hh.phase == HEARTS_PASSING && strstr(gg.status, "pass left"));
+    /* three cards chosen, raised; a fourth refused; one put back */
+    for (int i = 0; i < 3; i++) {
+        sqg_rect r = games_gui_hand_rect(&gg, 12 - i);
+        click(r.x + 5, r.y + 30);
+    }
+    CHECK(gg.nchosen == 3 && games_gui_hand_rect(&gg, 12).y < games_gui_hand_rect(&gg, 0).y);
+    CHECK(games_gui_hand_hit(&gg, games_gui_hand_rect(&gg, 0).x + 3, games_gui_hand_rect(&gg, 0).y + 3) == 0);
+    sqg_rect r = games_gui_hand_rect(&gg, 0);
+    click(r.x + 5, r.y + 40);
+    CHECK(gg.nchosen == 3 && strstr(gg.status, "Three are chosen"));
+    r = games_gui_hand_rect(&gg, 12);
+    click(r.x + r.w - 8, r.y + 10);
+    CHECK(gg.nchosen == 2);
+    click(r.x + r.w - 8, r.y + 30);
+    CHECK(gg.nchosen == 3);
+    uint8_t passing[3] = {hh.hand[0][10], hh.hand[0][11], hh.hand[0][12]};
+    sqg_rect b = games_gui_hearts_button(&gg);
+    click(b.x + b.w / 2, b.y + b.h / 2);
+    CHECK(hh.phase == HEARTS_PLAYING && strstr(gg.status, "Passed to West") && hearts_has(&hh, 1, passing[0]) &&
+          hearts_has(&hh, 1, passing[2]) && gg.nchosen == 0);
+    /* the computer plays at its pace; your cards by clicks, the wrong one refused */
+    int refused = 0, clicks = 0, guard = 0, early = 0;
+    while (hh.phase == HEARTS_PLAYING && guard++ < 3000) {
+        if (hh.turn != 0) {
+            int before = hh.ntrick + hh.tricks * 4;
+            long due = gg.next_ms;
+            frame(); /* no time has passed: not yet, unless it was due */
+            if (hh.ntrick + hh.tricks * 4 != before && gg.ms < due) early = 1;
+            gg.ms += 500;
+            frame();
+            continue;
+        }
+        int pick = -1, wrong = -1;
+        for (int i = 0; i < hh.n[0]; i++) {
+            if (!hearts_can_play(&hh, hh.hand[0][i], NULL)) {
+                if (pick < 0) pick = i;
+            } else if (wrong < 0) wrong = i;
+        }
+        if (wrong >= 0 && !refused) {
+            r = games_gui_hand_rect(&gg, wrong);
+            click(r.x + 5, r.y + 40);
+            refused = hh.turn == 0 && gg.status[0] >= 'A' && gg.status[0] <= 'Z' && !strstr(gg.status, "Your");
+        }
+        r = games_gui_hand_rect(&gg, pick);
+        int had = hh.n[0];
+        click(r.x + 5, r.y + 40);
+        clicks += hh.n[0] == had - 1;
+    }
+    CHECK(!early && refused == 1 && clicks == 13 && hh.phase == HEARTS_HAND_OVER && strstr(gg.status, "this hand"));
+    /* the scores, then the next hand: passing right */
+    b = games_gui_hearts_button(&gg);
+    CHECK(screen[(b.y - 60) * W + b.x] != 0xFF1E6B3Cu); /* the scores' box over the felt */
+    click(b.x + b.w / 2, b.y + b.h / 2);
+    CHECK(hh.hand_no == 1 && hh.phase == HEARTS_PASSING && strstr(gg.status, "pass right"));
+    /* New: another game; Restart: this one from the start */
+    gg.ms += 10000;
+    hh.score[1] = 50;
+    int bx = 6 + 320 + 4 + 6 + 4 + sqg_text_width("Deal", 1) + 4 + 4 + 90 + 4 + sqg_button_w(&ui, "Play") + 4;
+    click(bx + sqg_button_w(&ui, "New") + 4 + sqg_button_w(&ui, "Restart") / 2, 6 + lh / 2);
+    CHECK(hh.seed == 5 && hh.hand_no == 0 && hh.score[1] == 0);
+    click(bx + sqg_button_w(&ui, "New") / 2, 6 + lh / 2);
+    CHECK(hh.seed != 5 && gg.kind == GAMES_HEARTS);
 }
 
 int main(int argc, char **argv) {
@@ -704,6 +992,8 @@ int main(int argc, char **argv) {
     test_mines();
     test_window(dir);
     test_window_mines();
+    test_hearts();
+    test_window_hearts();
     printf("test_games: %d checks, %d failed\n", checks, failures);
     return failures != 0;
 }

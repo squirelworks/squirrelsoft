@@ -11,10 +11,11 @@
 #define INK_RED 0xFFC81E1Eu
 #define INK_BLACK 0xFF141414u
 
-void games_gui_init(GamesGui *gg, Game *game, Mines *mines) {
+void games_gui_init(GamesGui *gg, Game *game, Mines *mines, Hearts *hearts) {
     memset(gg, 0, sizeof *gg);
     gg->game = game;
     gg->mines = mines;
+    gg->hearts = hearts;
     gg->kind = game->s.kind;
     gg->draw3 = game->s.draw == 3;
     gg->auto_home = 1;
@@ -204,9 +205,17 @@ static void after_move(GamesGui *gg) {
     if (game_won(&g->s)) snprintf(gg->status, sizeof gg->status, "Won in %d moves!", g->s.moves);
 }
 
-static uint32_t current_seed(const GamesGui *gg) { return gg->kind == GAMES_MINES ? gg->mines->seed : gg->game->s.seed; }
+static uint32_t current_seed(const GamesGui *gg) {
+    return gg->kind == GAMES_MINES ? gg->mines->seed : gg->kind == GAMES_HEARTS ? gg->hearts->seed : gg->game->s.seed;
+}
+
+static void hearts_deal(GamesGui *gg, uint32_t seed);
 
 static void deal(GamesGui *gg, uint32_t seed) {
+    if (gg->kind == GAMES_HEARTS) {
+        hearts_deal(gg, seed);
+        return;
+    }
     if (gg->kind == GAMES_MINES) {
         int w, h, n;
         mines_size_of(gg->mines_size, &w, &h, &n);
@@ -477,14 +486,245 @@ static void draw_mines(GamesGui *gg, sqg_ui *ui) {
         }
 }
 
+/* ---- hearts ---- */
+
+#define HAND_STEP 34
+#define RAISE 22
+
+static int hearts_cx(const GamesGui *gg) { return gg->board.x + gg->board.w / 2; }
+static int hearts_cy(const GamesGui *gg) { return gg->board.y + gg->board.h / 2 - 50; }
+
+sqg_rect games_gui_hand_rect(const GamesGui *gg, int i) {
+    const Hearts *h = gg->hearts;
+    int n = h->n[0], total = GAMES_CARD_W + (n > 0 ? n - 1 : 0) * HAND_STEP;
+    int x = hearts_cx(gg) - total / 2 + i * HAND_STEP, y = gg->board.y + gg->board.h - GAMES_CARD_H - 12;
+    for (int k = 0; k < gg->nchosen && i >= 0 && i < n; k++)
+        if (gg->chosen[k] == h->hand[0][i]) y -= RAISE;
+    return sqg_rect_make(x, y, GAMES_CARD_W, GAMES_CARD_H);
+}
+
+int games_gui_hand_hit(const GamesGui *gg, int x, int y) {
+    for (int i = gg->hearts->n[0] - 1; i >= 0; i--) {
+        sqg_rect r = games_gui_hand_rect(gg, i);
+        if (sqg_rect_contains(r, x, y)) return i;
+    }
+    return -1;
+}
+
+sqg_rect games_gui_hearts_button(const GamesGui *gg) {
+    return sqg_rect_make(hearts_cx(gg) - 70, hearts_cy(gg) + 140, 140, 26);
+}
+
+/* where each player's card of a trick goes */
+static void trick_place(const GamesGui *gg, int p, int *x, int *y) {
+    static const int DX[4] = {0, -95, 0, 95}, DY[4] = {65, 0, -65, 0};
+    *x = hearts_cx(gg) - GAMES_CARD_W / 2 + DX[p];
+    *y = hearts_cy(gg) - GAMES_CARD_H / 2 + DY[p];
+}
+
+static const char *const PASS_WORD[4] = {"left", "right", "across", ""};
+
+static void hearts_said(GamesGui *gg) {
+    const Hearts *h = gg->hearts;
+    if (h->phase == HEARTS_PASSING)
+        snprintf(gg->status, sizeof gg->status, "Choose three cards to pass %s", PASS_WORD[hearts_pass_dir(h)]);
+    else if (h->phase == HEARTS_PLAYING && h->turn == 0)
+        say(gg, h->ntrick ? "Your turn" : h->tricks == 0 ? "Your lead: the two of clubs" : "Your lead");
+    else if (h->phase == HEARTS_HAND_OVER || h->phase == HEARTS_GAME_OVER) {
+        char t[64] = "";
+        if (h->moon >= 0) snprintf(t, sizeof t, "%s shot the moon! ", h->moon ? HEARTS_NAMES[h->moon] : "You");
+        if (h->phase == HEARTS_HAND_OVER)
+            snprintf(gg->status, sizeof gg->status, "%sYou took %d this hand", t, h->hand_score[0]);
+        else {
+            int w = hearts_winner(h);
+            snprintf(gg->status, sizeof gg->status, "%s%s %s with %d", t, w ? HEARTS_NAMES[w] : "You", w ? "wins" : "win",
+                     h->score[w]);
+        }
+    }
+}
+
+static void hearts_deal(GamesGui *gg, uint32_t seed) {
+    hearts_new(gg->hearts, seed);
+    gg->nchosen = 0;
+    gg->next_ms = gg->ms + 400;
+    gg->show_until = 0;
+    snprintf(gg->seed_text, sizeof gg->seed_text, "%lu", (unsigned long)seed);
+    hearts_said(gg);
+}
+
+/* a card played, by you or the computer: the trick it takes stays a moment */
+static void hearts_played(GamesGui *gg) {
+    const Hearts *h = gg->hearts;
+    gg->next_ms = gg->ms + 450;
+    if (h->ntrick == 0) gg->show_until = gg->next_ms = gg->ms + 1100;
+    hearts_said(gg);
+}
+
+static void hearts_center_button(GamesGui *gg, sqg_ui *ui) {
+    Hearts *h = gg->hearts;
+    char label[24];
+    if (h->phase == HEARTS_PASSING && gg->nchosen == 3) snprintf(label, sizeof label, "Pass %s", PASS_WORD[hearts_pass_dir(h)]);
+    else if (h->phase == HEARTS_HAND_OVER) snprintf(label, sizeof label, "Next hand");
+    else if (h->phase == HEARTS_GAME_OVER) snprintf(label, sizeof label, "New game");
+    else return;
+    if (!sqg_button(ui, sqg_id_str("hearts_go"), games_gui_hearts_button(gg), label)) return;
+    if (h->phase == HEARTS_PASSING) {
+        int to = hearts_pass_to(h, 0), from = 0;
+        for (int p = 1; p < 4; p++)
+            if (hearts_pass_to(h, p) == 0) from = p;
+        hearts_pass(h, gg->chosen);
+        gg->nchosen = 0;
+        gg->next_ms = gg->ms + 400;
+        char got[3][3];
+        for (int i = 0; i < 3; i++) game_card_name((uint8_t)(h->passed[from][i] | CARD_UP), got[i]);
+        snprintf(gg->status, sizeof gg->status, "Passed to %s; %s %s %s from %s", HEARTS_NAMES[to], got[0], got[1], got[2],
+                 HEARTS_NAMES[from]);
+    } else if (h->phase == HEARTS_HAND_OVER) {
+        hearts_next_hand(h);
+        gg->nchosen = 0;
+        gg->next_ms = gg->ms + 400;
+        gg->show_until = 0;
+        hearts_said(gg);
+    } else {
+        hearts_deal(gg, h->seed * 2654435761u + 12345u);
+    }
+}
+
+static void hearts_input(GamesGui *gg, sqg_ui *ui) {
+    const sqg_input *in = &ui->in;
+    Hearts *h = gg->hearts;
+    if (h->phase == HEARTS_PLAYING && h->turn != 0 && gg->ms >= gg->next_ms) {
+        hearts_play(h, hearts_ai_card(h));
+        hearts_played(gg);
+    }
+    if (ui->active || !in->pressed) return;
+    int i = games_gui_hand_hit(gg, in->mx, in->my);
+    if (i < 0) {
+        if (sqg_rect_contains(gg->board, in->mx, in->my)) gg->show_until = 0; /* a click moves on from the trick */
+        return;
+    }
+    uint8_t c = h->hand[0][i];
+    if (h->phase == HEARTS_PASSING) {
+        for (int k = 0; k < gg->nchosen; k++)
+            if (gg->chosen[k] == c) {
+                gg->chosen[k] = gg->chosen[--gg->nchosen];
+                hearts_said(gg);
+                return;
+            }
+        if (gg->nchosen == 3) say(gg, "Three are chosen: click one to put it back");
+        else {
+            gg->chosen[gg->nchosen++] = c;
+            if (gg->nchosen == 3) snprintf(gg->status, sizeof gg->status, "Pass them %s with the button", PASS_WORD[hearts_pass_dir(h)]);
+        }
+        return;
+    }
+    if (h->phase != HEARTS_PLAYING || h->turn != 0) return;
+    const char *why;
+    gg->show_until = 0;
+    if (hearts_can_play(h, c, &why)) {
+        snprintf(gg->status, sizeof gg->status, "%c%s", why[0] >= 'a' && why[0] <= 'z' ? why[0] - 32 : why[0], why + 1);
+        return;
+    }
+    hearts_play(h, c);
+    hearts_played(gg);
+}
+
+static void draw_name(sqg_canvas *cv, int x, int y, const Hearts *h, int p, int turn) {
+    char t[40];
+    snprintf(t, sizeof t, "%s  %d (%d)", HEARTS_NAMES[p], h->taken[p], h->score[p]);
+    sqg_text(cv, x, y, t, turn ? 0xFFFFE070u : 0xFFE0F0E0u, 1);
+}
+
+static void draw_hearts(GamesGui *gg, sqg_ui *ui) {
+    sqg_canvas *cv = ui->cv;
+    const Hearts *h = gg->hearts;
+    sqg_fill(cv, gg->board, FELT);
+    sqg_rect old = sqg_clip(cv, gg->board);
+    int playing = h->phase == HEARTS_PLAYING;
+    /* the others' hands, face down: West down the left, North along the top, East down the right */
+    int bx = gg->board.x, by = gg->board.y, bw = gg->board.w;
+    int col_y = hearts_cy(gg) - (GAMES_CARD_H + 12 * 16) / 2;
+    for (int i = 0; i < h->n[1]; i++) games_gui_draw_card(cv, bx + 24, col_y + i * 16, 0);
+    for (int i = 0; i < h->n[3]; i++) games_gui_draw_card(cv, bx + bw - 24 - GAMES_CARD_W, col_y + i * 16, 0);
+    int nw = GAMES_CARD_W + (h->n[2] > 0 ? h->n[2] - 1 : 0) * 16;
+    for (int i = 0; i < h->n[2]; i++) games_gui_draw_card(cv, hearts_cx(gg) - nw / 2 + i * 16, by + 12 - 60, 0);
+    draw_name(cv, bx + 24, col_y - 14, h, 1, playing && h->turn == 1);
+    draw_name(cv, bx + bw - 24 - GAMES_CARD_W, col_y - 14, h, 3, playing && h->turn == 3);
+    draw_name(cv, hearts_cx(gg) + nw / 2 + 10, by + 12, h, 2, playing && h->turn == 2);
+    sqg_rect r0 = games_gui_hand_rect(gg, 0);
+    draw_name(cv, r0.x, r0.y - RAISE - 14, h, 0, playing && h->turn == 0);
+    /* your hand */
+    for (int i = 0; i < h->n[0]; i++) {
+        sqg_rect r = games_gui_hand_rect(gg, i);
+        games_gui_draw_card(cv, r.x, r.y, (uint8_t)(h->hand[0][i] | CARD_UP));
+        if (playing && h->turn == 0 && hearts_can_play(h, h->hand[0][i], NULL)) /* the cards you may not play: dimmed */
+            sqg_blend(cv, sqg_rect_make(r.x, r.y, i + 1 < h->n[0] ? HAND_STEP : r.w, r.h), 0x50000000u);
+    }
+    /* the trick, or the one just taken */
+    const uint8_t *t = h->trick;
+    int taken = h->ntrick == 0 && h->last_winner >= 0 && gg->ms < gg->show_until;
+    if (taken) t = h->last;
+    for (int k = 0; k < 4; k++) {
+        int p = (h->leader + k) % 4;
+        if (taken) p = k;
+        if (!t[p]) continue;
+        int x, y;
+        trick_place(gg, p, &x, &y);
+        games_gui_draw_card(cv, x, y, (uint8_t)(t[p] | CARD_UP));
+    }
+    if (taken) {
+        char s[40];
+        snprintf(s, sizeof s, "%s %s", h->last_winner ? HEARTS_NAMES[h->last_winner] : "You", h->last_winner ? "takes it" : "take it");
+        int w = sqg_text_width(s, 2);
+        sqg_text(cv, hearts_cx(gg) - w / 2, hearts_cy(gg) + GAMES_CARD_H + 30, s, 0xFFFFE070u, 2);
+    }
+    if (h->phase >= HEARTS_HAND_OVER) { /* the scores */
+        sqg_rect b = sqg_rect_make(hearts_cx(gg) - 170, hearts_cy(gg) - 110, 340, 230);
+        sqg_blend(cv, b, 0xC0000000u);
+        const char *head = h->phase == HEARTS_GAME_OVER ? (hearts_winner(h) ? "Game over" : "You won!") : "Hand over";
+        sqg_text(cv, b.x + (b.w - sqg_text_width(head, 3)) / 2, b.y + 12, head, 0xFFFFE070u, 3);
+        sqg_text(cv, b.x + 150, b.y + 50, "Hand", 0xFFE0F0E0u, 2);
+        sqg_text(cv, b.x + 240, b.y + 50, "Game", 0xFFE0F0E0u, 2);
+        for (int p = 0; p < 4; p++) {
+            char s[16];
+            int y = b.y + 80 + p * 26;
+            sqg_text(cv, b.x + 20, y, HEARTS_NAMES[p], 0xFFFFFFFFu, 2);
+            snprintf(s, sizeof s, "%d", h->hand_score[p]);
+            sqg_text(cv, b.x + 150, y, s, 0xFFFFFFFFu, 2);
+            snprintf(s, sizeof s, "%d", h->score[p]);
+            sqg_text(cv, b.x + 240, y, s, 0xFFFFFFFFu, 2);
+        }
+    }
+    cv->clip = old;
+}
+
+void games_gui_show(GamesGui *gg, int kind) {
+    gg->kind = kind;
+    gg->dragging = gg->pending = 0;
+    snprintf(gg->seed_text, sizeof gg->seed_text, "%lu", (unsigned long)current_seed(gg));
+    if (kind == GAMES_HEARTS) {
+        gg->nchosen = 0;
+        gg->next_ms = gg->ms + 400;
+        hearts_said(gg);
+        if (gg->hearts->phase == HEARTS_PASSING) say(gg, "Choose three cards to pass, then the Pass button");
+    } else if (kind == GAMES_MINES) {
+        for (int k = 0; k < 3; k++) {
+            int w, h, n;
+            mines_size_of(k, &w, &h, &n);
+            if (w == gg->mines->w && h == gg->mines->h && n == gg->mines->mines) gg->mines_size = k;
+        }
+        say(gg, "The left button opens a square, the right one flags it");
+    }
+}
+
 /* ---- the top bar ---- */
 
 static void top_bar(GamesGui *gg, sqg_ui *ui, sqg_rect r) {
     Game *g = gg->game;
     sqg_row row = sqg_row_begin(r, 4);
-    static const char *const KINDS[3] = {"Klondike", "FreeCell", "Mines"};
+    static const char *const KINDS[4] = {"Klondike", "FreeCell", "Mines", "Hearts"};
     int kind = gg->kind;
-    if (sqg_segments(ui, sqg_id_str("kind"), sqg_row_take(&row, 240), KINDS, 3, &kind)) {
+    if (sqg_segments(ui, sqg_id_str("kind"), sqg_row_take(&row, 320), KINDS, 4, &kind)) {
         uint32_t seed = current_seed(gg);
         gg->kind = kind;
         deal(gg, seed);
@@ -510,7 +750,7 @@ static void top_bar(GamesGui *gg, sqg_ui *ui, sqg_rect r) {
         deal(gg, current_seed(gg) * 2654435761u + 12345u);
     if (sqg_button(ui, sqg_id_str("again"), sqg_row_take(&row, sqg_button_w(ui, "Restart")), "Restart"))
         deal(gg, current_seed(gg));
-    if (gg->kind == GAMES_MINES) return;
+    if (gg->kind == GAMES_MINES || gg->kind == GAMES_HEARTS) return;
     sqg_row_take(&row, 6);
     if (sqg_button(ui, sqg_id_str("undo"), sqg_row_take(&row, sqg_button_w(ui, "Undo")), "Undo") || ui->in.ctrl_key == 'z')
         do_undo(gg);
@@ -527,6 +767,10 @@ static void status_line(GamesGui *gg, sqg_ui *ui, sqg_rect r) {
     if (gg->kind == GAMES_MINES)
         snprintf(t, sizeof t, "%d x %d, %d mines   Field %lu", gg->mines->w, gg->mines->h, gg->mines->mines,
                  (unsigned long)gg->mines->seed);
+    else if (gg->kind == GAMES_HEARTS)
+        snprintf(t, sizeof t, "Game %lu   Hand %d   You %d  West %d  North %d  East %d", (unsigned long)gg->hearts->seed,
+                 gg->hearts->hand_no + 1, gg->hearts->score[0], gg->hearts->score[1], gg->hearts->score[2],
+                 gg->hearts->score[3]);
     else if (s->kind == GAME_KLONDIKE) snprintf(t, sizeof t, "Score %d   Moves %d", s->score, s->moves);
     else snprintf(t, sizeof t, "Moves %d   Cards that can move together: %d", s->moves, game_most(s, -1));
     sqg_row row = sqg_row_begin(r, 8);
@@ -545,6 +789,10 @@ void games_gui_frame(GamesGui *gg, sqg_ui *ui) {
     if (gg->kind == GAMES_MINES) {
         mines_input(gg, ui);
         draw_mines(gg, ui);
+    } else if (gg->kind == GAMES_HEARTS) {
+        hearts_input(gg, ui);
+        draw_hearts(gg, ui);
+        hearts_center_button(gg, ui);
     } else {
         table_input(gg, ui);
         draw_table(gg, ui);

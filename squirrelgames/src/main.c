@@ -11,10 +11,12 @@ static void usage(FILE *f) {
           "  --klondike3      Klondike, three at a time\n"
           "  --freecell       FreeCell\n"
           "  --mines SIZE     Mines: small (9x9, 10), medium (16x16, 40), large (30x16, 99), or WxHxM\n"
+          "  --hearts         Hearts, you and three computer players, to 100\n"
           "  --seed N         the deal (0 to 4294967295; the same number, the same deal)\n"
           "  --do CMD         play: \"draw\", \"move t3 t5\", \"move w f1\", \"smart t2\", \"auto\",\n"
           "                   \"finish\", \"undo\", \"new freecell 7\" (no window then);\n"
-          "                   Mines: \"open 4 4\", \"flag 0 1\", \"chord 2 2\", \"new medium 5\"\n"
+          "                   Mines: \"open 4 4\", \"flag 0 1\", \"chord 2 2\", \"new medium 5\";\n"
+          "                   Hearts: \"pass QS AH KH\", \"play 2C\", \"next\", \"new 9\"\n"
           "  --script FILE    the same, one command a line (# for comments)\n"
           "  --show           print the table as text after the commands\n"
           "  --snapshot FILE  draw one 960x680 frame of the window to FILE (PPM), no window\n"
@@ -27,12 +29,15 @@ static void usage(FILE *f) {
 
 static Game game; /* about 1 MB with its undo */
 static Mines mines;
-static int play_mines;
+static Hearts hearts;
+static int play_mines, play_hearts;
 static GamesGui gui;
 
 static int run_command(const char *where, const char *cmd) {
     char msg[120];
-    if (play_mines ? mines_command(&mines, cmd, msg, sizeof msg) : game_command(&game, cmd, msg, sizeof msg)) {
+    if (play_hearts  ? hearts_command(&hearts, cmd, msg, sizeof msg)
+        : play_mines ? mines_command(&mines, cmd, msg, sizeof msg)
+                     : game_command(&game, cmd, msg, sizeof msg)) {
         fprintf(stderr, "squirrelgames: %s%s: %s\n", where, cmd, msg);
         return -1;
     }
@@ -88,7 +93,9 @@ int main(int argc, char **argv) {
                 fprintf(stderr, "squirrelgames: --mines %s: small, medium, large, or WxHxM as in 20x12x40\n", z);
                 return 2;
             }
-            play_mines = 1;
+            play_mines = 1, play_hearts = 0;
+        } else if (!strcmp(a, "--hearts")) {
+            play_hearts = 1, play_mines = 0;
         } else if (!strcmp(a, "--seed") && more) {
             char *end;
             seed = strtoul(argv[++i], &end, 10);
@@ -115,6 +122,7 @@ int main(int argc, char **argv) {
         fprintf(stderr, "squirrelgames: a field is 2x2 to %dx%d, with room for a clear first square\n", MINES_MAX_W, MINES_MAX_H);
         return 2;
     }
+    hearts_new(&hearts, (uint32_t)seed);
     for (int i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "--seed") || !strcmp(argv[i], "--snapshot") || !strcmp(argv[i], "--gui-frames") ||
             !strcmp(argv[i], "--mines"))
@@ -124,7 +132,9 @@ int main(int argc, char **argv) {
     }
     if (show) {
         static char text[8192];
-        if (play_mines) {
+        if (play_hearts) {
+            hearts_text(&hearts, text, sizeof text);
+        } else if (play_mines) {
             static const char *const STATE[3] = {"playing", "won", "lost"};
             printf("Mines %d x %d, %d mines  field %lu  left %d  %s\n", mines.w, mines.h, mines.mines,
                    (unsigned long)mines.seed, mines_left(&mines), STATE[mines.state]);
@@ -134,16 +144,9 @@ int main(int argc, char **argv) {
         }
         fputs(text, stdout);
     }
-    games_gui_init(&gui, &game, &mines);
-    if (play_mines) {
-        gui.kind = GAMES_MINES;
-        snprintf(gui.status, sizeof gui.status, "The left button opens a square, the right one flags it");
-        for (int k = 0; k < 3; k++) {
-            int w, h, n;
-            mines_size_of(k, &w, &h, &n);
-            if (w == mines.w && h == mines.h && n == mines.mines) gui.mines_size = k;
-        }
-    }
+    games_gui_init(&gui, &game, &mines, &hearts);
+    if (play_hearts) games_gui_show(&gui, GAMES_HEARTS);
+    if (play_mines) games_gui_show(&gui, GAMES_MINES);
     if (snapshot) {
         enum { W = 960, H = 680 };
         static uint32_t px[W * H];

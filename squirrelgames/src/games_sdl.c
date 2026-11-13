@@ -19,10 +19,11 @@ int games_gui_run(GamesGui *gg, int max_frames) {
         sqg_begin(&ui, sqg_window_canvas(win), &in);
         games_gui_frame(gg, &ui);
         sqg_end(&ui);
-        int now = gg->kind == GAMES_MINES ? GAMES_MINES : gg->game->s.kind;
+        int now = gg->kind >= GAMES_MINES ? gg->kind : gg->game->s.kind;
         if (now != kind) {
             kind = now;
-            sqg_window_set_title(win, kind == GAMES_MINES     ? "Mines - SquirrelGames"
+            sqg_window_set_title(win, kind == GAMES_HEARTS    ? "Hearts - SquirrelGames"
+                                      : kind == GAMES_MINES   ? "Mines - SquirrelGames"
                                       : kind == GAME_FREECELL ? "FreeCell - SquirrelGames"
                                                               : "Klondike - SquirrelGames");
         }
