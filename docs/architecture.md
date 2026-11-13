@@ -62,4 +62,4 @@ The owner creates the new repositories and runs `git filter-repo` to keep histor
 
 - `libs/sqfelica`: add real card dumps to the fixture (S1.3 feeds it), a Kotlin parity test.
 - JNI: SquirrelSound calls `sqdsp` through the NDK, keeping `Fft.kt` as the fallback until parity holds on devices.
-- `libs/sqmath` step 3 (units, factoring), and parametric/polar curves and sliders in the SquirrelCalc window (S5.1).
+- `libs/sqmath` step 3 (units, factoring), and implicit curves, lists and regression in the SquirrelCalc window (S5.1).

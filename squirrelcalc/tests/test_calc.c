@@ -166,6 +166,24 @@ static void test_plot(void) {
     CHECK(calc_mark_points(&cv, r, &v, pxs, pys, 2, RED) == 1);
     CHECK(count(sqg_rect_make(337, 237, 6, 6), RED) > 0);
 
+    /* a circle of radius 5 as a curve: through (5, 0), (0, 5), (-5, 0), not the middle */
+    calc_draw_axes(&cv, r, &v);
+    SqmProgram cx, cy;
+    static SqmExpr ce;
+    const char *T[] = {"t"};
+    CHECK(sqm_parse("5 cos(t)", &ce, NULL) == SQM_OK && sqm_compile(&ce, T, 1, &cx) == SQM_OK);
+    CHECK(sqm_parse("5 sin(t)", &ce, NULL) == SQM_OK && sqm_compile(&ce, T, 1, &cy) == SQM_OK);
+    CHECK(calc_plot_curve(&cv, r, &v, &cx, &cy, values, 0, 0, 6.283185307179586, 400, RED) == 400);
+    CHECK(count(sqg_rect_make(397, 296, 6, 8), RED) > 0);
+    CHECK(count(sqg_rect_make(296, 197, 8, 6), RED) > 0);
+    CHECK(count(sqg_rect_make(197, 296, 6, 8), RED) > 0);
+    CHECK(count(sqg_rect_make(280, 280, 40, 40), RED) == 0);
+    CHECK(calc_plot_curve(&cv, r, &v, &cx, &cy, values, 0, 0, NAN, 400, RED) == 0);
+    /* half of it: nothing below the axis */
+    calc_draw_axes(&cv, r, &v);
+    calc_plot_curve(&cv, r, &v, &cx, &cy, values, 0, 0, 3.14159, 400, RED);
+    CHECK(count(sqg_rect_make(100, 303, 400, 197), RED) == 0);
+
     double xs[3] = {0, 5, 50};
     CHECK(calc_mark_roots(&cv, r, &v, xs, 3, RED) == 2);
     CHECK(count(sqg_rect_make(397, 297, 6, 6), RED) > 0);
@@ -407,6 +425,82 @@ static void test_analysis(void) {
     frame();
 }
 
+static void test_curves(void) {
+    sqg_canvas_init(&cv, px, W, H, W);
+    sqg_ui_init(&ui, NULL, 1);
+    memset(&in, 0, sizeof in);
+    in.mx = in.my = -1;
+    calc_gui_init(&g);
+
+    calc_gui_set(&g, 0, "(cos(t), sin(t))");
+    CHECK(g.ok[0] && g.kind[0] == CALC_PARAM);
+    calc_gui_set(&g, 1, "r = 2");
+    CHECK(g.ok[1] && g.kind[1] == CALC_POLAR);
+    calc_gui_set(&g, 2, "  r=1+cos(t)");
+    CHECK(g.ok[2] && g.kind[2] == CALC_POLAR);
+    calc_gui_set(&g, 3, "(x + 1)");
+    CHECK(g.ok[3] && g.kind[3] == CALC_FUNC); /* one part: a function */
+    calc_gui_set(&g, 3, "(x, t)");
+    CHECK(!g.ok[3] && !strcmp(g.err[3], "curves use t, not x"));
+    calc_gui_set(&g, 3, "r = q t");
+    CHECK(!g.ok[3] && contains(g.err[3], "define q first"));
+    calc_gui_set(&g, 3, "(cos(t), sin(t) +)");
+    CHECK(!g.ok[3] && contains(g.err[3], "(at 18)"));
+    calc_gui_set(&g, 3, "(1, 2, 3)");
+    CHECK(!g.ok[3] && g.kind[3] == CALC_FUNC);
+    calc_gui_set(&g, 3, "");
+
+    /* drawn: the unit circle and the circle of radius 2 */
+    frame();
+    sqg_rect inner = sqg_rect_inset(g.graph_at, 2);
+    int ox = (int)calc_px_x(&g.view, inner, 0), oy = (int)calc_px_y(&g.view, inner, 0);
+    int u = (int)(calc_px_x(&g.view, inner, 1) - ox);
+    CHECK(count(sqg_rect_make(ox + u - 3, oy - 6, 6, 12), 0xFF2060D0u) > 0);
+    CHECK(count(sqg_rect_make(ox - 6, oy - u - 3, 12, 6), 0xFF2060D0u) > 0);
+    CHECK(count(sqg_rect_make(ox - 2 * u - 3, oy - 6, 6, 12), 0xFFD03030u) > 0);
+    CHECK(count(sqg_rect_make(ox - u / 2, oy - u / 2, u, u), 0xFFD03030u) == 0);
+    /* curves have no roots, crossings, derivative, integral or table column */
+    g.show_roots = g.show_cross = g.show_deriv = 1;
+    frame();
+    CHECK(g.nroots[0] == 0 && g.ncross == 0 && !g.dok);
+    CHECK(calc_gui_eval(&g, "integrate y1 from 0 to 1") == -1 && contains(g.hist, "is a curve"));
+    /* tmax = pi: the upper half only */
+    CHECK(calc_gui_eval(&g, "tmax = pi") == 0);
+    g.show_roots = g.show_cross = g.show_deriv = 0;
+    frame();
+    CHECK(count(sqg_rect_make(ox - 6, oy + u - 3, 12, 6), 0xFF2060D0u) == 0);
+    CHECK(count(sqg_rect_make(ox - 6, oy - u - 3, 12, 6), 0xFF2060D0u) > 0);
+
+    /* sliders: one per variable but ans; dragging one moves the graph */
+    calc_gui_init(&g);
+    CHECK(calc_gui_eval(&g, "1 + 1") == 0); /* ans: no slider */
+    CHECK(calc_gui_eval(&g, "a = 2") == 0);
+    NEAR(g.vlo[0] + g.vlo[1], -10, 0); /* ans has none; a has -10..10 */
+    calc_gui_set(&g, 0, "a");
+    frame();
+    sqg_rect sr = g.slider_at[0];
+    CHECK(sr.w > 40 && g.slider_at[1].w == 0);
+    in.mx = sr.x + sr.w * 3 / 4;
+    in.my = sr.y + sr.h / 2;
+    in.down = in.pressed = 1;
+    frame();
+    in.down = 0;
+    in.released = 1;
+    frame();
+    double a = calc_gui_var(&g, "a");
+    CHECK(a > 3 && a < 7);
+    inner = sqg_rect_inset(g.graph_at, 2);
+    int ya = (int)calc_px_y(&g.view, inner, a);
+    CHECK(count(sqg_rect_make(inner.x, ya - 2, inner.w, 5), 0xFF2060D0u) > inner.w / 2);
+    CHECK(calc_gui_eval(&g, "a = 100") == 0);
+    CHECK(calc_gui_eval(&g, "b = -3") == 0 && calc_gui_eval(&g, "c = 1") == 0 && calc_gui_eval(&g, "d = 1") == 0 &&
+          calc_gui_eval(&g, "f = 1") == 0);
+    frame();
+    for (int k = 0; k < CALC_SLIDERS; k++) CHECK(g.slider_at[k].w > 0);
+    for (int i = 0; i < g.nvars; i++)
+        if (!strcmp(g.vname[i], "a")) CHECK(g.vlo[i] == -200 && g.vhi[i] == 200);
+}
+
 int main(int argc, char **argv) {
     const char *dir = argc > 1 ? argv[1] : ".";
     test_steps();
@@ -414,6 +508,7 @@ int main(int argc, char **argv) {
     test_plot();
     test_gui(dir);
     test_analysis();
+    test_curves();
     printf("test_calc: %d checks, %d failed\n", checks, failures);
     return failures != 0;
 }

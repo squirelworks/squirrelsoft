@@ -51,7 +51,7 @@ static int slots(const CalcGui *g, const char **names, double *values) {
 static void compile_deriv(CalcGui *g) {
     g->dok = 0;
     g->dtext[0] = 0;
-    if (!g->ok[0] || sqm_parse(g->fx[0], &scratch, NULL) != SQM_OK) return;
+    if (!g->ok[0] || g->kind[0] != CALC_FUNC || sqm_parse(g->fx[0], &scratch, NULL) != SQM_OK) return;
     int rc = sqm_diff(&scratch, "x", &scratch2);
     if (rc != SQM_OK) {
         snprintf(g->dtext, sizeof g->dtext, "d/dx y1: %s", sqm_strerror(rc));
@@ -75,40 +75,92 @@ static void compile_cross(CalcGui *g) {
         int i, j;
         pair_of(k, &i, &j);
         g->cok[k] = 0;
-        if (!g->ok[i] || !g->ok[j]) continue;
+        if (!g->ok[i] || !g->ok[j] || g->kind[i] != CALC_FUNC || g->kind[j] != CALC_FUNC) continue;
         char text[340];
         snprintf(text, sizeof text, "(%s) - (%s)", g->fx[i], g->fx[j]);
         g->cok[k] = sqm_parse(text, &scratch, NULL) == SQM_OK && sqm_compile(&scratch, names, n, &g->cprog[k]) == SQM_OK;
     }
 }
 
+/* parse part of row i (it starts at byte off of the row) and check that its
+ * names other than var are defined; 0, or -1 with the row's error set */
+static int check_part(CalcGui *g, int i, const char *text, int off, const char *var) {
+    SqmError err;
+    if (sqm_parse(text, &scratch, &err) != SQM_OK) {
+        snprintf(g->err[i], sizeof g->err[i], "%s (at %d)", err.msg, err.pos + off + 1);
+        return -1;
+    }
+    for (int k = 0; k < scratch.nnames; k++) {
+        const char *nm = scratch.names[k];
+        if (!strcmp(nm, var) || !isnan(calc_gui_var(g, nm))) continue;
+        if (!strcmp(nm, "x") && strcmp(var, "x")) snprintf(g->err[i], sizeof g->err[i], "curves use t, not x");
+        else snprintf(g->err[i], sizeof g->err[i], "define %.15s first: %.15s = 1", nm, nm);
+        return -1;
+    }
+    return 0;
+}
+
+/* compile text with var in slot 0 and the user variables after it */
+static int compile_into(CalcGui *g, int i, const char *text, const char *var, SqmProgram *prog) {
+    const char *names[CALC_VARS + 1];
+    double values[CALC_VARS + 1];
+    int n = slots(g, names, values);
+    names[0] = var;
+    int rc = sqm_parse(text, &scratch, NULL);
+    if (rc == SQM_OK) rc = sqm_compile(&scratch, names, n, prog);
+    if (rc != SQM_OK) snprintf(g->err[i], sizeof g->err[i], "%s", sqm_strerror(rc));
+    return rc == SQM_OK ? 0 : -1;
+}
+
+/* "(X, Y)" as a whole: the byte offset of its top-level comma (and of the
+ * closing parenthesis in *close), or 0 */
+static int pair_comma(const char *p, int *close) {
+    if (*p != '(') return 0;
+    int depth = 0, comma = 0;
+    size_t k = 0;
+    for (; p[k]; k++) {
+        if (p[k] == '(') depth++;
+        else if (p[k] == ')' && --depth == 0) break;
+        else if (p[k] == ',' && depth == 1 && !comma) comma = (int)k;
+        else if (p[k] == ',' && depth == 1) return 0; /* three parts */
+    }
+    if (!p[k]) return 0;
+    *close = (int)k;
+    for (k++; p[k] == ' '; k++) {}
+    return p[k] == 0 ? comma : 0;
+}
+
 static void compile(CalcGui *g, int i) {
     memcpy(g->seen[i], g->fx[i], sizeof g->seen[i]);
     g->ok[i] = 0;
+    g->kind[i] = CALC_FUNC;
     g->err[i][0] = 0;
     g->nroots[i] = 0;
-    const char *p = g->fx[i];
+    const char *row = g->fx[i], *p = row;
     while (*p == ' ') p++;
-    if (*p) {
-        SqmError err;
-        if (sqm_parse(g->fx[i], &scratch, &err) != SQM_OK) {
-            snprintf(g->err[i], sizeof g->err[i], "%s (at %d)", err.msg, err.pos + 1);
-        } else {
-            for (int k = 0; k < scratch.nnames; k++)
-                if (strcmp(scratch.names[k], "x") && isnan(calc_gui_var(g, scratch.names[k]))) {
-                    snprintf(g->err[i], sizeof g->err[i], "define %s first: %s = 1", scratch.names[k],
-                             scratch.names[k]);
-                    break;
-                }
-            if (!g->err[i][0]) {
-                const char *names[CALC_VARS + 1];
-                double values[CALC_VARS + 1];
-                int n = slots(g, names, values);
-                int rc = sqm_compile(&scratch, names, n, &g->prog[i]);
-                if (rc == SQM_OK) g->ok[i] = 1;
-                else snprintf(g->err[i], sizeof g->err[i], "%s", sqm_strerror(rc));
-            }
+    const char *q = p + 1;
+    while (*q == ' ') q++;
+    int close = 0, comma = pair_comma(p, &close);
+    char a[200], b[200];
+    if (*p == 'r' && *q == '=') {
+        /* polar: r = f(t), drawn as (f cos t, f sin t) */
+        g->kind[i] = CALC_POLAR;
+        const char *e = q + 1;
+        if (check_part(g, i, e, (int)(e - row), "t") == 0) {
+            snprintf(a, sizeof a, "(%s)*cos(t)", e);
+            snprintf(b, sizeof b, "(%s)*sin(t)", e);
+            g->ok[i] = !compile_into(g, i, a, "t", &g->prog[i]) && !compile_into(g, i, b, "t", &g->prog2[i]);
         }
+    } else if (comma) {
+        /* parametric: (x(t), y(t)) */
+        g->kind[i] = CALC_PARAM;
+        snprintf(a, sizeof a, "%.*s", comma - 1, p + 1);
+        snprintf(b, sizeof b, "%.*s", close - comma - 1, p + comma + 1);
+        int off = (int)(p - row);
+        if (check_part(g, i, a, off + 1, "t") == 0 && check_part(g, i, b, off + comma + 1, "t") == 0)
+            g->ok[i] = !compile_into(g, i, a, "t", &g->prog[i]) && !compile_into(g, i, b, "t", &g->prog2[i]);
+    } else if (*p) {
+        if (check_part(g, i, row, 0, "x") == 0) g->ok[i] = !compile_into(g, i, row, "x", &g->prog[i]);
     }
     if (i == 0) compile_deriv(g);
     compile_cross(g);
@@ -157,6 +209,19 @@ static int set_var(CalcGui *g, const char *name, double v) {
     snprintf(g->vname[g->nvars], SQM_NAME_LEN, "%s", name);
     g->vval[g->nvars++] = v;
     return 0;
+}
+
+/* a slider range around v: -10..10, or wider for big values */
+static void set_range(CalcGui *g, const char *name) {
+    for (int i = 0; i < g->nvars; i++)
+        if (!strcmp(g->vname[i], name)) {
+            double v = g->vval[i], span = fabs(v) * 2 > 10 ? fabs(v) * 2 : 10;
+            if (!isfinite(span)) span = 10;
+            if (!(v >= g->vlo[i] && v <= g->vhi[i]) || g->vlo[i] == g->vhi[i]) {
+                g->vlo[i] = -span;
+                g->vhi[i] = span;
+            }
+        }
 }
 
 /* "word rest": rest after the word and spaces, or NULL */
@@ -220,6 +285,10 @@ static int integrate_line(CalcGui *g, const char *line, const char *rest) {
         fn = expr[1] - '1';
         if (!g->ok[fn]) {
             hist_error(g, line, g->fx[fn][0] ? "that function has an error" : "that function is empty");
+            return -1;
+        }
+        if (g->kind[fn] != CALC_FUNC) {
+            hist_error(g, line, "that row is a curve, not a function of x");
             return -1;
         }
         text = g->fx[fn];
@@ -386,6 +455,7 @@ int calc_gui_eval(CalcGui *g, const char *line) {
             hist_add(g, out);
             return -1;
         }
+        set_range(g, name);
         snprintf(out, sizeof out, "%s = %s", name, num);
         for (int i = 0; i < CALC_N; i++) compile(g, i); /* the graphs may use it */
     } else {
@@ -435,7 +505,7 @@ static void graph(CalcGui *g, sqg_ui *ui, sqg_rect r) {
         int best = -1;
         double best_d = 10;
         for (int i = 0; i < CALC_N; i++) {
-            if (!g->ok[i]) continue;
+            if (!g->ok[i] || g->kind[i] != CALC_FUNC) continue;
             double d = fabs(calc_px_y(&g->view, inner, sqm_run(&g->prog[i], values)) - (in->my + 0.5));
             if (d < best_d) {
                 best_d = d;
@@ -469,10 +539,18 @@ static void graph(CalcGui *g, sqg_ui *ui, sqg_rect r) {
         calc_shade(cv, inner, &g->view, &g->area_prog, values, 0, g->area_a, g->area_b, (col & 0xFFFFFFu) | 0x50000000u);
     }
     if (g->show_deriv && g->dok) calc_plot(cv, inner, &g->view, &g->dprog, values, 0, COL_DERIV);
+    double t0 = calc_gui_var(g, "tmin"), t1 = calc_gui_var(g, "tmax");
+    if (isnan(t0)) t0 = 0;
+    if (isnan(t1)) t1 = 2 * 3.14159265358979323846;
     for (int i = 0; i < CALC_N; i++) {
         if (!g->ok[i]) continue;
-        calc_plot(cv, inner, &g->view, &g->prog[i], values, 0, COLORS[i]);
         g->nroots[i] = 0;
+        if (g->kind[i] != CALC_FUNC) {
+            calc_plot_curve(cv, inner, &g->view, &g->prog[i], &g->prog2[i], values, 0, t0, t1, 1000, COLORS[i]);
+            values[0] = 0;
+            continue;
+        }
+        calc_plot(cv, inner, &g->view, &g->prog[i], values, 0, COLORS[i]);
         if (g->show_roots) {
             int n = sqm_roots(&g->prog[i], values, 0, g->view.xmin, g->view.xmax, inner.w, g->roots[i], CALC_ROOTS);
             g->nroots[i] = n < CALC_ROOTS ? n : CALC_ROOTS;
@@ -544,7 +622,7 @@ static void table(CalcGui *g, sqg_ui *ui, sqg_rect r) {
     int cols[CALC_N + 1], ncol = 0;
     cols[ncol++] = -1;
     for (int i = 0; i < CALC_N; i++)
-        if (g->ok[i]) cols[ncol++] = i;
+        if (g->ok[i] && g->kind[i] == CALC_FUNC) cols[ncol++] = i;
     int cw = in.w / ncol, rh = 14, rows = (in.h - rh - 4) / rh;
     sqg_rect old = sqg_clip(cv, in);
     for (int c = 0; c < ncol; c++) {
@@ -577,7 +655,7 @@ static void make_status(CalcGui *g) {
     if (g->show_roots) {
         k += (size_t)snprintf(s + k, sizeof s - k, "Roots ");
         for (int i = 0; i < CALC_N && k + 40 < sizeof s; i++) {
-            if (!g->ok[i]) continue;
+            if (!g->ok[i] || g->kind[i] != CALC_FUNC) continue;
             k += (size_t)snprintf(s + k, sizeof s - k, "  y%d:", i + 1);
             if (g->nroots[i] == 0) k += (size_t)snprintf(s + k, sizeof s - k, " none in view");
             for (int r = 0; r < g->nroots[i] && r < 4 && k + 20 < sizeof s; r++) {
@@ -620,7 +698,7 @@ void calc_gui_frame(CalcGui *g, sqg_ui *ui) {
 
     /* functions */
     int y = pad;
-    sqg_label(ui, sqg_rect_make(pad, y, left_w, lh), "Functions of x", SQG_ALIGN_LEFT);
+    sqg_label(ui, sqg_rect_make(pad, y, left_w, lh), "Functions of x, or curves of t", SQG_ALIGN_LEFT);
     y += lh;
     for (int i = 0; i < CALC_N; i++) {
         char id[16], tag[16];
@@ -646,6 +724,24 @@ void calc_gui_frame(CalcGui *g, sqg_ui *ui) {
         sqg_text(cv, pad, y, g->dtext, g->dok ? 0xFF3050A0u : COL_ERR, 1);
         y += 12;
     }
+
+    /* a slider for each variable but ans */
+    int ns = 0;
+    for (int v = 0; v < g->nvars && ns < CALC_SLIDERS; v++) {
+        if (!strcmp(g->vname[v], "ans")) continue;
+        char id[24], val[32];
+        snprintf(id, sizeof id, "slider_%s", g->vname[v]);
+        sqg_row srow = sqg_row_begin(sqg_rect_make(pad, y, left_w, lh), 6);
+        sqg_label(ui, sqg_row_take(&srow, sqg_text_width("tmax", 1) + 4), g->vname[v], SQG_ALIGN_LEFT);
+        sqg_rect vr = sqg_row_take(&srow, 64);
+        sqg_rect sr = sqg_row_take(&srow, 0);
+        g->slider_at[ns++] = sr;
+        sqg_slider(ui, sqg_id_str(id), sr, &g->vval[v], g->vlo[v], g->vhi[v]);
+        sqm_format(g->vval[v], 4, val, sizeof val);
+        sqg_label(ui, vr, val, SQG_ALIGN_LEFT);
+        y += lh + 2;
+    }
+    for (int k = ns; k < CALC_SLIDERS; k++) g->slider_at[k] = sqg_rect_make(0, 0, 0, 0);
 
     /* calculator: history above the input line */
     y += 4;

@@ -25,6 +25,10 @@ echo "$out" | grep -q "integrate y1 from 0 to 3 = 3" || fail "integrate line: $o
 echo "$out" | grep -q "y1=y2 at (2, 2)" || fail "crossings: $out"
 $C --fn "x^2" --table --snapshot "$B/snap7.ppm" >/dev/null || fail "--table"
 
+$C --let a=3 --fn "(a cos(t), 2 sin(t))" --fn "r = 1 + cos(t)" --snapshot "$B/snap8.ppm" >/dev/null || fail "curves"
+err=$($C --fn "(x, t)" --snapshot "$B/snap9.ppm" 2>&1 >/dev/null)
+echo "$err" | grep -q "curves use t, not x" || fail "x in a curve: $err"
+
 err=$($C --fn "sin(" --snapshot "$B/snap3.ppm" 2>&1 >/dev/null)
 echo "$err" | grep -q "y1:" || fail "parse error reported: $err"
 $C --let "x=1" --snapshot "$B/snap4.ppm" >/dev/null 2>&1; [ $? -eq 1 ] || fail "--let x=1 should exit 1"

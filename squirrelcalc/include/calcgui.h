@@ -1,7 +1,9 @@
-/* calcgui: the SquirrelCalc window panel (libs/sqgui): four functions y1..y4
- * graphed together, variables defined in the calculator line and used by the
- * graphs (a = 2, then y1 = a sin(x)), roots, the derivative of y1, pan and
- * zoom. Drawn the same on the desktop and off screen in tests. */
+/* calcgui: the SquirrelCalc window panel (libs/sqgui): four rows graphed
+ * together, each a function of x, a curve "(cos(t), sin(t))" or a polar
+ * curve "r = 1 + cos(t)" (t from tmin to tmax: 0 to 2 pi unless defined).
+ * Variables defined in the calculator line are used by the graphs (a = 2,
+ * then y1 = a sin(x)) and get sliders. Roots, crossings, the derivative of
+ * y1, trace, integrals, a table, pan and zoom. Drawn the same on the desktop and off screen in tests. */
 #ifndef CALCGUI_H
 #define CALCGUI_H
 
@@ -12,11 +14,16 @@
 #define CALC_ROOTS 16 /* roots kept per function */
 #define CALC_PAIRS 6  /* pairs of functions, for crossings */
 #define CALC_CROSS 16 /* crossings kept */
+#define CALC_SLIDERS 4 /* variables shown with a slider */
+
+enum { CALC_FUNC, CALC_PARAM, CALC_POLAR }; /* y = f(x), (x(t), y(t)), r = f(t) */
 
 typedef struct {
     char fx[CALC_N][160];      /* what is typed for y1..y4 */
     char seen[CALC_N][160];    /* the text last compiled */
-    SqmProgram prog[CALC_N];
+    SqmProgram prog[CALC_N];  /* f(x), or x(t) for a curve */
+    SqmProgram prog2[CALC_N]; /* y(t) for a curve */
+    int kind[CALC_N];         /* CALC_FUNC, CALC_PARAM or CALC_POLAR */
     int ok[CALC_N];
     char err[CALC_N][96];      /* why a function is not drawn, or "" */
     int show_roots, show_deriv;
@@ -25,7 +32,9 @@ typedef struct {
     char dtext[200];           /* its text */
     char vname[CALC_VARS][SQM_NAME_LEN];
     double vval[CALC_VARS];
+    double vlo[CALC_VARS], vhi[CALC_VARS]; /* slider ranges */
     int nvars;
+    sqg_rect slider_at[CALC_SLIDERS];     /* where the sliders were drawn */
     char line[200];            /* the calculator input */
     char hist[1600];           /* past results, newest last */
     CalcView view;

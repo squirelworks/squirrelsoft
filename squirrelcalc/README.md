@@ -15,6 +15,12 @@ build/squirrelcalc --fn "x^2 - 2" --fn "2 sin(x)" --roots
 
 - **Functions of x:** four rows, y1 to y4, each drawn in its own colour.
   A row that does not parse shows the error and where it is.
+- **Curves of t:** a row can also be a parametric curve `(3 cos(t), 2 sin(t))`
+  or a polar one `r = 1 + cos(t)`. t runs from 0 to 2 pi, or from `tmin` to
+  `tmax` once those are defined (`tmax = 6pi` for a longer spiral).
+- **Sliders:** every variable defined in the calculator (but `ans`) gets a
+  slider, up to four. Dragging one redraws every graph that uses it. The
+  range is -10 to 10, or wider for bigger values.
 - **Calculator:** type a line and press Enter or `=`. `a = 2` defines a
   variable that the graphs can use (`y1 = a sin(x)` redraws when `a`
   changes), and `ans` is the last result. Anything not finite shows as
@@ -69,5 +75,6 @@ or no window.
 about a point, pan, plotted pixels for `x`, `1/x`, `sqrt(x)`, the calculator
 line and its errors, roots, the derivative, wheel zoom and drag pan through
 the panel, crossings, integrals and their shading, trace by click and arrow
-keys, the table), `tests/cli_smoke.sh`, and ten frames of the real window with
+keys, the table, parametric and polar curves, tmin and tmax, sliders),
+`tests/cli_smoke.sh`, and ten frames of the real window with
 `SDL_VIDEODRIVER=dummy` when SDL2 is installed.
