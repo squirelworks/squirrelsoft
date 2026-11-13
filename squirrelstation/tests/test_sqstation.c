@@ -14,7 +14,7 @@ static void expect(int cond, const char *msg) {
 }
 
 int main(void) {
-    SqsDesign d;
+    static SqsDesign d;
     sqs_design_init(&d, "test");
     expect(d.level_count == 1, "default level");
 
@@ -36,7 +36,7 @@ int main(void) {
 
     const char *path = "/tmp/sqstation_test.sqdgn";
     expect(sqs_write_sqdgn(&d, path) == 0, "write");
-    SqsDesign d2;
+    static SqsDesign d2;
     expect(sqs_read_sqdgn(&d2, path) == 0, "read");
     expect(d2.element_count == d.element_count, "roundtrip count");
     expect(strcmp(d2.title, "test") == 0, "title");

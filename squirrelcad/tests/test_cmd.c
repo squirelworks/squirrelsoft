@@ -246,6 +246,45 @@ static void test_plot(void) {
     remove("/tmp/sqc_plot.svg");
 }
 
+static void count_visit(const SqcEntity *e, const SqcLayer *L, void *ctx) {
+    (void)e;
+    (void)L;
+    ++*(long *)ctx;
+}
+
+/* review notes on the reader and on nested inserts */
+static void test_limits(void) {
+    static SqcDrawing back;
+    /* an id at the top of int would overflow next_id: refused */
+    FILE *f = fopen("/tmp/sqc_bad.sqdwg", "w");
+    fprintf(f, "SQDWG 1\nLINE 2147483647 1 0 0 0 1 1 0\nEND\n");
+    fclose(f);
+    CHECK(sqc_read_sqdwg(&back, "/tmp/sqc_bad.sqdwg") == -2);
+    f = fopen("/tmp/sqc_bad.sqdwg", "w");
+    fprintf(f, "SQDWG 1\nLINE -3 1 0 0 0 1 1 0\nEND\n");
+    fclose(f);
+    CHECK(sqc_read_sqdwg(&back, "/tmp/sqc_bad.sqdwg") == -2);
+    remove("/tmp/sqc_bad.sqdwg");
+
+    /* sixteen inserts of sixteen inserts ... six deep is 16^6 lines: the
+       visit stops at its budget instead of running for minutes */
+    sqc_session_init(&S, NULL);
+    CHECK(ok("LINE 0,0 1,0") && ok("BLOCK b0 0,0 LAST"));
+    char cmd[64];
+    for (int k = 1; k <= 6; k++) {
+        for (int i = 0; i < 16; i++) {
+            snprintf(cmd, sizeof cmd, "INSERT b%d %d,0", k - 1, i);
+            CHECK(ok(cmd));
+        }
+        snprintf(cmd, sizeof cmd, "BLOCK b%d 0,0 ALL", k);
+        CHECK(ok(cmd));
+    }
+    CHECK(ok("INSERT b6 0,0"));
+    long n = 0;
+    sqc_visit(&S.dwg, count_visit, &n);
+    CHECK(n > 1000 && n <= 200000);
+}
+
 int main(void) {
     test_drawing();
     test_layers();
@@ -253,6 +292,7 @@ int main(void) {
     test_blocks();
     test_files();
     test_plot();
+    test_limits();
     printf("test_cmd: %d checks, %d failed\n", checks, failures);
     return failures != 0;
 }

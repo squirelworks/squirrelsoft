@@ -24,7 +24,7 @@ int main(void) {
 
     expect(sqs_file_looks_like_dxf(dxf), "sample looks like dxf");
 
-    SqsDesign d;
+    static SqsDesign d;
     sqs_design_init(&d, "t");
     SqsDxfStats st;
     expect(sqs_import_dxf(&d, dxf, &st) == 0, "import");
@@ -44,7 +44,7 @@ int main(void) {
     expect(sqs_export_dxf(&d, out_dxf) == 0, "export");
     expect(sqs_write_sqdgn(&d, out_sq) == 0, "write sqdgn");
 
-    SqsDesign d2;
+    static SqsDesign d2;
     sqs_design_init(&d2, "rt");
     SqsDxfStats st2;
     expect(sqs_import_dxf(&d2, out_dxf, &st2) == 0, "re-import");

@@ -6,3 +6,16 @@ geometry, levels, cells, Accu-style snaps, and `.sqdgn` interchange.
 MicroStation `.dgn` files are not parsed (proprietary). Use ASCII DXF as the
 bridge: export DXF from MicroStation → `import-dxf`, or `export-dxf` → import
 DXF back into MicroStation. See `samples/microstation_bridge.dxf`.
+
+## The design
+
+A design holds levels, elements, cell definitions and reference attachments.
+`sqs_visit` walks it as drawn: hidden and frozen levels left out, cell
+placements expanded (innermost transform first, at most four deep and a fixed
+number of elements per walk), and attached references moved and scaled.
+Snapping, DXF export and the CLI all go through that one walk, so what is
+snapped to is what is drawn.
+
+`.sqdgn` is line-oriented text (`SQDGN 2`, one record per line). `.sqdgnb` is
+`SQDGNB\1\0` followed by tagged little-endian records, each with its length;
+a reader that meets a short, oversized or unknown record refuses the file.
