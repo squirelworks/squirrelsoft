@@ -21,4 +21,27 @@
     <string name="camera_permission">Camera permission required for QR scanning</string>
     <string name="open_failed">Could not open link</string>
     <string name="link_badge">Link</string>
+    <string name="make_qr">Make QR</string>
+    <string name="make_kind_text">Text or link</string>
+    <string name="make_kind_wifi">Wi-Fi network</string>
+    <string name="make_text_hint">Text, link, or anything to encode</string>
+    <string name="wifi_ssid">Network name</string>
+    <string name="wifi_password">Password (empty for an open network)</string>
+    <string name="wifi_hidden">Hidden network</string>
+    <string name="make_level">Error correction (higher survives more damage, makes a denser code)</string>
+    <string name="make">Make</string>
+    <string name="cancel">Cancel</string>
+    <string name="close">Close</string>
+    <string name="share">Share</string>
+    <string name="save_png">Save PNG</string>
+    <string name="saved">Saved</string>
+    <string name="save_failed">Could not save the image</string>
+    <string name="share_failed">Could not share the image</string>
+    <string name="made_image">The QR code you made</string>
+    <string name="made_info">Version %1$d · %2$d×%2$d modules · level %3$s · mask %4$d</string>
+    <string name="make_empty">Type the text to encode</string>
+    <string name="make_wifi_empty">Type the network name</string>
+    <string name="make_too_long">Too much text for a QR code at this level; try a lower level or shorter text</string>
+    <string name="make_failed">Could not make the code (error %1$d)</string>
+    <string name="make_unavailable">The QR maker is not available on this device</string>
 </resources>

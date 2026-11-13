@@ -44,6 +44,8 @@ Every item is a checkbox. Tick it in the PR that merges its last piece. Nested b
 - [ ] `libs/sqmath` (C): expression engine/CAS core for the calculator suite.
 - [x] `libs/sqgui` (C): tiny immediate-mode widget layer over SDL2 for desktop, designed to port to Squirrel OS/2's wm/gfx: a 32-bit canvas core with no OS calls, Warp-grey widgets, the OS/2 5x7 font, and an SDL2 window back end.
 - [ ] JNI smoke tests for every Android app that uses a core (each lib already has `make test` unit tests).
+  - [x] SquirrelQR: `make test` builds `sqqr_jni.c` for the host and drives it from a JVM (`squirrelqr/android/jni-smoke`)
+  - [ ] SquirrelSound (`sqdsp_jni.c`)
 
 ## S3 — Native front-ends, desktop parity (#30, #31)
 - [x] S3.1 Retire the SquirrelQR PWA as a product: moved to `squirrelqr/web-demo/` with a "not a product" README (#66).
@@ -105,14 +107,14 @@ Every item is a checkbox. Tick it in the PR that merges its last piece. Nested b
     - [ ] Android
   - [x] Desktop scope view (the oscilloscope of #28 on the desktop; Android stays under S0.4)
 - SquirrelQR
-  - [ ] Generate QR
+  - [x] Generate QR
     - [x] Shared core: `sqqr_encode` (numeric/alphanumeric/byte, ECI, all versions and levels, penalty-scored mask; matches segno's fixtures)
     - [x] Desktop: `--encode` / `--wifi` to PNG, SVG, PGM or the terminal; Make QR and Save PNG in the window
-    - [ ] Android (JNI bridge already builds the encoder)
-  - [ ] Wi-Fi / vCard parsing
+    - [x] Android: Make QR (text or Wi-Fi network, level), Share and Save PNG
+  - [x] Wi-Fi / vCard parsing
     - [x] Shared core: `sqqr_content` (Wi-Fi, vCard, MECARD, mailto/MATMSG, tel, SMS, geo, links)
     - [x] Desktop: `--details`, `"type"`/`"fields"` in `--json`, fields in the window
-    - [ ] Android
+    - [x] Android: fields under the last read
   - [ ] Batch scan
   - [ ] Torch / zoom
 
