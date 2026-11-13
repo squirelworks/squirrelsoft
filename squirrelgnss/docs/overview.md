@@ -9,9 +9,11 @@ GNSS point positioning for land surveying. It covers:
 - epoch tracking, an epoch stream with occupation averaging and velocity,
   and stakeout ENU deltas with go/cut/fill guidance
 - RINEX 2.11 and 3.x GPS navigation and observation input (pseudorange,
-  L1 carrier, SNR), and a RINEX 3 writer
-- code DGNSS and static single-frequency RTK from double differences, with
-  integer ambiguity fixing by rounding and a ratio test
+  L1 and L2 carrier, SNR, loss of lock), and a RINEX 3 writer
+- code DGNSS, and static and kinematic RTK from double differences on one
+  or two frequencies: wide lanes from the Melbourne-Wubbena combination,
+  then integer least squares (LAMBDA-style decorrelation and search) with
+  a ratio test; the kinematic filter keeps the ambiguities in information
+  form, eliminating each epoch's rover, and handles cycle slips
 
-Next come dual-frequency observations, a decorrelated ambiguity search,
-kinematic RTK and serial receiver input.
+Next comes serial receiver input.

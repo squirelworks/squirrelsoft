@@ -403,13 +403,32 @@ long sqg_demo_ambiguity(SqgEcef rx, int prn) {
     return 1000L * prn + (long)fmod(site * 0.01 * (prn % 7 + 1), 997.0);
 }
 
-void sqg_demo_epoch(const SqgEphemeris *ephs, int n_eph, SqgGeodetic truth, double t_true, double clock_bias_m,
-                    double mask_deg, double noise_m, unsigned seed, SqgEpoch *out) {
+long sqg_demo_receiver_ambiguity(long receiver, int prn, int band) {
+    unsigned long h = (unsigned long)receiver * 2654435761UL + (unsigned long)prn * 40503UL + (unsigned long)band * 97UL;
+    h ^= h >> 13;
+    h *= 0x5bd1e995UL;
+    h ^= h >> 15;
+    return (long)(h % 20000UL) - 10000L + 300L * band;
+}
+
+void sqg_demo_epoch_opt(const SqgEphemeris *ephs, int n_eph, SqgGeodetic truth, double t_true, const SqgDemoOptions *o,
+                        SqgEpoch *out) {
     SqgEcef rx;
     sqg_geodetic_to_ecef(truth, &rx);
     memset(out, 0, sizeof *out);
-    out->t_receiver = t_true + clock_bias_m / SQG_C_LIGHT;
-    unsigned s = seed ? seed : 1;
+    out->t_receiver = t_true + o->clock_bias_m / SQG_C_LIGHT;
+    unsigned s = o->seed ? o->seed : 1;
+    if (o->receiver) {
+        /* consecutive seeds give the generator correlated first draws: mix them
+         * (the site mode keeps the old draws so its numbers do not move) */
+        s ^= s >> 16;
+        s *= 0x7feb352dU;
+        s ^= s >> 15;
+        s *= 0x846ca68bU;
+        s ^= s >> 16;
+        if (!s) s = 1;
+    }
+    const double g = (SQG_L1_HZ / SQG_L2_HZ) * (SQG_L1_HZ / SQG_L2_HZ); /* L2 delay over L1 delay */
     for (int i = 0; i < n_eph && out->n_obs < SQG_MAX_SATS; i++) {
         double t_tx = t_true - 0.075, rho = 0;
         SqgEcef sr = {0, 0, 0};
@@ -424,16 +443,33 @@ void sqg_demo_epoch(const SqgEphemeris *ephs, int n_eph, SqgGeodetic truth, doub
         }
         double el = sqg_az_el(rx, truth, sr).el_deg;
         double n = gauss(&s);
-        if (el < mask_deg) continue;
-        SqgObservation *o = &out->obs[out->n_obs++];
-        o->prn = ephs[i].prn;
-        o->pseudorange_m = rho + clock_bias_m - SQG_C_LIGHT * sqg_sat_clock(&ephs[i], t_tx) + noise_m * n;
-        o->snr_dbhz = 30.0 + 20.0 * sin(el * DEG);
-        o->valid = 1;
+        if (el < o->mask_deg) continue;
+        SqgObservation *ob = &out->obs[out->n_obs++];
+        ob->prn = ephs[i].prn;
+        /* a thin shell at 350 km: the slant delay grows toward the horizon */
+        double ce = 0.94 * cos(el * DEG);
+        double iono = o->iono_m / sqrt(1 - ce * ce);
+        double geo = rho + o->clock_bias_m - SQG_C_LIGHT * sqg_sat_clock(&ephs[i], t_tx);
+        ob->pseudorange_m = geo + iono + o->noise_m * n;
+        ob->snr_dbhz = 30.0 + 20.0 * sin(el * DEG);
+        ob->valid = 1;
         /* carrier: the same clocks, an ambiguity of whole cycles, less noise */
-        long amb = sqg_demo_ambiguity(rx, ephs[i].prn);
-        o->carrier_cyc = (rho + clock_bias_m - SQG_C_LIGHT * sqg_sat_clock(&ephs[i], t_tx)) / SQG_L1_LAMBDA + amb +
-                         noise_m / 100 * gauss(&s) / SQG_L1_LAMBDA;
-        o->has_carrier = 1;
+        long amb = o->receiver ? sqg_demo_receiver_ambiguity(o->receiver, ephs[i].prn, 1)
+                               : sqg_demo_ambiguity(rx, ephs[i].prn);
+        ob->carrier_cyc = (geo - iono) / SQG_L1_LAMBDA + amb + o->noise_m / 100 * gauss(&s) / SQG_L1_LAMBDA;
+        ob->has_carrier = 1;
+        if (o->dual) {
+            long amb2 = o->receiver ? sqg_demo_receiver_ambiguity(o->receiver, ephs[i].prn, 2)
+                                    : sqg_demo_ambiguity(rx, ephs[i].prn) + 77;
+            ob->pseudorange2_m = geo + g * iono + o->noise_m * gauss(&s);
+            ob->carrier2_cyc = (geo - g * iono) / SQG_L2_LAMBDA + amb2 + o->noise_m / 100 * gauss(&s) / SQG_L2_LAMBDA;
+            ob->has_l2 = 1;
+        }
     }
+}
+
+void sqg_demo_epoch(const SqgEphemeris *ephs, int n_eph, SqgGeodetic truth, double t_true, double clock_bias_m,
+                    double mask_deg, double noise_m, unsigned seed, SqgEpoch *out) {
+    SqgDemoOptions o = {clock_bias_m, mask_deg, noise_m, seed, 0, 0, 0};
+    sqg_demo_epoch_opt(ephs, n_eph, truth, t_true, &o, out);
 }

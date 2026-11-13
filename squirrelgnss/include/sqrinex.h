@@ -46,6 +46,8 @@ typedef struct {
     int code_index;  /* which one is the pseudorange: C1C, C1, C1W or P1 */
     int snr_index;   /* S1C or S1, or -1 */
     int carrier_index; /* L1C, L1, L1W or L1P, or -1 */
+    int code2_index;   /* C2W, C2L, C2X, C2S, P2 or C2, or -1 */
+    int carrier2_index; /* L2W, L2L, L2X, L2S or L2, or -1 */
     char code_name[4];
     double approx[3]; /* APPROX POSITION XYZ, or 0 */
 } SqrObs;
@@ -55,7 +57,9 @@ typedef struct {
 int sqr_obs_open(SqrObs *r, const char *text, SqrError *err);
 
 /* The next epoch with GPS pseudoranges: 1, or 0 at the end, or -1 with err.
- * week receives the GPS week of the epoch. Event records are skipped. */
+ * week receives the GPS week of the epoch. Event records are skipped. L2
+ * code and carrier are read when the file has both; a loss-of-lock flag on
+ * either carrier sets the observation's slip. */
 int sqr_obs_next(SqrObs *r, SqgEpoch *ep, int *week, SqrError *err);
 
 /* RINEX 3.04 writers */

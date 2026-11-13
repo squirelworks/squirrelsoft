@@ -301,6 +301,21 @@ int sqr_obs_open(SqrObs *r, const char *text, SqrError *err) {
                 r->carrier_index = k;
                 break;
             }
+    static const char *CODES2[] = {"C2W", "C2L", "C2X", "C2S", "P2", "C2"};
+    static const char *PHASES2[] = {"L2W", "L2L", "L2X", "L2S", "L2"};
+    r->code2_index = r->carrier2_index = -1;
+    for (size_t c = 0; c < sizeof CODES2 / sizeof *CODES2 && r->code2_index < 0; c++)
+        for (int k = 0; k < have; k++)
+            if (!strcmp(types[k], CODES2[c])) {
+                r->code2_index = k;
+                break;
+            }
+    for (size_t c = 0; c < sizeof PHASES2 / sizeof *PHASES2 && r->carrier2_index < 0; c++)
+        for (int k = 0; k < have; k++)
+            if (!strcmp(types[k], PHASES2[c])) {
+                r->carrier2_index = k;
+                break;
+            }
     if (r->code_index < 0) return fail(err, r->line, "no GPS L1 pseudorange (C1C, C1, C1W or P1)");
     return 0;
 }
@@ -317,6 +332,14 @@ static double obs_value(const char *sat, int k, int *present) {
     t[14] = 0;
     *present = strspn(t, " ") != strlen(t);
     return *present ? strtod(t, NULL) : 0;
+}
+
+/* the loss-of-lock indicator after observation k: bit 0 is a possible slip */
+static int obs_lli(const char *sat, int k) {
+    int at = k * 16 + 14;
+    if (at >= (int)strlen(sat)) return 0;
+    char c = sat[at];
+    return c >= '0' && c <= '9' ? c - '0' : 0;
 }
 
 int sqr_obs_next(SqrObs *r, SqgEpoch *ep, int *week, SqrError *err) {
@@ -409,6 +432,17 @@ int sqr_obs_next(SqrObs *r, SqgEpoch *ep, int *week, SqrError *err) {
             if (r->carrier_index >= 0) {
                 o->carrier_cyc = obs_value(sat, r->carrier_index, &present);
                 o->has_carrier = present && o->carrier_cyc != 0;
+                if (o->has_carrier && (obs_lli(sat, r->carrier_index) & 1)) o->slip = 1;
+            }
+            if (r->code2_index >= 0 && r->carrier2_index >= 0 && o->has_carrier) {
+                int p2, l2;
+                double c2 = obs_value(sat, r->code2_index, &p2), ph2 = obs_value(sat, r->carrier2_index, &l2);
+                if (p2 && l2 && c2 > 1e6 && ph2 != 0) {
+                    o->pseudorange2_m = c2;
+                    o->carrier2_cyc = ph2;
+                    o->has_l2 = 1;
+                    if (obs_lli(sat, r->carrier2_index) & 1) o->slip = 1;
+                }
             }
         }
         return 1;
@@ -449,7 +483,7 @@ void sqr_write_obs_header(FILE *f, const SqgEcef *approx) {
     label(f, "SYNTHETIC", "MARKER NAME");
     snprintf(t, sizeof t, "%14.4f%14.4f%14.4f", approx ? approx->x : 0, approx ? approx->y : 0, approx ? approx->z : 0);
     label(f, t, "APPROX POSITION XYZ");
-    label(f, "G    3 C1C L1C S1C", "SYS / # / OBS TYPES");
+    label(f, "G    5 C1C L1C S1C C2W L2W", "SYS / # / OBS TYPES");
     label(f, "", "END OF HEADER");
 }
 
@@ -464,8 +498,10 @@ void sqr_write_obs_epoch(FILE *f, int week, const SqgEpoch *ep) {
         {
             const SqgObservation *o = &ep->obs[i];
             fprintf(f, "G%02d%14.3f  ", o->prn, o->pseudorange_m);
-            if (o->has_carrier) fprintf(f, "%14.3f  ", o->carrier_cyc);
+            if (o->has_carrier) fprintf(f, "%14.3f%c ", o->carrier_cyc, o->slip ? '1' : ' ');
             else fprintf(f, "%16s", "");
-            fprintf(f, "%14.3f  \n", o->snr_dbhz);
+            fprintf(f, "%14.3f  ", o->snr_dbhz);
+            if (o->has_l2) fprintf(f, "%14.3f  %14.3f%c ", o->pseudorange2_m, o->carrier2_cyc, o->slip ? '1' : ' ');
+            fprintf(f, "\n");
         }
 }

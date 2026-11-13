@@ -208,6 +208,282 @@ static void test_rtk(const SqgEphemeris *eph, int n_eph) {
     CHECK(sqg_rtk_static(base_eps, rover_eps, 0, eph, n_eph, base_pos, &opt, &out) == -1);
 }
 
+/* ---- integer least squares against a brute-force search ---- */
+
+static unsigned rs = 12345;
+static double urand(void) {
+    rs = rs * 1103515245u + 12345u;
+    return ((rs >> 8) & 0xffffff) / 16777216.0;
+}
+
+/* (x - a)' Q^-1 (x - a), with Q^-1 given */
+static double qform(const double *qi, const double *a, const long *x, int n) {
+    double s = 0;
+    for (int i = 0; i < n; i++)
+        for (int j = 0; j < n; j++) s += (x[i] - a[i]) * qi[i * n + j] * (x[j] - a[j]);
+    return s;
+}
+
+/* the inverse of an n x n matrix by Gauss-Jordan, for the test only */
+static int invert(const double *m, double *inv, int n) {
+    double a[8][16];
+    for (int i = 0; i < n; i++)
+        for (int j = 0; j < 2 * n; j++) a[i][j] = j < n ? m[i * n + j] : (j - n == i);
+    for (int c = 0; c < n; c++) {
+        int p = c;
+        for (int r = c + 1; r < n; r++)
+            if (fabs(a[r][c]) > fabs(a[p][c])) p = r;
+        if (fabs(a[p][c]) < 1e-14) return -1;
+        for (int k = 0; k < 2 * n; k++) {
+            double t = a[c][k];
+            a[c][k] = a[p][k];
+            a[p][k] = t;
+        }
+        double d = a[c][c];
+        for (int k = 0; k < 2 * n; k++) a[c][k] /= d;
+        for (int r = 0; r < n; r++)
+            if (r != c) {
+                double f = a[r][c];
+                for (int k = 0; k < 2 * n; k++) a[r][k] -= f * a[c][k];
+            }
+    }
+    for (int i = 0; i < n; i++)
+        for (int j = 0; j < n; j++) inv[i * n + j] = a[i][n + j];
+    return 0;
+}
+
+static void test_ils(void) {
+    /* strongly correlated covariances (a cycle or two along one direction, a
+       few hundredths across), where rounding each ambiguity goes wrong */
+    int agree = 0, rounding_wrong = 0, trials = 0;
+    for (int t = 0; t < 40; t++) {
+        int n = 2 + t % 4;
+        double m[25], q[25], qi[25], a[5];
+        for (int i = 0; i < n * n; i++) m[i] = urand() * 2 - 1;
+        /* q = m m' / 10 + a long thin direction */
+        double dir[5];
+        for (int i = 0; i < n; i++) dir[i] = urand() * 2 - 1;
+        for (int i = 0; i < n; i++)
+            for (int j = 0; j < n; j++) {
+                double s = 0;
+                for (int k = 0; k < n; k++) s += m[i * n + k] * m[j * n + k];
+                q[i * n + j] = s * 0.01 + dir[i] * dir[j];
+            }
+        for (int i = 0; i < n; i++) a[i] = (urand() - 0.5) * 40;
+        if (invert(q, qi, n)) continue;
+        trials++;
+        long best[5], round_x[5];
+        double ratio, dist[2];
+        CHECK(sqg_ils(a, q, n, best, &ratio, dist) == 0);
+        /* brute force over a box wide enough for the long direction */
+        long lo[5], x[5], bx[5] = {0};
+        double b1 = INFINITY, b2 = INFINITY;
+        int span = 10;
+        for (int i = 0; i < n; i++) lo[i] = lround(a[i]) - span, x[i] = lo[i];
+        for (;;) {
+            double v = qform(qi, a, x, n);
+            if (v < b1) {
+                b2 = b1;
+                b1 = v;
+                memcpy(bx, x, sizeof x);
+            } else if (v < b2)
+                b2 = v;
+            int i = 0;
+            while (i < n && ++x[i] > lo[i] + 2 * span) x[i] = lo[i], i++;
+            if (i == n) break;
+        }
+        int same = 1;
+        for (int i = 0; i < n; i++) same &= best[i] == bx[i];
+        agree += same && fabs(dist[0] - b1) < 1e-6 * (1 + b1) && fabs(dist[1] - b2) < 1e-6 * (1 + b2);
+        for (int i = 0; i < n; i++) round_x[i] = lround(a[i]);
+        rounding_wrong += qform(qi, a, round_x, n) > b1 + 1e-9;
+        CHECK(fabs(ratio - b2 / fmax(b1, 1e-12)) < 1e-6 * ratio);
+    }
+    CHECK(trials >= 35 && agree == trials);
+    CHECK(rounding_wrong >= trials / 3); /* the cases rounding alone gets wrong */
+    /* one ambiguity; and a covariance that is not positive definite */
+    long b1v[1];
+    double r1, q1[1] = {0.01}, a1[1] = {3.1};
+    CHECK(sqg_ils(a1, q1, 1, b1v, &r1, NULL) == 0 && b1v[0] == 3 && fabs(r1 - 0.81 / 0.01) < 1e-9);
+    double qbad[4] = {1, 2, 2, 1}, a2[2] = {0.2, 0.3};
+    long b2v[2];
+    CHECK(sqg_ils(a2, qbad, 2, b2v, &r1, NULL) == -1);
+    double nanv[2] = {NAN, 0}, qok[4] = {1, 0, 0, 1};
+    CHECK(sqg_ils(nanv, qok, 2, b2v, &r1, NULL) == -1);
+    CHECK(sqg_ils(a2, qok, 0, b2v, &r1, NULL) == -1);
+}
+
+/* ---- dual frequency ---- */
+
+static SqgEpoch dual_b[200], dual_r[200];
+
+/* the double-difference ambiguity of receivers 22 (rover) and 11 (base) */
+static long dd_amb(int prn, int ref, int band) {
+    return (sqg_demo_receiver_ambiguity(22, prn, band) - sqg_demo_receiver_ambiguity(22, ref, band)) -
+           (sqg_demo_receiver_ambiguity(11, prn, band) - sqg_demo_receiver_ambiguity(11, ref, band));
+}
+
+static void dual_session(const SqgEphemeris *eph, int n_eph, int n, double gap, double noise, double iono, int dual,
+                         SqgGeodetic (*path)(int k)) {
+    for (int k = 0; k < n; k++) {
+        SqgDemoOptions ob = {300.0 + k, 5.0, noise, 41u + (unsigned)k, 11, dual, iono};
+        SqgDemoOptions orv = {-700.0 - k, 5.0, noise, 9001u + (unsigned)k, 22, dual, iono};
+        sqg_demo_epoch_opt(eph, n_eph, BASE, T0 + gap * k, &ob, &dual_b[k]);
+        sqg_demo_epoch_opt(eph, n_eph, path(k), T0 + gap * k, &orv, &dual_r[k]);
+    }
+}
+
+static SqgGeodetic still(int k) {
+    (void)k;
+    return moved(BASE, 350.0, 420.0, -3.0);
+}
+
+/* a 100 m circle at 5 m/s, a second apart */
+static SqgGeodetic circle(int k) {
+    double a = 5.0 * k / 100.0;
+    return moved(BASE, 600 + 100 * cos(a), -200 + 100 * sin(a), 1.5);
+}
+
+static void test_dual_static(const SqgEphemeris *eph, int n_eph) {
+    SqgEcef base_pos, truth;
+    sqg_geodetic_to_ecef(BASE, &base_pos);
+    sqg_geodetic_to_ecef(still(0), &truth);
+    SqgRtkOptions opt;
+    sqg_rtk_options_default(&opt);
+    SqgRtk l1, both;
+    /* 3 m of ionosphere at the zenith, 0.3 m code: 12 epochs 15 s apart */
+    dual_session(eph, n_eph, 12, 15.0, 0.3, 3.0, 1, still);
+    CHECK(sqg_rtk_static(dual_b, dual_r, 12, eph, n_eph, base_pos, &opt, &both) == 0);
+    CHECK(both.wl_fixed && both.dual && both.fixed);
+    int wl_right = 1, n1_right = 1;
+    for (int j = 0; j < both.n_dd; j++) {
+        long n1 = dd_amb(both.prn[j], both.ref_prn, 1), n2 = dd_amb(both.prn[j], both.ref_prn, 2);
+        wl_right &= both.wl[j] == n1 - n2;
+        n1_right &= both.amb[j] == n1;
+    }
+    CHECK(wl_right && n1_right);
+    CHECK(sqg_baseline_length(both.rover, truth) < 0.02);
+    /* the same data on L1 alone fits far less sharply */
+    opt.dual = 0;
+    CHECK(sqg_rtk_static(dual_b, dual_r, 12, eph, n_eph, base_pos, &opt, &l1) == 0);
+    CHECK(!l1.dual && !l1.wl_fixed && l1.ratio < both.ratio / 5);
+    /* noiseless, with the ionosphere: exact, because it cancels over a short
+       baseline (told the code is good, three epochs are enough for the wide lanes) */
+    opt.dual = 1;
+    opt.sigma_code = 0.05;
+    dual_session(eph, n_eph, 3, 15.0, 0, 3.0, 1, still);
+    CHECK(sqg_rtk_static(dual_b, dual_r, 3, eph, n_eph, base_pos, &opt, &both) == 0);
+    CHECK(both.fixed && both.dual && sqg_baseline_length(both.rover, truth) < 2e-3);
+}
+
+static void test_kinematic(const SqgEphemeris *eph, int n_eph) {
+    SqgEcef base_pos;
+    sqg_geodetic_to_ecef(BASE, &base_pos);
+    static SqgRtkFilter f;
+    SqgRtkFix fx;
+    const int N = 160;
+    /* dual frequency, 0.3 m code, 3 m of ionosphere, a rover on a circle */
+    dual_session(eph, n_eph, N, 1.0, 0.3, 3.0, 1, circle);
+    sqg_rtk_filter_init(&f, base_pos, NULL);
+    int fixed = 0, bad = 0, first = -1, wl_all = 0, ok = 1;
+    for (int k = 0; k < N; k++) {
+        if (sqg_rtk_filter_push(&f, &dual_b[k], &dual_r[k], eph, n_eph, &fx)) {
+            ok = 0;
+            continue;
+        }
+        SqgEcef t;
+        sqg_geodetic_to_ecef(circle(k), &t);
+        if (fx.fixed) {
+            fixed++;
+            if (first < 0) first = k;
+            if (sqg_baseline_length(fx.pos, t) > 0.06) bad++; /* 3-D, one epoch of 3 mm carrier */
+        } else if (sqg_baseline_length(fx.pos, t) > 3.0)
+            bad++;
+        if (k == 0) CHECK(fx.reset);
+        wl_all = fx.wide_lanes == fx.n_dd;
+    }
+    CHECK(ok && bad == 0 && first >= 0 && fixed >= N - 20 && wl_all);
+    /* the fixed ambiguities are the true ones */
+    int right = 1;
+    for (int j = 0; j < f.n_sat - 1; j++) right &= f.fixed_amb[j] == dd_amb(f.prn[j + 1], f.prn[0], 1);
+    CHECK(f.fixed && right);
+
+    /* noiseless: every fixed epoch to the millimetre */
+    dual_session(eph, n_eph, 20, 1.0, 0, 3.0, 1, circle);
+    sqg_rtk_filter_init(&f, base_pos, NULL);
+    double worst = 0;
+    fixed = 0;
+    for (int k = 0; k < 20; k++)
+        if (sqg_rtk_filter_push(&f, &dual_b[k], &dual_r[k], eph, n_eph, &fx) == 0 && fx.fixed) {
+            SqgEcef t;
+            sqg_geodetic_to_ecef(circle(k), &t);
+            worst = fmax(worst, sqg_baseline_length(fx.pos, t));
+            fixed++;
+        }
+    CHECK(fixed >= 18 && worst < 1e-3);
+
+    /* slips: one the rover flags; two it does not, which show as jumps in the
+     * geometry-free carrier (3 cycles on L1; 1 on L1 and 2 on L2); then the
+     * reference satellite goes */
+    dual_session(eph, n_eph, N, 1.0, 0.3, 3.0, 1, circle);
+    sqg_rtk_filter_init(&f, base_pos, NULL);
+    for (int k = 0; k < 40; k++) sqg_rtk_filter_push(&f, &dual_b[k], &dual_r[k], eph, n_eph, &fx);
+    CHECK(fx.fixed);
+    int ref = f.prn[0], p1 = f.prn[1], p2 = f.prn[2], p3 = f.prn[3];
+    for (int k = 40; k < N; k++)
+        for (int i = 0; i < dual_r[k].n_obs; i++) {
+            SqgObservation *o = &dual_r[k].obs[i];
+            if (o->prn == p1) o->carrier_cyc += 7, o->carrier2_cyc += 5, o->slip = k == 40;
+            if (o->prn == p2 && k >= 60) o->carrier_cyc += 3;
+            if (o->prn == p3 && k >= 80) o->carrier_cyc += 1, o->carrier2_cyc += 2;
+        }
+    int slips40 = 0, slips60 = 0, slips80 = 0, wrong = 0, refixed = 0;
+    for (int k = 40; k < 120; k++) {
+        if (sqg_rtk_filter_push(&f, &dual_b[k], &dual_r[k], eph, n_eph, &fx)) continue;
+        SqgEcef t;
+        sqg_geodetic_to_ecef(circle(k), &t);
+        if (k == 40) slips40 = fx.slips;
+        if (k == 60) slips60 = fx.slips;
+        if (k == 80) slips80 = fx.slips;
+        if (fx.fixed && sqg_baseline_length(fx.pos, t) > 0.06) wrong++;
+        if (k >= 110) refixed += fx.fixed;
+    }
+    CHECK(slips40 == 1 && slips60 == 1 && slips80 == 1);
+    CHECK(wrong == 0 && refixed == 10);
+    /* the reference goes: the filter starts over on what is left */
+    for (int k = 120; k < N; k++)
+        for (int i = 0; i < dual_r[k].n_obs; i++)
+            if (dual_r[k].obs[i].prn == ref) dual_r[k].obs[i].has_carrier = 0;
+    CHECK(sqg_rtk_filter_push(&f, &dual_b[120], &dual_r[120], eph, n_eph, &fx) == 0 && fx.reset && !fx.fixed);
+    CHECK(f.prn[0] != ref);
+
+    /* L1 only: an unflagged slip of one cycle is caught when the fix stops fitting */
+    dual_session(eph, n_eph, N, 1.0, 0.3, 0, 0, circle);
+    sqg_rtk_filter_init(&f, base_pos, NULL);
+    for (int k = 0; k < 60; k++) sqg_rtk_filter_push(&f, &dual_b[k], &dual_r[k], eph, n_eph, &fx);
+    CHECK(fx.fixed && fx.wide_lanes == 0);
+    p1 = f.prn[2];
+    for (int k = 60; k < N; k++)
+        for (int i = 0; i < dual_r[k].n_obs; i++)
+            if (dual_r[k].obs[i].prn == p1) dual_r[k].obs[i].carrier_cyc += 1;
+    int dropped = 0;
+    wrong = 0;
+    for (int k = 60; k < N; k++) {
+        if (sqg_rtk_filter_push(&f, &dual_b[k], &dual_r[k], eph, n_eph, &fx)) continue;
+        SqgEcef t;
+        sqg_geodetic_to_ecef(circle(k), &t);
+        dropped |= fx.dropped;
+        if (fx.fixed && sqg_baseline_length(fx.pos, t) > 0.06) wrong++;
+    }
+    CHECK(dropped && wrong == 0);
+
+    /* too few satellites: no solution, and nothing kept */
+    SqgEpoch few = dual_r[0];
+    few.n_obs = 3;
+    sqg_rtk_filter_init(&f, base_pos, NULL);
+    CHECK(sqg_rtk_filter_push(&f, &dual_b[0], &few, eph, n_eph, &fx) == -1);
+}
+
 void test_rtk_all(int *checks, int *failures) {
     nchecks = checks;
     nfails = failures;
@@ -218,4 +494,7 @@ void test_rtk_all(int *checks, int *failures) {
     test_guide();
     test_dgnss(eph, n_eph);
     test_rtk(eph, n_eph);
+    test_ils();
+    test_dual_static(eph, n_eph);
+    test_kinematic(eph, n_eph);
 }

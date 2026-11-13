@@ -156,8 +156,10 @@ These milestones predate the suite roadmap and remain open. Formats stay owned b
 - [x] RINEX navigation and observation input (2.11 and 3.x GPS; `squirrelgnss solve OBS NAV`)
 - [x] Continuous epoch stream + survey stakeout helpers (occupation averaging, speed/course, go/cut/fill guidance)
 - [x] RTK double-difference math: code DGNSS, static L1 carrier float + integer fix with ratio test (`squirrelgnss rtk`)
-- [ ] Dual-frequency (L2/L5) observations and wide-lane fixing; LAMBDA-style decorrelated search
-- [ ] Kinematic RTK (moving rover epoch by epoch) and serial receiver input
+- [x] Dual-frequency (L2) observations and wide-lane fixing; LAMBDA-style decorrelated search (`sqg_ils`)
+- [x] Kinematic RTK (moving rover epoch by epoch, cycle slips, `rtk --kinematic`)
+- [ ] L5 observations
+- [ ] Serial receiver input
 
 ### SquirrelSound desktop (sqdsp)
 - [x] Radix-2 FFT, windows, periodogram, Welch PSD, STFT; pitch, THD, SNR; WAV I/O, CLI reports, SVG plots; live SDL spectrum/waterfall + ALSA mic (done)

@@ -8,10 +8,20 @@
  * with one whole-cycle ambiguity per satellite pair, give it to millimetres
  * once the ambiguities are fixed.
  *
- * The ambiguity fix here is rounding checked by a ratio test: each
- * ambiguity moved one cycle toward its float value must fit at least
- * `ratio_min` times worse. It is not LAMBDA: correlated ambiguities from a
- * short session can fail the test, and then the float solution stands. */
+ * Ambiguities are fixed by integer least squares (LAMBDA-style: integer
+ * Gauss decorrelation, then a search that shrinks its ellipsoid), accepted
+ * when the second-best set fits at least `ratio_min` times worse.
+ *
+ * With L2 the Melbourne-Wubbena combination gives each double difference's
+ * wide-lane ambiguity (about 86 cm, free of geometry and ionosphere); once
+ * those are whole numbers the L2 carrier joins the L1 one on the same
+ * ambiguities, which fixes in far fewer epochs.
+ *
+ * A moving rover goes through SqgRtkFilter: each epoch's rover position is
+ * eliminated into an information matrix of the ambiguities alone, so they
+ * gather strength while the rover moves, and once fixed every epoch is
+ * placed to the centimetre. A slip (flagged by the receiver, or a jump in
+ * the geometry-free carrier) restarts only that ambiguity. */
 #ifndef SQRTK_H
 #define SQRTK_H
 
@@ -22,6 +32,7 @@ typedef struct {
     double sigma_code; /* m, for weighting */
     double sigma_phase; /* m */
     double ratio_min;  /* to accept a fix */
+    int dual;          /* use L2 when it is there */
 } SqgRtkOptions;
 
 typedef struct {
@@ -36,9 +47,12 @@ typedef struct {
     double rms_phase_m;         /* phase residual RMS of the solution given */
     SqgEcef float_rover;
     SqgEcef rover;              /* fixed when fixed, else float */
+    int dual;                   /* L2 used: every wide lane fixed */
+    int wl_fixed;
+    long wl[SQG_MAX_SATS];      /* wide-lane ambiguities (L1 minus L2 cycles) */
 } SqgRtk;
 
-/* 15 degrees, 0.5 m code, 3 mm phase, ratio 3 */
+/* 15 degrees, 0.5 m code, 3 mm phase, ratio 3, L2 when there */
 void sqg_rtk_options_default(SqgRtkOptions *o);
 
 /* The rover from code double differences in one epoch, with the base at a
@@ -53,5 +67,49 @@ int sqg_dgnss(const SqgEpoch *base, const SqgEpoch *rover, const SqgEphemeris *e
  * double differences or a failed solution. */
 int sqg_rtk_static(const SqgEpoch *base, const SqgEpoch *rover, int n_epochs, const SqgEphemeris *ephs, int n_eph,
                    SqgEcef base_pos, const SqgRtkOptions *opt, SqgRtk *out);
+
+/* Integer least squares: the integer vector nearest the float ambiguities a
+ * (n of them, up to SQG_MAX_SATS) in the metric of their covariance q (n x n,
+ * row by row). ratio gets the second-best squared distance over the best;
+ * dist (may be NULL) the two distances. Returns 0, or -1 when q is not
+ * positive definite or the search gives up. */
+int sqg_ils(const double *a, const double *q, int n, long *best, double *ratio, double *dist);
+
+/* ---- kinematic ---- */
+typedef struct {
+    double t;          /* rover receiver time */
+    SqgEcef pos;
+    int fixed;         /* placed with fixed ambiguities */
+    double ratio;      /* of the last integer search */
+    double rms_phase_m;
+    int n_dd;          /* double differences this epoch */
+    int wide_lanes;    /* of them with the wide lane fixed (L2 in use) */
+    int slips;         /* ambiguities restarted this epoch */
+    int reset;         /* the satellite set started over */
+    int dropped;       /* a fix stopped fitting and was let go */
+} SqgRtkFix;
+
+typedef struct {
+    SqgRtkOptions opt;
+    SqgEcef base_pos;
+    int started, epochs;
+    int n_sat, prn[SQG_MAX_SATS]; /* prn[0] is the reference */
+    double info[SQG_MAX_SATS][SQG_MAX_SATS], rhs[SQG_MAX_SATS];
+    double mw_ref[SQG_MAX_SATS], mw_sum[SQG_MAX_SATS], mw_sq[SQG_MAX_SATS];
+    int mw_n[SQG_MAX_SATS], wl_ok[SQG_MAX_SATS];
+    long wl[SQG_MAX_SATS];
+    double gf_last[SQG_MAX_SATS];
+    int gf_have[SQG_MAX_SATS];
+    int fixed;
+    long fixed_amb[SQG_MAX_SATS];
+    double ratio;
+    SqgEcef last;
+} SqgRtkFilter;
+
+void sqg_rtk_filter_init(SqgRtkFilter *f, SqgEcef base_pos, const SqgRtkOptions *opt);
+/* One epoch of base and rover at the same time. Returns 0 with out filled,
+ * or -1 when there is no solution this epoch (too few satellites). */
+int sqg_rtk_filter_push(SqgRtkFilter *f, const SqgEpoch *base, const SqgEpoch *rover, const SqgEphemeris *ephs,
+                        int n_eph, SqgRtkFix *out);
 
 #endif
