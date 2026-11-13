@@ -1,7 +1,8 @@
 # SquirrelGames
 
-Card and board games on `libs/sqgui`, roadmap item S5.3. This first part
-is patience: Klondike and FreeCell. The rules (`cards.c`) are freestanding
+Card and board games on `libs/sqgui`, roadmap item S5.3. So far:
+patience (Klondike and FreeCell) and Mines. The rules (`cards.c`,
+`mines.c`) are freestanding
 C11 with no allocation and no stdio, and `make test` checks that they
 need nothing from outside but `memcpy`, `memmove`, `memset` and
 `strlen`, so they move to Squirrel OS/2 as they are. Only `games_sdl.c`
@@ -29,9 +30,17 @@ build/squirrelgames --freecell --seed 7
   (free cells + 1), doubled for each empty column other than the one it
   goes to. Any card goes into an empty column.
 
-A deal is a number from 0 to 4294967295: the same number always gives the
-same deal (shuffled with SquirrelGames' own generator, so the numbers are
-its own).
+- **Mines**: a field of hidden squares, some holding mines. Opening a
+  square shows how many of its eight neighbours hold mines; one with none
+  opens its neighbours too. Open every square without a mine to win.
+  The mines go in at the first square opened, never on it or next to it,
+  so the first square always opens a clear patch. Small is 9x9 with 10
+  mines, Medium 16x16 with 40, Large 30x16 with 99; any field from 2x2 to
+  40x24 from the command line.
+
+A deal (or a field) is a number from 0 to 4294967295: the same number
+always gives the same deal (shuffled with SquirrelGames' own generator,
+so the numbers are its own).
 
 ## The window
 
@@ -44,14 +53,19 @@ its own).
   need them: an ace or two at once, any other card when both suits of the
   other colour are home to one below it. In Klondike, once the stock is
   gone and every card is face up, it finishes the game.
-- Klondike or FreeCell, Draw 3, a deal by its number (Play), New (another
-  deal), Restart (this one again), Undo (Ctrl+Z, as far back as 1000
-  moves), Home (everything that can go, Ctrl+A). Ctrl+N deals anew.
+- Klondike, FreeCell or Mines, Draw 3, a deal by its number (Play), New
+  (another deal), Restart (this one again), Undo (Ctrl+Z, as far back as
+  1000 moves), Home (everything that can go, Ctrl+A). Ctrl+N deals anew.
+- Mines: the left button opens a square, or on a number with all its
+  flags placed, the squares around it. The right button flags a square,
+  then marks it with a question mark, then clears it. The counters show
+  the mines less the flags, and the seconds since the first square.
 
 ## Command line
 
 ```
 --klondike | --klondike3 | --freecell   the game (Klondike, draw 1, unless one of these)
+--mines SIZE     Mines: small, medium, large, or WxHxM (20x12x40)
 --seed N         the deal
 --do CMD         play (see below); in order with --script
 --script FILE    commands one a line, # for comments
@@ -76,6 +90,19 @@ is safe, `finish` everything that can go. In the text, a card is its rank
 0, 1 for a move the rules refuse or a bad command, 2 for usage or no
 window.
 
+Mines commands, with squares as `X Y` from `0 0` at the top-left:
+
+```
+new small|medium|large [SEED]     new W H MINES [SEED]
+open X Y             flag X Y             chord X Y
+```
+
+`flag` puts a flag on a hidden square or takes it off; `chord` opens the
+neighbours of an open number that has as many flags around it. In the
+text, `.` is hidden, `F` a flag, `?` a question mark, a space or 1-8 an
+open square, and after a loss `*` a mine and `X` the one that went off.
+Opening a mine is not an error: the game is lost and `--show` says so.
+
 ## Tests
 
 `make test` runs `tests/test_games.c`: deals (every card once, the same
@@ -85,5 +112,7 @@ FreeCell, the best place, cards going home by themselves and finishing,
 undo, the commands and their errors, 200 games of random play (the cards
 stay 52, each once, and undoing everything gives the deal back), and the
 window driven by clicks, double clicks, drags, the right button and the
-top bar. Then `tests/cli_smoke.sh`, the freestanding check, and ten frames
+top bar. For Mines: the first square clear and the counts right on 300 fields of random sizes,
+flood opening, chords, flags and question marks, winning and losing,
+the clock, the commands, and the window's clicks. Then `tests/cli_smoke.sh`, the freestanding check, and ten frames
 of the real window with `SDL_VIDEODRIVER=dummy` when SDL2 is installed.

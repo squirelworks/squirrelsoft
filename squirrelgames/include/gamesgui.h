@@ -4,21 +4,30 @@
  * it, in a column); a double click or the right button sends it to the
  * best place (home first); a click on Klondike's stock turns the next
  * cards. Ctrl+Z undoes, Ctrl+N deals again, Ctrl+A sends home what can go.
+ * Mines: the left button opens a square (or, on a number with its flags
+ * all placed, the squares around it), the right one flags it, then marks
+ * it with a question mark, then clears it.
  */
 #ifndef GAMESGUI_H
 #define GAMESGUI_H
 
 #include "cards.h"
+#include "mines.h"
 #include "sqgui.h"
 
 #define GAMES_CARD_W 80
 #define GAMES_CARD_H 110
+#define GAMES_MINES 2  /* the third game the window plays, beside GAME_KLONDIKE and GAME_FREECELL */
+#define GAMES_SQUARE 24 /* a square of the mines field */
 
 typedef struct GamesGui GamesGui;
 
 struct GamesGui {
     Game *game;
-    int kind;              /* the game the next deal is: GAME_* */
+    Mines *mines;
+    int kind;              /* the game shown: GAME_KLONDIKE, GAME_FREECELL or GAMES_MINES */
+    int mines_size;        /* MINES_SMALL, MEDIUM or LARGE */
+    long ms, last_ms;      /* the time now, from the run loop (milliseconds), for the mines clock */
     int draw3;             /* Klondike: three cards at a time */
     int auto_home;         /* cards go home by themselves when nothing needs them */
     char seed_text[12];    /* the deal to play, typed */
@@ -32,7 +41,10 @@ struct GamesGui {
     char status[160];
 };
 
-void games_gui_init(GamesGui *gg, Game *game);
+void games_gui_init(GamesGui *gg, Game *game, Mines *mines);
+/* The mines square under a window point: 0 with x, y, or -1 */
+int games_gui_square(const GamesGui *gg, int sx, int sy, int *x, int *y);
+sqg_rect games_gui_square_rect(const GamesGui *gg, int x, int y);
 
 /* Where card index of a pile is (index pile->n: where the next would go;
  * an empty pile: its place) and which card is under a point: 0 with the

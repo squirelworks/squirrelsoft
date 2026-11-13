@@ -2,6 +2,7 @@
  * window driven by simulated input. */
 #include "cards.h"
 #include "gamesgui.h"
+#include "mines.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -18,6 +19,7 @@ static void check(int ok, const char *what, int line) {
 }
 
 static Game g;
+static Mines mn;
 
 /* a pile from names: "AS 2H #KD" (# for face down) */
 static void set(int pile, const char *cards) {
@@ -307,6 +309,157 @@ static void test_random_play(void) {
     }
 }
 
+static int count_mines(const Mines *m) {
+    int k = 0;
+    for (int i = 0; i < m->w * m->h; i++) k += (m->sq[i] & MINE_HERE) != 0;
+    return k;
+}
+
+/* open every square without a mine, by what the field holds */
+static void clear_field(Mines *m) {
+    for (int y = 0; y < m->h; y++)
+        for (int x = 0; x < m->w; x++)
+            if (!(mines_at(m, x, y) & MINE_HERE)) mines_open(m, x, y);
+}
+
+static int mine_ok(const char *line) {
+    char msg[120];
+    int rc = mines_command(&mn, line, msg, sizeof msg);
+    if (rc) printf("  %s: %s\n", line, msg);
+    return rc == 0;
+}
+static int mine_fails(const char *line, const char *why) {
+    char msg[120];
+    int rc = mines_command(&mn, line, msg, sizeof msg);
+    if (rc == 0 || !strstr(msg, why)) {
+        printf("  %s: rc %d, said \"%s\"\n", line, rc, msg);
+        return 0;
+    }
+    return 1;
+}
+
+static void test_mines(void) {
+    CHECK(mines_new(&mn, 1, 5, 1, 0) == -1 && mines_new(&mn, 41, 5, 1, 0) == -1 && mines_new(&mn, 5, 25, 1, 0) == -1);
+    CHECK(mines_new(&mn, 4, 4, 8, 0) == -1 && mines_new(&mn, 4, 4, 7, 0) == 0 && mines_new(&mn, 9, 9, 0, 0) == -1);
+    /* the first square and its neighbours are always clear; the count is right; counts are right */
+    int good = 1;
+    for (int k = 0; k < 300; k++) {
+        int w, h, n;
+        mines_size_of(k % 3, &w, &h, &n);
+        mines_new(&mn, w, h, n, (uint32_t)k);
+        int fx = (k * 7) % w, fy = (k * 5) % h;
+        good &= mines_open(&mn, fx, fy) > 0 && count_mines(&mn) == n && mn.state != MINES_LOST;
+        for (int j = -1; j <= 1; j++)
+            for (int i = -1; i <= 1; i++) good &= !(mines_at(&mn, fx + i, fy + j) & MINE_HERE);
+        for (int y = 0; y < h; y++)
+            for (int x = 0; x < w; x++) {
+                int c = 0;
+                for (int j = -1; j <= 1; j++)
+                    for (int i = -1; i <= 1; i++) c += (mines_at(&mn, x + i, y + j) & MINE_HERE) != 0;
+                good &= (mines_at(&mn, x, y) & 15) == c;
+                /* an open square with none around has every neighbour open */
+                if ((mines_at(&mn, x, y) & MINE_OPEN) && !c)
+                    for (int j = -1; j <= 1; j++)
+                        for (int i = -1; i <= 1; i++)
+                            if (x + i >= 0 && y + j >= 0 && x + i < w && y + j < h) good &= (mines_at(&mn, x + i, y + j) & MINE_OPEN) != 0;
+            }
+    }
+    CHECK(good);
+    /* the same seed and first square: the same field */
+    mines_new(&mn, 16, 16, 40, 77);
+    mines_open(&mn, 3, 3);
+    Mines a = mn;
+    mines_new(&mn, 16, 16, 40, 77);
+    mines_open(&mn, 3, 3);
+    CHECK(!memcmp(a.sq, mn.sq, sizeof a.sq));
+    /* winning: every clear square open; the mines flagged for you */
+    clear_field(&mn);
+    CHECK(mn.state == MINES_WON && mn.flags == 40 && mines_left(&mn) == 0 && mn.opened == 256 - 40);
+    CHECK(mines_open(&mn, 0, 0) == 0 && mines_mark(&mn, 0, 0, 1) == -1);
+    /* losing: a mine; it shows, and then nothing more happens */
+    mines_new(&mn, 9, 9, 10, 5);
+    mines_open(&mn, 4, 4);
+    int mx = -1, my = -1;
+    for (int i = 0; i < 81 && mx < 0; i++)
+        if (mn.sq[i] & MINE_HERE) mx = i % 9, my = i / 9;
+    CHECK(mines_open(&mn, mx, my) == -1 && mn.state == MINES_LOST && mn.boom_x == mx && mn.boom_y == my);
+    char text[1024];
+    mines_text(&mn, text, sizeof text);
+    CHECK(text[my * 10 + mx] == 'X' && strchr(text, '*') && strlen(text) == 90);
+    CHECK(mine_fails("open 0 0", "lost"));
+    /* flags and question marks */
+    mines_new(&mn, 9, 9, 10, 5);
+    CHECK(mines_mark(&mn, 2, 2, 1) == 0 && (mines_at(&mn, 2, 2) & MINE_FLAG) && mines_left(&mn) == 9);
+    CHECK(mines_open(&mn, 2, 2) == 0 && !mn.laid); /* a flag keeps it shut */
+    CHECK(mines_mark(&mn, 2, 2, 1) == 0 && (mines_at(&mn, 2, 2) & MINE_ASK) && mines_left(&mn) == 10);
+    CHECK(mines_mark(&mn, 2, 2, 1) == 0 && !(mines_at(&mn, 2, 2) & (MINE_ASK | MINE_FLAG)));
+    mines_mark(&mn, 2, 2, 0);
+    CHECK(mines_mark(&mn, 2, 2, 0) == 0 && !(mines_at(&mn, 2, 2) & (MINE_ASK | MINE_FLAG))); /* without ?: flag, none */
+    mines_mark(&mn, 2, 2, 1);
+    mines_mark(&mn, 2, 2, 1);
+    CHECK(mines_open(&mn, 2, 2) > 0 && !(mines_at(&mn, 2, 2) & MINE_ASK)); /* a ? opens */
+    mines_text(&mn, text, sizeof text);
+    CHECK(!strchr(text, '?') && strchr(text, '.'));
+    /* chord: a number with its flags placed opens the rest around it */
+    int cx = -1, cy = -1;
+    for (int y = 0; y < 9 && cx < 0; y++)
+        for (int x = 0; x < 9 && cx < 0; x++) {
+            uint8_t q = mines_at(&mn, x, y);
+            if (!(q & MINE_OPEN) || !(q & 15)) continue;
+            int hidden_safe = 0;
+            for (int j = -1; j <= 1; j++)
+                for (int i = -1; i <= 1; i++) {
+                    uint8_t r = mines_at(&mn, x + i, y + j);
+                    hidden_safe += x + i >= 0 && y + j >= 0 && x + i < 9 && y + j < 9 && !(r & (MINE_OPEN | MINE_HERE));
+                }
+            if (hidden_safe) cx = x, cy = y;
+        }
+    CHECK(cx >= 0);
+    CHECK(mines_chord(&mn, cx, cy) == 0); /* no flags yet: nothing */
+    for (int j = -1; j <= 1; j++)
+        for (int i = -1; i <= 1; i++)
+            if (mines_at(&mn, cx + i, cy + j) & MINE_HERE && !(mines_at(&mn, cx + i, cy + j) & MINE_FLAG)) mines_mark(&mn, cx + i, cy + j, 0);
+    int before = mn.opened;
+    CHECK(mines_chord(&mn, cx, cy) > 0 && mn.opened > before && mn.state != MINES_LOST);
+    /* a flag in the wrong place: chording sets off the mine it hid */
+    mines_new(&mn, 9, 9, 10, 5);
+    mines_open(&mn, 4, 4);
+    cx = -1;
+    for (int y = 0; y < 9 && cx < 0; y++)
+        for (int x = 0; x < 9 && cx < 0; x++) {
+            uint8_t q = mines_at(&mn, x, y);
+            if (!(q & MINE_OPEN) || (q & 15) != 1) continue;
+            int safe = -1, mine = -1;
+            for (int j = -1; j <= 1; j++)
+                for (int i = -1; i <= 1; i++) {
+                    int nx = x + i, ny = y + j;
+                    if (nx < 0 || ny < 0 || nx > 8 || ny > 8) continue;
+                    uint8_t r = mines_at(&mn, nx, ny);
+                    if (r & MINE_OPEN) continue;
+                    if (r & MINE_HERE) mine = ny * 9 + nx;
+                    else safe = ny * 9 + nx;
+                }
+            if (safe >= 0 && mine >= 0) {
+                cx = x, cy = y;
+                mines_mark(&mn, safe % 9, safe / 9, 0);
+            }
+        }
+    CHECK(cx >= 0 && mines_chord(&mn, cx, cy) == -1 && mn.state == MINES_LOST);
+    mines_text(&mn, text, sizeof text);
+    CHECK(strchr(text, 'F') != NULL);
+    /* the commands */
+    CHECK(mine_ok("new small 9") && mn.w == 9 && mn.mines == 10 && mn.seed == 9);
+    CHECK(mine_ok("new 20 10 30 4") && mn.w == 20 && mn.h == 10 && mn.mines == 30);
+    CHECK(mine_ok("new large") && mn.w == 30 && mn.seed == 5);
+    CHECK(mine_fails("new 50 10 3", "up to 40 x 24") && mine_fails("new 4 4 8", "room for a clear start"));
+    CHECK(mine_fails("new huge", "new small") && mine_fails("new 1 2", "new small"));
+    CHECK(mine_ok("open 10 5") && mn.laid && mine_fails("open 10 5", "open already"));
+    CHECK(mine_fails("open 30 0", "a square of the field") && mine_fails("flag 1", "flag X Y") && mine_fails("open x 1", "open X Y"));
+    CHECK(mine_fails("chord 10 5", "on an open number") || (mines_at(&mn, 10, 5) & 15));
+    CHECK(mine_fails("dig 1 1", "unknown") && mine_fails("open 1 1 1 1 1 1 1", "too many"));
+    CHECK(mine_ok("") );
+}
+
 /* ---- the window ---- */
 
 #define W 960
@@ -357,7 +510,7 @@ static void drag_card(int pile, int index, int to) {
 }
 static int top_x(const char *label) { /* the top bar's buttons, by what the window draws: find the label */
     static const char *const order[] = {"Klondike/FreeCell", "Draw 3", "Deal", "#seed", "Play", "New", "Restart", "Undo", "Home"};
-    int x = 6 + 160 + 4;
+    int x = 6 + 240 + 4;
     int lh = sqg_line_h(&ui);
     (void)lh;
     for (size_t k = 1; k < sizeof order / sizeof order[0]; k++) {
@@ -378,7 +531,7 @@ static void test_window(const char *dir) {
     sqg_ui_init(&ui, NULL, 1);
     memset(&in, 0, sizeof in);
     game_new(&g, GAME_KLONDIKE, 1, 42);
-    games_gui_init(&gg, &g);
+    games_gui_init(&gg, &g, &mn);
     frame();
     int lh = sqg_line_h(&ui), x, y;
     /* the cards are drawn: the AH on column 5, face up, white with red */
@@ -482,6 +635,63 @@ static void test_window(const char *dir) {
     CHECK(sqg_write_ppm(&cv, path) == 0);
 }
 
+static void test_window_mines(void) {
+    int lh = sqg_line_h(&ui);
+    game_new(&g, GAME_KLONDIKE, 1, 42);
+    games_gui_init(&gg, &g, &mn);
+    gg.ms = 1000;
+    frame();
+    click(6 + 240 * 5 / 6, 6 + lh / 2); /* Mines */
+    CHECK(gg.kind == GAMES_MINES && mn.w == 9 && mn.seed == 42 && strstr(gg.status, "Mines, field 42"));
+    click(6 + 240 + 4 + 180 * 5 / 6, 6 + lh / 2); /* Large */
+    CHECK(gg.mines_size == MINES_LARGE && mn.w == 30 && mn.mines == 99);
+    click(6 + 240 + 4 + 180 / 6, 6 + lh / 2); /* Small again */
+    CHECK(mn.w == 9);
+    /* a click opens; the clock runs from then */
+    sqg_rect r = games_gui_square_rect(&gg, 4, 4);
+    int x, y;
+    CHECK(games_gui_square(&gg, r.x + 3, r.y + 3, &x, &y) == 0 && x == 4 && y == 4);
+    CHECK(games_gui_square(&gg, 2, 2, &x, &y) == -1);
+    click(r.x + 5, r.y + 5);
+    CHECK(mn.laid && (mines_at(&mn, 4, 4) & MINE_OPEN) && mn.ticks == 0);
+    CHECK(screen[(r.y + 1) * W + r.x + 1] == 0xFFD8D8D8u); /* drawn open */
+    gg.ms = 3500;
+    frame();
+    CHECK(mn.ticks == 1000); /* a long gap counts a second at most */
+    gg.ms = 3600;
+    frame();
+    CHECK(mn.ticks == 1100);
+    /* the right button flags a hidden square, then ?, then nothing */
+    int hx = -1, hy = -1;
+    for (int i = 0; i < 81 && hx < 0; i++)
+        if (!(mn.sq[i] & MINE_OPEN)) hx = i % 9, hy = i / 9;
+    r = games_gui_square_rect(&gg, hx, hy);
+    in.mx = r.x + 5, in.my = r.y + 5;
+    in.down2 = in.pressed2 = 1;
+    frame();
+    in.down2 = 0, in.released2 = 1;
+    frame();
+    CHECK((mines_at(&mn, hx, hy) & MINE_FLAG) && mines_left(&mn) == 9);
+    CHECK(screen[(r.y + 2 * 2 + 3) * W + r.x + 3 + 6 * 2] == 0xFFD21E1Eu); /* the flag's red */
+    /* clear the field by clicks: won, and the window says so */
+    mines_mark(&mn, hx, hy, 0); /* without ask: flag, then none */
+    for (int yy = 0; yy < 9; yy++)
+        for (int xx = 0; xx < 9; xx++)
+            if (!(mines_at(&mn, xx, yy) & (MINE_HERE | MINE_OPEN))) {
+                r = games_gui_square_rect(&gg, xx, yy);
+                click(r.x + 5, r.y + 5);
+            }
+    CHECK(mn.state == MINES_WON && strstr(gg.status, "Cleared in 1 seconds"));
+    /* Restart: the same field again, hidden; New: another */
+    int bx = 6 + 240 + 4 + 180 + 4 + 6 + 4 + sqg_text_width("Deal", 1) + 4 + 4 + 90 + 4 + sqg_button_w(&ui, "Play") + 4;
+    int newx = bx + sqg_button_w(&ui, "New") / 2;
+    int againx = bx + sqg_button_w(&ui, "New") + 4 + sqg_button_w(&ui, "Restart") / 2;
+    click(againx, 6 + lh / 2);
+    CHECK(mn.seed == 42 && !mn.laid && mn.opened == 0 && mn.state == MINES_PLAYING && mn.ticks == 0);
+    click(newx, 6 + lh / 2);
+    CHECK(mn.seed != 42 && !mn.laid && mn.w == 9 && gg.kind == GAMES_MINES);
+}
+
 int main(int argc, char **argv) {
     const char *dir = argc > 1 ? argv[1] : ".";
     test_deals();
@@ -491,7 +701,9 @@ int main(int argc, char **argv) {
     test_smart_and_finish();
     test_commands();
     test_random_play();
+    test_mines();
     test_window(dir);
+    test_window_mines();
     printf("test_games: %d checks, %d failed\n", checks, failures);
     return failures != 0;
 }

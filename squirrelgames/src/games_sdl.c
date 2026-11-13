@@ -13,14 +13,18 @@ int games_gui_run(GamesGui *gg, int max_frames) {
     sqg_ui ui;
     sqg_ui_init(&ui, NULL, 1);
     sqg_input in = {0};
-    int kind = -1;
+    int kind = -2;
     for (int n = 0; (max_frames <= 0 || n < max_frames) && sqg_window_poll(win, &in); n++) {
+        gg->ms = (long)SDL_GetTicks();
         sqg_begin(&ui, sqg_window_canvas(win), &in);
         games_gui_frame(gg, &ui);
         sqg_end(&ui);
-        if (gg->game->s.kind != kind) {
-            kind = gg->game->s.kind;
-            sqg_window_set_title(win, kind == GAME_FREECELL ? "FreeCell - SquirrelGames" : "Klondike - SquirrelGames");
+        int now = gg->kind == GAMES_MINES ? GAMES_MINES : gg->game->s.kind;
+        if (now != kind) {
+            kind = now;
+            sqg_window_set_title(win, kind == GAMES_MINES     ? "Mines - SquirrelGames"
+                                      : kind == GAME_FREECELL ? "FreeCell - SquirrelGames"
+                                                              : "Klondike - SquirrelGames");
         }
         sqg_window_present(win);
         SDL_Delay(10);

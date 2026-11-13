@@ -10,24 +10,29 @@ static void usage(FILE *f) {
           "  --klondike       Klondike, a card at a time from the stock (the default)\n"
           "  --klondike3      Klondike, three at a time\n"
           "  --freecell       FreeCell\n"
+          "  --mines SIZE     Mines: small (9x9, 10), medium (16x16, 40), large (30x16, 99), or WxHxM\n"
           "  --seed N         the deal (0 to 4294967295; the same number, the same deal)\n"
           "  --do CMD         play: \"draw\", \"move t3 t5\", \"move w f1\", \"smart t2\", \"auto\",\n"
-          "                   \"finish\", \"undo\", \"new freecell 7\" (no window then)\n"
+          "                   \"finish\", \"undo\", \"new freecell 7\" (no window then);\n"
+          "                   Mines: \"open 4 4\", \"flag 0 1\", \"chord 2 2\", \"new medium 5\"\n"
           "  --script FILE    the same, one command a line (# for comments)\n"
           "  --show           print the table as text after the commands\n"
           "  --snapshot FILE  draw one 960x680 frame of the window to FILE (PPM), no window\n"
           "  --gui-frames N   close the window after N frames (testing)\n"
           "  --help           this text\n"
-          "Piles: s (stock), w (waste), f1-f4 (home), t1-t8 (columns), c1-c4 (FreeCell's cells).\n",
+          "Piles: s (stock), w (waste), f1-f4 (home), t1-t8 (columns), c1-c4 (FreeCell's cells).\n"
+          "Mines squares are X Y from 0 0 at the top-left.\n",
           f);
 }
 
 static Game game; /* about 1 MB with its undo */
+static Mines mines;
+static int play_mines;
 static GamesGui gui;
 
 static int run_command(const char *where, const char *cmd) {
     char msg[120];
-    if (game_command(&game, cmd, msg, sizeof msg)) {
+    if (play_mines ? mines_command(&mines, cmd, msg, sizeof msg) : game_command(&game, cmd, msg, sizeof msg)) {
         fprintf(stderr, "squirrelgames: %s%s: %s\n", where, cmd, msg);
         return -1;
     }
@@ -60,6 +65,7 @@ static int run_script(const char *path) {
 int main(int argc, char **argv) {
     int kind = GAME_KLONDIKE, draw = 1, frames = 0, show = 0, batch = 0;
     unsigned long seed = 1;
+    int mw = 9, mh = 9, mm = 10;
     const char *snapshot = NULL;
     for (int i = 1; i < argc; i++) {
         const char *a = argv[i];
@@ -73,6 +79,16 @@ int main(int argc, char **argv) {
             kind = GAME_KLONDIKE, draw = 3;
         } else if (!strcmp(a, "--freecell")) {
             kind = GAME_FREECELL;
+        } else if (!strcmp(a, "--mines") && more) {
+            const char *z = argv[++i];
+            int which = !strcmp(z, "small") ? MINES_SMALL : !strcmp(z, "medium") ? MINES_MEDIUM : !strcmp(z, "large") ? MINES_LARGE : -1;
+            char x1, x2, extra;
+            if (which >= 0) mines_size_of(which, &mw, &mh, &mm);
+            else if (sscanf(z, "%d%c%d%c%d%c", &mw, &x1, &mh, &x2, &mm, &extra) != 5 || x1 != 'x' || x2 != 'x') {
+                fprintf(stderr, "squirrelgames: --mines %s: small, medium, large, or WxHxM as in 20x12x40\n", z);
+                return 2;
+            }
+            play_mines = 1;
         } else if (!strcmp(a, "--seed") && more) {
             char *end;
             seed = strtoul(argv[++i], &end, 10);
@@ -95,17 +111,39 @@ int main(int argc, char **argv) {
         }
     }
     game_new(&game, kind, draw, (uint32_t)seed);
+    if (mines_new(&mines, mw, mh, mm, (uint32_t)seed)) {
+        fprintf(stderr, "squirrelgames: a field is 2x2 to %dx%d, with room for a clear first square\n", MINES_MAX_W, MINES_MAX_H);
+        return 2;
+    }
     for (int i = 1; i < argc; i++) {
-        if (!strcmp(argv[i], "--seed") || !strcmp(argv[i], "--snapshot") || !strcmp(argv[i], "--gui-frames")) i++;
+        if (!strcmp(argv[i], "--seed") || !strcmp(argv[i], "--snapshot") || !strcmp(argv[i], "--gui-frames") ||
+            !strcmp(argv[i], "--mines"))
+            i++;
         else if (!strcmp(argv[i], "--do") && run_command("", argv[++i])) return 1;
         else if (!strcmp(argv[i], "--script") && run_script(argv[++i])) return 1;
     }
     if (show) {
         static char text[8192];
-        game_text(&game.s, text, sizeof text);
+        if (play_mines) {
+            static const char *const STATE[3] = {"playing", "won", "lost"};
+            printf("Mines %d x %d, %d mines  field %lu  left %d  %s\n", mines.w, mines.h, mines.mines,
+                   (unsigned long)mines.seed, mines_left(&mines), STATE[mines.state]);
+            mines_text(&mines, text, sizeof text);
+        } else {
+            game_text(&game.s, text, sizeof text);
+        }
         fputs(text, stdout);
     }
-    games_gui_init(&gui, &game);
+    games_gui_init(&gui, &game, &mines);
+    if (play_mines) {
+        gui.kind = GAMES_MINES;
+        snprintf(gui.status, sizeof gui.status, "The left button opens a square, the right one flags it");
+        for (int k = 0; k < 3; k++) {
+            int w, h, n;
+            mines_size_of(k, &w, &h, &n);
+            if (w == mines.w && h == mines.h && n == mines.mines) gui.mines_size = k;
+        }
+    }
     if (snapshot) {
         enum { W = 960, H = 680 };
         static uint32_t px[W * H];
