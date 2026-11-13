@@ -1,9 +1,9 @@
 # SquirrelGames
 
 Card and board games on `libs/sqgui`, roadmap item S5.3. So far:
-patience (Klondike and FreeCell), Mines, Hearts, Chess and Tiles. The
-rules (`cards.c`, `mines.c`, `hearts.c`, `chess.c`, `tiles.c`) are
-freestanding
+patience (Klondike and FreeCell), Mines, Hearts, Chess, Tiles and
+Bridge. The rules (`cards.c`, `mines.c`, `hearts.c`, `chess.c`,
+`tiles.c`, `bridge.c`) are freestanding
 C11 with no allocation and no stdio, and `make test` checks that they
 need nothing from outside but `memcpy`, `memmove`, `memset` and
 `strlen`, so they move to Squirrel OS/2 as they are. Only `games_sdl.c`
@@ -69,6 +69,19 @@ build/squirrelgames --freecell --seed 7
   layout); Shuffle deals the tiles left again the same way when you are
   stuck.
 
+- **Bridge**: contract bridge, you South with the computer as your
+  partner North and as East and West. Each board is dealt from the
+  game's number and the board's, and the dealer and vulnerability go
+  round as on real boards. An auction (bids, doubles and redoubles; four
+  passes throw the board in), then thirteen tricks with the declarer's
+  partner as dummy: when your side declares you play both of its hands.
+  Duplicate scoring by the published tables, with a running total for
+  North-South. The computer bids a plain natural system of its own
+  (opening points, 1NT with 15 to 17 even, raises with a fit toward game
+  or slam by the points between the partners) and plays by plain rules
+  (second hand low, third hand the cheapest that wins, ruff when the
+  other side is winning, cash winners).
+
 A deal (or a field, or a chess game) is a number from 0 to 4294967295: the same number
 always gives the same deal (shuffled with SquirrelGames' own generator,
 so the numbers are its own).
@@ -103,7 +116,13 @@ so the numbers are its own).
   The moves are listed beside the board, and the pieces are drawn here.
 - Tiles: click a free tile, then another of its kind. Pyramid, Towers or
   Cross; New; Restart; Undo (Ctrl+Z, as far back as the start); Hint
-  (Ctrl+H) lights a pair that can go; Shuffle.
+  (Ctrl+H) lights a pair that can go; Shuffle. When no shuffle could
+  clear what is left (two tiles one on the other), it says so: Undo.
+- Bridge: call from the bidding box (what may be bid is bright), then
+  click a card of your hand, or of North's when your side declares (the
+  cards that may not be played are shaded). The dummy is shown once the
+  lead is made; at the end of a board, all four hands and the score, and
+  Next board.
 
 ## Command line
 
@@ -114,6 +133,7 @@ so the numbers are its own).
 --chess          Chess (you White, level 3)
 --level N        Chess: the computer's level, 1 to 4
 --tiles LAYOUT   Tiles: pyramid, towers or cross
+--bridge         Bridge
 --seed N         the deal
 --do CMD         play (see below); in order with --script
 --script FILE    commands one a line, # for comments
@@ -184,6 +204,17 @@ each free tile as `NUMBER:KIND`, the kinds as C1-C9 (circles), B1-B9
 (bars), N1-N9 (numbers), WE WS WW WN (winds), DR DG DW (dragons), SU and
 MO.
 
+Bridge commands, after each of which the computer calls or plays up to
+your turn:
+
+```
+new [SEED]     bid CALL (1C .. 7NT, pass, X, XX)     play CARD     next
+```
+
+`play` plays from whichever of your hands is to play. `--show` prints
+the board, the auction, the contract and the tricks, the trick on the
+table, your hand, and North's or the dummy's when you may see them.
+
 ## Tests
 
 `make test` runs `tests/test_games.c`: deals (every card once, the same
@@ -210,6 +241,11 @@ undo, sides and levels in the window. For Tiles: every layout whole (four
 of each kind, each upper tile on tiles below) and 120 deals cleared by the
 order they were made in, which tiles are free, matches and their refusals,
 undo, shuffles that keep the tiles and clear, the commands, and a deal
-cleared in the window by clicks. Then `tests/cli_smoke.sh`, the
-freestanding check, and ten frames of the real window with
-`SDL_VIDEODRIVER=dummy` when SDL2 is installed.
+cleared in the window by clicks. For Bridge: every deal whole, the dealer
+and vulnerability over 32 boards, call names, each rule of the auction
+(higher bids, doubles, redoubles, who declares, a board passed out),
+following suit and trumps, the scores against the published tables, the
+computer's openings, raises and cards, 300 boards the computer plays
+through, the commands, and a board bid and played in the window by clicks.
+Then `tests/cli_smoke.sh`, the freestanding check, and ten frames of the
+real window with `SDL_VIDEODRIVER=dummy` when SDL2 is installed.

@@ -26,7 +26,9 @@
 enum { TILES_CIRCLES = 0, TILES_BARS = 9, TILES_NUMBERS = 18, TILES_WINDS = 27, TILES_DRAGONS = 31, TILES_SUN = 34, TILES_MOON = 35 };
 
 enum { TILES_PYRAMID, TILES_TOWERS, TILES_CROSS, TILES_LAYOUTS };
-enum { TILES_PLAYING, TILES_WON, TILES_STUCK };
+/* stuck: no pair can go; dead: and a shuffle found no deal of the tiles
+ * left that could be cleared, so only undo helps */
+enum { TILES_PLAYING, TILES_WON, TILES_STUCK, TILES_DEAD };
 
 typedef struct {
     int layout;      /* TILES_PYRAMID, ... */
@@ -42,6 +44,7 @@ typedef struct {
     int16_t taken[TILES_MAX]; /* the tiles taken, in pairs, in order: for undo */
     int ntaken;
     int shuffles;
+    int dead;                 /* the last shuffle could not help (until an undo) */
     /* how the deal was made: these pairs, taken in this order, clear it
      * (from the deal or the last shuffle) */
     int16_t plan[TILES_MAX];
@@ -61,7 +64,7 @@ int tiles_undo(Tiles *t);
 int tiles_hint(const Tiles *t, int *i, int *j);
 /* How many pairs could go now */
 int tiles_moves(const Tiles *t);
-int tiles_state(const Tiles *t); /* TILES_PLAYING, TILES_WON, TILES_STUCK */
+int tiles_state(const Tiles *t); /* TILES_PLAYING, TILES_WON, TILES_STUCK, TILES_DEAD */
 /* The tiles left dealt again among their places, so that they can all be
  * cleared. 0, or -1 when there are none or no deal of them could be
  * cleared (as with two tiles one on the other): then they stay as they were. */

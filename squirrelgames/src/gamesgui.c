@@ -11,8 +11,9 @@
 #define INK_RED 0xFFC81E1Eu
 #define INK_BLACK 0xFF141414u
 
-void games_gui_init(GamesGui *gg, Game *game, Mines *mines, Hearts *hearts, Chess *chess, Tiles *tiles) {
+void games_gui_init(GamesGui *gg, Game *game, Mines *mines, Hearts *hearts, Chess *chess, Tiles *tiles, Bridge *bridge) {
     memset(gg, 0, sizeof *gg);
+    gg->bridge = bridge;
     gg->tiles = tiles;
     gg->tiles_sel = gg->hint_a = gg->hint_b = -1;
     gg->chess = chess;
@@ -214,6 +215,7 @@ static uint32_t current_seed(const GamesGui *gg) {
            : gg->kind == GAMES_HEARTS ? gg->hearts->seed
            : gg->kind == GAMES_CHESS  ? gg->chess->seed
            : gg->kind == GAMES_TILES  ? gg->tiles->seed
+           : gg->kind == GAMES_BRIDGE ? gg->bridge->seed
                                       : gg->game->s.seed;
 }
 
@@ -222,6 +224,8 @@ static void chess_start(GamesGui *gg, uint32_t seed);
 static void chess_said(GamesGui *gg);
 static void tiles_deal(GamesGui *gg, uint32_t seed);
 static void tiles_said(GamesGui *gg);
+static void bridge_deal(GamesGui *gg, uint32_t seed);
+static void bridge_said(GamesGui *gg);
 
 static void deal(GamesGui *gg, uint32_t seed) {
     if (gg->kind == GAMES_HEARTS) {
@@ -234,6 +238,10 @@ static void deal(GamesGui *gg, uint32_t seed) {
     }
     if (gg->kind == GAMES_TILES) {
         tiles_deal(gg, seed);
+        return;
+    }
+    if (gg->kind == GAMES_BRIDGE) {
+        bridge_deal(gg, seed);
         return;
     }
     if (gg->kind == GAMES_MINES) {
@@ -722,7 +730,12 @@ void games_gui_show(GamesGui *gg, int kind) {
     gg->kind = kind;
     gg->dragging = gg->pending = 0;
     snprintf(gg->seed_text, sizeof gg->seed_text, "%lu", (unsigned long)current_seed(gg));
-    if (kind == GAMES_TILES) {
+    if (kind == GAMES_BRIDGE) {
+        gg->next_ms = gg->ms + 400;
+        gg->show_until = 0;
+        bridge_said(gg);
+        if (!gg->status[0]) say(gg, "You sit South; the computer plays North, your partner, and East and West");
+    } else if (kind == GAMES_TILES) {
         gg->tiles_layout = gg->tiles->layout;
         gg->tiles_sel = gg->hint_a = gg->hint_b = -1;
         tiles_said(gg);
@@ -1051,6 +1064,7 @@ static void tiles_said(GamesGui *gg) {
     int st = tiles_state(t);
     if (st == TILES_WON) say(gg, "Cleared!");
     else if (st == TILES_STUCK) say(gg, "No pair can go: Shuffle, or Undo");
+    else if (st == TILES_DEAD) say(gg, "No deal of these tiles could be cleared: Undo");
     else snprintf(gg->status, sizeof gg->status, "%d pairs can go", tiles_moves(t));
 }
 
@@ -1110,14 +1124,269 @@ static void draw_tiles(GamesGui *gg, sqg_ui *ui) {
     cv->clip = old;
 }
 
+/* ---- bridge ---- */
+
+#define BRIDGE_STEP 34 /* the gap between cards of a hand across */
+#define BRIDGE_DOWN 22 /* and of a hand down the side */
+
+static int bridge_cx(const GamesGui *gg) { return gg->board.x + gg->board.w / 2; }
+static int bridge_cy(const GamesGui *gg) { return gg->board.y + gg->board.h / 2 - 20; }
+
+/* whether a hand is shown face up: yours, the dummy once the lead is made,
+ * and North whenever your side declares; every hand once the board is over */
+static int bridge_face_up(const GamesGui *gg, int seat) {
+    const Bridge *b = gg->bridge;
+    if (seat == BRIDGE_SOUTH || b->phase == BRIDGE_DONE) return 1;
+    if (b->phase != BRIDGE_PLAYING) return 0;
+    if (seat == BRIDGE_NORTH && (b->declarer & 1) == 0) return 1;
+    return seat == bridge_dummy(b) && (b->tricks || b->ntrick);
+}
+
+static int bridge_count(const GamesGui *gg, int seat) {
+    const Bridge *b = gg->bridge;
+    return b->phase == BRIDGE_DONE ? 13 : b->n[seat];
+}
+static uint8_t bridge_card_at(const GamesGui *gg, int seat, int i) {
+    const Bridge *b = gg->bridge;
+    return b->phase == BRIDGE_DONE ? b->dealt[seat][i] : b->hand[seat][i];
+}
+
+sqg_rect games_gui_bridge_card_rect(const GamesGui *gg, int seat, int i) {
+    int n = bridge_count(gg, seat), up = bridge_face_up(gg, seat);
+    if (seat == BRIDGE_NORTH || seat == BRIDGE_SOUTH) {
+        int step = up ? BRIDGE_STEP : 16, total = GAMES_CARD_W + (n > 0 ? n - 1 : 0) * step;
+        int x = bridge_cx(gg) - total / 2 + i * step;
+        int y = seat == BRIDGE_SOUTH ? gg->board.y + gg->board.h - GAMES_CARD_H - 8 : gg->board.y + 8 - (up ? 0 : 60);
+        return sqg_rect_make(x, y, GAMES_CARD_W, GAMES_CARD_H);
+    }
+    int step = up ? BRIDGE_DOWN : 14, total = GAMES_CARD_H + (n > 0 ? n - 1 : 0) * step;
+    int x = seat == BRIDGE_WEST ? gg->board.x + 16 : gg->board.x + gg->board.w - 16 - GAMES_CARD_W;
+    return sqg_rect_make(x, bridge_cy(gg) - total / 2 + i * step, GAMES_CARD_W, GAMES_CARD_H);
+}
+
+/* the card of a hand you play under a point: its index, with the seat, or -1 */
+int games_gui_bridge_hit(const GamesGui *gg, int x, int y, int *seat) {
+    static const int SEATS[2] = {BRIDGE_SOUTH, BRIDGE_NORTH};
+    for (int k = 0; k < 2; k++) {
+        int s = SEATS[k];
+        if (!bridge_face_up(gg, s)) continue;
+        for (int i = bridge_count(gg, s) - 1; i >= 0; i--)
+            if (sqg_rect_contains(games_gui_bridge_card_rect(gg, s, i), x, y)) {
+                *seat = s;
+                return i;
+            }
+    }
+    return -1;
+}
+
+/* the bidding box: the bids in seven rows of five, then Pass, X and XX */
+sqg_rect games_gui_bid_rect(const GamesGui *gg, int call) {
+    int x0 = bridge_cx(gg) + 20, y0 = bridge_cy(gg) - 120, w = 40, h = 22;
+    if (call < 5) return sqg_rect_make(x0 + (call == BRIDGE_PASS ? 0 : call == BRIDGE_DOUBLE ? 3 * w : 4 * w), y0 + 7 * (h + 2) + 4,
+                                       call == BRIDGE_PASS ? 3 * w - 2 : w - 2, h);
+    return sqg_rect_make(x0 + BRIDGE_STRAIN(call) * w, y0 + (BRIDGE_LEVEL(call) - 1) * (h + 2), w - 2, h);
+}
+
+sqg_rect games_gui_bridge_button(const GamesGui *gg) {
+    return sqg_rect_make(bridge_cx(gg) - 70, bridge_cy(gg) + 110, 140, 26);
+}
+
+static void bridge_said(GamesGui *gg) {
+    const Bridge *b = gg->bridge;
+    char c[16];
+    if (b->phase == BRIDGE_BIDDING) {
+        if (b->turn == BRIDGE_SOUTH)
+            snprintf(gg->status, sizeof gg->status, "Your call: %d points", bridge_hcp(b, BRIDGE_SOUTH));
+        else say(gg, "");
+    } else if (b->phase == BRIDGE_PLAYING) {
+        if (bridge_yours(b))
+            snprintf(gg->status, sizeof gg->status, "%s", b->turn == BRIDGE_SOUTH ? "Your card" : "Your card from North");
+        else say(gg, "");
+    } else if (b->declarer < 0) say(gg, "Passed out: Next board");
+    else {
+        int side = b->declarer & 1, need = b->level + 6, got = b->won[side];
+        bridge_call_name(BRIDGE_BID(b->level, b->strain), c);
+        if (got >= need)
+            snprintf(gg->status, sizeof gg->status, "%s by %s made%s%.0d: %+d to North-South", c, BRIDGE_SEATS[b->declarer],
+                     got > need ? " +" : "", got - need, b->result);
+        else
+            snprintf(gg->status, sizeof gg->status, "%s by %s down %d: %+d to North-South", c, BRIDGE_SEATS[b->declarer],
+                     need - got, b->result);
+    }
+}
+
+static void bridge_deal(GamesGui *gg, uint32_t seed) {
+    bridge_new(gg->bridge, seed);
+    gg->next_ms = gg->ms + 400;
+    gg->show_until = 0;
+    snprintf(gg->seed_text, sizeof gg->seed_text, "%lu", (unsigned long)seed);
+    bridge_said(gg);
+}
+
+static void bridge_acted(GamesGui *gg) {
+    const Bridge *b = gg->bridge;
+    gg->next_ms = gg->ms + (b->phase == BRIDGE_BIDDING ? 350 : 450);
+    if (b->phase != BRIDGE_BIDDING && b->ntrick == 0 && b->last_winner >= 0) gg->show_until = gg->next_ms = gg->ms + 1100;
+    bridge_said(gg);
+}
+
+static void bridge_center_button(GamesGui *gg, sqg_ui *ui) {
+    Bridge *b = gg->bridge;
+    if (b->phase != BRIDGE_DONE) return;
+    if (sqg_button(ui, sqg_id_str("bridge_next"), games_gui_bridge_button(gg), "Next board")) {
+        bridge_next(b);
+        gg->next_ms = gg->ms + 400;
+        gg->show_until = 0;
+        bridge_said(gg);
+    }
+}
+
+static void bridge_input(GamesGui *gg, sqg_ui *ui) {
+    const sqg_input *in = &ui->in;
+    Bridge *b = gg->bridge;
+    if (b->phase != BRIDGE_DONE && !bridge_yours(b) && gg->ms >= gg->next_ms) {
+        if (b->phase == BRIDGE_BIDDING) {
+            if (bridge_call(b, bridge_ai_call(b))) bridge_call(b, BRIDGE_PASS);
+        } else bridge_play(b, bridge_ai_card(b));
+        bridge_acted(gg);
+    }
+    if (ui->active || !in->pressed || !bridge_yours(b)) return;
+    const char *why;
+    if (b->phase == BRIDGE_BIDDING) {
+        for (int call = 0; call <= BRIDGE_BID(7, BRIDGE_NOTRUMP); call++) {
+            if (call == 3 || call == 4) continue;
+            if (!sqg_rect_contains(games_gui_bid_rect(gg, call), in->mx, in->my)) continue;
+            if (bridge_can_call(b, call, &why))
+                snprintf(gg->status, sizeof gg->status, "%c%s", why[0] >= 'a' && why[0] <= 'z' ? why[0] - 32 : why[0], why + 1);
+            else {
+                bridge_call(b, call);
+                bridge_acted(gg);
+            }
+            return;
+        }
+        return;
+    }
+    int seat, i = games_gui_bridge_hit(gg, in->mx, in->my, &seat);
+    gg->show_until = 0;
+    if (i < 0) return;
+    if (seat != b->turn) {
+        say(gg, seat == BRIDGE_NORTH ? "It is not North's turn" : "It is not your turn");
+        return;
+    }
+    if (bridge_can_play(b, b->hand[seat][i], &why))
+        snprintf(gg->status, sizeof gg->status, "%c%s", why[0] >= 'a' && why[0] <= 'z' ? why[0] - 32 : why[0], why + 1);
+    else {
+        bridge_play(b, b->hand[seat][i]);
+        bridge_acted(gg);
+    }
+}
+
+static void draw_call(sqg_canvas *cv, int x, int y, int call, uint32_t ink) {
+    char t[6];
+    bridge_call_name(call, t);
+    if (call >= 5 && BRIDGE_STRAIN(call) < BRIDGE_NOTRUMP) { /* the level, then the suit's picture */
+        t[1] = 0;
+        sqg_text(cv, x, y, t, ink, 2);
+        int s = BRIDGE_STRAIN(call);
+        draw_suit(cv, x + 14, y + 2, s, 1, s == BRIDGE_HEARTS || s == BRIDGE_DIAMONDS ? INK_RED : ink);
+        return;
+    }
+    if (call >= 5) { /* no trumps: the level, and NT smaller */
+        t[1] = 0;
+        sqg_text(cv, x, y, t, ink, 2);
+        sqg_text(cv, x + 13, y + 5, "NT", ink, 1);
+        return;
+    }
+    sqg_text(cv, x, y, t, ink, 1);
+}
+
+static void draw_bridge(GamesGui *gg, sqg_ui *ui) {
+    sqg_canvas *cv = ui->cv;
+    const Bridge *b = gg->bridge;
+    sqg_fill(cv, gg->board, FELT);
+    sqg_rect old = sqg_clip(cv, gg->board);
+    int playing = b->phase == BRIDGE_PLAYING;
+    /* the four hands */
+    for (int seat = 0; seat < 4; seat++) {
+        int up = bridge_face_up(gg, seat), n = bridge_count(gg, seat);
+        for (int i = 0; i < n; i++) {
+            sqg_rect r = games_gui_bridge_card_rect(gg, seat, i);
+            uint8_t c = bridge_card_at(gg, seat, i);
+            games_gui_draw_card(cv, r.x, r.y, (uint8_t)(up ? c | CARD_UP : c));
+            if (playing && up && b->turn == seat && bridge_yours(b) && bridge_can_play(b, c, NULL)) {
+                int horiz = seat == BRIDGE_NORTH || seat == BRIDGE_SOUTH, last = i + 1 == n;
+                sqg_blend(cv, horiz ? sqg_rect_make(r.x, r.y, last ? r.w : BRIDGE_STEP, r.h) : r, 0x50000000u);
+            }
+        }
+        /* the name, with the dealer, and whose turn */
+        char t[40];
+        snprintf(t, sizeof t, "%s%s%s", BRIDGE_SEATS[seat], seat == b->dealer ? " (dealer)" : "",
+                 seat == bridge_dummy(b) ? " - dummy" : seat == b->declarer ? " - declarer" : "");
+        sqg_rect r0 = games_gui_bridge_card_rect(gg, seat, 0);
+        int tx = seat == BRIDGE_NORTH ? bridge_cx(gg) + 250 : r0.x, ty = seat == BRIDGE_SOUTH ? r0.y - 14 : seat == BRIDGE_NORTH ? gg->board.y + 10 : r0.y - 14;
+        if (seat == BRIDGE_EAST) tx = r0.x + GAMES_CARD_W - sqg_text_width(t, 1);
+        sqg_text(cv, tx, ty, t, b->phase != BRIDGE_DONE && b->turn == seat ? 0xFFFFE070u : 0xFFE0F0E0u, 1);
+    }
+    int cx = bridge_cx(gg), cy = bridge_cy(gg);
+    if (b->phase == BRIDGE_BIDDING) {
+        /* the auction so far, West North East South across */
+        static const int ORDER[4] = {BRIDGE_WEST, BRIDGE_NORTH, BRIDGE_EAST, BRIDGE_SOUTH};
+        int ax = cx - 250, ay = cy - 120;
+        sqg_fill(cv, sqg_rect_make(ax - 8, ay - 8, 248, 230), FELT_DARK);
+        for (int k = 0; k < 4; k++) sqg_text(cv, ax + k * 60, ay, BRIDGE_SEATS[ORDER[k]], 0xFFE0F0E0u, 1);
+        int col0 = (b->dealer + 3) & 3; /* the dealer's column: West 0, North 1, East 2, South 3 */
+        for (int i = 0; i < b->ncalls; i++) {
+            int pos = col0 + i;
+            draw_call(cv, ax + (pos % 4) * 60, ay + 18 + (pos / 4) * 18, b->calls[i], 0xFFFFFFFFu);
+        }
+        /* the bidding box: what can be bid is bright */
+        for (int call = 0; call <= BRIDGE_BID(7, BRIDGE_NOTRUMP); call++) {
+            if (call == 3 || call == 4) continue;
+            sqg_rect r = games_gui_bid_rect(gg, call);
+            int ok = !bridge_can_call(b, call, NULL) && b->turn == BRIDGE_SOUTH;
+            sqg_fill(cv, r, ok ? 0xFFF4F4F4u : 0xFF8A9A8Eu);
+            sqg_frame(cv, r, 0xFF303030u);
+            draw_call(cv, r.x + 6, r.y + (call >= 5 ? 4 : 8), call, ok ? INK_BLACK : 0xFF5A5A5Au);
+        }
+    } else {
+        /* the contract and the tricks */
+        if (b->declarer >= 0) {
+            char t[64], c[6];
+            bridge_call_name(BRIDGE_BID(b->level, b->strain), c);
+            snprintf(t, sizeof t, "%s%s by %s", c, b->doubled == 2 ? " XX" : b->doubled ? " X" : "", BRIDGE_SEATS[b->declarer]);
+            sqg_text(cv, cx - 250, cy - 130, t, 0xFFFFE070u, 2);
+            snprintf(t, sizeof t, "Tricks: North-South %d  East-West %d", b->won[0], b->won[1]);
+            sqg_text(cv, cx - 250, cy - 108, t, 0xFFE0F0E0u, 1);
+        }
+        const uint8_t *t = b->trick;
+        int taken = b->ntrick == 0 && b->last_winner >= 0 && gg->ms < gg->show_until && b->phase == BRIDGE_PLAYING;
+        if (taken) t = b->last;
+        static const int DX[4] = {0, 95, 0, -95}, DY[4] = {-62, 0, 62, 0};
+        for (int s = 0; s < 4; s++)
+            if (t[s]) games_gui_draw_card(cv, cx - GAMES_CARD_W / 2 + DX[s], cy - GAMES_CARD_H / 2 + DY[s], (uint8_t)(t[s] | CARD_UP));
+        if (b->phase == BRIDGE_DONE) {
+            sqg_rect box = sqg_rect_make(cx - 170, cy - 70, 340, 170);
+            sqg_blend(cv, box, 0xC0000000u);
+            char s1[64], s2[64];
+            snprintf(s1, sizeof s1, "Board %d", b->board);
+            sqg_text(cv, box.x + (box.w - sqg_text_width(s1, 3)) / 2, box.y + 12, s1, 0xFFFFE070u, 3);
+            snprintf(s2, sizeof s2, "%+d to North-South", b->result);
+            sqg_text(cv, box.x + (box.w - sqg_text_width(s2, 2)) / 2, box.y + 50, s2, 0xFFFFFFFFu, 2);
+            snprintf(s2, sizeof s2, "Total %+ld", b->total);
+            sqg_text(cv, box.x + (box.w - sqg_text_width(s2, 2)) / 2, box.y + 80, s2, 0xFFFFFFFFu, 2);
+        }
+    }
+    cv->clip = old;
+}
+
 /* ---- the top bar ---- */
 
 static void top_bar(GamesGui *gg, sqg_ui *ui, sqg_rect r) {
     Game *g = gg->game;
     sqg_row row = sqg_row_begin(r, 4);
-    static const char *const KINDS[6] = {"Klondike", "FreeCell", "Mines", "Hearts", "Chess", "Tiles"};
+    static const char *const KINDS[7] = {"Klondike", "FreeCell", "Mines", "Hearts", "Chess", "Tiles", "Bridge"};
     int kind = gg->kind;
-    if (sqg_segments(ui, sqg_id_str("kind"), sqg_row_take(&row, 420), KINDS, 6, &kind)) {
+    if (sqg_segments(ui, sqg_id_str("kind"), sqg_row_take(&row, 420), KINDS, 7, &kind)) {
         uint32_t seed = current_seed(gg);
         gg->kind = kind;
         deal(gg, seed);
@@ -1151,7 +1420,7 @@ static void top_bar(GamesGui *gg, sqg_ui *ui, sqg_rect r) {
         }
         if (sqg_button(ui, sqg_id_str("shuffle"), sqg_row_take(&row, sqg_button_w(ui, "Shuffle")), "Shuffle")) {
             gg->tiles_sel = gg->hint_a = gg->hint_b = -1;
-            if (tiles_shuffle(t)) say(gg, t->left ? "These tiles cannot be dealt to clear" : "Cleared!");
+            if (tiles_shuffle(t)) tiles_said(gg);
             else {
                 tiles_said(gg);
                 snprintf(gg->status + strlen(gg->status), sizeof gg->status - strlen(gg->status), " (shuffled)");
@@ -1197,7 +1466,7 @@ static void top_bar(GamesGui *gg, sqg_ui *ui, sqg_rect r) {
         deal(gg, current_seed(gg) * 2654435761u + 12345u);
     if (sqg_button(ui, sqg_id_str("again"), sqg_row_take(&row, sqg_button_w(ui, "Restart")), "Restart"))
         deal(gg, current_seed(gg));
-    if (gg->kind == GAMES_MINES || gg->kind == GAMES_HEARTS) return;
+    if (gg->kind == GAMES_MINES || gg->kind == GAMES_HEARTS || gg->kind == GAMES_BRIDGE) return;
     sqg_row_take(&row, 6);
     if (sqg_button(ui, sqg_id_str("undo"), sqg_row_take(&row, sqg_button_w(ui, "Undo")), "Undo") || ui->in.ctrl_key == 'z')
         do_undo(gg);
@@ -1214,6 +1483,9 @@ static void status_line(GamesGui *gg, sqg_ui *ui, sqg_rect r) {
     if (gg->kind == GAMES_MINES)
         snprintf(t, sizeof t, "%d x %d, %d mines   Field %lu", gg->mines->w, gg->mines->h, gg->mines->mines,
                  (unsigned long)gg->mines->seed);
+    else if (gg->kind == GAMES_BRIDGE)
+        snprintf(t, sizeof t, "Game %lu   Board %d   North-South %+ld", (unsigned long)gg->bridge->seed, gg->bridge->board,
+                 gg->bridge->total);
     else if (gg->kind == GAMES_TILES)
         snprintf(t, sizeof t, "%s   Game %lu   Tiles left %d", TILES_LAYOUT_NAMES[gg->tiles->layout],
                  (unsigned long)gg->tiles->seed, gg->tiles->left);
@@ -1241,6 +1513,10 @@ void games_gui_frame(GamesGui *gg, sqg_ui *ui) {
     if (gg->kind == GAMES_MINES) {
         mines_input(gg, ui);
         draw_mines(gg, ui);
+    } else if (gg->kind == GAMES_BRIDGE) {
+        bridge_input(gg, ui);
+        draw_bridge(gg, ui);
+        bridge_center_button(gg, ui);
     } else if (gg->kind == GAMES_TILES) {
         tiles_input(gg, ui);
         draw_tiles(gg, ui);

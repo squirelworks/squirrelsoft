@@ -94,11 +94,11 @@ Every item is a checkbox. Tick it in the PR that merges its last piece. Nested b
   - [x] Selections: rectangle select, cut, copy, paste, move, nudge; flip, rotate, resize (nearest or smooth), crop, canvas size, invert
   - [x] Text (the suite's 5x7 font), spray, curves (cubic, two bends) and polygons; custom colours (typed, R/G/B sliders, into the palette)
   - [x] PNG in and out (own inflate and deflate): every colour type and depth, interlacing and transparency in; filtered and compressed RGB out
-- [ ] S5.3 SquirrelGames (Solitaire, FreeCell, Hearts, Bridge, Chess, Minesweeper-class, Mahjongg)
+- [x] S5.3 SquirrelGames (Solitaire, FreeCell, Hearts, Bridge, Chess, Minesweeper-class, Mahjongg)
   - [x] Patience: Klondike (draw 1 or 3, scoring) and FreeCell (moves of several cards as the free cells allow), seeded deals, undo, cards going home by themselves, drag and drop, the command line
   - [x] Minesweeper-class: Mines, three sizes or any up to 40x24, the first square always clear, chords, flags and question marks, a clock, seeded fields, the command line
   - [x] Hearts: three computer players, passing, the usual first-trick and broken-hearts rules, shooting the moon, to 100
-  - [ ] Bridge
+  - [x] Bridge: you South with three computer players, the auction with doubles, dummy, duplicate scoring with boards going round
   - [x] Chess: every rule and draw, standard notation and FEN, a computer player with four levels, White, Black or two people
   - [x] Mahjongg (tile matching): Tiles, three layouts of its own, deals that can always be cleared, hint, shuffle, undo
 - [ ] S5.4 SquirrelDebug (desktop debugger UI for Squirrel OS/2 over serial/QEMU gdbstub)

@@ -1,5 +1,6 @@
 /* SquirrelGames tests: the rules of each game, the commands, and the
  * window driven by simulated input. */
+#include "bridge.h"
 #include "cards.h"
 #include "chess.h"
 #include "gamesgui.h"
@@ -26,6 +27,7 @@ static Mines mn;
 static Hearts hh;
 static Chess ch;
 static Tiles tt;
+static Bridge br;
 
 /* a pile from names: "AS 2H #KD" (# for face down) */
 static void set(int pile, const char *cards) {
@@ -537,7 +539,7 @@ static void test_window(const char *dir) {
     sqg_ui_init(&ui, NULL, 1);
     memset(&in, 0, sizeof in);
     game_new(&g, GAME_KLONDIKE, 1, 42);
-    games_gui_init(&gg, &g, &mn, &hh, &ch, &tt);
+    games_gui_init(&gg, &g, &mn, &hh, &ch, &tt, &br);
     frame();
     int lh = sqg_line_h(&ui), x, y;
     /* the cards are drawn: the AH on column 5, face up, white with red */
@@ -589,7 +591,7 @@ static void test_window(const char *dir) {
     in.ctrl_key = 'z';
     frame();
     /* FreeCell, a deal by its number */
-    click(6 + 120, 6 + lh / 2);
+    click(6 + 420 * 3 / 14, 6 + lh / 2);
     CHECK(g.s.kind == GAME_FREECELL && gg.kind == GAME_FREECELL);
     snprintf(gg.seed_text, sizeof gg.seed_text, "7");
     click(top_x("Play"), 6 + lh / 2);
@@ -644,10 +646,10 @@ static void test_window(const char *dir) {
 static void test_window_mines(void) {
     int lh = sqg_line_h(&ui);
     game_new(&g, GAME_KLONDIKE, 1, 42);
-    games_gui_init(&gg, &g, &mn, &hh, &ch, &tt);
+    games_gui_init(&gg, &g, &mn, &hh, &ch, &tt, &br);
     gg.ms = 1000;
     frame();
-    click(6 + 420 * 5 / 12, 6 + lh / 2); /* Mines */
+    click(6 + 420 * 5 / 14, 6 + lh / 2); /* Mines */
     CHECK(gg.kind == GAMES_MINES && mn.w == 9 && mn.seed == 42 && strstr(gg.status, "Mines, field 42"));
     click(6 + 420 + 4 + 180 * 5 / 6, 6 + lh / 2); /* Large */
     CHECK(gg.mines_size == MINES_LARGE && mn.w == 30 && mn.mines == 99);
@@ -915,10 +917,10 @@ static void test_hearts(void) {
 static void test_window_hearts(void) {
     int lh = sqg_line_h(&ui);
     game_new(&g, GAME_KLONDIKE, 1, 5);
-    games_gui_init(&gg, &g, &mn, &hh, &ch, &tt);
+    games_gui_init(&gg, &g, &mn, &hh, &ch, &tt, &br);
     gg.ms = 1000;
     frame();
-    click(6 + 420 * 7 / 12, 6 + lh / 2); /* Hearts */
+    click(6 + 420 * 7 / 14, 6 + lh / 2); /* Hearts */
     CHECK(gg.kind == GAMES_HEARTS && hh.seed == 5 && hh.phase == HEARTS_PASSING && strstr(gg.status, "pass left"));
     /* three cards chosen, raised; a fourth refused; one put back */
     for (int i = 0; i < 3; i++) {
@@ -1158,10 +1160,10 @@ static void test_window_chess(void) {
     int lh = sqg_line_h(&ui);
     game_new(&g, GAME_KLONDIKE, 1, 3);
     chess_new(&ch, 3);
-    games_gui_init(&gg, &g, &mn, &hh, &ch, &tt);
+    games_gui_init(&gg, &g, &mn, &hh, &ch, &tt, &br);
     gg.ms = 1000;
     frame();
-    click(6 + 420 * 9 / 12, 6 + lh / 2); /* Chess */
+    click(6 + 420 * 9 / 14, 6 + lh / 2); /* Chess */
     CHECK(gg.kind == GAMES_CHESS && ch.n == 0 && ch.human[0] && !ch.human[1] && strstr(gg.status, "Your move"));
     /* a1 at the bottom left; a square from a point */
     sqg_rect a1 = games_gui_chess_rect(&gg, 0), h8 = games_gui_chess_rect(&gg, 63);
@@ -1304,7 +1306,10 @@ static void test_tiles(void) {
             if (tt.here[k]) per[tt.kind[k]]++;
         CHECK(tiles_hint(&tt, &h1, &h2) == -1 && tiles_moves(&tt) == 0);
         if (tiles_shuffle(&tt)) { /* (a few left that no deal could clear, as two tiles one on the other) */
-            shuffled_clears &= tt.left == left && tiles_state(&tt) == TILES_STUCK;
+            char dead[256];
+            tiles_text(&tt, dead, sizeof dead);
+            shuffled_clears &= tt.left == left && tiles_state(&tt) == TILES_DEAD && strstr(dead, "no shuffle can clear these");
+            shuffled_clears &= tiles_undo(&tt) == 0 && tiles_state(&tt) == TILES_PLAYING && !tt.dead;
             stuck_seen--;
             continue;
         }
@@ -1351,10 +1356,10 @@ static void test_tiles(void) {
 static void test_window_tiles(void) {
     int lh = sqg_line_h(&ui);
     game_new(&g, GAME_KLONDIKE, 1, 6);
-    games_gui_init(&gg, &g, &mn, &hh, &ch, &tt);
+    games_gui_init(&gg, &g, &mn, &hh, &ch, &tt, &br);
     gg.ms = 1000;
     frame();
-    click(6 + 420 * 11 / 12, 6 + lh / 2); /* Tiles */
+    click(6 + 420 * 11 / 14, 6 + lh / 2); /* Tiles */
     CHECK(gg.kind == GAMES_TILES && tt.seed == 6 && tt.layout == TILES_PYRAMID && tt.left == 144 && strstr(gg.status, "pairs can go"));
     /* the top tile is the one hit; a tile that is not free says so */
     int top = tt.n - 1;
@@ -1406,6 +1411,306 @@ static void test_window_tiles(void) {
     CHECK(tt.left == 0 && tiles_state(&tt) == TILES_WON && by_click > 50 && (!last_click || strstr(gg.status, "Cleared")));
 }
 
+/* ---- bridge ---- */
+
+static int bok(const char *line) {
+    char msg[120];
+    int rc = bridge_command(&br, line, msg, sizeof msg);
+    if (rc) printf("  %s: %s\n", line, msg);
+    return rc == 0;
+}
+static int bfails(const char *line, const char *why) {
+    char msg[120];
+    int rc = bridge_command(&br, line, msg, sizeof msg);
+    if (rc == 0 || !strstr(msg, why)) {
+        printf("  %s: rc %d, said \"%s\"\n", line, rc, msg);
+        return 0;
+    }
+    return 1;
+}
+
+static int calls(const char *list) { /* calls in turn from the dealer: "1H P 2H X" */
+    for (const char *s = list; *s;) {
+        while (*s == ' ') s++;
+        const char *w = s;
+        while (*s && *s != ' ') s++;
+        if (s == w) break;
+        int c = bridge_call_of(w, (size_t)(s - w));
+        if (c < 0 || bridge_call(&br, c)) {
+            printf("  call %.*s refused\n", (int)(s - w), w);
+            return 0;
+        }
+    }
+    return 1;
+}
+
+static void bset(int seat, const char *cards) { /* a hand from names, "AS KS 2C" */
+    br.n[seat] = 0;
+    for (const char *s = cards; *s;) {
+        while (*s == ' ') s++;
+        if (!*s) break;
+        br.hand[seat][br.n[seat]++] = card_named(s);
+        s += 2;
+    }
+}
+
+static void test_bridge(void) {
+    /* deals: 52 cards once, the same number the same deal; dealer and vulnerability go round */
+    int whole = 1;
+    for (uint32_t seed = 0; seed < 20; seed++) {
+        bridge_new(&br, seed);
+        for (int board = 1; board <= 16; board++) {
+            uint64_t seen = 0;
+            for (int s = 0; s < 4; s++) {
+                whole &= br.n[s] == 13;
+                for (int i = 0; i < 13; i++) seen |= (uint64_t)1 << (CARD_SUIT(br.hand[s][i]) * 13 + CARD_RANK(br.hand[s][i]) - 1);
+            }
+            whole &= seen == ((uint64_t)1 << 52) - 1 && br.dealer == (board - 1) % 4 && br.turn == br.dealer;
+            br.phase = BRIDGE_DONE;
+            bridge_next(&br);
+        }
+    }
+    CHECK(whole);
+    bridge_new(&br, 1);
+    CHECK(br.vul == 0 && br.dealer == BRIDGE_NORTH);
+    static const int VUL[16] = {0, 1, 2, 3, 1, 2, 3, 0, 2, 3, 0, 1, 3, 0, 1, 2};
+    int vul_ok = 1;
+    for (int board = 1; board <= 32; board++) {
+        vul_ok &= br.board == board && br.vul == VUL[(board - 1) % 16];
+        br.phase = BRIDGE_DONE;
+        bridge_next(&br);
+    }
+    CHECK(vul_ok);
+    static Bridge x, y;
+    bridge_new(&x, 7), bridge_new(&y, 7);
+    CHECK(!memcmp(&x, &y, sizeof x));
+    bridge_new(&y, 8);
+    CHECK(memcmp(x.hand, y.hand, sizeof x.hand) != 0);
+    /* names of calls, both ways */
+    char nm[6];
+    bridge_call_name(BRIDGE_BID(3, BRIDGE_NOTRUMP), nm);
+    CHECK(!strcmp(nm, "3NT"));
+    bridge_call_name(BRIDGE_BID(1, BRIDGE_HEARTS), nm);
+    CHECK(!strcmp(nm, "1H"));
+    bridge_call_name(BRIDGE_REDOUBLE, nm);
+    CHECK(!strcmp(nm, "XX") && bridge_call_of("3nt", 3) == BRIDGE_BID(3, BRIDGE_NOTRUMP) && bridge_call_of("7S", 2) == BRIDGE_BID(7, 3));
+    CHECK(bridge_call_of("p", 1) == BRIDGE_PASS && bridge_call_of("x", 1) == BRIDGE_DOUBLE && bridge_call_of("8C", 2) == -1 &&
+          bridge_call_of("1Z", 2) == -1);
+    /* the auction: higher bids only; doubles of the other side's bid; redoubles of their double */
+    bridge_new(&br, 1); /* North deals */
+    const char *why;
+    CHECK(bridge_can_call(&br, BRIDGE_DOUBLE, &why) == -1 && strstr(why, "opponent's bid"));
+    CHECK(calls("1H"));
+    CHECK(bridge_can_call(&br, BRIDGE_BID(1, BRIDGE_DIAMONDS), &why) == -1 && strstr(why, "higher"));
+    CHECK(bridge_can_call(&br, BRIDGE_REDOUBLE, &why) == -1 && strstr(why, "opponent's double"));
+    CHECK(calls("X"));                                                  /* East doubles North */
+    CHECK(bridge_can_call(&br, BRIDGE_DOUBLE, &why) == -1);             /* South: not partner's bid... */
+    CHECK(calls("XX P P P") && br.phase == BRIDGE_PLAYING);              /* South redoubles; done */
+    CHECK(br.level == 1 && br.strain == BRIDGE_HEARTS && br.doubled == 2 && br.declarer == BRIDGE_NORTH &&
+          br.turn == BRIDGE_EAST && br.leader == BRIDGE_EAST && bridge_dummy(&br) == BRIDGE_SOUTH);
+    /* declarer: the first of the side to name the strain */
+    bridge_new(&br, 1);
+    CHECK(calls("1S P 2H P 2S P 4H P P P") && br.declarer == BRIDGE_SOUTH && br.level == 4 && br.doubled == 0);
+    bridge_new(&br, 1);
+    CHECK(calls("P P P P") && br.phase == BRIDGE_DONE && br.declarer == -1 && br.result == 0 && br.total == 0);
+    CHECK(bridge_call(&br, BRIDGE_PASS) == -1 && bridge_next(&br) == 0 && br.board == 2);
+    /* the play: follow suit; the highest of the suit led, or the highest trump, takes it */
+    bridge_new(&br, 1);
+    CHECK(calls("1S P P P"));
+    bset(0, "AS 2H"), bset(1, "3H 4D"), bset(2, "5H 6H"), bset(3, "KH 2S");
+    br.tricks = 11, br.won[0] = 5, br.won[1] = 6;
+    CHECK(bridge_can_play(&br, card_named("AS"), &why) == -1 && strstr(why, "not in the hand"));
+    CHECK(bridge_play(&br, card_named("3H")) == 0 && br.turn == BRIDGE_SOUTH);
+    CHECK(bridge_can_play(&br, card_named("AS"), &why) == -1);
+    CHECK(bridge_play(&br, card_named("5H")) == 0 && bridge_can_play(&br, card_named("2S"), &why) == -1 && strstr(why, "follow suit"));
+    CHECK(bridge_play(&br, card_named("KH")) == 0 && bridge_play(&br, card_named("2H")) == 0);
+    CHECK(br.last_winner == BRIDGE_WEST && br.won[1] == 7 && br.turn == BRIDGE_WEST);
+    CHECK(bridge_play(&br, card_named("2S")) == 0 && bridge_play(&br, card_named("AS")) == 0 &&
+          bridge_play(&br, card_named("4D")) == 0 && bridge_play(&br, card_named("6H")) == 0);
+    CHECK(br.last_winner == BRIDGE_NORTH && br.phase == BRIDGE_DONE && br.won[0] == 6 && br.won[1] == 7);
+    CHECK(br.result == bridge_score(1, BRIDGE_SPADES, 0, 0, 6) && br.result == -50 && br.total == -50);
+    /* a trump takes it over a higher card of the suit led */
+    bridge_new(&br, 1);
+    CHECK(calls("1S P P P"));
+    bset(0, "2S"), bset(1, "AH"), bset(2, "KH"), bset(3, "QH");
+    br.tricks = 12;
+    br.turn = br.leader = BRIDGE_EAST;
+    CHECK(bridge_play(&br, card_named("AH")) == 0 && bridge_play(&br, card_named("KH")) == 0 &&
+          bridge_play(&br, card_named("QH")) == 0 && bridge_play(&br, card_named("2S")) == 0 && br.last_winner == BRIDGE_NORTH);
+    /* scores, from the published tables */
+    CHECK(bridge_score(4, BRIDGE_SPADES, 0, 0, 10) == 420 && bridge_score(4, BRIDGE_SPADES, 0, 1, 11) == 650);
+    CHECK(bridge_score(3, BRIDGE_NOTRUMP, 0, 0, 9) == 400 && bridge_score(1, BRIDGE_NOTRUMP, 0, 0, 7) == 90);
+    CHECK(bridge_score(2, BRIDGE_CLUBS, 0, 0, 9) == 110 && bridge_score(5, BRIDGE_DIAMONDS, 0, 1, 11) == 600);
+    CHECK(bridge_score(2, BRIDGE_HEARTS, 1, 0, 8) == 470 && bridge_score(2, BRIDGE_HEARTS, 2, 0, 9) == 840);
+    CHECK(bridge_score(1, BRIDGE_CLUBS, 1, 1, 9) == 540); /* doubled: 40, a part score 50, 50 for making it, 2 x 200 */
+    CHECK(bridge_score(6, BRIDGE_SPADES, 0, 0, 12) == 980 && bridge_score(7, BRIDGE_NOTRUMP, 0, 1, 13) == 2220);
+    CHECK(bridge_score(4, BRIDGE_HEARTS, 0, 0, 8) == -100 && bridge_score(4, BRIDGE_HEARTS, 0, 1, 8) == -200);
+    CHECK(bridge_score(3, BRIDGE_NOTRUMP, 1, 0, 5) == -800 && bridge_score(3, BRIDGE_NOTRUMP, 1, 1, 5) == -1100);
+    CHECK(bridge_score(3, BRIDGE_NOTRUMP, 2, 0, 8) == -200 && bridge_score(3, BRIDGE_NOTRUMP, 1, 0, 3) == -1400);
+    /* the computer: opens with points, 1NT with 15-17 even, passes with little */
+    bridge_new(&br, 1);
+    const char *const HANDS[3] = {"AS KS 2S 3S AH 2H 3H KD 2D 3D 2C 3C 4C", "AS KS QS 2S QH 3H 4H KD QD 2D 5C 3C 4C",
+                                  "2S 3S 4S 5S 2H 3H 4H 2D 3D 4D QC 3C 4C"};
+    const int WANT[3] = {BRIDGE_BID(1, BRIDGE_CLUBS), BRIDGE_BID(1, BRIDGE_NOTRUMP), BRIDGE_PASS};
+    int opens = 1;
+    for (int k = 0; k < 3; k++) {
+        bridge_new(&br, 1);
+        bset(0, HANDS[k]);
+        memcpy(br.dealt[0], br.hand[0], 13);
+        opens &= bridge_ai_call(&br) == WANT[k];
+    }
+    CHECK(opens);
+    /* a partner's opening and a fit: on to game */
+    bridge_new(&br, 1);
+    bset(2, "AS KS 3S 2S AH 2H 3H 4H 2D 3D 4D 2C 3C"); /* South: 11 points, four spades */
+    memcpy(br.dealt[2], br.hand[2], 13);
+    bset(0, "QS JS TS 9S 8S KH QH 5D 6D 7D 4C 5C 6C");
+    memcpy(br.dealt[0], br.hand[0], 13);
+    CHECK(calls("1S P"));
+    int c = bridge_ai_call(&br);
+    CHECK(c >= 5 && BRIDGE_STRAIN(c) == BRIDGE_SPADES && BRIDGE_LEVEL(c) >= 2);
+    /* the computer's cards: second hand low, third hand cheapest winner, a ruff when void */
+    bridge_new(&br, 1);
+    CHECK(calls("1S P P P"));
+    bset(0, "2S 3D"), bset(1, "KH 4H"), bset(2, "AH 2H 5D"), bset(3, "3H QH");
+    br.tricks = 11;
+    br.turn = br.leader = BRIDGE_WEST;
+    bridge_play(&br, card_named("3H"));
+    CHECK(bridge_ai_card(&br) == card_named("2S")); /* North: no hearts, a ruff */
+    bridge_new(&br, 1);
+    CHECK(calls("1NT P P P"));
+    bset(0, "AD 2D"), bset(1, "KH 4H"), bset(2, "AH QH 2H"), bset(3, "3H 5D");
+    br.tricks = 11;
+    br.turn = br.leader = BRIDGE_WEST;
+    bridge_play(&br, card_named("3H"));
+    bridge_play(&br, card_named("2D")); /* North discards */
+    bridge_play(&br, card_named("4H")); /* East plays low */
+    CHECK(bridge_ai_card(&br) == card_named("QH")); /* South: the cheapest that wins */
+    /* the computer through 300 boards: every call and card allowed, every board ends */
+    int legal = 1, ends = 1, sums = 1;
+    bridge_new(&br, 11);
+    long total = 0;
+    for (int k = 0; k < 300; k++) {
+        int guard = 0;
+        while (br.phase != BRIDGE_DONE && guard++ < 200) {
+            if (br.phase == BRIDGE_BIDDING) legal &= bridge_call(&br, bridge_ai_call(&br)) == 0;
+            else legal &= bridge_play(&br, bridge_ai_card(&br)) == 0;
+        }
+        ends &= br.phase == BRIDGE_DONE;
+        if (br.declarer >= 0) sums &= br.won[0] + br.won[1] == 13;
+        total += br.result;
+        bridge_next(&br);
+    }
+    CHECK(legal && ends && sums && total == br.total);
+
+    /* the commands */
+    bridge_new(&br, 3);
+    CHECK(bfails("play 2C", "auction is not over") && bfails("bid 9C", "bid CALL") && bfails("jump", "unknown"));
+    CHECK(bfails("next", "not over") && bfails("bid x", "opponent's bid") == 1);
+    CHECK(bok("bid pass") && br.ncalls >= 4);
+    CHECK(bfails("bid 1C", "higher"));
+    CHECK(bok("bid 3D") && br.phase == BRIDGE_PLAYING && br.declarer == BRIDGE_SOUTH && bridge_yours(&br));
+    char text[4096];
+    bridge_text(&br, text, sizeof text);
+    CHECK(strstr(text, "Bridge  game 3  board 1  dealer North  vulnerable none") && strstr(text, "Contract 3D by South") &&
+          strstr(text, "\nNorth  S:") && strstr(text, "\nSouth  S:"));
+    CHECK(bfails("play AS", "follow suit") && bfails("play 9H", "not in the hand"));
+    /* play it out: your hand and dummy's, the computer between */
+    int guard = 0;
+    while (br.phase == BRIDGE_PLAYING && guard++ < 60) {
+        uint8_t card = bridge_ai_card(&br);
+        char line[16];
+        snprintf(line, sizeof line, "play %c%c", "?A23456789TJQK"[CARD_RANK(card)], "CDHS"[CARD_SUIT(card)]);
+        if (!bok(line)) break;
+    }
+    CHECK(br.phase == BRIDGE_DONE && bok("next") && br.board == 2 && bok("new 9") && br.seed == 9 && br.board == 1);
+}
+
+static void test_window_bridge(void) {
+    int lh = sqg_line_h(&ui);
+    game_new(&g, GAME_KLONDIKE, 1, 3);
+    bridge_new(&br, 3);
+    games_gui_init(&gg, &g, &mn, &hh, &ch, &tt, &br);
+    gg.ms = 1000;
+    frame();
+    click(6 + 420 * 13 / 14, 6 + lh / 2); /* Bridge */
+    CHECK(gg.kind == GAMES_BRIDGE && br.seed == 3 && br.phase == BRIDGE_BIDDING && br.ncalls == 0);
+    /* North and East call, at the computer's pace */
+    frame();
+    CHECK(br.ncalls == 0);
+    for (int k = 0; k < 10 && br.turn != BRIDGE_SOUTH; k++) {
+        gg.ms += 400;
+        frame();
+    }
+    CHECK(br.turn == BRIDGE_SOUTH && br.ncalls == 2 && strstr(gg.status, "Your call"));
+    /* a pass; then a call too low is refused, and 3D goes */
+    sqg_rect r = games_gui_bid_rect(&gg, BRIDGE_PASS);
+    click(r.x + 5, r.y + 5);
+    CHECK(br.ncalls == 3 && br.calls[2] == BRIDGE_PASS);
+    for (int k = 0; k < 10 && br.turn != BRIDGE_SOUTH; k++) {
+        gg.ms += 400;
+        frame();
+    }
+    CHECK(br.turn == BRIDGE_SOUTH && br.ncalls == 6); /* W 1H, N pass, E 2H, as on the command line */
+    r = games_gui_bid_rect(&gg, BRIDGE_BID(2, BRIDGE_DIAMONDS));
+    click(r.x + 5, r.y + 5);
+    CHECK(br.ncalls == 6 && strstr(gg.status, "higher"));
+    r = games_gui_bid_rect(&gg, BRIDGE_BID(3, BRIDGE_DIAMONDS));
+    click(r.x + 5, r.y + 5);
+    CHECK(br.ncalls == 7);
+    for (int k = 0; k < 10 && br.phase == BRIDGE_BIDDING; k++) {
+        gg.ms += 400;
+        frame();
+    }
+    CHECK(br.phase == BRIDGE_PLAYING && br.declarer == BRIDGE_SOUTH);
+    /* West leads; then North's cards are yours to play */
+    for (int k = 0; k < 10 && !bridge_yours(&br); k++) {
+        gg.ms += 500;
+        frame();
+    }
+    CHECK(br.turn == BRIDGE_NORTH && bridge_yours(&br) && strstr(gg.status, "from North"));
+    int seat, wrong = -1, right = -1;
+    for (int i = 0; i < br.n[0]; i++) {
+        if (bridge_can_play(&br, br.hand[0][i], NULL)) {
+            if (wrong < 0) wrong = i;
+        } else if (right < 0) right = i;
+    }
+    if (wrong >= 0) {
+        r = games_gui_bridge_card_rect(&gg, BRIDGE_NORTH, wrong);
+        click(r.x + 5, r.y + 40);
+        CHECK(br.n[0] == 13 && strstr(gg.status, "Follow suit"));
+    }
+    r = games_gui_bridge_card_rect(&gg, BRIDGE_SOUTH, 0);
+    CHECK(games_gui_bridge_hit(&gg, r.x + 5, r.y + 40, &seat) == 0 && seat == BRIDGE_SOUTH);
+    click(r.x + 5, r.y + 40);
+    CHECK(br.n[2] == 13 && strstr(gg.status, "not your turn"));
+    r = games_gui_bridge_card_rect(&gg, BRIDGE_NORTH, right);
+    click(r.x + 5, r.y + 40);
+    CHECK(br.n[0] == 12);
+    /* the rest by clicks: whichever of your hands is to play */
+    int guard = 0, clicks = 1;
+    while (br.phase == BRIDGE_PLAYING && guard++ < 400) {
+        if (!bridge_yours(&br)) {
+            gg.ms += 500;
+            frame();
+            continue;
+        }
+        int s = br.turn, pick = -1;
+        uint8_t want = bridge_ai_card(&br);
+        for (int i = 0; i < br.n[s]; i++)
+            if (br.hand[s][i] == want) pick = i;
+        r = games_gui_bridge_card_rect(&gg, s, pick);
+        int had = br.n[s];
+        click(r.x + 5, r.y + 40);
+        clicks += br.n[s] == had - 1;
+        gg.ms += 1200;
+    }
+    CHECK(br.phase == BRIDGE_DONE && clicks == 26 && strstr(gg.status, "to North-South"));
+    sqg_rect b = games_gui_bridge_button(&gg);
+    click(b.x + b.w / 2, b.y + b.h / 2);
+    CHECK(br.board == 2 && br.phase == BRIDGE_BIDDING && br.dealer == BRIDGE_EAST);
+}
+
 int main(int argc, char **argv) {
     const char *dir = argc > 1 ? argv[1] : ".";
     test_deals();
@@ -1424,6 +1729,8 @@ int main(int argc, char **argv) {
     test_window_chess();
     test_tiles();
     test_window_tiles();
+    test_bridge();
+    test_window_bridge();
     printf("test_games: %d checks, %d failed\n", checks, failures);
     return failures != 0;
 }
