@@ -80,4 +80,43 @@ int sqc_write_sqdwg(const SqcDrawing *dwg, const char *path);
 int sqc_read_sqdwg(SqcDrawing *dwg, const char *path);
 double sqc_ent_length(const SqcEntity *e);
 
+/* ---- editing ---- */
+SqcEntity *sqc_find(SqcDrawing *dwg, int id);
+const SqcLayer *sqc_layer_of(const SqcDrawing *dwg, int layer_id);
+const SqcBlock *sqc_find_block(const SqcDrawing *dwg, const char *name);
+/* 1 when entity id belongs to a block definition (not drawn in model space) */
+int sqc_in_block(const SqcDrawing *dwg, int id);
+/* remove an entity; -1 when there is none, -2 when a block uses it */
+int sqc_erase(SqcDrawing *dwg, int id);
+/* a copy with a new id; its id, or -1 when full */
+int sqc_copy(SqcDrawing *dwg, int id);
+/* p' = base + R(rot_deg) * (scale * (p - base)) + move, applied to an entity */
+void sqc_transform(SqcEntity *e, SqcPoint base, double scale, double rot_deg, SqcPoint move);
+/* the model-space extents of visible entities (blocks expanded); 0 when empty */
+int sqc_extents(const SqcDrawing *dwg, SqcPoint *lo, SqcPoint *hi);
+/* area enclosed by a polyline (closed or not, shoelace) or a circle */
+double sqc_ent_area(const SqcEntity *e);
+
+/* Walk every visible model-space entity with blocks expanded: fn gets each
+ * primitive (never an INSERT) already transformed into model space, with
+ * the layer of the outermost insert for parts on layer 0. */
+typedef void (*SqcVisit)(const SqcEntity *e, const SqcLayer *layer, void *ctx);
+void sqc_visit(const SqcDrawing *dwg, SqcVisit fn, void *ctx);
+
+/* ---- paper space ---- */
+typedef struct {
+    double width_mm, height_mm; /* the sheet */
+    double scale;               /* paper mm per model unit; 0 = fit */
+    char name[16];              /* "A3", ... */
+} SqcSheet;
+
+/* "A4", "A3", "A2", "A1", "A0", "LETTER", "TABLOID", landscape or not.
+ * Returns 0, or -1 for an unknown size. */
+int sqc_sheet(const char *name, int landscape, SqcSheet *out);
+/* Plot model space onto a sheet as SVG: a border, a title block (title,
+ * scale, sheet) and the drawing at `scale` (model units are metres: 1:100
+ * is 10 paper mm per unit) or fitted. Returns 0, or -1 when the file can't
+ * be written. */
+int sqc_plot_svg(const SqcDrawing *dwg, const SqcSheet *sheet, const char *path);
+
 #endif

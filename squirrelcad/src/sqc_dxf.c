@@ -115,6 +115,7 @@ int sqc_import_dxf(SqcDrawing *dwg, const char *path, SqcDxfStats *stats_out) {
     char text[SQC_MAX_NAME] = "";
     int in_entities = 0;
     int in_layer_table = 0;
+    int table_layer = 0;
     int collecting = 0;
 
     int lw_n = 0, lw_closed = 0, lw_count = 0;
@@ -170,7 +171,8 @@ int sqc_import_dxf(SqcDrawing *dwg, const char *path, SqcDxfStats *stats_out) {
             text[0] = 0;
             snprintf(layer, sizeof(layer), "0");
             x = y = z = x1 = y1 = z1 = 0;
-            snprintf(entity, sizeof(entity), "%s", pair.val);
+            snprintf(entity, sizeof(entity), "%.63s", pair.val);
+            table_layer = 0;
 
             if (eqi(entity, "SECTION")) {
             } else if (eqi(entity, "ENDSEC")) {
@@ -198,15 +200,24 @@ int sqc_import_dxf(SqcDrawing *dwg, const char *path, SqcDxfStats *stats_out) {
             } else if (eqi(entity, "TABLE") && eqi(pair.val, "LAYER")) {
                 in_layer_table = 1;
             } else if (collecting && in_layer_table && eqi(entity, "LAYER")) {
-                sqc_add_layer(dwg, pair.val, 7);
+                table_layer = sqc_add_layer(dwg, pair.val, 7);
                 st.layers++;
             }
+        }
+        /* a layer's colour; negative means it is off */
+        if (pair.code == 62 && collecting && in_layer_table && eqi(entity, "LAYER") && table_layer > 0) {
+            int c = atoi(pair.val);
+            for (int i = 0; i < dwg->layer_count; i++)
+                if (dwg->layers[i].id == table_layer) {
+                    dwg->layers[i].color = (uint32_t)(c < 0 ? -c : c);
+                    dwg->layers[i].on = c >= 0;
+                }
         }
 
         if (!collecting) continue;
 
         if (pair.code == 8) {
-            snprintf(layer, sizeof(layer), "%s", pair.val);
+            snprintf(layer, sizeof(layer), "%.63s", pair.val);
         } else if (pair.code == 10) {
             x = atof(pair.val);
             if (eqi(entity, "LWPOLYLINE") && lw_count < SQC_MAX_PLINE) {
@@ -235,7 +246,7 @@ int sqc_import_dxf(SqcDrawing *dwg, const char *path, SqcDxfStats *stats_out) {
         else if (pair.code == 51)
             a1 = atof(pair.val);
         else if (pair.code == 1 || pair.code == 3)
-            snprintf(text, sizeof(text), "%s", pair.val);
+            snprintf(text, sizeof(text), "%.63s", pair.val);
         else if (pair.code == 70 && eqi(entity, "LWPOLYLINE"))
             lw_closed = (atoi(pair.val) & 1) != 0;
         else if (pair.code == 90 && eqi(entity, "LWPOLYLINE"))
@@ -279,6 +290,47 @@ static const char *layer_name(const SqcDrawing *dwg, int id) {
     return "0";
 }
 
+static void write_ent(FILE *f, const SqcDrawing *dwg, const SqcEntity *e) {
+    const char *lay = layer_name(dwg, e->layer_id);
+    switch (e->type) {
+    case SQC_ENT_LINE:
+        fprintf(f, "0\nLINE\n8\n%s\n", lay);
+        fprintf(f, "10\n%.15g\n20\n%.15g\n30\n%.15g\n", e->p1.x, e->p1.y, e->p1.z);
+        fprintf(f, "11\n%.15g\n21\n%.15g\n31\n%.15g\n", e->p2.x, e->p2.y, e->p2.z);
+        break;
+    case SQC_ENT_CIRCLE:
+        fprintf(f, "0\nCIRCLE\n8\n%s\n", lay);
+        fprintf(f, "10\n%.15g\n20\n%.15g\n30\n%.15g\n40\n%.15g\n", e->p1.x, e->p1.y, e->p1.z, e->radius);
+        break;
+    case SQC_ENT_ARC:
+        fprintf(f, "0\nARC\n8\n%s\n", lay);
+        fprintf(f, "10\n%.15g\n20\n%.15g\n30\n%.15g\n40\n%.15g\n", e->p1.x, e->p1.y, e->p1.z, e->radius);
+        fprintf(f, "50\n%.15g\n51\n%.15g\n", e->start_ang, e->end_ang);
+        break;
+    case SQC_ENT_PLINE: {
+        /* a last vertex back on the first is written as the closed flag */
+        int n = e->vert_count, closed = 0;
+        if (n > 2 && e->verts[0].x == e->verts[n - 1].x && e->verts[0].y == e->verts[n - 1].y) closed = 1, n--;
+        fprintf(f, "0\nLWPOLYLINE\n8\n%s\n90\n%d\n70\n%d\n", lay, n, closed);
+        for (int v = 0; v < n; v++) fprintf(f, "10\n%.15g\n20\n%.15g\n", e->verts[v].x, e->verts[v].y);
+        break;
+    }
+    case SQC_ENT_TEXT:
+        fprintf(f, "0\nTEXT\n8\n%s\n", lay);
+        fprintf(f, "10\n%.15g\n20\n%.15g\n30\n%.15g\n40\n%.15g\n1\n%s\n", e->p1.x, e->p1.y, e->p1.z,
+                e->scale > 0 ? e->scale : 1.0, e->text);
+        if (e->rotation_deg != 0) fprintf(f, "50\n%.15g\n", e->rotation_deg);
+        break;
+    case SQC_ENT_INSERT:
+        fprintf(f, "0\nINSERT\n8\n%s\n2\n%s\n", lay, e->block_name);
+        fprintf(f, "10\n%.15g\n20\n%.15g\n30\n%.15g\n", e->p1.x, e->p1.y, e->p1.z);
+        fprintf(f, "41\n%.15g\n42\n%.15g\n43\n%.15g\n50\n%.15g\n", e->scale, e->scale, e->scale, e->rotation_deg);
+        break;
+    }
+}
+
+/* Layers with their colours (negative when off), block definitions, then
+ * the model-space entities, in R12 (AC1009) ASCII DXF. */
 int sqc_export_dxf(const SqcDrawing *dwg, const char *path) {
     FILE *f = fopen(path, "w");
     if (!f) return -1;
@@ -290,54 +342,31 @@ int sqc_export_dxf(const SqcDrawing *dwg, const char *path) {
 
     fprintf(f, "0\nSECTION\n2\nTABLES\n");
     fprintf(f, "0\nTABLE\n2\nLAYER\n70\n%d\n", dwg->layer_count > 0 ? dwg->layer_count : 1);
-    if (dwg->layer_count == 0)
-        fprintf(f, "0\nLAYER\n2\n0\n70\n0\n62\n7\n6\nCONTINUOUS\n");
+    if (dwg->layer_count == 0) fprintf(f, "0\nLAYER\n2\n0\n70\n0\n62\n7\n6\nCONTINUOUS\n");
     for (int i = 0; i < dwg->layer_count; i++) {
         const SqcLayer *L = &dwg->layers[i];
-        fprintf(f, "0\nLAYER\n2\n%s\n70\n0\n62\n7\n6\nCONTINUOUS\n", L->name);
+        int aci = L->color >= 1 && L->color <= 255 ? (int)L->color : 7;
+        fprintf(f, "0\nLAYER\n2\n%s\n70\n0\n62\n%d\n6\nCONTINUOUS\n", L->name, L->on ? aci : -aci);
     }
     fprintf(f, "0\nENDTAB\n0\nENDSEC\n");
 
-    fprintf(f, "0\nSECTION\n2\nENTITIES\n");
-    for (int i = 0; i < dwg->ent_count; i++) {
-        const SqcEntity *e = &dwg->ents[i];
-        const char *lay = layer_name(dwg, e->layer_id);
-        switch (e->type) {
-        case SQC_ENT_LINE:
-            fprintf(f, "0\nLINE\n8\n%s\n", lay);
-            fprintf(f, "10\n%.15g\n20\n%.15g\n30\n%.15g\n", e->p1.x, e->p1.y, e->p1.z);
-            fprintf(f, "11\n%.15g\n21\n%.15g\n31\n%.15g\n", e->p2.x, e->p2.y, e->p2.z);
-            break;
-        case SQC_ENT_CIRCLE:
-            fprintf(f, "0\nCIRCLE\n8\n%s\n", lay);
-            fprintf(f, "10\n%.15g\n20\n%.15g\n30\n%.15g\n40\n%.15g\n", e->p1.x, e->p1.y,
-                    e->p1.z, e->radius);
-            break;
-        case SQC_ENT_ARC:
-            fprintf(f, "0\nARC\n8\n%s\n", lay);
-            fprintf(f, "10\n%.15g\n20\n%.15g\n30\n%.15g\n40\n%.15g\n", e->p1.x, e->p1.y,
-                    e->p1.z, e->radius);
-            fprintf(f, "50\n%.15g\n51\n%.15g\n", e->start_ang, e->end_ang);
-            break;
-        case SQC_ENT_PLINE:
-            fprintf(f, "0\nLWPOLYLINE\n8\n%s\n90\n%d\n70\n0\n", lay, e->vert_count);
-            for (int v = 0; v < e->vert_count; v++)
-                fprintf(f, "10\n%.15g\n20\n%.15g\n", e->verts[v].x, e->verts[v].y);
-            break;
-        case SQC_ENT_TEXT:
-            fprintf(f, "0\nTEXT\n8\n%s\n", lay);
-            fprintf(f, "10\n%.15g\n20\n%.15g\n30\n%.15g\n40\n1.0\n1\n%s\n", e->p1.x, e->p1.y,
-                    e->p1.z, e->text);
-            break;
-        case SQC_ENT_INSERT:
-            /* exported as point marker text for now */
-            fprintf(f, "0\nTEXT\n8\n%s\n", lay);
-            fprintf(f, "10\n%.15g\n20\n%.15g\n30\n%.15g\n40\n1.0\n1\nINSERT:%s\n", e->p1.x,
-                    e->p1.y, e->p1.z, e->block_name);
-            break;
-        }
+    fprintf(f, "0\nSECTION\n2\nBLOCKS\n");
+    for (int i = 0; i < dwg->block_count; i++) {
+        const SqcBlock *b = &dwg->blocks[i];
+        fprintf(f, "0\nBLOCK\n8\n0\n2\n%s\n70\n0\n10\n%.15g\n20\n%.15g\n30\n%.15g\n3\n%s\n", b->name, b->base.x,
+                b->base.y, b->base.z, b->name);
+        for (int j = 0; j < b->ent_count; j++)
+            for (int k = 0; k < dwg->ent_count; k++)
+                if (dwg->ents[k].id == b->ent_ids[j]) write_ent(f, dwg, &dwg->ents[k]);
+        fprintf(f, "0\nENDBLK\n8\n0\n");
     }
+    fprintf(f, "0\nENDSEC\n");
+
+    fprintf(f, "0\nSECTION\n2\nENTITIES\n");
+    for (int i = 0; i < dwg->ent_count; i++)
+        if (!sqc_in_block(dwg, dwg->ents[i].id)) write_ent(f, dwg, &dwg->ents[i]);
     fprintf(f, "0\nENDSEC\n0\nEOF\n");
-    fclose(f);
-    return 0;
+    int bad = ferror(f);
+    bad |= fclose(f) != 0;
+    return bad ? -1 : 0;
 }

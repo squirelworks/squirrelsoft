@@ -24,14 +24,38 @@ drawing.sqdwg  --EXPORT-DXF-->  file.dxf  --open in-->  AutoCAD
 Imported: `LINE`, `CIRCLE`, `ARC`, `TEXT`/`MTEXT`, `LWPOLYLINE`, `LAYER`.  
 Sample: `samples/autocad_bridge.dxf`.
 
-## Features (v0)
+## Features
 
 - Entities: LINE, CIRCLE, ARC, PLINE, TEXT
-- Named layers with color / on-off
-- Blocks and INSERT
-- Model-space drawing list
-- Command CLI mirroring classic CAD verbs
-- Text `.sqdwg` + ASCII DXF interchange
+- Named layers with colour and on/off
+- Blocks and INSERT with scale and rotation, nested up to 8 deep. A
+  block's parts leave model space, as in classic CAD.
+- **The command line** (`squirrelcad run DRAWING [SCRIPT]`): classic verbs
+  typed at `Command:` or read from a script.
+  - Drawing: `LINE` (a chain), `CIRCLE`, `ARC`, `PLINE ... CLOSE`, `TEXT`
+    (to the end of the line).
+  - Layers: `LAYER NEW|SET|ON|OFF|COLOR|LIST`.
+  - Blocks: `BLOCK name base sel`, `INSERT name point [scale [rotation]]`.
+  - Editing: `ERASE`, `MOVE`, `COPY`, `ROTATE`, `SCALE`, and one level of
+    `UNDO`.
+  - Inquiry: `LIST`, `DIST`, `AREA` (with perimeter), `EXTENTS`.
+  - Files: `SAVE`, `OPEN`, `NEW`, `TITLE`, `EXPORT-DXF`, `PLOT`.
+  - Points can be `x,y`, `x,y,z`, `@dx,dy` (relative to the last point),
+    `d<angle` or `@d<angle` (polar, degrees counter-clockwise from east).
+    A selection is entity ids, `ALL` or `LAST`.
+  - In a script, a failing line stops the run with `file:line: message`.
+    The drawing is saved when the input ends, if it changed.
+- **Paper space** (`PLOT out.svg [A4..A0|LETTER|TABLOID] [1:N|FIT]
+  [PORTRAIT]`, or `squirrelcad plot`): model space on a sheet as SVG, with
+  a border and a title block (title, scale, sheet). Model units are
+  metres, so 1:500 is 2 paper mm per metre. Layer colours and on/off
+  apply, blocks are expanded, and the drawing is clipped to the viewport.
+- **Interchange:** text `.sqdwg` and ASCII DXF (R12).
+  - The DXF export writes layer colours (negative when off), a BLOCKS
+    section and real INSERTs.
+  - The import reads layer colours and on/off.
+  - The `.sqdwg` reader keeps text with spaces, refuses damaged files
+    instead of overrunning, and never reuses an id.
 
 ## Build
 
@@ -50,4 +74,16 @@ make test
 ./build/squirrelcad LAYER plan.sqdwg Notes 7
 ./build/squirrelcad IMPORT-DXF from_acad.sqdwg samples/autocad_bridge.dxf
 ./build/squirrelcad LIST from_acad.sqdwg
+
+cat > lot.scr <<'SCR'
+TITLE Lot_7
+LAYER NEW boundary 1
+PLINE 0,0 30,0 @0,20 @30<180 CLOSE
+AREA LAST                       # area 600  perimeter 100
+LAYER SET 0
+TEXT 10,10 Lot 7
+PLOT lot.svg A4 1:200
+SCR
+./build/squirrelcad run lot.sqdwg lot.scr
+./build/squirrelcad run lot.sqdwg            # Command: prompt
 ```
