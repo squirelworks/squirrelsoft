@@ -1,9 +1,11 @@
+#include "sqc_cmd.h"
 #include "sqc_dxf.h"
 #include "sqcad.h"
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 static int parse_xy(const char *s, SqcPoint *p) {
     p->z = 0;
@@ -18,6 +20,8 @@ static void usage(void) {
     puts("  IMPORT-DXF <out.sqdwg> <in.dxf>   # AutoCAD bridge");
     puts("  EXPORT-DXF <in.sqdwg> <out.dxf>");
     puts("  PROBE <file>                     # detect dxf/dwg/sqdwg");
+    puts("  run <drawing.sqdwg> [script.scr]  # the command line: LINE, CIRCLE, MOVE, PLOT, ...");
+    puts("  plot <drawing.sqdwg> <out.svg> [A3] [1:100|FIT] [PORTRAIT]");
     puts("  help");
     puts("");
     puts("AutoCAD .dwg: SAVEAS → DXF, then IMPORT-DXF.");
@@ -35,6 +39,80 @@ static int save(const SqcDrawing *d, const char *path) {
     return sqc_write_sqdwg(d, path);
 }
 
+static SqcSession session; /* two drawings: not on the stack */
+
+/* Commands from a script, or typed at "Command:". The drawing is opened (or
+ * started when the file does not exist yet) and saved when the input ends
+ * or at QUIT, if it changed. A failing command in a script stops it. */
+static int run(int argc, char **argv) {
+    if (argc < 3 || argc > 4) return usage(), 2;
+    sqc_session_init(&session, argv[2]);
+    FILE *probe = fopen(argv[2], "r");
+    if (probe) {
+        fclose(probe);
+        if (sqc_read_sqdwg(&session.dwg, argv[2])) {
+            fprintf(stderr, "cannot read %s\n", argv[2]);
+            return 1;
+        }
+    } else {
+        session.dirty = 1;
+    }
+    FILE *in = stdin;
+    if (argc == 4 && !(in = fopen(argv[3], "r"))) {
+        fprintf(stderr, "cannot read %s\n", argv[3]);
+        return 1;
+    }
+    int interactive = argc == 3 && isatty(0);
+    char line[1024], out[8192];
+    int ln = 0, rc = 0;
+    for (;;) {
+        if (interactive) {
+            fputs("Command: ", stdout);
+            fflush(stdout);
+        }
+        if (!fgets(line, sizeof line, in)) break;
+        ln++;
+        int r = sqc_exec(&session, line, out, sizeof out);
+        if (r == SQC_CMD_QUIT) break;
+        if (r == SQC_CMD_ERROR) {
+            if (interactive) printf("%s\n", out);
+            else {
+                fprintf(stderr, "%s:%d: %s\n", argc == 4 ? argv[3] : "stdin", ln, out);
+                rc = 1;
+                break;
+            }
+        } else if (out[0]) {
+            printf("%s\n", out);
+        }
+    }
+    if (in != stdin) fclose(in);
+    if (session.dirty && rc == 0) {
+        if (sqc_write_sqdwg(&session.dwg, session.path)) {
+            fprintf(stderr, "cannot write %s\n", session.path);
+            return 1;
+        }
+        printf("saved %s\n", session.path);
+    }
+    return rc;
+}
+
+static int plot(int argc, char **argv) {
+    if (argc < 4) return usage(), 2;
+    sqc_session_init(&session, argv[2]);
+    if (sqc_read_sqdwg(&session.dwg, argv[2])) {
+        fprintf(stderr, "cannot read %s\n", argv[2]);
+        return 1;
+    }
+    char line[1024] = "PLOT", out[256];
+    for (int i = 3; i < argc; i++) {
+        size_t at = strlen(line);
+        snprintf(line + at, sizeof line - at, " %s", argv[i]);
+    }
+    int r = sqc_exec(&session, line, out, sizeof out);
+    printf("%s\n", out);
+    return r == SQC_CMD_OK ? 0 : 1;
+}
+
 int main(int argc, char **argv) {
     if (argc < 2) {
         usage();
@@ -45,6 +123,9 @@ int main(int argc, char **argv) {
         usage();
         return 0;
     }
+
+    if (strcmp(cmd, "run") == 0 || strcmp(cmd, "RUN") == 0) return run(argc, argv);
+    if (strcmp(cmd, "plot") == 0 || strcmp(cmd, "PLOT") == 0) return plot(argc, argv);
 
     SqcDrawing *d = (SqcDrawing *)calloc(1, sizeof(SqcDrawing));
     if (!d) return 1;

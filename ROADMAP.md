@@ -140,10 +140,12 @@ These milestones predate the suite roadmap and remain open. Formats stay owned b
 - [ ] `.sqdgn` text interchange + binary sketch
 
 ### SquirrelCAD
-- [ ] Classic command loop: LINE, CIRCLE, ARC, PLINE, LAYER, BLOCK, INSERT
-- [ ] Model space / paper space sketch
-- [ ] `.sqdwg` interchange
-- [ ] DXF-like export of *our* entities (not Autodesk DXF fidelity claims)
+- [x] Classic command loop: LINE, CIRCLE, ARC, PLINE, LAYER, BLOCK, INSERT, plus ERASE/MOVE/COPY/ROTATE/SCALE, UNDO, LIST/DIST/AREA (`squirrelcad run`)
+- [x] Model space / paper space sketch: PLOT to an SVG sheet with scale and title block
+- [x] `.sqdwg` interchange (text with spaces, damaged-file checks, unique ids)
+- [x] DXF-like export of *our* entities (layer colours, BLOCKS, INSERT; not Autodesk DXF fidelity claims)
+- [ ] Desktop window on sqgui (draw with the mouse, snaps, zoom/pan)
+- [ ] DXF import of BLOCKS/INSERT
 
 ### SquirrelGNSS
 - [x] WGS84 / ECEF / geodetic conversions (exact both ways, ENU both ways, azimuth/elevation)
