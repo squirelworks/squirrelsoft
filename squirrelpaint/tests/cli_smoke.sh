@@ -50,6 +50,49 @@ $P --new 8x8 --do "color ff0000" --do "fill 0 0" --do "select 0 0 3 3" --do "mov
 err=$($P --new 10x10 --do "crop" 2>&1); [ $? -eq 1 ] || fail "crop with nothing selected should exit 1"
 echo "$err" | grep -q "crop: nothing is selected" || fail "crop message: $err"
 
+# PNG: save one, open it again and save a BMP: the same pixels as the BMP
+$P "$B/a.bmp" --save "$B/a.png" || fail "save a PNG"
+[ "$(head -c 8 "$B/a.png" | od -An -tx1 | tr -d ' \n')" = "89504e470d0a1a0a" ] || fail "a.png signature"
+[ "$(wc -c < "$B/a.png")" -lt "$(wc -c < "$B/a.bmp")" ] || fail "a.png is not smaller than the BMP"
+$P "$B/a.png" --save "$B/h.bmp" || fail "open the PNG"
+cmp -s "$B/a.bmp" "$B/h.bmp" || fail "BMP -> PNG -> BMP changed the picture"
+# and a checker that knows nothing of ours: Python's zlib, when Python is here
+if command -v python3 >/dev/null 2>&1; then
+    python3 - "$B/a.png" "$B/a.bmp" <<'PY' || fail "a.png does not check out"
+import struct, sys, zlib
+d = open(sys.argv[1], 'rb').read()
+assert d[:8] == b'\x89PNG\r\n\x1a\n'
+at, idat, kinds = 8, b'', []
+while at < len(d):
+    n, = struct.unpack('>I', d[at:at + 4])
+    kind, body = d[at + 4:at + 8], d[at + 8:at + 8 + n]
+    assert struct.unpack('>I', d[at + 8 + n:at + 12 + n])[0] == zlib.crc32(kind + body), kind
+    kinds.append(kind)
+    if kind == b'IHDR':
+        w, h, depth, ct, _, _, lace = struct.unpack('>IIBBBBB', body)
+    if kind == b'IDAT':
+        idat += body
+    at += 12 + n
+assert kinds[0] == b'IHDR' and kinds[-1] == b'IEND' and (depth, ct, lace) == (8, 2, 0)
+raw, up, rows = zlib.decompress(idat), bytes(3 * w), []
+assert len(raw) == h * (3 * w + 1)
+for y in range(h):
+    f, x = raw[y * (3 * w + 1)], bytearray(raw[y * (3 * w + 1) + 1:(y + 1) * (3 * w + 1)])
+    for i in range(3 * w):
+        a, b, c = (x[i - 3] if i >= 3 else 0), up[i], (up[i - 3] if i >= 3 else 0)
+        p = a + b - c
+        pa, pb, pc = abs(p - a), abs(p - b), abs(p - c)
+        x[i] = (x[i] + [0, a, b, (a + b) // 2, a if pa <= pb and pa <= pc else b if pb <= pc else c][f]) & 255
+    rows.append(bytes(x))
+    up = x
+bmp = open(sys.argv[2], 'rb').read()
+stride = (3 * w + 3) // 4 * 4
+for y in range(h):
+    r = bmp[54 + (h - 1 - y) * stride:][:3 * w]
+    assert rows[y] == bytes(v for i in range(w) for v in r[3 * i:3 * i + 3][::-1]), y
+PY
+fi
+
 # errors
 err=$($P --new 10x10 --do "line 1 2 3" 2>&1); [ $? -eq 1 ] || fail "a bad command should exit 1"
 echo "$err" | grep -q "line 1 2 3: line: X0 Y0 X1 Y1" || fail "bad command message: $err"
@@ -59,6 +102,9 @@ echo "$err" | grep -q "bad.txt:2: wiggle 1 2: unknown" || fail "bad script line:
 printf 'hello' > "$B/not.bmp"
 err=$($P "$B/not.bmp" --snapshot "$B/snap2.ppm" 2>&1); [ $? -eq 1 ] || fail "a bad file should exit 1"
 echo "$err" | grep -q "not a picture this reads" || fail "bad file message: $err"
+head -c 60 "$B/a.png" > "$B/cut.png"
+err=$($P "$B/cut.png" --snapshot "$B/snap2.ppm" 2>&1); [ $? -eq 1 ] || fail "a cut PNG should exit 1"
+echo "$err" | grep -q "a PNG cut short" || fail "cut PNG message: $err"
 $P "$B/no-such.bmp" --snapshot "$B/snap2.ppm" >/dev/null 2>&1; [ $? -eq 1 ] || fail "a missing file should exit 1"
 $P --new 10x10 --save "$B/no-such-dir/x.bmp" >/dev/null 2>&1; [ $? -eq 1 ] || fail "an unwritable file should exit 1"
 echo "squirrelpaint cli ok"

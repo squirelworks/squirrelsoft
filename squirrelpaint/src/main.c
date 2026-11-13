@@ -8,7 +8,7 @@
 
 static void usage(FILE *f) {
     fputs("usage: squirrelpaint [options] [FILE]\n"
-          "  FILE, --open FILE  open a BMP or PPM (PGM too)\n"
+          "  FILE, --open FILE  open a PNG, BMP or PPM (PGM too)\n"
           "  --new WxH        start with a white picture (640x480 unless one is opened)\n"
           "  --do CMD         draw: \"color ff0000\", \"size 6\", \"line 10 10 200 80\",\n"
           "                   \"rect 20 20 120 90 square\", \"fill on\", \"ellipse ...\",\n"
@@ -16,7 +16,7 @@ static void usage(FILE *f) {
           "                   \"select 0 0 99 99\", \"copy\", \"paste 10 10\", \"rotate 90\",\n"
           "                   \"flip h\", \"resize 320 240 smooth\", \"crop\", \"canvas W H\"\n"
           "  --script FILE    the same, one command a line (# for comments)\n"
-          "  --save FILE      write the picture (.bmp, or .ppm / .pnm) after the commands\n"
+          "  --save FILE      write the picture (.png, .bmp, or .ppm / .pnm) after the commands\n"
           "  --snapshot FILE  draw one 960x680 frame of the window to FILE (PPM), no window\n"
           "  --gui-frames N   close the window after N frames (testing)\n"
           "  --help           this text\n",
@@ -55,7 +55,7 @@ static int save_file(PaintGui *g, const char *path, char *msg, size_t cap) {
     PaintDoc *d = g->doc;
     paint_drop(d); /* a pasted or moved selection still floating goes in too */
     size_t n = paint_write_image(paint_kind_of_name(path), d->px, d->w, d->h, file_buf, sizeof file_buf);
-    if (n > sizeof file_buf) {
+    if (!n || n > sizeof file_buf) {
         snprintf(msg, cap, "too big to write");
         return -1;
     }

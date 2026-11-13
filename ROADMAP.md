@@ -93,7 +93,7 @@ Every item is a checkbox. Tick it in the PR that merges its last piece. Nested b
   - [x] Window and core: pencil, brush, eraser, line, rectangle, ellipse (outlined or filled, Shift for square, circle, 45 degrees), flood fill with tolerance, colour picker, two colours and a palette, undo and redo, zoom and pan, BMP (Windows and OS/2, 1 to 32 bits) and PPM/PGM in, BMP and PPM out, drawing commands and scripts from the command line
   - [x] Selections: rectangle select, cut, copy, paste, move, nudge; flip, rotate, resize (nearest or smooth), crop, canvas size, invert
   - [ ] Text, spray, curves and polygons; custom colours
-  - [ ] PNG in and out (own inflate and deflate)
+  - [x] PNG in and out (own inflate and deflate): every colour type and depth, interlacing and transparency in; filtered and compressed RGB out
 - [ ] S5.3 SquirrelGames (Solitaire, FreeCell, Hearts, Bridge, Chess, Minesweeper-class, Mahjongg)
 - [ ] S5.4 SquirrelDebug (desktop debugger UI for Squirrel OS/2 over serial/QEMU gdbstub)
 - Each designed so its core compiles for Squirrel OS/2 (freestanding C, no libc beyond a small shim).
