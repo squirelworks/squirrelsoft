@@ -1,0 +1,107 @@
+/* sqserial: a receiver's serial port, raw, or a recorded stream (POSIX). Original code. */
+#define _DEFAULT_SOURCE /* the faster baud rates and CRTSCTS beside POSIX termios */
+#include "sqrecv.h"
+
+#include <errno.h>
+#include <fcntl.h>
+#include <stdio.h>
+#include <string.h>
+#include <termios.h>
+#include <unistd.h>
+
+static int speed_of(int baud, speed_t *out) {
+    static const struct {
+        int baud;
+        speed_t s;
+    } T[] = {{4800, B4800},   {9600, B9600},   {19200, B19200}, {38400, B38400}, {57600, B57600},
+             {115200, B115200}, {230400, B230400},
+#ifdef B460800
+             {460800, B460800},
+#endif
+#ifdef B921600
+             {921600, B921600},
+#endif
+    };
+    for (size_t i = 0; i < sizeof T / sizeof T[0]; i++)
+        if (T[i].baud == baud) {
+            *out = T[i].s;
+            return 0;
+        }
+    return -1;
+}
+
+int sqrx_serial_open(const char *path, int baud, int write, char *err, size_t cap) {
+    if (!strcmp(path, "-")) {
+        if (write) {
+            snprintf(err, cap, "cannot configure a receiver on standard input");
+            return -1;
+        }
+        return 0;
+    }
+    int fd = open(path, (write ? O_RDWR : O_RDONLY) | O_NOCTTY);
+    if (fd < 0) {
+        snprintf(err, cap, "%s: %s", path, strerror(errno));
+        return -1;
+    }
+    if (!isatty(fd)) {
+        if (write) {
+            snprintf(err, cap, "%s is not a serial port", path);
+            close(fd);
+            return -1;
+        }
+        return fd; /* a recording */
+    }
+    speed_t sp;
+    if (speed_of(baud, &sp)) {
+        snprintf(err, cap, "unsupported baud rate %d", baud);
+        close(fd);
+        return -1;
+    }
+    struct termios t;
+    if (tcgetattr(fd, &t)) {
+        snprintf(err, cap, "%s: %s", path, strerror(errno));
+        close(fd);
+        return -1;
+    }
+    /* raw 8N1: no echo, no line editing, no translation, no flow control */
+    t.c_iflag &= ~(tcflag_t)(IGNBRK | BRKINT | PARMRK | ISTRIP | INLCR | IGNCR | ICRNL | IXON | IXOFF | IXANY);
+    t.c_oflag &= ~(tcflag_t)OPOST;
+    t.c_lflag &= ~(tcflag_t)(ECHO | ECHONL | ICANON | ISIG | IEXTEN);
+    t.c_cflag &= ~(tcflag_t)(CSIZE | PARENB | CSTOPB);
+#ifdef CRTSCTS
+    t.c_cflag &= ~(tcflag_t)CRTSCTS;
+#endif
+    t.c_cflag |= CS8 | CREAD | CLOCAL;
+    t.c_cc[VMIN] = 1;
+    t.c_cc[VTIME] = 0;
+    if (cfsetispeed(&t, sp) || cfsetospeed(&t, sp) || tcsetattr(fd, TCSANOW, &t)) {
+        snprintf(err, cap, "%s: %s", path, strerror(errno));
+        close(fd);
+        return -1;
+    }
+    tcflush(fd, TCIFLUSH);
+    return fd;
+}
+
+long sqrx_serial_read(int fd, unsigned char *buf, size_t cap) {
+    for (;;) {
+        ssize_t n = read(fd, buf, cap);
+        if (n < 0 && errno == EINTR) continue;
+        return (long)n;
+    }
+}
+
+int sqrx_serial_write(int fd, const unsigned char *buf, size_t n) {
+    while (n > 0) {
+        ssize_t w = write(fd, buf, n);
+        if (w < 0 && errno == EINTR) continue;
+        if (w <= 0) return -1;
+        buf += w;
+        n -= (size_t)w;
+    }
+    return tcdrain(fd) == 0 || errno == ENOTTY ? 0 : -1;
+}
+
+void sqrx_serial_close(int fd) {
+    if (fd > 0) close(fd);
+}

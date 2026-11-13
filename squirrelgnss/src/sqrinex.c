@@ -316,6 +316,21 @@ int sqr_obs_open(SqrObs *r, const char *text, SqrError *err) {
                 r->carrier2_index = k;
                 break;
             }
+    static const char *CODES5[] = {"C5Q", "C5X", "C5I", "C5"};
+    static const char *PHASES5[] = {"L5Q", "L5X", "L5I", "L5"};
+    r->code5_index = r->carrier5_index = -1;
+    for (size_t c = 0; c < sizeof CODES5 / sizeof *CODES5 && r->code5_index < 0; c++)
+        for (int k = 0; k < r->n_types; k++)
+            if (!strcmp(types[k], CODES5[c])) {
+                r->code5_index = k;
+                break;
+            }
+    for (size_t c = 0; c < sizeof PHASES5 / sizeof *PHASES5 && r->carrier5_index < 0; c++)
+        for (int k = 0; k < r->n_types; k++)
+            if (!strcmp(types[k], PHASES5[c])) {
+                r->carrier5_index = k;
+                break;
+            }
     if (r->code_index < 0) return fail(err, r->line, "no GPS L1 pseudorange (C1C, C1, C1W or P1)");
     return 0;
 }
@@ -444,6 +459,20 @@ int sqr_obs_next(SqrObs *r, SqgEpoch *ep, int *week, SqrError *err) {
                     if (obs_lli(sat, r->carrier2_index) & 1) o->slip = 1;
                 }
             }
+            if (r->code5_index >= 0) {
+                int p5, l5 = 0;
+                double c5 = obs_value(sat, r->code5_index, &p5);
+                double ph5 = r->carrier5_index >= 0 ? obs_value(sat, r->carrier5_index, &l5) : 0;
+                if (p5 && c5 > 1e6) {
+                    o->pseudorange5_m = c5;
+                    o->has_l5 = 1;
+                    if (l5 && ph5 != 0) {
+                        o->carrier5_cyc = ph5;
+                        o->has_l5_carrier = 1;
+                        if (obs_lli(sat, r->carrier5_index) & 1) o->slip = 1;
+                    }
+                }
+            }
         }
         return 1;
     }
@@ -476,32 +505,55 @@ void sqr_write_nav(FILE *f, const SqgEphemeris *ephs, int n) {
     }
 }
 
-void sqr_write_obs_header(FILE *f, const SqgEcef *approx) {
+void sqr_write_obs_header_bands(FILE *f, const SqgEcef *approx, int bands) {
     char t[80];
     label(f, "     3.04           OBSERVATION DATA    G: GPS", "RINEX VERSION / TYPE");
     label(f, "squirrelgnss", "PGM / RUN BY / DATE");
     label(f, "SYNTHETIC", "MARKER NAME");
     snprintf(t, sizeof t, "%14.4f%14.4f%14.4f", approx ? approx->x : 0, approx ? approx->y : 0, approx ? approx->z : 0);
     label(f, t, "APPROX POSITION XYZ");
-    label(f, "G    5 C1C L1C S1C C2W L2W", "SYS / # / OBS TYPES");
+    int n = 3 + (bands & SQR_BANDS_L2 ? 2 : 0) + (bands & SQR_BANDS_L5 ? 2 : 0);
+    snprintf(t, sizeof t, "G  %3d C1C L1C S1C%s%s", n, bands & SQR_BANDS_L2 ? " C2W L2W" : "",
+             bands & SQR_BANDS_L5 ? " C5Q L5Q" : "");
+    label(f, t, "SYS / # / OBS TYPES");
     label(f, "", "END OF HEADER");
 }
 
-void sqr_write_obs_epoch(FILE *f, int week, const SqgEpoch *ep) {
+void sqr_write_obs_header(FILE *f, const SqgEcef *approx) { sqr_write_obs_header_bands(f, approx, SQR_BANDS_L2); }
+
+/* one F14.3 field with its loss-of-lock and strength columns, or blanks */
+static void put_field(FILE *f, int have, double v, int lli) {
+    if (have) fprintf(f, "%14.3f%c ", v, lli ? '1' : ' ');
+    else fprintf(f, "%16s", "");
+}
+
+void sqr_write_obs_epoch_bands(FILE *f, int week, const SqgEpoch *ep, int bands) {
     int y, mo, d, h, mi, n = 0;
     double s;
     sqr_calendar(week, ep->t_receiver, &y, &mo, &d, &h, &mi, &s);
     for (int i = 0; i < ep->n_obs; i++) n += ep->obs[i].valid;
     fprintf(f, "> %04d %02d %02d %02d %02d%11.7f  0%3d\n", y, mo, d, h, mi, s, n);
-    for (int i = 0; i < ep->n_obs; i++)
-        if (ep->obs[i].valid)
-        {
-            const SqgObservation *o = &ep->obs[i];
-            fprintf(f, "G%02d%14.3f  ", o->prn, o->pseudorange_m);
-            if (o->has_carrier) fprintf(f, "%14.3f%c ", o->carrier_cyc, o->slip ? '1' : ' ');
-            else fprintf(f, "%16s", "");
-            fprintf(f, "%14.3f  ", o->snr_dbhz);
-            if (o->has_l2) fprintf(f, "%14.3f  %14.3f%c ", o->pseudorange2_m, o->carrier2_cyc, o->slip ? '1' : ' ');
-            fprintf(f, "\n");
+    for (int i = 0; i < ep->n_obs; i++) {
+        const SqgObservation *o = &ep->obs[i];
+        if (!o->valid) continue;
+        /* trailing blank fields are left off, as RINEX allows */
+        int l2 = (bands & SQR_BANDS_L2) && o->has_l2, l5 = (bands & SQR_BANDS_L5) && o->has_l5;
+        fprintf(f, "G%02d", o->prn);
+        put_field(f, 1, o->pseudorange_m, 0);
+        put_field(f, o->has_carrier, o->carrier_cyc, o->slip);
+        put_field(f, 1, o->snr_dbhz, 0);
+        if (l2 || l5) {
+            if (bands & SQR_BANDS_L2) {
+                put_field(f, l2, o->pseudorange2_m, 0);
+                put_field(f, l2, o->carrier2_cyc, o->slip);
+            }
+            if (l5) {
+                put_field(f, 1, o->pseudorange5_m, 0);
+                put_field(f, o->has_l5_carrier, o->carrier5_cyc, o->slip);
+            }
         }
+        fprintf(f, "\n");
+    }
 }
+
+void sqr_write_obs_epoch(FILE *f, int week, const SqgEpoch *ep) { sqr_write_obs_epoch_bands(f, week, ep, SQR_BANDS_L2); }

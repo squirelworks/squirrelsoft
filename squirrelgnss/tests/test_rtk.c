@@ -326,8 +326,8 @@ static long dd_amb(int prn, int ref, int band) {
 static void dual_session(const SqgEphemeris *eph, int n_eph, int n, double gap, double noise, double iono, int dual,
                          SqgGeodetic (*path)(int k)) {
     for (int k = 0; k < n; k++) {
-        SqgDemoOptions ob = {300.0 + k, 5.0, noise, 41u + (unsigned)k, 11, dual, iono};
-        SqgDemoOptions orv = {-700.0 - k, 5.0, noise, 9001u + (unsigned)k, 22, dual, iono};
+        SqgDemoOptions ob = {300.0 + k, 5.0, noise, 41u + (unsigned)k, 11, dual, iono, 0};
+        SqgDemoOptions orv = {-700.0 - k, 5.0, noise, 9001u + (unsigned)k, 22, dual, iono, 0};
         sqg_demo_epoch_opt(eph, n_eph, BASE, T0 + gap * k, &ob, &dual_b[k]);
         sqg_demo_epoch_opt(eph, n_eph, path(k), T0 + gap * k, &orv, &dual_r[k]);
     }
