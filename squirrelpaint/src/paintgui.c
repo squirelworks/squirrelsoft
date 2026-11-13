@@ -8,9 +8,10 @@ static const double ZOOMS[] = {0.125, 0.25, 0.5, 1, 2, 3, 4, 6, 8, 12, 16, 24, 3
 #define NZOOM ((int)(sizeof ZOOMS / sizeof ZOOMS[0]))
 #define ZOOM_1 3 /* 1:1 */
 
-static const char *const TOOL_NAMES[PAINT_TOOLS] = {"Pencil", "Brush", "Eraser", "Line",  "Rect",
-                                                    "Ellipse", "Fill", "Picker", "Select"};
-static const char TOOL_KEYS[PAINT_TOOLS] = {'p', 'b', 'e', 'l', 'r', 'o', 'f', 'i', 's'};
+static const char *const TOOL_NAMES[PAINT_TOOLS] = {"Pencil", "Brush",  "Eraser", "Line",  "Rect",
+                                                    "Ellipse", "Fill", "Picker", "Select", "Spray",
+                                                    "Polygon", "Curve", "Text"};
+static const char TOOL_KEYS[PAINT_TOOLS] = {'p', 'b', 'e', 'l', 'r', 'o', 'f', 'i', 's', 'a', 'g', 'c', 't'};
 
 double paint_gui_scale(int k) { return ZOOMS[k < 0 ? 0 : k >= NZOOM ? NZOOM - 1 : k]; }
 int paint_gui_zooms(void) { return NZOOM; }
@@ -148,8 +149,18 @@ static void draw_picture(PaintGui *g, sqg_ui *ui) {
             if (sy >= pic.y && sy < pic.y + pic.h) sqg_blend(cv, sqg_rect_make(pic.x, sy, pic.w, 1), 0x30808080u);
         }
     }
+    /* the text cursor */
+    int tx, ty, th;
+    if (!paint_text_caret(d, &tx, &ty, &th)) {
+        int sx0, sy0, sx1, sy1;
+        paint_gui_to_screen(g, tx, ty, &sx0, &sy0);
+        paint_gui_to_screen(g, tx, ty + th, &sx1, &sy1);
+        sqg_fill(cv, sqg_rect_make(sx0 - 1, sy0, 2, sy1 - sy0 > 1 ? sy1 - sy0 : 1), 0xFF000000u);
+        sqg_fill(cv, sqg_rect_make(sx0 + 1, sy0, 1, sy1 - sy0 > 1 ? sy1 - sy0 : 1), 0xFFFFFFFFu);
+    }
     /* the brush's reach under the pointer */
-    if (g->mouse_in && d->tool != PAINT_FILL && d->tool != PAINT_PICKER && d->tool != PAINT_SELECT) {
+    if (g->mouse_in && d->tool != PAINT_FILL && d->tool != PAINT_PICKER && d->tool != PAINT_SELECT &&
+        d->tool != PAINT_TEXT) {
         int size = d->tool == PAINT_PENCIL ? 1 : d->size;
         int bx = g->mouse_x - (size - 1) / 2, by = g->mouse_y - (size - 1) / 2, sx0, sy0, sx1, sy1;
         paint_gui_to_screen(g, bx, by, &sx0, &sy0);
@@ -195,8 +206,10 @@ static void picture_input(PaintGui *g, sqg_ui *ui) {
     }
     if (g->painting) {
         int held = g->painting == 1 ? in->down : in->down2;
-        if (held) paint_drag(d, x, y, in->shift);
-        else {
+        if (held) {
+            paint_drag(d, x, y, in->shift);
+            paint_tick(d); /* the spray keeps going while the button is held */
+        } else {
             paint_release(d, x, y, in->shift);
             g->painting = 0;
         }
@@ -224,9 +237,8 @@ static void tools_panel(PaintGui *g, sqg_ui *ui, sqg_rect r) {
         sqg_rect b = sqg_rect_make(r.x + (k % 2) * (half + 4), y + (k / 2) * (lh + 2), half, lh);
         int on = d->tool == k;
         if (sqg_toggle(ui, sqg_id_str(id), b, TOOL_NAMES[k], &on)) {
-            paint_cancel(d);
+            paint_set_tool(d, k);
             g->painting = 0;
-            d->tool = k;
         }
     }
     y += (PAINT_TOOLS + 1) / 2 * (lh + 2) + 4;
@@ -273,16 +285,43 @@ static void tools_panel(PaintGui *g, sqg_ui *ui, sqg_rect r) {
         d->bg = c;
     }
     y += 50;
-    snprintf(t, sizeof t, "#%06X", (unsigned)(d->fg & 0xFFFFFF));
-    sqg_label(ui, sqg_rect_make(r.x, y, r.w, lh), t, SQG_ALIGN_LEFT);
+    /* the first colour as RRGGBB to type, and its red, green and blue */
+    sqg_id hex_id = sqg_id_str("hex");
+    if (ui->focus != hex_id) snprintf(g->hex, sizeof g->hex, "%06X", (unsigned)(d->fg & 0xFFFFFF));
+    sqg_label(ui, sqg_rect_make(r.x, y, 10, lh), "#", SQG_ALIGN_LEFT);
+    if (sqg_textfield(ui, hex_id, sqg_rect_make(r.x + 10, y, r.w - 10, lh), g->hex, sizeof g->hex)) {
+        uint32_t c;
+        if (paint_parse_color(g->hex, strlen(g->hex), &c)) say(g, "A colour is six hex digits, as FF8000");
+        else d->fg = c;
+    }
     y += lh + 2;
-    /* the palette: the left button takes the first colour, the right the second */
+    static const char *const RGB[3] = {"R", "G", "B"};
+    for (int k = 0; k < 3; k++) {
+        char id[8];
+        snprintf(id, sizeof id, "rgb%d", k);
+        int shift = 16 - 8 * k;
+        sqg_label(ui, sqg_rect_make(r.x, y, 10, lh), RGB[k], SQG_ALIGN_LEFT);
+        g->rgb_v[k] = (d->fg >> shift) & 0xFF;
+        if (sqg_slider(ui, sqg_id_str(id), sqg_rect_make(r.x + 10, y, r.w - 10, lh), &g->rgb_v[k], 0, 255)) {
+            uint32_t v = (uint32_t)(g->rgb_v[k] + 0.5);
+            d->fg = (d->fg & ~(0xFFu << shift)) | v << shift;
+        }
+        y += lh + 1;
+    }
+    y += 3;
+    /* the palette: the left button takes the first colour, the right the
+     * second; with Shift, the left button puts the first colour there */
     int cols = 4, cw = (r.w - (cols - 1) * 2) / cols;
     for (int k = 0; k < PAINT_PALETTE; k++) {
         sqg_rect c = sqg_rect_make(r.x + (k % cols) * (cw + 2), y + (k / cols) * (cw / 2 + 6), cw, cw / 2 + 4);
         swatch(cv, c, g->palette[k]);
         if (!ui->active && sqg_rect_contains(c, ui->in.mx, ui->in.my)) {
-            if (ui->in.pressed) d->fg = g->palette[k];
+            if (ui->in.pressed && ui->in.shift) {
+                g->palette[k] = d->fg;
+                say(g, "The colour is in the palette");
+            } else if (ui->in.pressed) {
+                d->fg = g->palette[k];
+            }
             if (ui->in.pressed2) d->bg = g->palette[k];
         }
     }
@@ -320,7 +359,8 @@ static void do_save(PaintGui *g) {
         say(g, "Saving files is not here");
         return;
     }
-    paint_drop(g->doc); /* what floats goes into the file */
+    paint_finish(g->doc); /* what is under way, and what floats, go into the file */
+    paint_drop(g->doc);
     if (g->save_file(g, g->path, msg, sizeof msg)) {
         snprintf(g->status, sizeof g->status, "%.60s: %.90s", g->path, msg);
         return;
@@ -338,14 +378,14 @@ static void edit(PaintGui *g, int what) {
     case 'c': rc = paint_copy(d); break;
     case 'd': rc = paint_delete(d); break;
     case 'a':
+        paint_set_tool(d, PAINT_SELECT);
         paint_select_all(d);
-        d->tool = PAINT_SELECT;
         break;
     default: { /* paste at the top-left of what is in view, ready to drag */
         int x, y;
         paint_gui_to_picture(g, g->area.x, g->area.y, &x, &y);
         rc = paint_paste(d, x, y);
-        if (!rc) d->tool = PAINT_SELECT;
+        if (!rc) paint_set_tool(d, PAINT_SELECT);
     }
     }
     if (rc) say(g, what == 'v' ? "Nothing to paste" : "Select something first (the Select tool, or Ctrl+A)");
@@ -434,8 +474,22 @@ static void keys(PaintGui *g, sqg_ui *ui) {
     if (in->ctrl_key == 'y') do_undo(g, 1);
     if (in->ctrl_key == 's') do_save(g);
     if (in->ctrl_key && strchr("xcva", in->ctrl_key) && !g->painting) edit(g, in->ctrl_key);
+    if (d->multi == PAINT_TEXT && !ui->focus && !in->ctrl) { /* typing goes into the text */
+        for (const char *t = in->text; *t; t++) paint_text_key(d, (unsigned char)*t);
+        if (in->key == SQG_KEY_BACKSPACE) paint_text_key(d, '\b');
+        if (in->key == SQG_KEY_ENTER) paint_text_key(d, '\n');
+        if (in->key == SQG_KEY_ESCAPE) {
+            paint_cancel(d);
+            say(g, "Taken back");
+        }
+        return;
+    }
+    if (in->key == SQG_KEY_ENTER && d->multi && !d->active && !ui->focus) {
+        paint_finish(d); /* the polygon closed, the curve as it is */
+        return;
+    }
     if (in->key == SQG_KEY_ESCAPE) {
-        if (d->active || d->sel_mode) {
+        if (d->active || d->sel_mode || d->multi) {
             paint_cancel(d);
             g->painting = 0;
             say(g, "Taken back");
@@ -458,7 +512,7 @@ static void keys(PaintGui *g, sqg_ui *ui) {
     if (in->key >= SQG_KEY_LEFT && in->key <= SQG_KEY_DOWN) clamp_view(g);
     if (in->text[0] && !in->text[1] && !in->ctrl && !g->painting)
         for (int k = 0; k < PAINT_TOOLS; k++)
-            if (in->text[0] == TOOL_KEYS[k] || in->text[0] == TOOL_KEYS[k] - 32) d->tool = k;
+            if (in->text[0] == TOOL_KEYS[k] || in->text[0] == TOOL_KEYS[k] - 32) paint_set_tool(d, k);
 }
 
 static void status_line(PaintGui *g, sqg_ui *ui, sqg_rect r) {

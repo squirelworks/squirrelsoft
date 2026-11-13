@@ -24,6 +24,17 @@ size_t paint__word(const char **p, const char **start);
 int paint__is(const char *w, size_t n, const char *s);
 int paint__number(const char *w, size_t n, int *v);
 
+/* what the press has drawn so far, taken back to before */
+void paint__restore_dirty(PaintDoc *d);
+
+/* the polygon, curve and text tools (painttools.c); cancel drops what is
+ * under way; the command words text, polygon and curve as for sel_command */
+void paint__multi_press(PaintDoc *d, int x, int y, int button, int square);
+void paint__multi_drag(PaintDoc *d, int x, int y, int square);
+void paint__multi_release(PaintDoc *d, int x, int y, int square);
+void paint__multi_cancel(PaintDoc *d);
+int paint__tools_command(PaintDoc *d, const char *word, size_t n, const char *rest, int *rc, char *msg, size_t cap);
+
 /* the select tool (paintsel.c) */
 void paint__sel_press(PaintDoc *d, int x, int y);
 void paint__sel_drag(PaintDoc *d, int x, int y);

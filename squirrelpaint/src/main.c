@@ -14,7 +14,9 @@ static void usage(FILE *f) {
           "                   \"rect 20 20 120 90 square\", \"fill on\", \"ellipse ...\",\n"
           "                   \"brush X Y X Y ...\", \"fill X Y\", \"pick X Y\", \"undo\",\n"
           "                   \"select 0 0 99 99\", \"copy\", \"paste 10 10\", \"rotate 90\",\n"
-          "                   \"flip h\", \"resize 320 240 smooth\", \"crop\", \"canvas W H\"\n"
+          "                   \"flip h\", \"resize 320 240 smooth\", \"crop\", \"canvas W H\",\n"
+          "                   \"text 10 10 Hello\", \"polygon 0 0 50 0 25 40\",\n"
+          "                   \"curve 0 0 99 0 50 60\", \"spray 40 40\"\n"
           "  --script FILE    the same, one command a line (# for comments)\n"
           "  --save FILE      write the picture (.png, .bmp, or .ppm / .pnm) after the commands\n"
           "  --snapshot FILE  draw one 960x680 frame of the window to FILE (PPM), no window\n"
@@ -53,7 +55,8 @@ static int open_file(PaintGui *g, const char *path, char *msg, size_t cap) {
 
 static int save_file(PaintGui *g, const char *path, char *msg, size_t cap) {
     PaintDoc *d = g->doc;
-    paint_drop(d); /* a pasted or moved selection still floating goes in too */
+    paint_finish(d); /* a polygon, curve or text under way goes in, */
+    paint_drop(d);   /* and a pasted or moved selection still floating */
     size_t n = paint_write_image(paint_kind_of_name(path), d->px, d->w, d->h, file_buf, sizeof file_buf);
     if (!n || n > sizeof file_buf) {
         snprintf(msg, cap, "too big to write");

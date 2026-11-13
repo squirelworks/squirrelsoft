@@ -16,8 +16,21 @@ build/squirrelpaint picture.png
 ## The window
 
 - **Tools**, down the left: Pencil (one pixel), Brush (round), Eraser,
-  Line, Rect, Ellipse, Fill, Picker and Select. Keys pick them too when no
-  text field has the keyboard: P, B, E, L, R, O (ellipse), F, I and S.
+  Line, Rect, Ellipse, Fill, Picker, Select, Spray, Polygon, Curve and
+  Text. Keys pick them too when no text field has the keyboard: P, B, E,
+  L, R, O (ellipse), F, I, S, A (spray), G (polygon), C and T.
+- **Spray** puts dots at random within the brush size of the pointer, and
+  keeps going while the button is held still.
+- **Polygon**: drag the first side, then click each corner; a click on the
+  first corner, two on the last, Enter or another tool closes it. Filled
+  shapes fills it. **Curve**: drag a line, then drag twice to bend it (the
+  first bend pulls both halves, the second its own). Each is one step to
+  undo, and Escape takes it back while it is under way.
+- **Text**: click, then type, in the suite's 5x7 font with each dot half
+  the brush size across. Enter starts a line and Backspace takes a letter
+  back; a click elsewhere, another tool or saving keeps it.
+- **Colours**: the first colour can be typed as RRGGBB or set with its R,
+  G and B sliders; Shift and a click put it into a palette slot.
 - **Selections.** Drag a rectangle with Select; a click elsewhere clears
   it. Dragged by its inside, it lifts off the picture (leaving the second
   colour) and floats until it is put down, by a click outside, Escape,
@@ -98,7 +111,10 @@ new W H              color RRGGBB        bg RRGGBB
 size N               tolerance N         fill on | fill off
 pencil|brush|eraser X Y [X Y ...]        a stroke through the points
 line|rect|ellipse X0 Y0 X1 Y1 [square]
-fill X Y             pick X Y
+fill X Y             pick X Y             spray X Y [X Y ...]
+polygon X Y X Y X Y [...]                 closed; filled with fill on
+curve X0 Y0 X1 Y1 [BX BY [BX BY]]         bent towards one or two points
+text X Y WORDS...    the rest of the line, each dot half the size across
 undo   redo   clear
 select X0 Y0 X1 Y1   select all   select none
 copy   cut   paste [X Y]   delete   move DX DY   drop
@@ -117,6 +133,10 @@ window.
   flood fill with a mark bitmap and an explicit list), the tools as
   press, drag and release, undo that keeps each stroke's rectangle and
   swaps it back, and the command line.
+- `painttools.c`: spray (xorshift dots in a circle), polygons (even-odd
+  rows through pixel centres), cubic Bezier curves in pieces of a few
+  pixels, and text; the tools that take more than one press keep what is
+  under way drawn over the picture as it was, until it is finished.
 - `paintsel.c`: the selection (lifted pixels float over the picture until
   dropped), the clipboard, and the transforms, which work on what floats
   or on the whole picture; size changes are whole-picture undo steps.
@@ -140,6 +160,9 @@ window.
   canvas and invert, on the picture and on a selection, undone and redone
   across size changes;
 - undo and redo, including the 64-step limit and the store's;
+- spray, polygon, curve and text by press, drag and release and by
+  command (the same pixels both ways), what finishes them and what takes
+  them back;
 - every command and its errors;
 - BMP and PPM both ways, plus hand-made files of every depth, header and
   bit-mask kind, and every refusal;
@@ -149,7 +172,8 @@ window.
   (palette, 16-bit, interlaced, split IDATs, transparency), which writes
   `tests/png_vectors.h`, and damaged ones;
 - the window driven by clicks, drags, both buttons, Shift, Ctrl, the
-  wheel, keys, the edit and image buttons, and the file hooks.
+  wheel, keys, typing, the edit and image buttons, the colour field,
+  sliders and palette, and the file hooks.
 
 It also runs `tests/cli_smoke.sh` (draw, save, reopen BMP, PPM and PNG
 byte for byte, a saved PNG checked by a stdlib-only Python reader when

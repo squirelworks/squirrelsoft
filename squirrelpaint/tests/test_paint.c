@@ -924,7 +924,8 @@ static void test_window(const char *dir) {
     frame();
     CHECK(paint_get(&d, 99, 59) == WHITE);
     /* the palette: left for the first colour, right for the second */
-    int pal_y = 6 + lh + 6 + 5 * (lh + 2) + 4 + 4 * (lh + 2) + 6 + lh + (lh + 4) + lh + (lh + 4) + (lh + 8) + 50 + (lh + 2) + 4;
+    int pal_y = 6 + lh + 6 + 7 * (lh + 2) + 4 + 4 * (lh + 2) + 6 + lh + (lh + 4) + lh + (lh + 4) + (lh + 8) + 50 + (lh + 2) +
+                3 * (lh + 1) + 3 + 4;
     CHECK(screen[pal_y * W + 6 + 10] == BLACK);
     int cw = (132 - 3 * 2) / 4;
     click(6 + (cw + 2) * 1 + cw / 2, pal_y + (cw / 2 + 6) * 1); /* the second row, second: red */
@@ -1010,7 +1011,7 @@ static void test_window(const char *dir) {
 
 
 static void test_window_selection(void) {
-    int lh = sqg_line_h(&ui), ops_y = 6 + lh + 6 + 5 * (lh + 2) + 4;
+    int lh = sqg_line_h(&ui), ops_y = 6 + lh + 6 + 7 * (lh + 2) + 4;
     paint_new(&d, 120, 80);
     g.view_ready = 0;
     frame();
@@ -1120,6 +1121,182 @@ static long inflate_all(const uint8_t *z, size_t n, uint8_t *out, size_t cap) {
 
 static uint8_t zsrc[6000], zout[1 << 16], zpack[1 << 16];
 
+static long count_not(uint32_t c) {
+    long k = 0;
+    for (int i = 0; i < d.w * d.h; i++) k += d.px[i] != c;
+    return k;
+}
+static void press_release(int x, int y) {
+    paint_press(&d, x, y, 1, 0);
+    paint_release(&d, x, y, 0);
+}
+static uint32_t saved_px[200 * 200];
+
+static void test_more_tools(void) {
+    char msg[120];
+    /* the spray: dots within its reach, more while held, one step */
+    paint_new(&d, 60, 60);
+    paint_set_tool(&d, PAINT_SPRAY);
+    paint_press(&d, 30, 30, 1, 0);
+    long a = count(BLACK);
+    CHECK(a > 0 && a <= 2 + 16 / 3 && count_in(26, 26, 34, 34, BLACK) == a);
+    paint_tick(&d);
+    paint_tick(&d);
+    long b = count(BLACK);
+    CHECK(b > a && count_in(26, 26, 34, 34, BLACK) == b);
+    paint_drag(&d, 50, 30, 0);
+    CHECK(count(BLACK) > b && count_in(46, 26, 54, 34, BLACK) > 0);
+    paint_release(&d, 50, 30, 0);
+    paint_tick(&d); /* not held: nothing */
+    long c = count(BLACK);
+    CHECK(d.nsteps == 1 && paint_undo(&d) == 0 && count(WHITE) == 3600 && paint_redo(&d) == 0 && count(BLACK) == c);
+    memcpy(saved_px, d.px, sizeof(uint32_t) * 3600);
+    paint_new(&d, 60, 60); /* the same seed, the same dots */
+    cmd("spray 30 30");
+    CHECK(count(BLACK) == a);
+    cmd("color 0000ff");
+    cmd("spray right 30 30 50 30");
+    CHECK(count(BLUE) == 0 && count(BLACK) < a && d.nsteps == 2); /* right: the second colour, white */
+    cmd("undo");
+    cmd("undo");
+    CHECK(cmd_fails("spray 1 2 3", "spray: X Y"));
+
+    /* the polygon: a drag, clicks, and a click on the first corner */
+    paint_new(&d, 60, 60);
+    d.size = 1;
+    paint_set_tool(&d, PAINT_POLYGON);
+    paint_press(&d, 10, 10, 1, 0);
+    paint_drag(&d, 30, 10, 0);
+    paint_release(&d, 40, 10, 0);
+    CHECK(d.multi == PAINT_POLYGON && d.npts == 2 && paint_get(&d, 40, 10) == BLACK && paint_get(&d, 25, 10) == BLACK);
+    press_release(40, 40);
+    paint_press(&d, 10, 40, 1, 0);
+    CHECK(paint_get(&d, 40, 25) == BLACK && paint_get(&d, 25, 40) == BLACK && paint_get(&d, 10, 25) == WHITE); /* still open */
+    paint_drag(&d, 12, 44, 1); /* Shift: held to 45 degrees from the last corner */
+    CHECK(d.pts[3][1] == 40 && paint_get(&d, 25, 40) == BLACK);
+    paint_release(&d, 10, 40, 0);
+    CHECK(d.nsteps == 0 && paint_can_undo(&d));
+    press_release(11, 12); /* near enough the first: closed */
+    CHECK(!d.multi && d.nsteps == 1 && paint_get(&d, 10, 25) == BLACK && count(BLACK) == 4 * 30);
+    CHECK(paint_undo(&d) == 0 && count(WHITE) == 3600);
+    /* twice on the last corner ends it; filled */
+    d.filled = 1;
+    press_release(0, 0);
+    CHECK(d.npts == 1 && d.multi == PAINT_POLYGON);
+    press_release(20, 0);
+    press_release(0, 20);
+    press_release(0, 20);
+    CHECK(!d.multi && count(BLACK) == 231); /* x + y <= 20 */
+    cmd("undo");
+    cmd("fill on");
+    cmd("polygon 0 0 20 0 0 20");
+    CHECK(count(BLACK) == 231);
+    cmd("undo");
+    cmd("fill off");
+    cmd("size 1");
+    cmd("polygon 10 10 40 10 40 40 10 40");
+    CHECK(count(BLACK) == 4 * 30 && d.nsteps == 1);
+    CHECK(cmd_fails("polygon 1 1 5 5", "three corners or more"));
+    CHECK(cmd_fails("polygon 1 1 5 5 9", "three corners or more"));
+    /* what is under way is kept by another tool, Enter (finish), undo and saving; Escape takes it back */
+    paint_new(&d, 60, 60);
+    paint_set_tool(&d, PAINT_POLYGON);
+    press_release(5, 5);
+    press_release(50, 5);
+    press_release(50, 50);
+    paint_set_tool(&d, PAINT_BRUSH);
+    CHECK(!d.multi && d.nsteps == 1 && paint_get(&d, 30, 30) == BLACK); /* closed: the diagonal back */
+    paint_set_tool(&d, PAINT_POLYGON);
+    press_release(5, 50);
+    press_release(20, 50);
+    CHECK(paint_get(&d, 12, 50) == BLACK);
+    paint_cancel(&d);
+    CHECK(!d.multi && paint_get(&d, 12, 50) == WHITE && d.nsteps == 1);
+    press_release(5, 50);
+    press_release(20, 50);
+    CHECK(paint_undo(&d) == 0 && !d.multi && paint_get(&d, 12, 50) == WHITE && d.done == 1);
+    CHECK(paint_redo(&d) == 0 && paint_get(&d, 12, 50) == BLACK);
+    press_release(5, 55);
+    press_release(20, 55);
+    CHECK(!paint_can_redo(&d) && paint_redo(&d) == -1);
+    paint_select(&d, 0, 0, 9, 9); /* a selection lifted keeps it first */
+    paint_lift(&d);
+    CHECK(!d.multi && paint_get(&d, 12, 55) == BLACK);
+    paint_drop(&d);
+
+    /* the curve: a line, then two bends; the same as the command */
+    paint_new(&d, 61, 50);
+    d.size = 2;
+    paint_set_tool(&d, PAINT_CURVE);
+    press_release(5, 5); /* a click is no line */
+    CHECK(!d.multi && count(WHITE) == 61 * 50);
+    paint_press(&d, 0, 10, 1, 0);
+    paint_release(&d, 60, 10, 0);
+    CHECK(d.multi == PAINT_CURVE && d.stage == 1 && paint_get(&d, 30, 10) == BLACK);
+    paint_press(&d, 20, 30, 1, 0);
+    paint_release(&d, 30, 40, 0);
+    CHECK(d.stage == 2 && paint_get(&d, 30, 10) == WHITE && count_in(28, 31, 32, 34, BLACK) > 0);
+    paint_press(&d, 50, 0, 1, 0);
+    paint_release(&d, 45, 45, 0);
+    CHECK(!d.multi && d.nsteps == 1);
+    memcpy(saved_px, d.px, sizeof(uint32_t) * 61 * 50);
+    cmd("undo");
+    cmd("curve 0 10 60 10 30 40 45 45");
+    CHECK(!memcmp(saved_px, d.px, sizeof(uint32_t) * 61 * 50));
+    cmd("undo");
+    cmd("curve 0 10 60 10");
+    CHECK(count_in(0, 9, 60, 11, BLACK) == count(BLACK) && paint_get(&d, 30, 10) == BLACK);
+    CHECK(cmd_fails("curve 0 10 60", "curve X0 Y0 X1 Y1"));
+
+    /* text: a click, typing, a new line, taking back a letter */
+    paint_new(&d, 80, 40);
+    d.size = 2; /* a dot a pixel */
+    CHECK(paint_text_key(&d, 'x') == -1);
+    paint_set_tool(&d, PAINT_TEXT);
+    paint_press(&d, 2, 3, 1, 0);
+    paint_release(&d, 2, 3, 0);
+    int tx, ty, th;
+    CHECK(d.multi == PAINT_TEXT && paint_text_caret(&d, &tx, &ty, &th) == 0 && tx == 2 && ty == 3 && th == 7);
+    CHECK(!paint_can_undo(&d)); /* nothing typed yet */
+    paint_text_key(&d, 'H');
+    CHECK(paint_get(&d, 2, 3) == BLACK && paint_get(&d, 6, 3) == BLACK && paint_get(&d, 4, 3) == WHITE &&
+          paint_get(&d, 4, 6) == BLACK); /* H */
+    paint_text_key(&d, 'i');
+    paint_text_key(&d, '\n');
+    paint_text_key(&d, '!');
+    paint_text_caret(&d, &tx, &ty, &th);
+    CHECK(tx == 2 + 6 && ty == 3 + 9 && !strcmp(d.text, "Hi\n!"));
+    long inked = count(BLACK);
+    paint_text_key(&d, '\b');
+    CHECK(count(BLACK) < inked && d.ntext == 3);
+    paint_text_key(&d, 7); /* not a character: nothing */
+    CHECK(d.ntext == 3);
+    paint_press(&d, 40, 3, 1, 0); /* a click elsewhere keeps it and starts another */
+    CHECK(d.nsteps == 1 && d.multi == PAINT_TEXT && d.tx == 40);
+    paint_text_key(&d, 'A');
+    paint_cancel(&d);
+    CHECK(!d.multi && count_in(40, 3, 44, 9, BLACK) == 0 && d.nsteps == 1);
+    memcpy(saved_px, d.px, sizeof(uint32_t) * 80 * 40);
+    cmd("undo");
+    CHECK(count(WHITE) == 80 * 40);
+    cmd("size 2");
+    cmd("text 2 3 Hi");
+    CHECK(!memcmp(saved_px, d.px, sizeof(uint32_t) * 80 * 40));
+    cmd("undo");
+    cmd("size 4");
+    cmd("text 0 0 squirrels and nuts, 12 of them");
+    CHECK(paint_get(&d, 0, 0) == WHITE && count_not(WHITE) > 50 && count_in(0, 0, 79, 13, BLACK) == count(BLACK));
+    CHECK(cmd_fails("text 1 2", "text X Y WORDS") && cmd_fails("text 1 hello", "text X Y WORDS"));
+    CHECK(paint_command(&d, "nonsense", msg, sizeof msg) == -1 && strstr(msg, "text"));
+    /* paint_text on its own: '?' for what the font has not */
+    paint_new(&d, 20, 10);
+    paint_text(&d, 0, 0, "\x01", 1, 1, BLACK);
+    long q = count(BLACK);
+    paint_new(&d, 20, 10);
+    paint_text(&d, 0, 0, "?", 1, 1, BLACK);
+    CHECK(q > 0 && count(BLACK) == q);
+}
+
 static void test_zlib(void) {
     CHECK(paint_crc32(0, (const uint8_t *)"123456789", 9) == 0xCBF43926u);
     CHECK(paint_crc32(paint_crc32(0, (const uint8_t *)"1234", 4), (const uint8_t *)"56789", 5) == 0xCBF43926u);
@@ -1221,6 +1398,103 @@ static void test_png(void) {
     CHECK(paint_kind_of_name("png") == PAINT_FILE_BMP && paint_kind_of_name("x.ppm") == PAINT_FILE_PPM);
 }
 
+static void key_frame(int key) {
+    in.key = key;
+    frame();
+}
+
+static void test_window_tools(void) {
+    int lh = sqg_line_h(&ui);
+    paint_new(&d, 100, 60);
+    g.view_ready = 0;
+    frame();
+    /* the letters pick the new tools */
+    static const char letters[] = "agct";
+    static const int want[] = {PAINT_SPRAY, PAINT_POLYGON, PAINT_CURVE, PAINT_TEXT};
+    for (int k = 0; k < 4; k++) {
+        snprintf(in.text, sizeof in.text, "%c", letters[k]);
+        frame();
+        CHECK(d.tool == want[k]);
+    }
+    /* text: typing goes in, letters no longer pick tools, Enter starts a line */
+    int sx, sy;
+    at(5, 5, &sx, &sy);
+    click(sx, sy);
+    CHECK(d.multi == PAINT_TEXT && d.tx == 5);
+    snprintf(in.text, sizeof in.text, "Hi b");
+    frame();
+    key_frame(SQG_KEY_BACKSPACE);
+    key_frame(SQG_KEY_ENTER);
+    snprintf(in.text, sizeof in.text, "x");
+    frame();
+    CHECK(!strcmp(d.text, "Hi \nx") && d.tool == PAINT_TEXT);
+    int tx, ty, th;
+    paint_text_caret(&d, &tx, &ty, &th);
+    int cx, cy;
+    paint_gui_to_screen(&g, tx, ty, &cx, &cy);
+    CHECK(screen[(cy + 1) * W + cx - 1] == BLACK); /* the cursor */
+    key_frame(SQG_KEY_ESCAPE);
+    CHECK(!d.multi && count(WHITE) == 6000);
+    click(sx, sy);
+    snprintf(in.text, sizeof in.text, "ok");
+    frame();
+    click(top_x("Save"), 6 + lh / 2); /* saving keeps it */
+    CHECK(!d.multi && d.nsteps == 1 && count(BLACK) > 0);
+    /* the polygon: Enter closes it */
+    snprintf(in.text, sizeof in.text, "g");
+    frame();
+    drag(10, 30, 60, 30, 0);
+    at(60, 55, &sx, &sy);
+    click(sx, sy);
+    CHECK(d.multi == PAINT_POLYGON && d.npts == 3);
+    key_frame(SQG_KEY_ENTER);
+    CHECK(!d.multi && d.nsteps == 2 && paint_get(&d, 35, 42) == BLACK);
+    /* a curve, then the spray, held still */
+    snprintf(in.text, sizeof in.text, "c");
+    frame();
+    drag(10, 20, 90, 20, 0);
+    CHECK(d.multi == PAINT_CURVE);
+    snprintf(in.text, sizeof in.text, "a"); /* another tool keeps it */
+    frame();
+    CHECK(!d.multi && d.tool == PAINT_SPRAY && d.nsteps == 3);
+    d.fg = BLUE;
+    at(80, 45, &sx, &sy);
+    in.mx = sx, in.my = sy;
+    in.down = in.pressed = 1;
+    frame();
+    long a = count(BLUE);
+    frame();
+    frame();
+    CHECK(count(BLUE) > a);
+    in.down = 0, in.released = 1;
+    frame();
+    CHECK(d.nsteps == 4 && !d.active);
+    /* the colour: typed, by slider, and into the palette with Shift */
+    ui.focus = sqg_id_str("hex");
+    snprintf(g.hex, sizeof g.hex, "ff8000");
+    key_frame(SQG_KEY_ENTER);
+    CHECK(d.fg == 0xFFFF8000u);
+    snprintf(g.hex, sizeof g.hex, "zz");
+    key_frame(SQG_KEY_ENTER);
+    CHECK(d.fg == 0xFFFF8000u && strstr(g.status, "six hex digits"));
+    ui.focus = 0;
+    int pal_y = 6 + lh + 6 + 7 * (lh + 2) + 4 + 4 * (lh + 2) + 6 + lh + (lh + 4) + lh + (lh + 4) + (lh + 8) + 50 + (lh + 2) +
+                3 * (lh + 1) + 3 + 4;
+    int g_y = pal_y - 4 - 3 - 2 * (lh + 1) + lh / 2; /* the G slider, at its left end: none */
+    click(6 + 10 + 1, g_y);
+    CHECK(d.fg == 0xFFFF0000u);
+    frame();
+    CHECK(!strcmp(g.hex, "FF0000"));
+    int cw = (132 - 3 * 2) / 4;
+    in.shift = 1;
+    click(6 + (cw + 2) * 3 + cw / 2, pal_y + (cw / 2 + 6) * 6); /* the last row, last */
+    in.shift = 0;
+    CHECK(g.palette[27] == 0xFFFF0000u && strstr(g.status, "in the palette"));
+    d.fg = BLACK;
+    click(6 + (cw + 2) * 3 + cw / 2, pal_y + (cw / 2 + 6) * 6);
+    CHECK(d.fg == 0xFFFF0000u);
+}
+
 int main(int argc, char **argv) {
     const char *dir = argc > 1 ? argv[1] : ".";
     test_shapes();
@@ -1230,11 +1504,13 @@ int main(int argc, char **argv) {
     test_selection();
     test_transforms();
     test_selection_commands();
+    test_more_tools();
     test_files();
     test_zlib();
     test_png();
     test_window(dir);
     test_window_selection();
+    test_window_tools();
     printf("test_paint: %d checks, %d failed\n", checks, failures);
     return failures != 0;
 }
