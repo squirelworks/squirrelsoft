@@ -52,4 +52,14 @@ int calc_plot(sqg_canvas *c, sqg_rect r, const CalcView *v, const SqmProgram *p,
 /* Mark the points (x, 0) with small rings; returns how many were in view. */
 int calc_mark_roots(sqg_canvas *c, sqg_rect r, const CalcView *v, const double *xs, int n, uint32_t color);
 
+/* Rings at (xs[i], ys[i]), or on the x axis when ys is NULL; returns how
+ * many are in view. */
+int calc_mark_points(sqg_canvas *c, sqg_rect r, const CalcView *v, const double *xs, const double *ys, int n,
+                     uint32_t color);
+
+/* Shade between the curve and the x axis for x from a to b (either order),
+ * blending argb (its alpha says how strongly). Returns the columns shaded. */
+int calc_shade(sqg_canvas *c, sqg_rect r, const CalcView *v, const SqmProgram *p, double *values, int slot,
+               double a, double b, uint32_t argb);
+
 #endif

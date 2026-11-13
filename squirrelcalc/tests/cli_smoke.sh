@@ -20,6 +20,11 @@ out=$($C --line "solve x^2 - x = 1" --line "expand (x+1)^3" --snapshot "$B/snap5
 echo "$out" | grep -q "x = (1 + sqrt(5))/2" || fail "solve line: $out"
 echo "$out" | grep -q "= x^3 + 3\*x^2 + 3\*x + 1" || fail "expand line: $out"
 
+out=$($C --fn "x^2 - 2" --fn x --crossings --line "integrate y1 from 0 to 3" --snapshot "$B/snap6.ppm") || fail "crossings"
+echo "$out" | grep -q "integrate y1 from 0 to 3 = 3" || fail "integrate line: $out"
+echo "$out" | grep -q "y1=y2 at (2, 2)" || fail "crossings: $out"
+$C --fn "x^2" --table --snapshot "$B/snap7.ppm" >/dev/null || fail "--table"
+
 err=$($C --fn "sin(" --snapshot "$B/snap3.ppm" 2>&1 >/dev/null)
 echo "$err" | grep -q "y1:" || fail "parse error reported: $err"
 $C --let "x=1" --snapshot "$B/snap4.ppm" >/dev/null 2>&1; [ $? -eq 1 ] || fail "--let x=1 should exit 1"

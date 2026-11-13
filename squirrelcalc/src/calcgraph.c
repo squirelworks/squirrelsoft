@@ -191,13 +191,14 @@ int calc_plot(sqg_canvas *c, sqg_rect r, const CalcView *v, const SqmProgram *p,
     return drawn;
 }
 
-int calc_mark_roots(sqg_canvas *c, sqg_rect r, const CalcView *v, const double *xs, int n, uint32_t color) {
+int calc_mark_points(sqg_canvas *c, sqg_rect r, const CalcView *v, const double *xs, const double *ys, int n,
+                     uint32_t color) {
     sqg_rect old = c->clip;
     sqg_clip(c, r);
     int shown = 0;
-    int py = px_int(calc_px_y(v, r, 0), r.y, r.y + r.h);
     for (int i = 0; i < n; i++) {
         int px = px_int(calc_px_x(v, r, xs[i]), r.x, r.x + r.w);
+        int py = px_int(calc_px_y(v, r, ys ? ys[i] : 0), r.y, r.y + r.h);
         if (px < r.x || px >= r.x + r.w || py < r.y || py >= r.y + r.h) continue;
         shown++;
         /* a ring of radius 4 */
@@ -209,4 +210,35 @@ int calc_mark_roots(sqg_canvas *c, sqg_rect r, const CalcView *v, const double *
     }
     c->clip = old;
     return shown;
+}
+
+int calc_mark_roots(sqg_canvas *c, sqg_rect r, const CalcView *v, const double *xs, int n, uint32_t color) {
+    return calc_mark_points(c, r, v, xs, NULL, n, color);
+}
+
+int calc_shade(sqg_canvas *c, sqg_rect r, const CalcView *v, const SqmProgram *p, double *values, int slot,
+               double a, double b, uint32_t argb) {
+    if (r.w <= 0 || r.h <= 0 || !(a == a) || !(b == b)) return 0;
+    if (a > b) {
+        double t = a;
+        a = b;
+        b = t;
+    }
+    sqg_rect old = c->clip;
+    sqg_clip(c, r);
+    int cols = 0;
+    int y0 = px_int(calc_px_y(v, r, 0), r.y, r.y + r.h);
+    for (int px = r.x; px < r.x + r.w; px++) {
+        double x = calc_x_at(v, r, px + 0.5);
+        if (x < a || x > b) continue;
+        values[slot] = x;
+        double y = sqm_run(p, values);
+        if (!isfinite(y)) continue;
+        int py = px_int(calc_px_y(v, r, y), r.y, r.y + r.h);
+        int top = py < y0 ? py : y0, bot = py < y0 ? y0 : py;
+        if (bot > top) sqg_blend(c, sqg_rect_make(px, top, 1, bot - top), argb);
+        cols++;
+    }
+    c->clip = old;
+    return cols;
 }

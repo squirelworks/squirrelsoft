@@ -81,7 +81,8 @@ Every item is a checkbox. Tick it in the PR that merges its last piece. Nested b
 ## S5 — Squirrel OS/2 apps built here first
 - [ ] S5.1 SquirrelCalc (Desmos/TI-Nspire class: graphing, CAS, geometry, stats, spreadsheet, notebooks) on `sqmath` + `sqgui`.
   - [x] Desktop graphing window: four functions of x, variables from the calculator line, roots, d/dx, pan and zoom, `--snapshot` headless render
-  - [ ] Tables, integrals and intersections in the window; parametric and polar curves
+  - [x] Tables, integrals with shading, crossings and trace in the window
+  - [ ] Parametric and polar curves, sliders for variables
   - [x] CAS in the calculator line: `expand`, `collect`, `d/dx`, `solve ... [for v]`
   - [ ] Geometry, stats, spreadsheet, notebooks
 - [ ] S5.2 SquirrelPaint

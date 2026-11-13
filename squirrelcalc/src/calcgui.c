@@ -3,6 +3,7 @@
 
 #include <ctype.h>
 #include <math.h>
+#include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -12,9 +13,22 @@ static const uint32_t COLORS[CALC_N] = {0xFF2060D0u, 0xFFD03030u, 0xFF20A040u, 0
 
 static SqmExpr scratch, scratch2; /* big: kept off the stack */
 
+#define HINT "Type a function of x (x^2 - 2), click a curve to trace it, integrate y1 from 0 to 2"
+
+/* the pair index of yi and yj, i < j: (0,1) (0,2) (0,3) (1,2) (1,3) (2,3) */
+static void pair_of(int k, int *i, int *j) {
+    static const int P[CALC_PAIRS][2] = {{0, 1}, {0, 2}, {0, 3}, {1, 2}, {1, 3}, {2, 3}};
+    *i = P[k][0];
+    *j = P[k][1];
+}
+
 void calc_gui_init(CalcGui *g) {
     memset(g, 0, sizeof *g);
-    snprintf(g->status, sizeof g->status, "Type a function of x, e.g. x^2 - 2 or a sin(x) after a = 2");
+    g->trace_fn = -1;
+    g->area_fn = -1;
+    snprintf(g->tstart, sizeof g->tstart, "-5");
+    snprintf(g->tstep, sizeof g->tstep, "1");
+    snprintf(g->status, sizeof g->status, "%s", HINT);
 }
 
 double calc_gui_var(const CalcGui *g, const char *name) {
@@ -52,6 +66,22 @@ static void compile_deriv(CalcGui *g) {
     g->dok = sqm_compile(&scratch2, names, n, &g->dprog) == SQM_OK;
 }
 
+/* yi - yj for every pair that both draw */
+static void compile_cross(CalcGui *g) {
+    const char *names[CALC_VARS + 1];
+    double values[CALC_VARS + 1];
+    int n = slots(g, names, values);
+    for (int k = 0; k < CALC_PAIRS; k++) {
+        int i, j;
+        pair_of(k, &i, &j);
+        g->cok[k] = 0;
+        if (!g->ok[i] || !g->ok[j]) continue;
+        char text[340];
+        snprintf(text, sizeof text, "(%s) - (%s)", g->fx[i], g->fx[j]);
+        g->cok[k] = sqm_parse(text, &scratch, NULL) == SQM_OK && sqm_compile(&scratch, names, n, &g->cprog[k]) == SQM_OK;
+    }
+}
+
 static void compile(CalcGui *g, int i) {
     memcpy(g->seen[i], g->fx[i], sizeof g->seen[i]);
     g->ok[i] = 0;
@@ -81,6 +111,9 @@ static void compile(CalcGui *g, int i) {
         }
     }
     if (i == 0) compile_deriv(g);
+    compile_cross(g);
+    if (g->area_on && g->area_fn == i) g->area_on = 0; /* the area was of the old text */
+    if (g->trace_fn == i && !g->ok[i]) g->trace_fn = -1;
 }
 
 void calc_gui_set(CalcGui *g, int i, const char *text) {
@@ -148,6 +181,72 @@ static int parse_or_say(CalcGui *g, const char *line, const char *text, int eq, 
     if ((eq ? sqm_parse_eq(text, e, &err) : sqm_parse(text, e, &err)) == SQM_OK) return 0;
     hist_error(g, line, err.msg);
     return -1;
+}
+
+/* the value of a constant expression with the user variables, or NAN */
+static double value_of(const CalcGui *g, const char *text) {
+    const char *names[CALC_VARS];
+    for (int i = 0; i < g->nvars; i++) names[i] = g->vname[i];
+    double v;
+    if (sqm_parse(text, &scratch2, NULL) != SQM_OK || sqm_eval(&scratch2, names, g->vval, g->nvars, &v) != SQM_OK)
+        return NAN;
+    return v;
+}
+
+static void load_values(const CalcGui *g, double *values);
+
+/* integrate EXPR from A to B: EXPR is y1..y4 or any expression of x */
+static int integrate_line(CalcGui *g, const char *line, const char *rest) {
+    char expr[200], a_text[64], b_text[64], out[400];
+    const char *from = strstr(rest, " from "), *to = from ? strstr(from + 6, " to ") : NULL;
+    if (!from || !to || from == rest || (size_t)(from - rest) >= sizeof expr || (size_t)(to - from - 6) >= sizeof a_text ||
+        strlen(to + 4) >= sizeof b_text) {
+        hist_error(g, line, "write integrate EXPR from A to B");
+        return -1;
+    }
+    memcpy(expr, rest, (size_t)(from - rest));
+    expr[from - rest] = 0;
+    memcpy(a_text, from + 6, (size_t)(to - from - 6));
+    a_text[to - from - 6] = 0;
+    snprintf(b_text, sizeof b_text, "%s", to + 4);
+    double a = value_of(g, a_text), b = value_of(g, b_text);
+    if (!isfinite(a) || !isfinite(b)) {
+        hist_error(g, line, "the bounds need values");
+        return -1;
+    }
+    int fn = -1;
+    const char *text = expr;
+    if (expr[0] == 'y' && expr[1] >= '1' && expr[1] <= '0' + CALC_N && expr[2] == 0) {
+        fn = expr[1] - '1';
+        if (!g->ok[fn]) {
+            hist_error(g, line, g->fx[fn][0] ? "that function has an error" : "that function is empty");
+            return -1;
+        }
+        text = g->fx[fn];
+    }
+    if (parse_or_say(g, line, text, 0, &scratch)) return -1;
+    const char *names[CALC_VARS + 1];
+    double values[CALC_VARS + 1];
+    int n = slots(g, names, values);
+    int rc = sqm_compile(&scratch, names, n, &g->area_prog);
+    if (rc != SQM_OK) {
+        hist_error(g, line, rc == SQM_ERR_UNKNOWN ? "a name has no value" : sqm_strerror(rc));
+        return -1;
+    }
+    load_values(g, values);
+    int ok;
+    double v = sqm_integrate(&g->area_prog, values, 0, a, b, 1e-10, &ok);
+    char num[64];
+    sqm_format(v, 12, num, sizeof num);
+    snprintf(out, sizeof out, "%.200s = %s%s", line, num, ok ? "" : "  (may not have converged)");
+    hist_add(g, out);
+    if (isfinite(v)) set_var(g, "ans", v);
+    g->area_on = 1;
+    g->area_fn = fn;
+    g->area_a = a;
+    g->area_b = b;
+    g->area_value = v;
+    return 0;
 }
 
 /* CAS lines: expand EXPR, collect VAR EXPR, d/dx EXPR, solve EQUATION [for VAR].
@@ -218,6 +317,8 @@ static int cas_line(CalcGui *g, const char *line) {
         }
         if (n > 0 && isfinite(sol[0].value)) set_var(g, "ans", sol[0].value);
         return rc == SQM_OK ? 0 : -1;
+    } else if ((rest = command(line, "integrate"))) {
+        return integrate_line(g, line, rest);
     } else {
         return -2;
     }
@@ -321,10 +422,33 @@ static void graph(CalcGui *g, sqg_ui *ui, sqg_rect r) {
         if (in->wheel) calc_view_zoom(&g->view, pow(1.25, in->wheel), g->mouse_x, g->mouse_y);
         if (in->pressed && !ui->hot) {
             g->dragging = 1;
-            g->last_mx = in->mx;
-            g->last_my = in->my;
+            g->last_mx = g->press_mx = in->mx;
+            g->last_my = g->press_my = in->my;
             ui->focus = 0;
         }
+    }
+    if (g->dragging && in->released && abs(in->mx - g->press_mx) + abs(in->my - g->press_my) < 4) {
+        /* a click, not a drag: trace the curve nearest the pointer, or stop */
+        double values[CALC_VARS + 1];
+        load_values(g, values);
+        values[0] = calc_x_at(&g->view, inner, in->mx + 0.5);
+        int best = -1;
+        double best_d = 10;
+        for (int i = 0; i < CALC_N; i++) {
+            if (!g->ok[i]) continue;
+            double d = fabs(calc_px_y(&g->view, inner, sqm_run(&g->prog[i], values)) - (in->my + 0.5));
+            if (d < best_d) {
+                best_d = d;
+                best = i;
+            }
+        }
+        g->trace_fn = best;
+        g->trace_x = values[0];
+    }
+    if (g->trace_fn >= 0 && !ui->focus) { /* Left and Right step one pixel */
+        double step = (g->view.xmax - g->view.xmin) / inner.w;
+        if (in->key == SQG_KEY_LEFT) g->trace_x -= step;
+        if (in->key == SQG_KEY_RIGHT) g->trace_x += step;
     }
     if (g->dragging) {
         if (in->down) {
@@ -340,6 +464,10 @@ static void graph(CalcGui *g, sqg_ui *ui, sqg_rect r) {
     calc_draw_axes(cv, inner, &g->view);
     double values[CALC_VARS + 1];
     load_values(g, values);
+    if (g->area_on) {
+        uint32_t col = g->area_fn >= 0 ? COLORS[g->area_fn] : 0xFF808080u;
+        calc_shade(cv, inner, &g->view, &g->area_prog, values, 0, g->area_a, g->area_b, (col & 0xFFFFFFu) | 0x50000000u);
+    }
     if (g->show_deriv && g->dok) calc_plot(cv, inner, &g->view, &g->dprog, values, 0, COL_DERIV);
     for (int i = 0; i < CALC_N; i++) {
         if (!g->ok[i]) continue;
@@ -351,6 +479,130 @@ static void graph(CalcGui *g, sqg_ui *ui, sqg_rect r) {
             calc_mark_roots(cv, inner, &g->view, g->roots[i], g->nroots[i], COLORS[i]);
         }
     }
+    /* crossings of each pair, in view */
+    g->ncross = 0;
+    for (int k = 0; k < CALC_PAIRS && g->show_cross; k++) {
+        if (!g->cok[k]) continue;
+        int i, j;
+        pair_of(k, &i, &j);
+        double xs[CALC_CROSS];
+        int n = sqm_roots(&g->cprog[k], values, 0, g->view.xmin, g->view.xmax, inner.w, xs, CALC_CROSS);
+        for (int m = 0; m < n && m < CALC_CROSS && g->ncross < CALC_CROSS; m++) {
+            values[0] = xs[m];
+            double y = sqm_run(&g->prog[i], values);
+            if (!isfinite(y)) continue;
+            g->cross_x[g->ncross] = xs[m];
+            g->cross_y[g->ncross] = y;
+            g->cross_pair[g->ncross++] = k;
+        }
+    }
+    calc_mark_points(cv, inner, &g->view, g->cross_x, g->cross_y, g->ncross, 0xFF303030u);
+    /* the traced point and its value */
+    if (g->trace_fn >= 0 && g->ok[g->trace_fn]) {
+        values[0] = g->trace_x;
+        double y = sqm_run(&g->prog[g->trace_fn], values);
+        char a[32], b[32], t[96];
+        sqm_format(g->trace_x, 6, a, sizeof a);
+        sqm_format(y, 6, b, sizeof b);
+        snprintf(t, sizeof t, "y%d(%s) = %s", g->trace_fn + 1, a, b);
+        int tx = inner.x + 6, ty = inner.y + 4;
+        if (isfinite(y)) {
+            calc_mark_points(cv, inner, &g->view, &g->trace_x, &y, 1, COLORS[g->trace_fn]);
+            tx = (int)calc_px_x(&g->view, inner, g->trace_x) + 8;
+            ty = (int)calc_px_y(&g->view, inner, y) - 14;
+        }
+        int tw = sqg_text_width(t, 1);
+        if (tx + tw > inner.x + inner.w - 2) tx = inner.x + inner.w - 2 - tw;
+        if (tx < inner.x + 2) tx = inner.x + 2;
+        if (ty < inner.y + 2) ty = inner.y + 2;
+        if (ty > inner.y + inner.h - 12) ty = inner.y + inner.h - 12;
+        sqg_fill(cv, sqg_rect_make(tx - 2, ty - 2, tw + 4, 12), 0xFFFFFFFFu);
+        sqg_text(cv, tx, ty, t, COLORS[g->trace_fn], 1);
+    }
+}
+
+/* x and y1..y4 in rows from Start by Step; the wheel scrolls */
+static void table(CalcGui *g, sqg_ui *ui, sqg_rect r) {
+    sqg_canvas *cv = ui->cv;
+    int lh = sqg_line_h(ui);
+    sqg_row row = sqg_row_begin(sqg_rect_make(r.x, r.y, r.w, lh), 4);
+    sqg_label(ui, sqg_row_take(&row, sqg_text_width("Start", 1) + 4), "Start", SQG_ALIGN_LEFT);
+    sqg_textfield(ui, sqg_id_str("tstart"), sqg_row_take(&row, 80), g->tstart, sizeof g->tstart);
+    sqg_label(ui, sqg_row_take(&row, sqg_text_width("Step", 1) + 4), "Step", SQG_ALIGN_LEFT);
+    sqg_textfield(ui, sqg_id_str("tstep"), sqg_row_take(&row, 80), g->tstep, sizeof g->tstep);
+    double start = value_of(g, g->tstart), step = value_of(g, g->tstep);
+    sqg_rect body = sqg_rect_make(r.x, r.y + lh + 4, r.w, r.h - lh - 4);
+    if (body.h < 30) return;
+    sqg_bevel(cv, body, 1, 0, ui->theme);
+    sqg_rect in = sqg_rect_inset(body, 2);
+    sqg_fill(cv, in, 0xFFFFFFFFu);
+    if (!isfinite(start) || !(step > 0) || !isfinite(step)) {
+        sqg_text(cv, in.x + 6, in.y + 6, "Start needs a value and Step a value above 0", COL_ERR, 1);
+        return;
+    }
+    if (sqg_rect_contains(in, ui->in.mx, ui->in.my)) g->table_top -= ui->in.wheel * 3;
+    int cols[CALC_N + 1], ncol = 0;
+    cols[ncol++] = -1;
+    for (int i = 0; i < CALC_N; i++)
+        if (g->ok[i]) cols[ncol++] = i;
+    int cw = in.w / ncol, rh = 14, rows = (in.h - rh - 4) / rh;
+    sqg_rect old = sqg_clip(cv, in);
+    for (int c = 0; c < ncol; c++) {
+        char head[16];
+        snprintf(head, sizeof head, cols[c] < 0 ? "x" : "y%d", cols[c] + 1);
+        sqg_text(cv, in.x + c * cw + 6, in.y + 3, head, cols[c] < 0 ? 0xFF000000u : COLORS[cols[c]], 1);
+        if (c) sqg_vline(cv, in.x + c * cw, in.y, in.y + in.h - 1, 0xFFE4E8EEu);
+    }
+    sqg_hline(cv, in.x, in.x + in.w - 1, in.y + rh, 0xFFC0C8D0u);
+    double values[CALC_VARS + 1];
+    load_values(g, values);
+    for (int k = 0; k < rows; k++) {
+        double x = start + step * (double)(g->table_top + k);
+        int ty = in.y + rh + 3 + k * rh;
+        if (k % 2) sqg_fill(cv, sqg_rect_make(in.x, ty - 2, in.w, rh), 0xFFF4F6F8u);
+        values[0] = x;
+        for (int c = 0; c < ncol; c++) {
+            char t[32];
+            sqm_format(cols[c] < 0 ? x : sqm_run(&g->prog[cols[c]], values), 6, t, sizeof t);
+            sqg_text(cv, in.x + c * cw + 6, ty, t, 0xFF202020u, 1);
+        }
+    }
+    cv->clip = old;
+}
+
+/* the roots and the crossings in view, or the hint */
+static void make_status(CalcGui *g) {
+    char s[200] = "";
+    size_t k = 0;
+    if (g->show_roots) {
+        k += (size_t)snprintf(s + k, sizeof s - k, "Roots ");
+        for (int i = 0; i < CALC_N && k + 40 < sizeof s; i++) {
+            if (!g->ok[i]) continue;
+            k += (size_t)snprintf(s + k, sizeof s - k, "  y%d:", i + 1);
+            if (g->nroots[i] == 0) k += (size_t)snprintf(s + k, sizeof s - k, " none in view");
+            for (int r = 0; r < g->nroots[i] && r < 4 && k + 20 < sizeof s; r++) {
+                char t[32];
+                sqm_format(g->roots[i][r], 6, t, sizeof t);
+                k += (size_t)snprintf(s + k, sizeof s - k, " %s", t);
+            }
+            if (g->nroots[i] > 4) k += (size_t)snprintf(s + k, sizeof s - k, " ...");
+        }
+    }
+    if (g->show_cross && k + 40 < sizeof s) {
+        k += (size_t)snprintf(s + k, sizeof s - k, "%sCrossings", k ? "    " : "");
+        if (g->ncross == 0) k += (size_t)snprintf(s + k, sizeof s - k, " none in view");
+        for (int m = 0; m < g->ncross && m < 4 && k + 50 < sizeof s; m++) {
+            int i, j;
+            pair_of(g->cross_pair[m], &i, &j);
+            char a[32], b[32];
+            sqm_format(g->cross_x[m], 5, a, sizeof a);
+            sqm_format(g->cross_y[m], 5, b, sizeof b);
+            k += (size_t)snprintf(s + k, sizeof s - k, "  y%d=y%d at (%s, %s)", i + 1, j + 1, a, b);
+        }
+        if (g->ncross > 4 && k + 5 < sizeof s) k += (size_t)snprintf(s + k, sizeof s - k, " ...");
+    }
+    if (k >= sizeof s) k = sizeof s - 1;
+    snprintf(g->status, sizeof g->status, "%s", k ? s : HINT);
 }
 
 void calc_gui_frame(CalcGui *g, sqg_ui *ui) {
@@ -385,6 +637,8 @@ void calc_gui_frame(CalcGui *g, sqg_ui *ui) {
     }
     sqg_row trow = sqg_row_begin(sqg_rect_make(pad, y, left_w, lh), 6);
     sqg_toggle(ui, sqg_id_str("roots"), sqg_row_take(&trow, sqg_button_w(ui, "Roots")), "Roots", &g->show_roots);
+    sqg_toggle(ui, sqg_id_str("cross"), sqg_row_take(&trow, sqg_button_w(ui, "Crossings")), "Crossings",
+               &g->show_cross);
     sqg_toggle(ui, sqg_id_str("deriv"), sqg_row_take(&trow, sqg_button_w(ui, "d/dx y1")), "d/dx y1",
                &g->show_deriv);
     y += lh + 4;
@@ -416,11 +670,12 @@ void calc_gui_frame(CalcGui *g, sqg_ui *ui) {
         if (sqg_button(ui, sqg_id_str("zin"), sqg_row_take(&grow, sqg_button_w(ui, "+")), "+"))
             calc_view_zoom(&g->view, 1.5, cx, cy);
         if (sqg_button(ui, sqg_id_str("reset"), sqg_row_take(&grow, sqg_button_w(ui, "Reset")), "Reset"))
-            g->view_ready = 0;
+            g->view_ready = g->area_on = 0;
         if (sqg_button(ui, sqg_id_str("square"), sqg_row_take(&grow, sqg_button_w(ui, "Square")), "Square"))
             calc_view_square(&g->view, g->graph_at.w, g->graph_at.h);
+        sqg_toggle(ui, sqg_id_str("table"), sqg_row_take(&grow, sqg_button_w(ui, "Table")), "Table", &g->show_table);
         char pos[80] = "";
-        if (g->mouse_in) {
+        if (g->mouse_in && !g->show_table) {
             char a[32], b[32];
             sqm_format(g->mouse_x, 5, a, sizeof a);
             sqm_format(g->mouse_y, 5, b, sizeof b);
@@ -428,25 +683,17 @@ void calc_gui_frame(CalcGui *g, sqg_ui *ui) {
         }
         sqg_label(ui, sqg_row_take(&grow, 0), pos, SQG_ALIGN_RIGHT);
         int top = pad + lh + 4;
-        if (status_y - pad - top > 20) graph(g, ui, sqg_rect_make(gx, top, gw, status_y - pad - top));
+        sqg_rect area = sqg_rect_make(gx, top, gw, status_y - pad - top);
+        if (area.h > 20) {
+            if (g->show_table) {
+                g->mouse_in = 0;
+                table(g, ui, area);
+            } else {
+                graph(g, ui, area);
+            }
+        }
     }
 
-    /* status: the roots, or the hint */
-    if (g->show_roots) {
-        char s[200] = "";
-        size_t k = 0;
-        for (int i = 0; i < CALC_N && k + 40 < sizeof s; i++) {
-            if (!g->ok[i]) continue;
-            k += (size_t)snprintf(s + k, sizeof s - k, "%sy%d:", k ? "   " : "", i + 1);
-            if (g->nroots[i] == 0) k += (size_t)snprintf(s + k, sizeof s - k, " none in view");
-            for (int r = 0; r < g->nroots[i] && r < 4 && k + 20 < sizeof s; r++) {
-                char t[32];
-                sqm_format(g->roots[i][r], 6, t, sizeof t);
-                k += (size_t)snprintf(s + k, sizeof s - k, " %s", t);
-            }
-            if (g->nroots[i] > 4) k += (size_t)snprintf(s + k, sizeof s - k, " ...");
-        }
-        snprintf(g->status, sizeof g->status, "Roots  %.190s", s[0] ? s : "(no functions)");
-    }
+    make_status(g);
     sqg_label(ui, sqg_rect_make(pad, status_y, cv->w - 2 * pad, lh), g->status, SQG_ALIGN_LEFT);
 }
