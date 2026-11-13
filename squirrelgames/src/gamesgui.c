@@ -11,8 +11,10 @@
 #define INK_RED 0xFFC81E1Eu
 #define INK_BLACK 0xFF141414u
 
-void games_gui_init(GamesGui *gg, Game *game, Mines *mines, Hearts *hearts) {
+void games_gui_init(GamesGui *gg, Game *game, Mines *mines, Hearts *hearts, Chess *chess) {
     memset(gg, 0, sizeof *gg);
+    gg->chess = chess;
+    gg->chess_sel = -1;
     gg->game = game;
     gg->mines = mines;
     gg->hearts = hearts;
@@ -206,14 +208,23 @@ static void after_move(GamesGui *gg) {
 }
 
 static uint32_t current_seed(const GamesGui *gg) {
-    return gg->kind == GAMES_MINES ? gg->mines->seed : gg->kind == GAMES_HEARTS ? gg->hearts->seed : gg->game->s.seed;
+    return gg->kind == GAMES_MINES    ? gg->mines->seed
+           : gg->kind == GAMES_HEARTS ? gg->hearts->seed
+           : gg->kind == GAMES_CHESS  ? gg->chess->seed
+                                      : gg->game->s.seed;
 }
 
 static void hearts_deal(GamesGui *gg, uint32_t seed);
+static void chess_start(GamesGui *gg, uint32_t seed);
+static void chess_said(GamesGui *gg);
 
 static void deal(GamesGui *gg, uint32_t seed) {
     if (gg->kind == GAMES_HEARTS) {
         hearts_deal(gg, seed);
+        return;
+    }
+    if (gg->kind == GAMES_CHESS) {
+        chess_start(gg, seed);
         return;
     }
     if (gg->kind == GAMES_MINES) {
@@ -702,7 +713,12 @@ void games_gui_show(GamesGui *gg, int kind) {
     gg->kind = kind;
     gg->dragging = gg->pending = 0;
     snprintf(gg->seed_text, sizeof gg->seed_text, "%lu", (unsigned long)current_seed(gg));
-    if (kind == GAMES_HEARTS) {
+    if (kind == GAMES_CHESS) {
+        gg->chess_side = gg->chess->human[0] && gg->chess->human[1] ? 2 : gg->chess->human[1] ? 1 : 0;
+        gg->chess_sel = -1;
+        gg->next_ms = gg->ms + 300;
+        chess_said(gg);
+    } else if (kind == GAMES_HEARTS) {
         gg->nchosen = 0;
         gg->next_ms = gg->ms + 400;
         hearts_said(gg);
@@ -717,14 +733,207 @@ void games_gui_show(GamesGui *gg, int kind) {
     }
 }
 
+/* ---- chess ---- */
+
+#define CHESS_SQUARE 64
+
+/* the pieces, 16x16, drawn for this: pawn, knight, bishop, rook, queen, king */
+static const char *const PIECE_ART[6][16] = {
+    {"................", "................", ".......##.......", "......####......", "......####......",
+     ".......##.......", "......####......", ".....######.....", "......####......", "......####......",
+     ".....######.....", "....########....", "...##########...", "...##########...", "................",
+     "................"},
+    {"................", ".......#.#......", "......######....", ".....########...", "....##.#######..",
+     "...###########..", "...####..#####..", "....##..######..", ".......#######..", "......#######...",
+     ".....########...", ".....########...", "....##########..", "...############.", "...############.",
+     "................"},
+    {"................", ".......##.......", "......####......", ".....######.....", ".....###.##.....",
+     ".....##.###.....", ".....######.....", "......####......", ".......##.......", "......####......",
+     ".....######.....", "......####......", "....########....", "...##########...", "...##########...",
+     "................"},
+    {"................", "...##..##..##...", "...##########...", "...##########...", "....########....",
+     ".....######.....", ".....######.....", ".....######.....", ".....######.....", ".....######.....",
+     "....########....", "...##########...", "..############..", "..############..", "................",
+     "................"},
+    {"................", "..#....##....#..", "..#...####...#..", "..##..####..##..", "..###.####.###..",
+     "...##########...", "...##########...", "....########....", ".....######.....", ".....######.....",
+     "....########....", "...##########...", "..############..", "..############..", "................",
+     "................"},
+    {".......##.......", "......####......", ".......##.......", ".....######.....", "....########....",
+     "...##########...", "...##########...", "....########....", ".....######.....", ".....######.....",
+     ".....######.....", "....########....", "...##########...", "..############..", "..############..",
+     "................"},
+};
+
+void games_gui_draw_piece(sqg_canvas *cv, int x, int y, int piece) {
+    if (!piece) return;
+    const char *const *a = PIECE_ART[(piece < 0 ? -piece : piece) - 1];
+    uint32_t fill = piece > 0 ? 0xFFF8F4ECu : 0xFF262626u, edge = piece > 0 ? 0xFF1A1A1Au : 0xFFD8D0C0u;
+    for (int pass = 0; pass < 2; pass++)
+        for (int j = 0; j < 16; j++)
+            for (int i = 0; i < 16; i++)
+                if (a[j][i] == '#') {
+                    sqg_rect r = sqg_rect_make(x + i * 3, y + j * 3, 3, 3);
+                    if (pass == 0) sqg_fill(cv, sqg_rect_inset(r, -2), edge); /* the outline first, */
+                    else sqg_fill(cv, r, fill);                               /* then the body over it */
+                }
+}
+
+static int chess_flipped(const GamesGui *gg) { return gg->chess->human[CHESS_BLACK] && !gg->chess->human[CHESS_WHITE]; }
+
+static sqg_rect chess_board_rect(const GamesGui *gg) {
+    int size = 8 * CHESS_SQUARE;
+    return sqg_rect_make(gg->board.x + 48, gg->board.y + (gg->board.h - size) / 2, size, size);
+}
+
+sqg_rect games_gui_chess_rect(const GamesGui *gg, int sq) {
+    sqg_rect b = chess_board_rect(gg);
+    int f = sq & 7, r = sq >> 3;
+    if (chess_flipped(gg)) f = 7 - f, r = 7 - r;
+    return sqg_rect_make(b.x + f * CHESS_SQUARE, b.y + (7 - r) * CHESS_SQUARE, CHESS_SQUARE, CHESS_SQUARE);
+}
+
+int games_gui_chess_square(const GamesGui *gg, int x, int y) {
+    sqg_rect b = chess_board_rect(gg);
+    if (!sqg_rect_contains(b, x, y)) return -1;
+    int f = (x - b.x) / CHESS_SQUARE, r = 7 - (y - b.y) / CHESS_SQUARE;
+    if (chess_flipped(gg)) f = 7 - f, r = 7 - r;
+    return CHESS_SQ(f, r);
+}
+
+static void chess_said(GamesGui *gg) {
+    const Chess *c = gg->chess;
+    int st = chess_state(c), side = c->pos.side, two = c->human[0] && c->human[1];
+    static const char *const SIDE[2] = {"White", "Black"};
+    if (st == CHESS_CHECKMATE) {
+        if (two) snprintf(gg->status, sizeof gg->status, "Checkmate: %s wins", SIDE[!side]);
+        else say(gg, c->human[side] ? "Checkmate: the computer wins" : "Checkmate: you win!");
+    } else if (st == CHESS_STALEMATE) say(gg, "Stalemate: a draw");
+    else if (st == CHESS_DRAW_FIFTY) say(gg, "A draw: fifty moves without a capture or a pawn moving");
+    else if (st == CHESS_DRAW_REPEAT) say(gg, "A draw: the same position three times");
+    else if (st == CHESS_DRAW_MATERIAL) say(gg, "A draw: too little left to mate");
+    else if (!c->human[side]) say(gg, "The computer is thinking");
+    else if (two) snprintf(gg->status, sizeof gg->status, "%s to move%s", SIDE[side], chess_in_check(&c->pos) ? ": check!" : "");
+    else say(gg, chess_in_check(&c->pos) ? "Check! Your move" : "Your move");
+}
+
+static void chess_start(GamesGui *gg, uint32_t seed) {
+    Chess *c = gg->chess;
+    int level = c->level;
+    chess_new(c, seed);
+    c->level = level;
+    c->human[CHESS_WHITE] = gg->chess_side != 1;
+    c->human[CHESS_BLACK] = gg->chess_side != 0;
+    gg->chess_sel = -1;
+    gg->next_ms = gg->ms + 300;
+    chess_said(gg);
+}
+
+static void chess_input(GamesGui *gg, sqg_ui *ui) {
+    const sqg_input *in = &ui->in;
+    Chess *c = gg->chess;
+    if (chess_state(c) == CHESS_PLAYING && !c->human[c->pos.side] && gg->ms >= gg->next_ms) {
+        chess_make(c, chess_ai(c));
+        chess_said(gg);
+    }
+    if (ui->active || !in->pressed) return;
+    int sq = games_gui_chess_square(gg, in->mx, in->my);
+    if (sq < 0 || chess_state(c) != CHESS_PLAYING || !c->human[c->pos.side]) return;
+    if (gg->chess_sel >= 0) {
+        int m = CHESS_MOVE(gg->chess_sel, sq, 0);
+        if (!chess_is_legal(&c->pos, m)) m = CHESS_MOVE(gg->chess_sel, sq, CHESS_QUEEN); /* a pawn on the last rank: a queen */
+        if (chess_is_legal(&c->pos, m)) {
+            chess_make(c, m);
+            gg->chess_sel = -1;
+            gg->next_ms = gg->ms + 300;
+            chess_said(gg);
+            return;
+        }
+    }
+    int pc = c->pos.sq[sq];
+    if (pc && (pc > 0) == (c->pos.side == CHESS_WHITE) && sq != gg->chess_sel) {
+        int m[CHESS_MAX_MOVES], n = chess_moves(&c->pos, m), any = 0;
+        for (int i = 0; i < n; i++) any |= CHESS_FROM(m[i]) == sq;
+        gg->chess_sel = sq;
+        if (!any) say(gg, "That piece has no move");
+        else chess_said(gg);
+    } else {
+        if (gg->chess_sel >= 0 && sq != gg->chess_sel) say(gg, chess_in_check(&c->pos) ? "That does not get out of check" : "That piece cannot go there");
+        gg->chess_sel = -1;
+    }
+}
+
+static void draw_chess(GamesGui *gg, sqg_ui *ui) {
+    sqg_canvas *cv = ui->cv;
+    const Chess *c = gg->chess;
+    const ChessPos *p = &c->pos;
+    sqg_fill(cv, gg->board, 0xFF3A3D42u);
+    sqg_rect old = sqg_clip(cv, gg->board);
+    sqg_rect b = chess_board_rect(gg);
+    sqg_frame(cv, sqg_rect_inset(b, -3), 0xFF1A1A1Au);
+    int last_from = -1, last_to = -1;
+    if (c->n) last_from = CHESS_FROM(c->move[c->n - 1]), last_to = CHESS_TO(c->move[c->n - 1]);
+    int check_sq = -1;
+    if (chess_in_check(p))
+        for (int s = 0; s < 64; s++)
+            if (p->sq[s] == (p->side == CHESS_WHITE ? CHESS_KING : -CHESS_KING)) check_sq = s;
+    int targets[CHESS_MAX_MOVES], nt = 0;
+    if (gg->chess_sel >= 0) {
+        int m[CHESS_MAX_MOVES], n = chess_moves(p, m);
+        for (int i = 0; i < n; i++)
+            if (CHESS_FROM(m[i]) == gg->chess_sel) targets[nt++] = CHESS_TO(m[i]);
+    }
+    for (int s = 0; s < 64; s++) {
+        sqg_rect r = games_gui_chess_rect(gg, s);
+        int light = ((s & 7) + (s >> 3)) & 1;
+        sqg_fill(cv, r, light ? 0xFFEAD9B5u : 0xFFAE8158u);
+        if (s == last_from || s == last_to) sqg_blend(cv, r, 0x60E8D040u);
+        if (s == gg->chess_sel) sqg_blend(cv, r, 0x7040A0E0u);
+        if (s == check_sq) sqg_blend(cv, r, 0x90E02020u);
+        games_gui_draw_piece(cv, r.x + 8, r.y + 8, p->sq[s]);
+        for (int k = 0; k < nt; k++)
+            if (targets[k] == s) {
+                if (p->sq[s]) sqg_frame(cv, sqg_rect_inset(r, 2), 0xFF2060B0u), sqg_frame(cv, sqg_rect_inset(r, 3), 0xFF2060B0u);
+                else sqg_blend(cv, sqg_rect_make(r.x + 26, r.y + 26, 12, 12), 0xA02060B0u);
+            }
+    }
+    /* the files and ranks along the edges */
+    for (int k = 0; k < 8; k++) {
+        sqg_rect r = games_gui_chess_rect(gg, CHESS_SQ(k, 0));
+        char t[2] = {(char)('a' + k), 0};
+        sqg_text(cv, r.x + 28, b.y + b.h + 8, t, 0xFFD8D8D8u, 1);
+        r = games_gui_chess_rect(gg, CHESS_SQ(0, k));
+        t[0] = (char)('1' + k);
+        sqg_text(cv, b.x - 16, r.y + 28, t, 0xFFD8D8D8u, 1);
+    }
+    /* the moves, two to a line, the latest in view */
+    int mx = b.x + b.w + 40, my = b.y + 24, lines = (b.h - 24) / 14;
+    sqg_text(cv, mx, b.y, "Moves", 0xFFFFE070u, 2);
+    int off = c->n && c->before[0].side == CHESS_BLACK, total = (c->n + off + 1) / 2;
+    int top = total > lines ? total - lines : 0;
+    for (int i = 0; i < c->n; i++) {
+        int line = (i + off) / 2 - top, col = (i + off) % 2;
+        if (line < 0) continue;
+        const ChessPos *bp = &c->before[i];
+        char san[10], t[16];
+        if (col == 0 || i == 0) {
+            snprintf(t, sizeof t, "%d.", bp->fullmove);
+            sqg_text(cv, mx, my + line * 14, t, 0xFFB0B0B0u, 1);
+        }
+        chess_san(bp, c->move[i], san);
+        sqg_text(cv, mx + (col ? 110 : 40), my + line * 14, san, 0xFFF0F0F0u, 1);
+    }
+    cv->clip = old;
+}
+
 /* ---- the top bar ---- */
 
 static void top_bar(GamesGui *gg, sqg_ui *ui, sqg_rect r) {
     Game *g = gg->game;
     sqg_row row = sqg_row_begin(r, 4);
-    static const char *const KINDS[4] = {"Klondike", "FreeCell", "Mines", "Hearts"};
+    static const char *const KINDS[5] = {"Klondike", "FreeCell", "Mines", "Hearts", "Chess"};
     int kind = gg->kind;
-    if (sqg_segments(ui, sqg_id_str("kind"), sqg_row_take(&row, 320), KINDS, 4, &kind)) {
+    if (sqg_segments(ui, sqg_id_str("kind"), sqg_row_take(&row, 400), KINDS, 5, &kind)) {
         uint32_t seed = current_seed(gg);
         gg->kind = kind;
         deal(gg, seed);
@@ -736,6 +945,31 @@ static void top_bar(GamesGui *gg, sqg_ui *ui, sqg_rect r) {
         static const char *const SIZES[3] = {"Small", "Medium", "Large"};
         if (sqg_segments(ui, sqg_id_str("msize"), sqg_row_take(&row, 180), SIZES, 3, &gg->mines_size))
             deal(gg, gg->mines->seed);
+    }
+    if (gg->kind == GAMES_CHESS) {
+        static const char *const SIDES[3] = {"White", "Black", "Both"}, *const LEVELS[4] = {"1", "2", "3", "4"};
+        sqg_row_take(&row, 6);
+        sqg_label(ui, sqg_row_take(&row, sqg_text_width("You play", 1) + 4), "You play", SQG_ALIGN_LEFT);
+        if (sqg_segments(ui, sqg_id_str("cside"), sqg_row_take(&row, 150), SIDES, 3, &gg->chess_side))
+            chess_start(gg, gg->chess->seed);
+        sqg_row_take(&row, 6);
+        sqg_label(ui, sqg_row_take(&row, sqg_text_width("Level", 1) + 4), "Level", SQG_ALIGN_LEFT);
+        int lv = gg->chess->level - 1;
+        if (sqg_segments(ui, sqg_id_str("clevel"), sqg_row_take(&row, 100), LEVELS, 4, &lv)) gg->chess->level = lv + 1;
+        sqg_row_take(&row, 6);
+        if (sqg_button(ui, sqg_id_str("new"), sqg_row_take(&row, sqg_button_w(ui, "New")), "New") || ui->in.ctrl_key == 'n')
+            chess_start(gg, gg->chess->seed * 2654435761u + 12345u);
+        if (sqg_button(ui, sqg_id_str("undo"), sqg_row_take(&row, sqg_button_w(ui, "Undo")), "Undo") || ui->in.ctrl_key == 'z') {
+            Chess *c = gg->chess;
+            if (chess_undo(c)) say(gg, "Nothing to undo");
+            else {
+                while (c->n && !c->human[c->pos.side]) chess_undo(c);
+                gg->chess_sel = -1;
+                gg->next_ms = gg->ms + 300;
+                chess_said(gg);
+            }
+        }
+        return;
     }
     sqg_row_take(&row, 6);
     sqg_label(ui, sqg_row_take(&row, sqg_text_width("Deal", 1) + 4), "Deal", SQG_ALIGN_LEFT);
@@ -767,6 +1001,8 @@ static void status_line(GamesGui *gg, sqg_ui *ui, sqg_rect r) {
     if (gg->kind == GAMES_MINES)
         snprintf(t, sizeof t, "%d x %d, %d mines   Field %lu", gg->mines->w, gg->mines->h, gg->mines->mines,
                  (unsigned long)gg->mines->seed);
+    else if (gg->kind == GAMES_CHESS)
+        snprintf(t, sizeof t, "Chess   Level %d   Move %d", gg->chess->level, gg->chess->pos.fullmove);
     else if (gg->kind == GAMES_HEARTS)
         snprintf(t, sizeof t, "Game %lu   Hand %d   You %d  West %d  North %d  East %d", (unsigned long)gg->hearts->seed,
                  gg->hearts->hand_no + 1, gg->hearts->score[0], gg->hearts->score[1], gg->hearts->score[2],
@@ -789,6 +1025,9 @@ void games_gui_frame(GamesGui *gg, sqg_ui *ui) {
     if (gg->kind == GAMES_MINES) {
         mines_input(gg, ui);
         draw_mines(gg, ui);
+    } else if (gg->kind == GAMES_CHESS) {
+        chess_input(gg, ui);
+        draw_chess(gg, ui);
     } else if (gg->kind == GAMES_HEARTS) {
         hearts_input(gg, ui);
         draw_hearts(gg, ui);

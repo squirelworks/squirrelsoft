@@ -60,6 +60,19 @@ err=$($P --hearts --seed 7 --do "pass AH KS KD" --do "play 4D" 2>&1); [ $? -eq 1
 echo "$err" | grep -q "play 4D: follow suit" || fail "follow suit message: $err"
 $P --hearts --seed 7 --do "pass AH KS KD" --do "play 4C" --snapshot "$B/hearts.ppm" || fail "hearts snapshot"
 
+# Chess: your move, the computer's reply, the same game for the same seed
+out=$($P --chess --seed 4 --do "move e4" --show) || fail "chess"
+echo "$out" | grep -q "^Chess  game 4  level 3  you white  white to move" || fail "chess heading: $out"
+echo "$out" | grep -q "^Moves 1. e4 [a-hNBRQKO]" || fail "the computer's reply: $out"
+[ "$out" = "$($P --chess --seed 4 --do "move e4" --show)" ] || fail "the same game twice"
+out=$($P --chess --do "new both" --do "move f3" --do "move e5" --do "move g4" --do "move Qh4" --show) || fail "fool's mate"
+echo "$out" | grep -q "checkmate: black wins" || fail "checkmate: $out"
+echo "$out" | grep -q "Moves 1. f3 e5 2. g4 Qh4#" || fail "the moves: $out"
+err=$($P --chess --do "move e5" 2>&1); [ $? -eq 1 ] || fail "an illegal move should exit 1"
+echo "$err" | grep -q "move e5: not a legal move here" || fail "illegal move message: $err"
+$P --chess --level 5 >/dev/null 2>&1; [ $? -eq 2 ] || fail "level 5 should exit 2"
+$P --chess --level 1 --do "move d4" --snapshot "$B/chess.ppm" || fail "chess snapshot"
+
 # a picture of the window
 $P --freecell --seed 7 --snapshot "$B/snap.ppm" || fail "snapshot"
 [ "$(head -c 15 "$B/snap.ppm")" = "$(printf 'P6\n960 680\n255')" ] || fail "snapshot header"

@@ -99,7 +99,7 @@ Every item is a checkbox. Tick it in the PR that merges its last piece. Nested b
   - [x] Minesweeper-class: Mines, three sizes or any up to 40x24, the first square always clear, chords, flags and question marks, a clock, seeded fields, the command line
   - [x] Hearts: three computer players, passing, the usual first-trick and broken-hearts rules, shooting the moon, to 100
   - [ ] Bridge
-  - [ ] Chess
+  - [x] Chess: every rule and draw, standard notation and FEN, a computer player with four levels, White, Black or two people
   - [ ] Mahjongg (tile matching)
 - [ ] S5.4 SquirrelDebug (desktop debugger UI for Squirrel OS/2 over serial/QEMU gdbstub)
 - Each designed so its core compiles for Squirrel OS/2 (freestanding C, no libc beyond a small shim).
