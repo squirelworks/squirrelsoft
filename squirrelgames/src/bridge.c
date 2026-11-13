@@ -99,7 +99,7 @@ static int seat_of_call(const Bridge *b, int i) { return (b->dealer + i) & 3; }
 int bridge_can_call(const Bridge *b, int call, const char **why) {
     const char *w = NULL;
     if (b->phase != BRIDGE_BIDDING) w = "the auction is over";
-    else if (call < 0 || call > BRIDGE_BID(7, BRIDGE_NOTRUMP)) w = "not a call";
+    else if (call < 0 || call > BRIDGE_BID(7, BRIDGE_NOTRUMP) || call == 3 || call == 4) w = "not a call";
     else if (call >= 5) {
         int lb = last_bid_at(b);
         if (lb >= 0 && call <= b->calls[lb]) w = "a bid must be higher than the last";
