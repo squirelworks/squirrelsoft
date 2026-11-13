@@ -9,11 +9,14 @@
  * it with a question mark, then clears it.
  * Hearts: a click on a card of your hand chooses it to pass (three, then
  * the Pass button) or plays it; the computer plays West, North and East.
+ * Chess: click a piece, then where it goes (a pawn reaching the last rank
+ * becomes a queen); the computer plays the other side.
  */
 #ifndef GAMESGUI_H
 #define GAMESGUI_H
 
 #include "cards.h"
+#include "chess.h"
 #include "hearts.h"
 #include "mines.h"
 #include "sqgui.h"
@@ -22,6 +25,7 @@
 #define GAMES_CARD_H 110
 #define GAMES_MINES 2  /* the third game the window plays, beside GAME_KLONDIKE and GAME_FREECELL */
 #define GAMES_HEARTS 3 /* and the fourth */
+#define GAMES_CHESS 4  /* and the fifth */
 #define GAMES_SQUARE 24 /* a square of the mines field */
 
 typedef struct GamesGui GamesGui;
@@ -30,6 +34,9 @@ struct GamesGui {
     Game *game;
     Mines *mines;
     Hearts *hearts;
+    Chess *chess;
+    int chess_sel;         /* Chess: the square of the piece picked up, or -1 */
+    int chess_side;        /* Chess: you play white (0), black (1) or both (2) */
     int kind;              /* the game shown: GAME_KLONDIKE, GAME_FREECELL or GAMES_MINES */
     int mines_size;        /* MINES_SMALL, MEDIUM or LARGE */
     long ms, last_ms;      /* the time now, from the run loop (milliseconds), for the mines clock */
@@ -50,9 +57,9 @@ struct GamesGui {
     char status[160];
 };
 
-void games_gui_init(GamesGui *gg, Game *game, Mines *mines, Hearts *hearts);
+void games_gui_init(GamesGui *gg, Game *game, Mines *mines, Hearts *hearts, Chess *chess);
 /* Show another game as it stands, without dealing: kind is GAME_KLONDIKE,
- * GAME_FREECELL, GAMES_MINES or GAMES_HEARTS (the window's own Klondike
+ * GAME_FREECELL, GAMES_MINES, GAMES_HEARTS or GAMES_CHESS (the window's own Klondike
  * or FreeCell is game's kind) */
 void games_gui_show(GamesGui *gg, int kind);
 /* The mines square under a window point: 0 with x, y, or -1 */
@@ -61,6 +68,12 @@ sqg_rect games_gui_square_rect(const GamesGui *gg, int x, int y);
 /* Hearts: card i of your hand, and which is under a point (-1 for none) */
 sqg_rect games_gui_hand_rect(const GamesGui *gg, int i);
 int games_gui_hand_hit(const GamesGui *gg, int x, int y);
+/* Chess: a square's place on the board (turned round when you play
+ * black), and the square under a point (-1 for none) */
+sqg_rect games_gui_chess_rect(const GamesGui *gg, int sq);
+int games_gui_chess_square(const GamesGui *gg, int x, int y);
+/* Draw a chess piece (chess.h's, white positive) in a 48x48 square at x, y */
+void games_gui_draw_piece(sqg_canvas *cv, int x, int y, int piece);
 /* Hearts: the button in the middle (Pass, Next hand, New game) */
 sqg_rect games_gui_hearts_button(const GamesGui *gg);
 

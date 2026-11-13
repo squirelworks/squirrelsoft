@@ -1,6 +1,7 @@
 /* SquirrelGames tests: the rules of each game, the commands, and the
  * window driven by simulated input. */
 #include "cards.h"
+#include "chess.h"
 #include "gamesgui.h"
 #include "hearts.h"
 #include "mines.h"
@@ -22,6 +23,7 @@ static void check(int ok, const char *what, int line) {
 static Game g;
 static Mines mn;
 static Hearts hh;
+static Chess ch;
 
 /* a pile from names: "AS 2H #KD" (# for face down) */
 static void set(int pile, const char *cards) {
@@ -512,7 +514,7 @@ static void drag_card(int pile, int index, int to) {
 }
 static int top_x(const char *label) { /* the top bar's buttons, by what the window draws: find the label */
     static const char *const order[] = {"Klondike/FreeCell", "Draw 3", "Deal", "#seed", "Play", "New", "Restart", "Undo", "Home"};
-    int x = 6 + 320 + 4;
+    int x = 6 + 400 + 4;
     int lh = sqg_line_h(&ui);
     (void)lh;
     for (size_t k = 1; k < sizeof order / sizeof order[0]; k++) {
@@ -533,7 +535,7 @@ static void test_window(const char *dir) {
     sqg_ui_init(&ui, NULL, 1);
     memset(&in, 0, sizeof in);
     game_new(&g, GAME_KLONDIKE, 1, 42);
-    games_gui_init(&gg, &g, &mn, &hh);
+    games_gui_init(&gg, &g, &mn, &hh, &ch);
     frame();
     int lh = sqg_line_h(&ui), x, y;
     /* the cards are drawn: the AH on column 5, face up, white with red */
@@ -640,14 +642,14 @@ static void test_window(const char *dir) {
 static void test_window_mines(void) {
     int lh = sqg_line_h(&ui);
     game_new(&g, GAME_KLONDIKE, 1, 42);
-    games_gui_init(&gg, &g, &mn, &hh);
+    games_gui_init(&gg, &g, &mn, &hh, &ch);
     gg.ms = 1000;
     frame();
-    click(6 + 320 * 5 / 8, 6 + lh / 2); /* Mines */
+    click(6 + 400 * 5 / 10, 6 + lh / 2); /* Mines */
     CHECK(gg.kind == GAMES_MINES && mn.w == 9 && mn.seed == 42 && strstr(gg.status, "Mines, field 42"));
-    click(6 + 320 + 4 + 180 * 5 / 6, 6 + lh / 2); /* Large */
+    click(6 + 400 + 4 + 180 * 5 / 6, 6 + lh / 2); /* Large */
     CHECK(gg.mines_size == MINES_LARGE && mn.w == 30 && mn.mines == 99);
-    click(6 + 320 + 4 + 180 / 6, 6 + lh / 2); /* Small again */
+    click(6 + 400 + 4 + 180 / 6, 6 + lh / 2); /* Small again */
     CHECK(mn.w == 9);
     /* a click opens; the clock runs from then */
     sqg_rect r = games_gui_square_rect(&gg, 4, 4);
@@ -685,7 +687,7 @@ static void test_window_mines(void) {
             }
     CHECK(mn.state == MINES_WON && strstr(gg.status, "Cleared in 1 seconds"));
     /* Restart: the same field again, hidden; New: another */
-    int bx = 6 + 320 + 4 + 180 + 4 + 6 + 4 + sqg_text_width("Deal", 1) + 4 + 4 + 90 + 4 + sqg_button_w(&ui, "Play") + 4;
+    int bx = 6 + 400 + 4 + 180 + 4 + 6 + 4 + sqg_text_width("Deal", 1) + 4 + 4 + 90 + 4 + sqg_button_w(&ui, "Play") + 4;
     int newx = bx + sqg_button_w(&ui, "New") / 2;
     int againx = bx + sqg_button_w(&ui, "New") + 4 + sqg_button_w(&ui, "Restart") / 2;
     click(againx, 6 + lh / 2);
@@ -911,10 +913,10 @@ static void test_hearts(void) {
 static void test_window_hearts(void) {
     int lh = sqg_line_h(&ui);
     game_new(&g, GAME_KLONDIKE, 1, 5);
-    games_gui_init(&gg, &g, &mn, &hh);
+    games_gui_init(&gg, &g, &mn, &hh, &ch);
     gg.ms = 1000;
     frame();
-    click(6 + 320 * 7 / 8, 6 + lh / 2); /* Hearts */
+    click(6 + 400 * 7 / 10, 6 + lh / 2); /* Hearts */
     CHECK(gg.kind == GAMES_HEARTS && hh.seed == 5 && hh.phase == HEARTS_PASSING && strstr(gg.status, "pass left"));
     /* three cards chosen, raised; a fourth refused; one put back */
     for (int i = 0; i < 3; i++) {
@@ -973,11 +975,239 @@ static void test_window_hearts(void) {
     /* New: another game; Restart: this one from the start */
     gg.ms += 10000;
     hh.score[1] = 50;
-    int bx = 6 + 320 + 4 + 6 + 4 + sqg_text_width("Deal", 1) + 4 + 4 + 90 + 4 + sqg_button_w(&ui, "Play") + 4;
+    int bx = 6 + 400 + 4 + 6 + 4 + sqg_text_width("Deal", 1) + 4 + 4 + 90 + 4 + sqg_button_w(&ui, "Play") + 4;
     click(bx + sqg_button_w(&ui, "New") + 4 + sqg_button_w(&ui, "Restart") / 2, 6 + lh / 2);
     CHECK(hh.seed == 5 && hh.hand_no == 0 && hh.score[1] == 0);
     click(bx + sqg_button_w(&ui, "New") / 2, 6 + lh / 2);
     CHECK(hh.seed != 5 && gg.kind == GAMES_HEARTS);
+}
+
+/* ---- chess ---- */
+
+static long perft(const ChessPos *p, int depth) {
+    int m[CHESS_MAX_MOVES], n = chess_moves(p, m);
+    if (depth == 1) return n;
+    long total = 0;
+    for (int i = 0; i < n; i++) {
+        static Chess step[8];
+        step[depth].pos = *p;
+        step[depth].n = 0;
+        chess_make(&step[depth], m[i]);
+        total += perft(&step[depth].pos, depth - 1);
+    }
+    return total;
+}
+
+static int cmove(const char *san) { /* a move by its notation in ch, made */
+    int m = chess_parse(&ch.pos, san, strlen(san));
+    if (m < 0) {
+        printf("  %s: not legal\n", san);
+        return 0;
+    }
+    return chess_make(&ch, m) == 0;
+}
+
+static int san_is(const char *move, const char *want) {
+    int m = chess_parse(&ch.pos, move, strlen(move));
+    char san[10] = "";
+    if (m >= 0) chess_san(&ch.pos, m, san);
+    if (strcmp(san, want)) printf("  %s: \"%s\", not \"%s\"\n", move, san, want);
+    return !strcmp(san, want);
+}
+
+static int cok(const char *line) {
+    char msg[120];
+    int rc = chess_command(&ch, line, msg, sizeof msg);
+    if (rc) printf("  %s: %s\n", line, msg);
+    return rc == 0;
+}
+static int cfails(const char *line, const char *why) {
+    char msg[120];
+    int rc = chess_command(&ch, line, msg, sizeof msg);
+    if (rc == 0 || !strstr(msg, why)) {
+        printf("  %s: rc %d, said \"%s\"\n", line, rc, msg);
+        return 0;
+    }
+    return 1;
+}
+
+static void test_chess(void) {
+    /* the moves, counted to a depth from known positions */
+    chess_new(&ch, 1);
+    CHECK(perft(&ch.pos, 1) == 20 && perft(&ch.pos, 2) == 400 && perft(&ch.pos, 3) == 8902);
+    CHECK(!chess_set_fen(&ch, "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1"));
+    CHECK(perft(&ch.pos, 1) == 48 && perft(&ch.pos, 2) == 2039 && perft(&ch.pos, 3) == 97862);
+    CHECK(!chess_set_fen(&ch, "8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1"));
+    CHECK(perft(&ch.pos, 1) == 14 && perft(&ch.pos, 2) == 191 && perft(&ch.pos, 3) == 2812);
+    /* FEN both ways, and what is not a position */
+    char fen[100];
+    chess_new(&ch, 1);
+    chess_fen(&ch.pos, fen, sizeof fen);
+    CHECK(!strcmp(fen, "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"));
+    CHECK(!chess_set_fen(&ch, "r3k2r/8/8/3pP3/8/8/8/R3K2R w Kq d6 5 30"));
+    chess_fen(&ch.pos, fen, sizeof fen);
+    CHECK(!strcmp(fen, "r3k2r/8/8/3pP3/8/8/8/R3K2R w Kq d6 5 30") && ch.pos.ep == CHESS_SQ(3, 5));
+    CHECK(!chess_set_fen(&ch, "4k3/8/8/8/8/8/8/4K3 b - -") && ch.pos.halfmove == 0 && ch.pos.fullmove == 1);
+    CHECK(chess_set_fen(&ch, "4k3/8/8/8/8/8/8/4KK2 w - - 0 1") == -1);   /* two white kings */
+    CHECK(chess_set_fen(&ch, "4k3/8/8/8/8/8/4K3 w - - 0 1") == -1);       /* seven ranks */
+    CHECK(chess_set_fen(&ch, "4k3/8/8/8/8/8/8/R3K3 w - - 0 1") == 0);
+    CHECK(chess_set_fen(&ch, "4k3/8/8/8/8/8/8/4R1K1 w - - 0 1") == -1);   /* black in check, white to move */
+    CHECK(chess_set_fen(&ch, "P3k3/8/8/8/8/8/8/4K3 w - - 0 1") == -1);    /* a pawn on the last rank */
+    CHECK(chess_set_fen(&ch, "4k3/8/8/8/8/8/8/4K3 x - - 0 1") == -1);
+    CHECK(!chess_set_fen(&ch, "4k3/8/8/8/8/8/8/4K3 w KQkq - 0 1") && ch.pos.castle == 0); /* no rooks: no castling */
+    /* castling: not out of, through or into check; the rook goes too; the rights go */
+    CHECK(!chess_set_fen(&ch, "r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1"));
+    CHECK(san_is("e1g1", "O-O") && san_is("O-O-O", "O-O-O") && san_is("0-0", "O-O"));
+    CHECK(cmove("O-O") && ch.pos.sq[CHESS_SQ(5, 0)] == CHESS_ROOK && ch.pos.sq[CHESS_SQ(6, 0)] == CHESS_KING &&
+          !ch.pos.sq[CHESS_SQ(7, 0)] && ch.pos.castle == (CHESS_BK | CHESS_BQ));
+    CHECK(cmove("Rxa1") && ch.pos.castle == CHESS_BK); /* the rook took a rook: neither has a's castling */
+    CHECK(!chess_set_fen(&ch, "r3k2r/8/8/8/8/5r2/8/R3K2R w KQkq - 0 1")); /* f1 attacked: no O-O */
+    CHECK(chess_parse(&ch.pos, "O-O", 3) == -1 && chess_parse(&ch.pos, "O-O-O", 5) >= 0);
+    CHECK(!chess_set_fen(&ch, "r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1") && cmove("Kf1") && ch.pos.castle == (CHESS_BK | CHESS_BQ));
+    CHECK(!chess_set_fen(&ch, "r3k2r/8/8/8/4r3/8/8/R3K2R w KQkq - 0 1")); /* in check: no castling at all */
+    CHECK(chess_parse(&ch.pos, "O-O", 3) == -1 && chess_parse(&ch.pos, "O-O-O", 5) == -1);
+    /* en passant: only at once */
+    chess_new(&ch, 1);
+    CHECK(cmove("e4") && cmove("a6") && cmove("e5") && cmove("d5") && san_is("exd6", "exd6") && san_is("e5d6", "exd6"));
+    CHECK(cmove("a3") && cmove("h6") && chess_parse(&ch.pos, "exd6", 4) == -1);
+    chess_new(&ch, 1);
+    CHECK(cmove("e4") && cmove("a6") && cmove("e5") && cmove("d5") && cmove("exd6") && !ch.pos.sq[CHESS_SQ(3, 4)] &&
+          ch.pos.sq[CHESS_SQ(3, 5)] == CHESS_PAWN);
+    /* promotion, to any piece */
+    CHECK(!chess_set_fen(&ch, "k7/4P3/8/8/8/8/8/4K3 w - - 0 1"));
+    CHECK(san_is("e8=Q", "e8=Q+") && san_is("e7e8n", "e8=N") && san_is("e8R", "e8=R+") && chess_parse(&ch.pos, "e8", 2) == -1);
+    CHECK(cmove("e7e8n") && ch.pos.sq[CHESS_SQ(4, 7)] == CHESS_KNIGHT);
+    /* which piece: by file, by rank */
+    CHECK(!chess_set_fen(&ch, "4k3/8/8/8/8/R7/8/R3K1N1 w - - 0 1"));
+    CHECK(san_is("R1a2", "R1a2") && san_is("a3a2", "R3a2") && san_is("Ne2", "Ne2"));
+    CHECK(!chess_set_fen(&ch, "4k3/8/8/8/8/8/8/1N2KN2 w - - 0 1") && san_is("Nbd2", "Nbd2") && san_is("Nfd2", "Nfd2"));
+    CHECK(chess_parse(&ch.pos, "Nd2", 3) == -1 && chess_parse(&ch.pos, "Qd2", 3) == -1 && chess_parse(&ch.pos, "zz", 2) == -1);
+    /* checkmate, stalemate and the draws */
+    chess_new(&ch, 1);
+    CHECK(cmove("f3") && cmove("e5") && cmove("g4") && san_is("Qh4", "Qh4#") && cmove("Qh4"));
+    CHECK(chess_state(&ch) == CHESS_CHECKMATE && chess_in_check(&ch.pos) && chess_make(&ch, CHESS_MOVE(8, 16, 0)) == -1);
+    CHECK(!chess_set_fen(&ch, "7k/5Q2/6K1/8/8/8/8/8 b - - 0 1") && chess_state(&ch) == CHESS_STALEMATE && !chess_in_check(&ch.pos));
+    CHECK(!chess_set_fen(&ch, "4k3/8/8/8/8/8/8/R3K3 w - - 99 80") && chess_state(&ch) == CHESS_PLAYING && cmove("Ra2") &&
+          chess_state(&ch) == CHESS_DRAW_FIFTY);
+    chess_new(&ch, 1);
+    CHECK(cmove("Nf3") && cmove("Nf6") && cmove("Ng1") && cmove("Ng8") && chess_state(&ch) == CHESS_PLAYING);
+    CHECK(cmove("Nf3") && cmove("Nf6") && cmove("Ng1") && cmove("Ng8") && chess_state(&ch) == CHESS_DRAW_REPEAT);
+    CHECK(!chess_set_fen(&ch, "4k3/8/8/8/8/8/8/2B1K3 w - - 0 1") && chess_state(&ch) == CHESS_DRAW_MATERIAL);
+    CHECK(!chess_set_fen(&ch, "4k3/8/8/8/8/8/8/2BBK3 w - - 0 1") && chess_state(&ch) == CHESS_PLAYING);
+    /* undo, all the way */
+    chess_new(&ch, 1);
+    ChessPos start = ch.pos;
+    CHECK(cmove("e4") && cmove("e5") && chess_undo(&ch) == 0 && chess_undo(&ch) == 0 && chess_undo(&ch) == -1 &&
+          !memcmp(&ch.pos, &start, sizeof start));
+    /* the computer: mate in one, a free queen, and no move when there is none */
+    CHECK(!chess_set_fen(&ch, "6k1/5ppp/8/8/8/8/8/R5K1 w - - 0 1"));
+    for (int lv = 1; lv <= 3; lv++) {
+        ch.level = lv;
+        CHECK(chess_ai(&ch) == CHESS_MOVE(CHESS_SQ(0, 0), CHESS_SQ(0, 7), 0));
+    }
+    CHECK(!chess_set_fen(&ch, "4k3/8/8/3q4/8/8/3R4/4K3 w - - 0 1"));
+    ch.level = 1;
+    CHECK(chess_ai(&ch) == CHESS_MOVE(CHESS_SQ(3, 1), CHESS_SQ(3, 4), 0));
+    CHECK(!chess_set_fen(&ch, "7k/5Q2/6K1/8/8/8/8/8 b - - 0 1") && chess_ai(&ch) == -1);
+    /* the computer against itself: every move legal, games end, undo goes back to the start */
+    int legal = 1, back = 1;
+    for (uint32_t seed = 1; seed <= 4; seed++) {
+        chess_new(&ch, seed);
+        ch.level = 1 + (int)(seed % 2);
+        ch.human[0] = ch.human[1] = 0;
+        for (int ply = 0; ply < 160 && chess_state(&ch) == CHESS_PLAYING; ply++) {
+            int m = chess_ai(&ch);
+            legal &= chess_is_legal(&ch.pos, m) && chess_make(&ch, m) == 0;
+        }
+        while (!chess_undo(&ch)) {}
+        static Chess start_game;
+        chess_new(&start_game, seed);
+        back &= !memcmp(&ch.pos, &start_game.pos, sizeof ch.pos);
+    }
+    CHECK(legal && back);
+    /* the same seed, the same game; another seed, another */
+    static Chess a, b2;
+    chess_new(&a, 5), chess_new(&b2, 5);
+    a.human[0] = b2.human[0] = 0;
+    a.level = b2.level = 2;
+    chess_run(&a), chess_run(&b2);
+    CHECK(a.n == b2.n && !memcmp(a.move, b2.move, sizeof a.move[0] * (size_t)a.n));
+
+    /* the commands */
+    chess_new(&ch, 1);
+    CHECK(cok("move e4") && ch.n == 2 && ch.pos.side == CHESS_WHITE); /* the computer replied */
+    CHECK(cfails("move Qh8", "not a legal move") && cfails("move", "move M") && cfails("jump", "unknown"));
+    CHECK(cok("undo") && ch.n == 0 && cfails("undo", "nothing to undo"));
+    CHECK(cfails("level 5", "1 to 4") && cfails("level x", "1 to 4") && cok("level 1") && ch.level == 1);
+    CHECK(cok("new black 9") && ch.seed == 9 && ch.n == 1 && ch.human[1] && !ch.human[0] && ch.level == 1);
+    CHECK(cok("new both") && ch.seed == 10 && ch.n == 0 && cok("move e4") && ch.n == 1 && cok("go") && ch.n == 2);
+    CHECK(cfails("new purple", "new [white|black|both]"));
+    CHECK(cok("fen 6k1/5ppp/8/8/8/8/8/R5K1 w - - 0 1") && cok("move Ra8") && chess_state(&ch) == CHESS_CHECKMATE);
+    CHECK(cfails("move Kh8", "checkmate") && cfails("go", "checkmate") && cfails("fen 8/8/8 w", "not a position"));
+    char text[4096];
+    chess_new(&ch, 1);
+    CHECK(cok("move e4"));
+    chess_text(&ch, text, sizeof text);
+    CHECK(strstr(text, "Chess  game 1  level 3  you white  white to move") && strstr(text, "4 | . . . . P . . . |") &&
+          strstr(text, "Moves 1. e4 ") && strstr(text, "\nFEN "));
+}
+
+static void test_window_chess(void) {
+    int lh = sqg_line_h(&ui);
+    game_new(&g, GAME_KLONDIKE, 1, 3);
+    chess_new(&ch, 3);
+    games_gui_init(&gg, &g, &mn, &hh, &ch);
+    gg.ms = 1000;
+    frame();
+    click(6 + 400 * 9 / 10, 6 + lh / 2); /* Chess */
+    CHECK(gg.kind == GAMES_CHESS && ch.n == 0 && ch.human[0] && !ch.human[1] && strstr(gg.status, "Your move"));
+    /* a1 at the bottom left; a square from a point */
+    sqg_rect a1 = games_gui_chess_rect(&gg, 0), h8 = games_gui_chess_rect(&gg, 63);
+    CHECK(a1.x < h8.x && a1.y > h8.y && games_gui_chess_square(&gg, a1.x + 3, a1.y + 3) == 0 &&
+          games_gui_chess_square(&gg, 2, 2) == -1);
+    /* a piece, then where it goes; the wrong place refused */
+    sqg_rect r = games_gui_chess_rect(&gg, CHESS_SQ(4, 1));
+    click(r.x + 30, r.y + 30);
+    CHECK(gg.chess_sel == CHESS_SQ(4, 1));
+    r = games_gui_chess_rect(&gg, CHESS_SQ(4, 4));
+    click(r.x + 30, r.y + 30);
+    CHECK(gg.chess_sel == -1 && ch.n == 0 && strstr(gg.status, "cannot go there"));
+    r = games_gui_chess_rect(&gg, CHESS_SQ(4, 1));
+    click(r.x + 30, r.y + 30);
+    r = games_gui_chess_rect(&gg, CHESS_SQ(4, 3));
+    click(r.x + 30, r.y + 30);
+    CHECK(ch.n == 1 && ch.pos.sq[CHESS_SQ(4, 3)] == CHESS_PAWN && strstr(gg.status, "thinking"));
+    CHECK(screen[(r.y + 8 + 3 * 12 + 1) * W + r.x + 8 + 3 * 7 + 1] == 0xFFF8F4ECu); /* the white pawn drawn there */
+    frame();
+    CHECK(ch.n == 1); /* the computer waits a moment */
+    gg.ms += 400;
+    frame();
+    CHECK(ch.n == 2 && ch.pos.side == CHESS_WHITE && strstr(gg.status, "Your move"));
+    /* Undo: back to your move; Black: the board turns round and the computer starts */
+    int x = 6 + 400 + 4 + 6 + 4 + sqg_text_width("You play", 1) + 4 + 4;
+    int levels = x + 150 + 4 + 6 + 4 + sqg_text_width("Level", 1) + 4 + 4;
+    int newx = levels + 100 + 4 + 6 + 4;
+    int undox = newx + sqg_button_w(&ui, "New") + 4;
+    click(undox + 10, 6 + lh / 2);
+    CHECK(ch.n == 0 && strstr(gg.status, "Your move"));
+    click(levels + 100 / 8, 6 + lh / 2);
+    CHECK(ch.level == 1);
+    click(x + 150 / 2, 6 + lh / 2); /* Black */
+    a1 = games_gui_chess_rect(&gg, 0), h8 = games_gui_chess_rect(&gg, 63);
+    CHECK(gg.chess_side == 1 && ch.human[1] && !ch.human[0] && a1.x > h8.x && a1.y < h8.y && ch.level == 1);
+    gg.ms += 400;
+    frame();
+    CHECK(ch.n == 1 && ch.pos.side == CHESS_BLACK);
+    click(newx + 10, 6 + lh / 2);
+    CHECK(ch.n == 0 && ch.seed != 3 && ch.human[1]);
+    /* a pawn to the last rank becomes a queen; checkmate said */
+    click(x + 150 * 5 / 6, 6 + lh / 2); /* Both */
+    CHECK(ch.human[0] && ch.human[1] && !chess_set_fen(&ch, "6k1/4Pppp/8/8/8/8/8/6K1 w - - 0 1"));
+    r = games_gui_chess_rect(&gg, CHESS_SQ(4, 6));
+    click(r.x + 30, r.y + 30);
+    r = games_gui_chess_rect(&gg, CHESS_SQ(4, 7));
+    click(r.x + 30, r.y + 30);
+    CHECK(ch.pos.sq[CHESS_SQ(4, 7)] == CHESS_QUEEN && chess_state(&ch) == CHESS_CHECKMATE && strstr(gg.status, "White wins"));
 }
 
 int main(int argc, char **argv) {
@@ -994,6 +1224,8 @@ int main(int argc, char **argv) {
     test_window_mines();
     test_hearts();
     test_window_hearts();
+    test_chess();
+    test_window_chess();
     printf("test_games: %d checks, %d failed\n", checks, failures);
     return failures != 0;
 }

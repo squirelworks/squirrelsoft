@@ -1,8 +1,8 @@
 # SquirrelGames
 
 Card and board games on `libs/sqgui`, roadmap item S5.3. So far:
-patience (Klondike and FreeCell), Mines and Hearts. The rules
-(`cards.c`, `mines.c`, `hearts.c`) are freestanding
+patience (Klondike and FreeCell), Mines, Hearts and Chess. The rules
+(`cards.c`, `mines.c`, `hearts.c`, `chess.c`) are freestanding
 C11 with no allocation and no stdio, and `make test` checks that they
 need nothing from outside but `memcpy`, `memmove`, `memset` and
 `strlen`, so they move to Squirrel OS/2 as they are. Only `games_sdl.c`
@@ -48,7 +48,17 @@ build/squirrelgames --freecell --seed 7
   heart led until one has been played (unless a hand holds nothing else).
   Once a score reaches 100, the lowest wins.
 
-A deal (or a field) is a number from 0 to 4294967295: the same number
+- **Chess**: against the computer, as White or Black, or two people at
+  one board. Every rule: castling (not out of, through or into check),
+  en passant, promotion to any piece, check, checkmate, stalemate, and
+  the draws by the fifty-move rule, threefold repetition and too little
+  left to mate. The computer looks ahead one to four moves (its level)
+  with a search of its own, the captures followed until it is quiet; the
+  game's number gives its choices a little variety. Moves are read and
+  written in the usual notation (`Nf3`, `exd5`, `O-O`, `e8=Q`) or as
+  squares (`e2e4`, `e7e8n`).
+
+A deal (or a field, or a chess game) is a number from 0 to 4294967295: the same number
 always gives the same deal (shuffled with SquirrelGames' own generator,
 so the numbers are its own).
 
@@ -75,6 +85,11 @@ so the numbers are its own).
   are shaded). Each name shows the points taken this hand and, in
   brackets, the game's. The computer plays a card about every half
   second, and a trick stays in the middle a moment once it is taken.
+- Chess: click a piece (its moves are marked), then where it goes. A
+  pawn reaching the last rank becomes a queen in the window (the command
+  line can choose). You play White, Black (the board turns round) or
+  Both; Level 1 to 4; New; Undo (Ctrl+Z) takes back to your last move.
+  The moves are listed beside the board, and the pieces are drawn here.
 
 ## Command line
 
@@ -82,6 +97,8 @@ so the numbers are its own).
 --klondike | --klondike3 | --freecell   the game (Klondike, draw 1, unless one of these)
 --mines SIZE     Mines: small, medium, large, or WxHxM (20x12x40)
 --hearts         Hearts
+--chess          Chess (you White, level 3)
+--level N        Chess: the computer's level, 1 to 4
 --seed N         the deal
 --do CMD         play (see below); in order with --script
 --script FILE    commands one a line, # for comments
@@ -129,6 +146,18 @@ new [SEED]     pass C C C     play C     next (the next hand, once one is over)
 `--show` prints the scores, the trick on the table (or the last one
 taken), your hand, and what you passed and got.
 
+Chess commands, after each of which the computer replies when it is its
+turn:
+
+```
+new [white|black|both] [SEED]     move M     undo     go     level N     fen FEN
+```
+
+`new` says which side you play; `undo` takes back to your previous move;
+`go` has the computer move for whichever side is to move; `fen` sets up a
+position. `--show` prints the board (White at the bottom, capitals for
+White), the moves and the FEN.
+
 ## Tests
 
 `make test` runs `tests/test_games.c`: deals (every card once, the same
@@ -145,6 +174,12 @@ Hearts: every deal whole, the passing order, each rule and its refusal,
 who takes a trick, shooting the moon, the end of the game, the computer's
 choices, the commands, 200 games the computer plays through (every card
 allowed, the cards always 52, each hand 26 points or 78), and a hand
-played in the window by clicks. Then `tests/cli_smoke.sh`, the
+played in the window by clicks. For Chess: the moves counted to depth 3
+from three known positions (the start, and two that test castling, en
+passant and promotion hard), FEN both ways and what is not a position,
+each special move, the notation and which piece it names, checkmate,
+stalemate and each draw, undo, the computer finding a mate and a free
+queen, games the computer plays against itself, the commands, and moves,
+undo, sides and levels in the window. Then `tests/cli_smoke.sh`, the
 freestanding check, and ten frames of the real window with
 `SDL_VIDEODRIVER=dummy` when SDL2 is installed.
