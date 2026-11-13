@@ -52,6 +52,12 @@ int calc_plot(sqg_canvas *c, sqg_rect r, const CalcView *v, const SqmProgram *p,
 /* Mark the points (x, 0) with small rings; returns how many were in view. */
 int calc_mark_roots(sqg_canvas *c, sqg_rect r, const CalcView *v, const double *xs, int n, uint32_t color);
 
+/* A curve (x(t), y(t)) for t from t0 to t1 in `steps` pieces: px and py read
+ * t from values[slot]. It breaks where a value is not finite or a step jumps
+ * across half the view. Returns the segments drawn. */
+int calc_plot_curve(sqg_canvas *c, sqg_rect r, const CalcView *v, const SqmProgram *px, const SqmProgram *py,
+                    double *values, int slot, double t0, double t1, int steps, uint32_t color);
+
 /* Rings at (xs[i], ys[i]), or on the x axis when ys is NULL; returns how
  * many are in view. */
 int calc_mark_points(sqg_canvas *c, sqg_rect r, const CalcView *v, const double *xs, const double *ys, int n,

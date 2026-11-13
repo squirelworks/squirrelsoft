@@ -191,6 +191,39 @@ int calc_plot(sqg_canvas *c, sqg_rect r, const CalcView *v, const SqmProgram *p,
     return drawn;
 }
 
+int calc_plot_curve(sqg_canvas *c, sqg_rect r, const CalcView *v, const SqmProgram *px, const SqmProgram *py,
+                    double *values, int slot, double t0, double t1, int steps, uint32_t color) {
+    if (r.w <= 0 || r.h <= 0 || steps < 1 || !isfinite(t0) || !isfinite(t1) || px->nops == 0 || py->nops == 0)
+        return 0;
+    sqg_rect old = c->clip;
+    sqg_clip(c, r);
+    int drawn = 0, have = 0;
+    double ax = 0, ay = 0;
+    for (int k = 0; k <= steps; k++) {
+        values[slot] = t0 + (t1 - t0) * k / steps;
+        double x = sqm_run(px, values), y = sqm_run(py, values);
+        if (!isfinite(x) || !isfinite(y)) {
+            have = 0;
+            continue;
+        }
+        double bx = calc_px_x(v, r, x), by = calc_px_y(v, r, y);
+        if (have && !(fabs(bx - ax) > r.w / 2.0 || fabs(by - ay) > r.h / 2.0)) {
+            int out = (ax < r.x && bx < r.x) || (ax >= r.x + r.w && bx >= r.x + r.w) || (ay < r.y && by < r.y) ||
+                      (ay >= r.y + r.h && by >= r.y + r.h);
+            if (!out) {
+                thick(c, px_int(ax, r.x, r.x + r.w), px_int(ay, r.y, r.y + r.h), px_int(bx, r.x, r.x + r.w),
+                      px_int(by, r.y, r.y + r.h), color);
+                drawn++;
+            }
+        }
+        ax = bx;
+        ay = by;
+        have = 1;
+    }
+    c->clip = old;
+    return drawn;
+}
+
 int calc_mark_points(sqg_canvas *c, sqg_rect r, const CalcView *v, const double *xs, const double *ys, int n,
                      uint32_t color) {
     sqg_rect old = c->clip;
