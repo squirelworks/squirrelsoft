@@ -110,6 +110,32 @@ build/squirrelcalc --fn "x^2 - 2" --fn "2 sin(x)" --roots
   across) with its cell names moved (`$A$1` stays). Cells can use the
   calculator's variables and lists, and graph rows can use cells
   (`y1 = A1 x` redraws when A1 changes).
+- **Notebook** shows a notebook in place of the graph: a list of lines,
+  each a calculator line or a line of notes (`# Title` makes a heading),
+  with every calculator line's result under it. It runs top to bottom from
+  a clean start, so changing `a = 2` to `a = 3` works out everything after
+  it again; `y1 = a sin(x)` in it sets a graph row, and points, lists and
+  cells made in it are drawn and kept as usual. Type into the line above
+  it: Enter puts the line in and moves on (after the last calculator line,
+  to a new one), Up and Down move. `+ Math` and `+ Text` add a line after
+  the selected one, `Math/Text` switches its kind, `Up` and `Down` move it,
+  `Delete` takes it out, `Run` works it all out again (after a slider
+  moved, say). While the notebook is shown, a line run from the
+  calculator is added to it. `y1 = sin(x)` works from the calculator too.
+- **Notebook files** keep a whole session in plain text, one line each:
+
+  ```
+  SquirrelCalc notebook 1
+  y1: a sin(x)
+  view: -10 10 -6.5 6.5
+  cell A1: 5
+  cell B1: =A1*2
+  text: # Waves
+  math: a = 2
+  ```
+
+  `#` comments and blank lines are left out. Loading checks every line
+  before it changes anything, and names the first bad line.
 
 ## Command line
 
@@ -124,6 +150,14 @@ build/squirrelcalc --fn "x^2 - 2" --fn "2 sin(x)" --roots
                  or row 50 is left out, with a warning)
 --cell REF=TEXT  set a cell as typed (--cell A1=5, --cell "B1==A1*2")
 --sheet          show the sheet instead of the graph
+--notebook FILE  load a notebook file (rows, sheet, view and lines) and run it
+--note TEXT      add a calculator line to the notebook
+--note-text TEXT add a line of notes ("# Title" for a heading); the notebook
+                 then runs from a clean start after the options, so --let and
+                 --line values are not kept; with --snapshot it is printed,
+                 each result under its line
+--notes          show the notebook instead of the graph
+--save-notebook FILE  write the whole session as a notebook file
 --save-csv FILE  write the sheet's values as CSV after everything else
 --save-sheet FILE  the same with the formulas as typed
 --roots          mark the roots
@@ -135,7 +169,7 @@ build/squirrelcalc --fn "x^2 - 2" --fn "2 sin(x)" --roots
 --gui-frames N   close the window after N frames (testing)
 ```
 
-Exit codes: 0, 1 for a bad `--let` or an unwritable snapshot, 2 for usage
+Exit codes: 0, 1 for a bad `--let`, a bad notebook or an unwritable snapshot, 2 for usage
 or no window.
 
 ## Code
@@ -156,12 +190,18 @@ or no window.
 - `calcsheet.c`: the sheet (cells, recalculation in dependency order,
   copying with moved names, CSV) and `calc_expand`, which rewrites cell
   names and the functions of values for `sqmath` before it parses a line.
+- `calcnote.c`: the notebook's lines, running them with the calculator,
+  and the notebook file.
 - `calcgui.c`: the panel, the calculator line, its variables and lists.
 - `calc_sdl.c` / `calc_nosdl.c`: the window loop, with or without SDL2.
 
 ## Tests
 
-`make test` runs `tests/test_geom.c` (every construction against worked
+`make test` runs `tests/test_note.c` (adding, moving and taking out lines
+with the selection following, results without the copy of their line,
+wrapping, runs that forget what came before, the file both ways, every
+kind of bad file leaving the session as it was, and the Notebook view by
+click, typing, keys, buttons and the wheel), `tests/test_geom.c` (every construction against worked
 values, objects that stop and start existing, redefinition, dragging,
 delete, every measurement and its errors, and drawing), `tests/test_sheet.c` (cell names, kinds, recalculation,
 cycles, errors and their spread, a 50-deep chain, every function of values

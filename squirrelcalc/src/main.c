@@ -19,6 +19,14 @@ static void usage(FILE *f) {
           "  --sheet          show the spreadsheet instead of the graph\n"
           "  --save-csv FILE  write the sheet's values to FILE as CSV (after the lines)\n"
           "  --save-sheet FILE  the same with formulas as typed\n"
+          "  --notebook FILE  load a notebook (rows, sheet, view and cells) and run it\n"
+          "  --note TEXT      add a calculator line to the notebook\n"
+          "  --note-text TEXT add a line of notes (\"# Title\" for a heading)\n"
+          "                   (the notebook runs from a clean start, after the options:\n"
+          "                   --let and --line values are not kept; with --snapshot it\n"
+          "                   is printed, each result under its line)\n"
+          "  --notes          show the notebook instead of the graph\n"
+          "  --save-notebook FILE  write the session as a notebook (after the run)\n"
           "  --roots          mark the roots\n"
           "  --crossings      mark where the functions cross\n"
           "  --table          show the table of values instead of the graph\n"
@@ -46,6 +54,33 @@ static int load_csv(const char *path) {
     return 0;
 }
 
+static int load_notebook(const char *path) {
+    FILE *f = fopen(path, "rb");
+    if (!f) {
+        fprintf(stderr, "squirrelcalc: cannot read %s\n", path);
+        return -1;
+    }
+    size_t n = fread(csv_buf, 1, sizeof csv_buf - 1, f);
+    int big = !feof(f);
+    fclose(f);
+    csv_buf[n] = 0;
+    char msg[160];
+    if (big || calc_gui_notebook_load(&g, csv_buf, msg, sizeof msg)) {
+        fprintf(stderr, "squirrelcalc: %s: %s\n", path, big ? "too big for a notebook" : msg);
+        return -1;
+    }
+    return 0;
+}
+
+static int save_notebook(const char *path) {
+    size_t n = calc_gui_notebook_save(&g, csv_buf, sizeof csv_buf);
+    if (n >= sizeof csv_buf) return -1;
+    FILE *f = fopen(path, "wb");
+    if (!f) return -1;
+    int ok = fwrite(csv_buf, 1, n, f) == n;
+    return fclose(f) == 0 && ok ? 0 : -1;
+}
+
 static int save_csv(const char *path, int formulas) {
     size_t n = calc_sheet_save_csv(&g.sheet, formulas, csv_buf, sizeof csv_buf);
     if (n >= sizeof csv_buf) return -1;
@@ -57,8 +92,8 @@ static int save_csv(const char *path, int formulas) {
 
 int main(int argc, char **argv) {
     calc_gui_init(&g);
-    const char *snapshot = NULL, *save = NULL;
-    int save_formulas = 0;
+    const char *snapshot = NULL, *save = NULL, *save_nb = NULL;
+    int save_formulas = 0, notes_added = 0;
     int frames = 0, nfn = 0;
     for (int i = 1; i < argc; i++) {
         const char *a = argv[i];
@@ -98,6 +133,19 @@ int main(int argc, char **argv) {
                 fprintf(stderr, "squirrelcalc: --cell %s: not a cell from A1 to H50, or too long\n", s);
                 return 1;
             }
+        } else if (!strcmp(a, "--notebook") && more) {
+            if (load_notebook(argv[++i])) return 1;
+        } else if ((!strcmp(a, "--note") || !strcmp(a, "--note-text")) && more) {
+            int kind = strcmp(a, "--note") ? CALC_NOTE_TEXT : CALC_NOTE_MATH;
+            if (calc_note_insert(&g.note, g.note.n, kind, argv[++i]) < 0) {
+                fprintf(stderr, "squirrelcalc: %s: the notebook is full, or the line is too long\n", a);
+                return 1;
+            }
+            notes_added = 1;
+        } else if (!strcmp(a, "--notes")) {
+            g.show_notes = 1;
+        } else if (!strcmp(a, "--save-notebook") && more) {
+            save_nb = argv[++i];
         } else if (!strcmp(a, "--sheet")) {
             g.show_sheet = 1;
         } else if ((!strcmp(a, "--save-csv") || !strcmp(a, "--save-sheet")) && more) {
@@ -120,8 +168,14 @@ int main(int argc, char **argv) {
             return 2;
         }
     }
+    if (notes_added) calc_gui_notebook_run(&g);
+    if (g.note.n && g.note.sel < 0) g.note.sel = 0;
     for (int k = 0; k < nfn; k++)
         if (g.err[k][0]) fprintf(stderr, "squirrelcalc: y%d: %s\n", k + 1, g.err[k]);
+    if (save_nb && save_notebook(save_nb)) {
+        fprintf(stderr, "squirrelcalc: could not write %s\n", save_nb);
+        return 1;
+    }
     if (save && save_csv(save, save_formulas)) {
         fprintf(stderr, "squirrelcalc: could not write %s\n", save);
         return 1;
@@ -144,6 +198,10 @@ int main(int argc, char **argv) {
         if (sqg_write_ppm(&cv, snapshot)) {
             fprintf(stderr, "squirrelcalc: could not write %s\n", snapshot);
             return 1;
+        }
+        if (g.note.n) {
+            calc_gui_notebook_text(&g, csv_buf, sizeof csv_buf);
+            fputs(csv_buf, stdout);
         }
         if (g.hist[0]) printf("%s\n", g.hist);
         if (g.status[0]) printf("%s\n", g.status);

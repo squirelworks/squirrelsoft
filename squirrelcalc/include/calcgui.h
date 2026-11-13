@@ -11,6 +11,7 @@
 
 #include "calcgeom.h"
 #include "calcgraph.h"
+#include "calcnote.h"
 #include "calcsheet.h"
 #include "calcstats.h"
 
@@ -108,6 +109,12 @@ typedef struct {
     int drag_geom, hot_geom; /* the point being dragged, and the one under the pointer; -1 for none */
     sqg_rect sheet_at;              /* the grid in the last frame: a 30-pixel row-number
                                        column, then 8 columns; 16-pixel rows under a header */
+    /* the notebook, shown in place of the graph */
+    CalcNote note;
+    int show_notes;
+    sqg_rect note_at[CALC_NOTE_MAX]; /* where each cell was drawn in the last frame (h 0: not shown) */
+    char *echo;      /* while set, results go here (echo_cap bytes) instead of the history */
+    size_t echo_cap;
     char status[200];
 } CalcGui;
 
@@ -131,7 +138,8 @@ void calc_gui_set(CalcGui *g, int i, const char *text);
  * "c = circle(A, 3)", "M = midpoint(A, B)", "I = intersect(s, c)" and the
  * rest of calcgeom.h, drawn on the graph (free points can be dragged);
  * measurements such as distance(A, B) or area(p) in any expression;
- * "delete NAME" and "geometry" (a list). Adds the result to the history. Returns 0, or -1 on
+ * "delete NAME" and "geometry" (a list). "y1 = sin(x)" sets a row (y1..y4).
+ * With the notebook shown, a line run here is also added to it. Adds the result to the history. Returns 0, or -1 on
  * an error (also in the history). */
 int calc_gui_eval(CalcGui *g, const char *line);
 
@@ -141,6 +149,32 @@ int calc_gui_cell(CalcGui *g, const char *ref, const char *text);
 /* Recalculate the sheet and recompile the rows that use it (after loading
  * a CSV into g->sheet, say) */
 void calc_gui_recalc(CalcGui *g);
+
+/* Forget the variables, lists, shapes, fits and plots, as at the start;
+ * the rows, the sheet, the view and the notebook stay. */
+void calc_gui_forget(CalcGui *g);
+
+/* Notebooks (calcnote.h, calcnote.c). Run: forget, then every math cell in
+ * order, each one's result kept with it; returns the cells with an error.
+ * A math cell is any calculator line, and "y1 = sin(x)" sets a row.
+ *
+ * The notebook file keeps a whole session, one line each:
+ *   SquirrelCalc notebook 1      first
+ *   y1: sin(x)                   a row as typed (y1 to y4)
+ *   view: -10 10 -6 6            xmin xmax ymin ymax
+ *   cell B2: =A1*2               a sheet cell as typed
+ *   text: Some notes             a text cell ("# Title" is a heading)
+ *   math: a = 2                  a math cell
+ * with blank lines and # comments left out. Save returns the length the
+ * whole text needs, like snprintf. Load checks every line first and changes
+ * nothing on an error (-1, "line 3: why" in msg); else it replaces the
+ * rows, sheet, view and notebook, runs it, and says how it went in msg.
+ * Text is the notebook as it reads, results under their cells, for a
+ * terminal. */
+int calc_gui_notebook_run(CalcGui *g);
+size_t calc_gui_notebook_save(const CalcGui *g, char *out, size_t cap);
+int calc_gui_notebook_load(CalcGui *g, const char *text, char *msg, size_t msgcap);
+size_t calc_gui_notebook_text(const CalcGui *g, char *out, size_t cap);
 
 /* Value of a user variable, or NAN */
 double calc_gui_var(const CalcGui *g, const char *name);

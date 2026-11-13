@@ -37,6 +37,17 @@ void calc_gui_init(CalcGui *g) {
     g->cell_r = g->cell_c = -1;
     calc_geom_init(&g->geom);
     g->drag_geom = g->hot_geom = -1;
+    calc_note_init(&g->note);
+}
+
+void calc_gui_forget(CalcGui *g) {
+    g->nvars = 0;
+    g->nlists = 0;
+    calc_geom_init(&g->geom);
+    g->drag_geom = g->hot_geom = -1;
+    g->fit_on = g->stat_plot = g->area_on = 0;
+    g->trace_fn = -1;
+    calc_gui_recalc(g);
 }
 
 double calc_gui_var(const CalcGui *g, const char *name) {
@@ -300,6 +311,12 @@ void calc_gui_set(CalcGui *g, int i, const char *text) {
 }
 
 static void hist_add(CalcGui *g, const char *line) {
+    if (g->echo) { /* a notebook cell's result: what fits */
+        size_t have = strlen(g->echo);
+        if (have && have + 1 < g->echo_cap) g->echo[have++] = '\n';
+        snprintf(g->echo + have, g->echo_cap - have, "%s", line);
+        return;
+    }
     size_t n = strlen(line), have = strlen(g->hist);
     while (have && have + n + 2 > sizeof g->hist) { /* drop the oldest lines */
         char *nl = strchr(g->hist, '\n');
@@ -925,6 +942,27 @@ static int cell_assign(CalcGui *g, const char *line, const char *name, const cha
     return 0;
 }
 
+/* y1 = sin(x): the row as typed after the = */
+static int row_assign(CalcGui *g, const char *line, int i, const char *rhs) {
+    char out[400];
+    rhs += strspn(rhs, " ");
+    size_t n = strlen(rhs);
+    while (n && rhs[n - 1] == ' ') n--;
+    if (n >= sizeof g->fx[i]) {
+        hist_error(g, line, "too long for a row");
+        return -1;
+    }
+    snprintf(g->fx[i], sizeof g->fx[i], "%.*s", (int)n, rhs);
+    calc_gui_set(g, i, g->fx[i]);
+    if (g->err[i][0]) {
+        hist_error(g, line, g->err[i]);
+        return -1;
+    }
+    snprintf(out, sizeof out, "y%d = %s", i + 1, g->fx[i]);
+    hist_add(g, out);
+    return 0;
+}
+
 static int eval_line(CalcGui *g, const char *line) {
     int cas = cas_line(g, line);
     if (cas == -2) cas = list_line(g, line);
@@ -999,6 +1037,7 @@ static int eval_line(CalcGui *g, const char *line) {
         name[len] = 0;
         int cr, cc;
         if (calc_cell_parse(name, &cr, &cc, NULL) == (int)len) return cell_assign(g, line, name, eq + 1);
+        if (len == 2 && name[0] == 'y' && name[1] >= '1' && name[1] <= '0' + CALC_N) return row_assign(g, line, name[1] - '1', eq + 1);
         if (!is_reserved(name) && strcmp(name, "ans")) {
             int gi = calc_geom_find(&g->geom, name), rc = -2;
             char why[96];
@@ -1485,6 +1524,219 @@ static void sheet_view(CalcGui *g, sqg_ui *ui, sqg_rect r) {
     cv->clip = old;
 }
 
+/* ---- the notebook ---- */
+
+static void load_note_line(CalcGui *g) {
+    CalcNote *nb = &g->note;
+    snprintf(nb->edit, sizeof nb->edit, "%s", nb->sel >= 0 && nb->sel < nb->n ? nb->c[nb->sel].text : "");
+    nb->edit_at = nb->sel;
+}
+
+/* the edit line into its cell, and the notebook run again, when it was changed */
+static void commit_note(CalcGui *g) {
+    CalcNote *nb = &g->note;
+    if (nb->edit_at < 0 || nb->edit_at >= nb->n || !strcmp(nb->edit, nb->c[nb->edit_at].text)) return;
+    calc_note_set(nb, nb->edit_at, nb->edit);
+    calc_gui_notebook_run(g);
+}
+
+static void select_note(CalcGui *g, int i) {
+    commit_note(g);
+    if (i >= g->note.n) i = g->note.n - 1;
+    if (i < 0) i = g->note.n ? 0 : -1;
+    g->note.sel = i;
+    load_note_line(g);
+}
+
+/* a new cell after the selected one, selected, with the keyboard */
+static void add_note(CalcGui *g, sqg_ui *ui, int kind) {
+    commit_note(g);
+    int at = calc_note_insert(&g->note, g->note.sel >= 0 ? g->note.sel + 1 : g->note.n, kind, "");
+    if (at < 0) {
+        snprintf(g->status, sizeof g->status, "A notebook has at most %d cells", CALC_NOTE_MAX);
+        return;
+    }
+    g->note.sel = at;
+    load_note_line(g);
+    ui->focus = sqg_id_str("note");
+    ui->cursor = 0;
+}
+
+enum { NOTE_LINE = SQG_GLYPH_H + 4, NOTE_HEAD = 2 * SQG_GLYPH_H + 6, NOTE_GAP = 6 };
+
+/* where a cell is drawn; with none, the lines are only measured */
+typedef struct {
+    sqg_canvas *cv;
+    int x, y;
+} NoteAt;
+
+/* s wrapped to cols columns from y down, lh apart; returns the y after it */
+static int note_lines(const char *s, int cols, int scale, int lh, uint32_t col, int indent, const NoteAt *at, int y) {
+    char buf[CALC_NOTE_OUT];
+    while (*s) {
+        size_t n = calc_note_wrap(s, cols);
+        if (at) {
+            size_t k = n;
+            while (k && (s[k - 1] == '\n' || s[k - 1] == ' ')) k--;
+            snprintf(buf, sizeof buf, "%.*s", (int)k, s);
+            sqg_text(at->cv, at->x + indent, at->y + y, buf, col, scale);
+        }
+        s += n;
+        y += lh;
+    }
+    return y;
+}
+
+/* a cell w pixels wide, drawn when at is set; returns its height */
+static int note_cell(const CalcNoteCell *c, int w, const NoteAt *at, int selected) {
+    int cols = (w - 24) / SQG_GLYPH_W, y = 3;
+    if (cols < 4) cols = 4;
+    const char *body;
+    if (c->kind == CALC_NOTE_TEXT) {
+        int head = calc_note_heading(c, &body);
+        if (!body[0]) {
+            if (selected) y = note_lines("(an empty line of notes)", cols, 1, NOTE_LINE, 0xFF909090u, 12, at, y);
+            else y += NOTE_LINE / 2;
+        } else if (head) {
+            y = note_lines(body, cols / 2, 2, NOTE_HEAD, 0xFF202830u, 12, at, y);
+        } else {
+            y = note_lines(body, cols, 1, NOTE_LINE, 0xFF303030u, 12, at, y);
+        }
+        return y + 2;
+    }
+    if (at) sqg_text(at->cv, at->x + 4, at->y + y, ">", 0xFF8090A0u, 1);
+    y = note_lines(c->text[0] ? c->text : "(an empty calculator line)", cols, 1, NOTE_LINE,
+                   c->text[0] ? 0xFF2050A0u : 0xFF909090u, 12, at, y);
+    char res[CALC_NOTE_OUT];
+    calc_note_result(c, res, sizeof res);
+    if (res[0]) y = note_lines(res, cols - 2, 1, NOTE_LINE, c->bad ? COL_ERR : 0xFF207040u, 24, at, y);
+    return y + 2;
+}
+
+static void notes_view(CalcGui *g, sqg_ui *ui, sqg_rect r) {
+    sqg_canvas *cv = ui->cv;
+    CalcNote *nb = &g->note;
+    int lh = sqg_line_h(ui);
+    sqg_id fid = sqg_id_str("note");
+    if (nb->edit_at != nb->sel) load_note_line(g);
+
+    /* the toolbar */
+    sqg_row row = sqg_row_begin(sqg_rect_make(r.x, r.y, r.w, lh), 4);
+    if (sqg_button(ui, sqg_id_str("n_math"), sqg_row_take(&row, sqg_button_w(ui, "+ Math")), "+ Math"))
+        add_note(g, ui, CALC_NOTE_MATH);
+    if (sqg_button(ui, sqg_id_str("n_text"), sqg_row_take(&row, sqg_button_w(ui, "+ Text")), "+ Text"))
+        add_note(g, ui, CALC_NOTE_TEXT);
+    int sel = nb->sel;
+    if (sqg_button(ui, sqg_id_str("n_kind"), sqg_row_take(&row, sqg_button_w(ui, "Math/Text")), "Math/Text") &&
+        sel >= 0) {
+        commit_note(g);
+        calc_note_set_kind(nb, sel, nb->c[sel].kind == CALC_NOTE_MATH ? CALC_NOTE_TEXT : CALC_NOTE_MATH);
+        calc_gui_notebook_run(g);
+    }
+    int up = sqg_button(ui, sqg_id_str("n_up"), sqg_row_take(&row, sqg_button_w(ui, "Up")), "Up");
+    int down = sqg_button(ui, sqg_id_str("n_down"), sqg_row_take(&row, sqg_button_w(ui, "Down")), "Down");
+    if ((up || down) && sel >= 0) {
+        commit_note(g);
+        if (calc_note_move(nb, sel, sel + (down ? 1 : -1)) != sel) calc_gui_notebook_run(g);
+    }
+    if (sqg_button(ui, sqg_id_str("n_del"), sqg_row_take(&row, sqg_button_w(ui, "Delete")), "Delete") && sel >= 0) {
+        calc_note_remove(nb, sel);
+        nb->edit_at = -1; /* what was being typed goes with it */
+        calc_gui_notebook_run(g);
+        load_note_line(g);
+    }
+    if (sqg_button(ui, sqg_id_str("n_run"), sqg_row_take(&row, sqg_button_w(ui, "Run")), "Run")) {
+        commit_note(g);
+        calc_gui_notebook_run(g);
+    }
+    int bad = 0;
+    for (int i = 0; i < nb->n; i++) bad += nb->c[i].bad;
+    char count[48];
+    if (bad) snprintf(count, sizeof count, "%d cells, %d with an error", nb->n, bad);
+    else snprintf(count, sizeof count, "%d cell%s", nb->n, nb->n == 1 ? "" : "s");
+    sqg_label(ui, sqg_row_take(&row, 0), count, SQG_ALIGN_RIGHT);
+
+    /* the edit line: Enter puts it in, and moves on (a new math line after the last) */
+    if (ui->focus == fid) {
+        int k = ui->in.key;
+        if ((k == SQG_KEY_UP && nb->sel > 0) || (k == SQG_KEY_DOWN && nb->sel + 1 < nb->n)) {
+            select_note(g, nb->sel + (k == SQG_KEY_DOWN ? 1 : -1));
+            ui->in.key = 0;
+            ui->cursor = (int)strlen(nb->edit);
+        }
+    }
+    sqg_row erow = sqg_row_begin(sqg_rect_make(r.x, r.y + lh + 4, r.w, lh), 4);
+    char tag[16];
+    if (nb->sel >= 0) snprintf(tag, sizeof tag, "%d %s", nb->sel + 1, nb->c[nb->sel].kind == CALC_NOTE_MATH ? ">" : "#");
+    else snprintf(tag, sizeof tag, "new >");
+    sqg_label(ui, sqg_row_take(&erow, sqg_text_width("48 # ", 1) + 4), tag, SQG_ALIGN_LEFT);
+    if (sqg_textfield(ui, fid, sqg_row_take(&erow, 0), nb->edit, sizeof nb->edit)) {
+        if (nb->sel < 0) { /* nothing yet: the line starts the notebook */
+            if (nb->edit[0] && calc_note_insert(nb, 0, CALC_NOTE_MATH, nb->edit) == 0) {
+                nb->sel = 0;
+                calc_gui_notebook_run(g);
+                nb->edit_at = -1;
+                add_note(g, ui, CALC_NOTE_MATH);
+            }
+        } else {
+            commit_note(g);
+            if (nb->sel == nb->n - 1 && nb->c[nb->sel].kind == CALC_NOTE_MATH && nb->c[nb->sel].text[0])
+                add_note(g, ui, CALC_NOTE_MATH);
+            else
+                select_note(g, nb->sel + 1);
+        }
+        ui->cursor = (int)strlen(nb->edit);
+    }
+
+    /* the cells */
+    int ey = r.y + 2 * (lh + 4);
+    sqg_rect body = sqg_rect_make(r.x, ey, r.w, r.h - (ey - r.y));
+    for (int i = 0; i < CALC_NOTE_MAX; i++) g->note_at[i] = sqg_rect_make(0, 0, 0, 0);
+    if (body.h < 30 || body.w < 80) return;
+    sqg_bevel(cv, body, 1, 0, ui->theme);
+    sqg_rect in = sqg_rect_inset(body, 2);
+    sqg_fill(cv, in, 0xFFFFFFFFu);
+    if (!nb->n) {
+        sqg_text(cv, in.x + 8, in.y + 8, "An empty notebook. Type a calculator line above, or + Text for notes;", 0xFF707070u, 1);
+        sqg_text(cv, in.x + 8, in.y + 8 + NOTE_LINE, "each line's result shows under it, and changing one works out the rest.",
+                 0xFF707070u, 1);
+        return;
+    }
+    if (sqg_rect_contains(in, ui->in.mx, ui->in.my)) nb->top -= ui->in.wheel;
+    if (nb->sel != nb->seen_sel && nb->sel >= 0) { /* follow a new selection; leave a scroll alone */
+        if (nb->sel < nb->top) nb->top = nb->sel;
+        int h = 0;
+        for (int i = nb->sel; i >= nb->top; i--) h += note_cell(&nb->c[i], in.w, NULL, i == nb->sel) + NOTE_GAP;
+        while (h > in.h && nb->top < nb->sel) h -= note_cell(&nb->c[nb->top], in.w, NULL, 0) + NOTE_GAP, nb->top++;
+        nb->seen_sel = nb->sel;
+    }
+    if (nb->top > nb->n - 1) nb->top = nb->n - 1;
+    if (nb->top < 0) nb->top = 0;
+    sqg_rect old = sqg_clip(cv, in);
+    int y = in.y + 2;
+    for (int i = nb->top; i < nb->n && y < in.y + in.h; i++) {
+        int h = note_cell(&nb->c[i], in.w, NULL, i == nb->sel);
+        sqg_rect cell = sqg_rect_make(in.x + 2, y, in.w - 4, h);
+        g->note_at[i] = cell;
+        if (i == nb->sel) {
+            sqg_fill(cv, cell, 0xFFEEF3FCu);
+            sqg_fill(cv, sqg_rect_make(cell.x, cell.y, 3, cell.h), 0xFF2060D0u);
+        }
+        NoteAt at = {cv, cell.x, cell.y};
+        note_cell(&nb->c[i], in.w, &at, i == nb->sel);
+        y += h + NOTE_GAP;
+    }
+    cv->clip = old;
+    /* a click picks a cell and gives the edit line the keyboard */
+    if (ui->in.pressed && sqg_rect_contains(in, ui->in.mx, ui->in.my))
+        for (int i = 0; i < nb->n; i++)
+            if (g->note_at[i].h && sqg_rect_contains(g->note_at[i], ui->in.mx, ui->in.my)) {
+                select_note(g, i);
+                ui->focus = fid;
+                ui->cursor = (int)strlen(nb->edit);
+            }
+}
+
 static void make_status(CalcGui *g) {
     char s[200] = "";
     size_t k = 0;
@@ -1595,7 +1847,19 @@ void calc_gui_frame(CalcGui *g, sqg_ui *ui) {
     int enter = sqg_textfield(ui, sqg_id_str("line"), sqg_row_take(&crow, left_w - sqg_button_w(ui, "=") - 4),
                               g->line, sizeof g->line);
     if ((sqg_button(ui, sqg_id_str("eq"), sqg_row_take(&crow, 0), "=") || enter) && g->line[0]) {
-        if (calc_gui_eval(g, g->line) == 0) g->line[0] = 0;
+        int at = -1;
+        if (g->show_notes) { /* the notebook keeps it, after the selected cell */
+            commit_note(g);
+            at = calc_note_insert(&g->note, g->note.sel >= 0 ? g->note.sel + 1 : g->note.n, CALC_NOTE_MATH, g->line);
+        }
+        if (at >= 0) {
+            g->note.sel = at;
+            load_note_line(g);
+            calc_gui_notebook_run(g);
+            g->line[0] = 0;
+        } else if (calc_gui_eval(g, g->line) == 0) {
+            g->line[0] = 0;
+        }
     }
 
     /* graph toolbar and graph */
@@ -1611,16 +1875,20 @@ void calc_gui_frame(CalcGui *g, sqg_ui *ui) {
             g->view_ready = g->area_on = g->fit_on = g->stat_plot = 0;
         if (sqg_button(ui, sqg_id_str("square"), sqg_row_take(&grow, sqg_button_w(ui, "Square")), "Square"))
             calc_view_square(&g->view, g->graph_at.w, g->graph_at.h);
+        int was_sheet = g->show_sheet, was_notes = g->show_notes;
         if (sqg_toggle(ui, sqg_id_str("table"), sqg_row_take(&grow, sqg_button_w(ui, "Table")), "Table",
                        &g->show_table) && g->show_table)
-            g->show_sheet = 0;
+            g->show_sheet = g->show_notes = 0;
         if (sqg_toggle(ui, sqg_id_str("sheet"), sqg_row_take(&grow, sqg_button_w(ui, "Sheet")), "Sheet",
-                       &g->show_sheet)) {
-            if (g->show_sheet) g->show_table = 0;
-            else commit_cell(g);
-        }
+                       &g->show_sheet) && g->show_sheet)
+            g->show_table = g->show_notes = 0;
+        if (sqg_toggle(ui, sqg_id_str("notes"), sqg_row_take(&grow, sqg_button_w(ui, "Notebook")), "Notebook",
+                       &g->show_notes) && g->show_notes)
+            g->show_table = g->show_sheet = 0;
+        if (was_sheet && !g->show_sheet) commit_cell(g);
+        if (was_notes && !g->show_notes) commit_note(g);
         char pos[80] = "";
-        if (g->mouse_in && !g->show_table && !g->show_sheet) {
+        if (g->mouse_in && !g->show_table && !g->show_sheet && !g->show_notes) {
             char a[32], b[32];
             sqm_format(g->mouse_x, 5, a, sizeof a);
             sqm_format(g->mouse_y, 5, b, sizeof b);
@@ -1630,7 +1898,10 @@ void calc_gui_frame(CalcGui *g, sqg_ui *ui) {
         int top = pad + lh + 4;
         sqg_rect area = sqg_rect_make(gx, top, gw, status_y - pad - top);
         if (area.h > 20) {
-            if (g->show_sheet) {
+            if (g->show_notes) {
+                g->mouse_in = 0;
+                notes_view(g, ui, area);
+            } else if (g->show_sheet) {
                 g->mouse_in = 0;
                 sheet_view(g, ui, area);
             } else if (g->show_table) {
