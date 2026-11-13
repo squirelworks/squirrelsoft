@@ -34,9 +34,20 @@ build/squirrelqr shot.png code.pgm   # PNG, PGM/PPM/PBM and BMP files; one line 
 build/squirrelqr --select            # drag a rectangle with the mouse; Esc cancels
 build/squirrelqr --screen --wait 10  # keep looking at the whole screen for up to 10 s
 build/squirrelqr --region 0,0,800,600 --json
-build/squirrelqr --gui [shot.png]    # small window: Select area, Whole screen, open a file, Copy text
+build/squirrelqr --gui [shot.png]    # small window: Select area, Whole screen, open a file, Copy text, Make QR
+build/squirrelqr --details shot.png  # also say what it is (Wi-Fi, contact, link, ...) and list its fields
+build/squirrelqr --encode "https://squirrel.works/"                 # draw a code in the terminal
+build/squirrelqr --encode "hello" --level H --out hello.png         # or write .png / .svg / .pgm
+build/squirrelqr --wifi "Nest" --password "acorns" --out wifi.png   # a Wi-Fi code phones can join from
 make test-desktop                    # unit + CLI tests; the capture test runs under xvfb-run
 ```
+
+Codes are made by `libs/sqqr`'s own encoder (one segment in the most compact
+mode, the smallest version for the level, the lowest-penalty mask; checked
+module for module against an independent encoder). Reading understands the
+common payload conventions through `sqqr_content` in the same library: Wi-Fi
+(`WIFI:`), contacts (vCard, MECARD), e-mail (`mailto:`, `MATMSG:`), phone,
+SMS, `geo:` locations and web links. `--json` adds `"type"` and `"fields"`.
 
 The `--gui` window (`libs/sqgui` on SDL2) shows the last image with the
 code outlined in green, the decoded text, and the version and charset in

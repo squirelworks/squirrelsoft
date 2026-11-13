@@ -1,4 +1,5 @@
 #include "sqqr.h"
+#include "sqqr_internal.h"
 
 #include <string.h>
 
@@ -151,7 +152,7 @@ int sqqr_rs_decode(uint8_t *cw, int n, int nsym) {
 
 /* ------------------------------------------------- format / version */
 
-static uint32_t bch_rem(uint32_t v, uint32_t gen, int gen_deg) {
+uint32_t sqqr_bch_rem(uint32_t v, uint32_t gen, int gen_deg) {
     for (int i = 31; i >= gen_deg; i--)
         if (v & (1u << i)) v ^= gen << (i - gen_deg);
     return v;
@@ -169,7 +170,7 @@ static int popcount32(uint32_t v) {
 int sqqr_decode_format_bits(uint32_t word) {
     int best = -1, best_d = 4;
     for (uint32_t d = 0; d < 32; d++) {
-        uint32_t code = ((d << 10) | bch_rem(d << 10, 0x537, 10)) ^ 0x5412;
+        uint32_t code = ((d << 10) | sqqr_bch_rem(d << 10, 0x537, 10)) ^ 0x5412;
         int dist = popcount32((code ^ word) & 0x7FFF);
         if (dist < best_d) {
             best_d = dist;
@@ -182,7 +183,7 @@ int sqqr_decode_format_bits(uint32_t word) {
 int sqqr_decode_version_bits(uint32_t word) {
     int best = -1, best_d = 4;
     for (uint32_t v = 7; v <= 40; v++) {
-        uint32_t code = (v << 12) | bch_rem(v << 12, 0x1F25, 12);
+        uint32_t code = (v << 12) | sqqr_bch_rem(v << 12, 0x1F25, 12);
         int dist = popcount32((code ^ word) & 0x3FFFF);
         if (dist < best_d) {
             best_d = dist;
@@ -262,18 +263,14 @@ int sqqr_alignment_positions(int version, int pos[7]) {
 
 /* ------------------------------------------------------- grid layout */
 
-typedef struct {
-    int size, version;
-    uint8_t fn[SQQR_MAX_SIZE * SQQR_MAX_SIZE]; /* 1 = function module (not data) */
-} Layout;
 
-static void mark(Layout *l, int r0, int c0, int h, int w) {
+static void mark(SqqrLayout *l, int r0, int c0, int h, int w) {
     for (int r = r0; r < r0 + h; r++)
         for (int c = c0; c < c0 + w; c++)
             if (r >= 0 && c >= 0 && r < l->size && c < l->size) l->fn[r * l->size + c] = 1;
 }
 
-static void layout_init(Layout *l, int version) {
+void sqqr_layout_init(SqqrLayout *l, int version) {
     int n = 17 + 4 * version;
     l->size = n;
     l->version = version;
@@ -300,7 +297,7 @@ static void layout_init(Layout *l, int version) {
     /* The dark module sits inside the bottom-left format area already marked. */
 }
 
-static int mask_bit(int mask, int i, int j) {
+int sqqr_mask_bit(int mask, int i, int j) {
     switch (mask) {
         case 0: return (i + j) % 2 == 0;
         case 1: return i % 2 == 0;
@@ -368,9 +365,9 @@ static int put(SqqrResult *r, uint8_t c) {
     return 0;
 }
 
-static const char ALNUM[] = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ $%*+-./:";
+const char SQQR_ALNUM[] = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ $%*+-./:";
 
-static int count_bits(int mode, int version) {
+int sqqr_count_bits(int mode, int version) {
     int range = version <= 9 ? 0 : version <= 26 ? 1 : 2;
     static const int numeric[3] = {10, 12, 14}, alnum[3] = {9, 11, 13}, byte8[3] = {8, 16, 16},
                      kanji[3] = {8, 10, 12};
@@ -391,7 +388,7 @@ static int parse_stream(Bits *b, int version, SqqrResult *r) {
         uint32_t cnt, v;
         switch (mode) {
             case 1: /* numeric */
-                if (bits_get(b, count_bits(1, version), &cnt)) return -1;
+                if (bits_get(b, sqqr_count_bits(1, version), &cnt)) return -1;
                 while (cnt >= 3) {
                     if (bits_get(b, 10, &v) || v > 999) return -1;
                     if (put(r, (uint8_t)('0' + v / 100)) || put(r, (uint8_t)('0' + v / 10 % 10)) ||
@@ -408,26 +405,26 @@ static int parse_stream(Bits *b, int version, SqqrResult *r) {
                 }
                 break;
             case 2: /* alphanumeric */
-                if (bits_get(b, count_bits(2, version), &cnt)) return -1;
+                if (bits_get(b, sqqr_count_bits(2, version), &cnt)) return -1;
                 while (cnt >= 2) {
                     if (bits_get(b, 11, &v) || v >= 45 * 45) return -1;
-                    if (put(r, (uint8_t)ALNUM[v / 45]) || put(r, (uint8_t)ALNUM[v % 45])) return SQQR_ERR_OVERFLOW;
+                    if (put(r, (uint8_t)SQQR_ALNUM[v / 45]) || put(r, (uint8_t)SQQR_ALNUM[v % 45])) return SQQR_ERR_OVERFLOW;
                     cnt -= 2;
                 }
                 if (cnt == 1) {
                     if (bits_get(b, 6, &v) || v >= 45) return -1;
-                    if (put(r, (uint8_t)ALNUM[v])) return SQQR_ERR_OVERFLOW;
+                    if (put(r, (uint8_t)SQQR_ALNUM[v])) return SQQR_ERR_OVERFLOW;
                 }
                 break;
             case 4: /* byte */
-                if (bits_get(b, count_bits(4, version), &cnt)) return -1;
+                if (bits_get(b, sqqr_count_bits(4, version), &cnt)) return -1;
                 for (uint32_t i = 0; i < cnt; i++) {
                     if (bits_get(b, 8, &v)) return -1;
                     if (put(r, (uint8_t)v)) return SQQR_ERR_OVERFLOW;
                 }
                 break;
             case 8: /* kanji -> Shift JIS */
-                if (bits_get(b, count_bits(8, version), &cnt)) return -1;
+                if (bits_get(b, sqqr_count_bits(8, version), &cnt)) return -1;
                 r->has_kanji = 1;
                 for (uint32_t i = 0; i < cnt; i++) {
                     if (bits_get(b, 13, &v)) return -1;
@@ -488,8 +485,8 @@ int sqqr_decode_grid(const uint8_t *grid, int size, SqqrResult *out) {
         if (v != version) return SQQR_ERR_VERSION;
     }
 
-    Layout lay;
-    layout_init(&lay, version);
+    SqqrLayout lay;
+    sqqr_layout_init(&lay, version);
     SqqrBlocks bl;
     sqqr_blocks(version, level, &bl);
 
@@ -506,7 +503,7 @@ int sqqr_decode_grid(const uint8_t *grid, int size, SqqrResult *out) {
                 int col = right - dc;
                 if (lay.fn[row * size + col]) continue;
                 if (nbits < max_bits) {
-                    unsigned bit = DARK(grid, size, row, col) ^ (unsigned)mask_bit(mask, row, col);
+                    unsigned bit = DARK(grid, size, row, col) ^ (unsigned)sqqr_mask_bit(mask, row, col);
                     if (bit) raw[nbits >> 3] |= (uint8_t)(0x80 >> (nbits & 7));
                 }
                 nbits++;

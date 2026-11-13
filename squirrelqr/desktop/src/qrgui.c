@@ -3,10 +3,12 @@
 #include "qrgui.h"
 #include "qrdecode.h"
 #include "qrtext.h"
+#include "sqqr_content.h"
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 #define COL_OUTLINE 0xFF20D060u
 #define COL_PREVIEW_BG 0xFF303030u
@@ -44,12 +46,25 @@ int qr_gui_set_image(QrGui *g, QrImage *img, const char *source) {
     g->found = rc == SQQR_OK;
     if (!g->found) {
         g->text[0] = 0;
+        g->details[0] = 0;
         g->charset = NULL;
         snprintf(g->status, sizeof g->status, "%s: %s", source, sqqr_strerror(rc));
         return 0;
     }
     g->charset = qr_payload_text(g->res.data, g->res.len, g->res.eci, g->res.has_kanji, g->text,
                                  sizeof g->text);
+    static SqqrContent ct;
+    sqqr_content_parse(g->text, &ct);
+    size_t k = 0;
+    g->details[0] = 0;
+    if (ct.type != SQQR_CT_TEXT) {
+        k += (size_t)snprintf(g->details, sizeof g->details, "[%s]\n", sqqr_content_type_name(ct.type));
+        for (int i = 0; i < ct.nfields && k < sizeof g->details; i++)
+            k += (size_t)snprintf(g->details + k, sizeof g->details - k, "%s: %s\n", ct.field[i].label,
+                                  ct.field[i].value);
+        if (k < sizeof g->details) k += (size_t)snprintf(g->details + k, sizeof g->details - k, "\n");
+    }
+    if (k < sizeof g->details) snprintf(g->details + k, sizeof g->details - k, "%s", g->text);
     snprintf(g->status, sizeof g->status, "%s: version %d-%c, %s, %zu bytes", source,
              g->res.version, "LMQH"[g->res.ec_level], g->charset, (size_t)g->res.len);
     return 1;
@@ -64,6 +79,47 @@ int qr_gui_open(QrGui *g, const char *path) {
     }
     if (path != g->path) snprintf(g->path, sizeof g->path, "%s", path);
     return qr_gui_set_image(g, &img, path);
+}
+
+int qr_gui_make(QrGui *g, const char *text) {
+    char err[200];
+    size_t len = strlen(text);
+    if (!len) {
+        qr_gui_status(g, "Type the text to put in the code first");
+        return 0;
+    }
+    if (qr_make(text, len, SQQR_EC_M, &g->made, err, sizeof err) != 0) {
+        qr_gui_status(g, err);
+        return 0;
+    }
+    QrImage img;
+    if (qr_symbol_image(&g->made, 4, 4, &img) != 0) {
+        qr_gui_status(g, "out of memory");
+        return 0;
+    }
+    g->has_made = 1;
+    return qr_gui_set_image(g, &img, "made");
+}
+
+int qr_gui_save(QrGui *g, const char *path) {
+    char name[64], err[sizeof g->status];
+    if (!g->has_made) {
+        qr_gui_status(g, "Make a code first");
+        return -1;
+    }
+    if (!path) {
+        time_t now = time(NULL);
+        struct tm *tm = localtime(&now);
+        if (!tm || !strftime(name, sizeof name, "squirrelqr-%Y%m%d-%H%M%S.png", tm))
+            snprintf(name, sizeof name, "squirrelqr.png");
+        path = name;
+    }
+    if (qr_save_symbol(path, &g->made, 8, 4, err, sizeof err) != 0) {
+        qr_gui_status(g, err);
+        return -1;
+    }
+    snprintf(g->status, sizeof g->status, "Saved %s", path);
+    return 0;
 }
 
 /* Fit w x h inside r, centred, keeping the aspect ratio */
@@ -141,9 +197,24 @@ int qr_gui_frame(QrGui *g, sqg_ui *ui) {
     if ((sqg_button(ui, sqg_id_str("open"), open_r, "Open") || enter) && g->path[0])
         qr_gui_open(g, g->path);
 
+    y += lh + pad;
+    sqg_row mrow = sqg_row_begin(sqg_rect_make(pad, y, cv->w - 2 * pad, lh), 6);
+    sqg_label(ui, sqg_row_take(&mrow, sqg_text_width("File", ui->scale) + 4), "Make",
+              SQG_ALIGN_LEFT);
+    int mw = mrow.area.x + mrow.area.w - mrow.x - sqg_button_w(ui, "Make QR") -
+             sqg_button_w(ui, "Save PNG") - 12;
+    int menter = sqg_textfield(ui, sqg_id_str("make"), sqg_row_take(&mrow, mw), g->make,
+                               sizeof g->make);
+    if (sqg_button(ui, sqg_id_str("makeqr"), sqg_row_take(&mrow, sqg_button_w(ui, "Make QR")),
+                   "Make QR") ||
+        menter)
+        qr_gui_make(g, g->make);
+    if (sqg_button(ui, sqg_id_str("save"), sqg_row_take(&mrow, 0), "Save PNG"))
+        qr_gui_save(g, NULL);
+
     /* status at the bottom, the text above it, the preview takes the rest */
     int status_y = cv->h - pad - lh;
-    int text_h = 4 * (lh - 4) + 8;
+    int text_h = 6 * (lh - 4) + 8;
     int text_y = status_y - pad - text_h;
     y += lh + pad;
     if (text_y - pad - y >= 24)
@@ -151,7 +222,7 @@ int qr_gui_frame(QrGui *g, sqg_ui *ui) {
     else
         text_y = y;
     sqg_textbox(ui, sqg_rect_make(pad, text_y, cv->w - 2 * pad, status_y - pad - text_y),
-                g->found ? g->text : "");
+                g->found ? g->details : "");
     sqg_label(ui, sqg_rect_make(pad, status_y, cv->w - 2 * pad, lh), g->status, SQG_ALIGN_LEFT);
     return action;
 }

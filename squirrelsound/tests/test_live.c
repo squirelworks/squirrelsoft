@@ -288,6 +288,29 @@ static void test_record(void) {
     wav_free(&w);
     remove(path);
     expect(live_record_start(&r, la, "/nonexistent/dir/x.wav") == -1, "unwritable path refused");
+
+    /* the 32-bit RIFF limit: the header never wraps, and the overflow is reported */
+    WavStream *ws = wav_stream_open(path, 48000);
+    expect(ws != NULL, "stream open");
+    if (ws) {
+        const uint64_t max_frames = (0xFFFFFFFFull - 36) / 2;
+        wav_stream_skip_for_test(ws, max_frames - 3);
+        double five[5] = {0, 0.1, 0.2, 0.3, 0.4};
+        expect(wav_stream_write(ws, five, 5) == -1 && wav_stream_full(ws), "write past the limit refused");
+        expect(wav_stream_close(ws) == -1, "close reports the loss");
+        FILE *f = fopen(path, "rb");
+        unsigned char h[44];
+        if (f && fread(h, 1, 44, f) == 44) {
+            uint32_t riff = h[4] | h[5] << 8 | h[6] << 16 | (uint32_t)h[7] << 24;
+            uint32_t data = h[40] | h[41] << 8 | h[42] << 16 | (uint32_t)h[43] << 24;
+            expect(data == (uint32_t)(max_frames * 2) && riff == data + 36 && riff >= data,
+                   "sizes at the limit, no wrap");
+        } else {
+            expect(0, "read header back");
+        }
+        if (f) fclose(f);
+        remove(path);
+    }
     live_audio_close(la);
 }
 

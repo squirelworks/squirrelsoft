@@ -158,7 +158,7 @@ struct WavStream {
     FILE *f;
     uint32_t rate;
     uint64_t frames;
-    int err;
+    int err, full;
 };
 
 WavStream *wav_stream_open(const char *path, uint32_t sample_rate) {
@@ -176,20 +176,35 @@ WavStream *wav_stream_open(const char *path, uint32_t sample_rate) {
 
 int wav_stream_write(WavStream *w, const double *samples, size_t n) {
     if (!w || w->err) return -1;
-    /* 16-bit mono RIFF tops out just under 4 GiB of data */
-    if (w->frames + n > 0x7FFFFFF0ull) n = (size_t)(0x7FFFFFF0ull - w->frames);
-    if (wr_samples(w->f, samples, n) != 0) w->err = 1;
+    /* RIFF sizes are 32-bit: the RIFF chunk (36 + data bytes) must fit, so
+     * 16-bit mono stops at (2^32 - 1 - 36) / 2 frames, about 12 h at 48 kHz.
+     * Past that the file is full: the rest is refused and close reports it. */
+    const uint64_t max_frames = (0xFFFFFFFFull - 36) / 2;
+    int full = 0;
+    if (w->frames + n > max_frames) {
+        n = (size_t)(max_frames - w->frames);
+        full = 1;
+    }
+    if (n && wr_samples(w->f, samples, n) != 0) w->err = 1;
     w->frames += n;
-    return w->err ? -1 : 0;
+    if (full) w->full = 1;
+    return w->err || full ? -1 : 0;
 }
 
 double wav_stream_seconds(const WavStream *w) {
     return w && w->rate ? (double)w->frames / (double)w->rate : 0.0;
 }
 
+int wav_stream_full(const WavStream *w) { return w && w->full; }
+
+/* for tests: pretend frames were already written */
+void wav_stream_skip_for_test(WavStream *w, uint64_t frames) {
+    if (w) w->frames = frames;
+}
+
 int wav_stream_close(WavStream *w) {
     if (!w) return -1;
-    int rc = w->err ? -1 : 0;
+    int rc = w->err || w->full ? -1 : 0;
     if (fseek(w->f, 0, SEEK_SET) == 0) wr_header(w->f, w->rate, (uint32_t)(w->frames * 2));
     else rc = -1;
     if (fclose(w->f) != 0) rc = -1;

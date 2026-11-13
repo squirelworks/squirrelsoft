@@ -229,7 +229,7 @@ static int run_fixture(const char *path) {
         return -1;
     }
     static char line[8192], hdr[8192];
-    int symbols = 0, damaged_ok = 0;
+    int symbols = 0, damaged_ok = 0, encoded_same = 0;
     while (fgets(line, sizeof line, f)) {
         if (line[0] != 'S') continue;
         strcpy(hdr, line);
@@ -262,6 +262,40 @@ static int run_fixture(const char *path) {
         }
         CHECK(res.corrected == 0);
         CHECK(res.corners[0] == 0 && res.corners[7] == 0); /* the grid decoder has no image */
+
+        /* The encoder rebuilds segno's symbol module for module (same version,
+         * level, mask, single segment); Kanji mode is decode-only. One known
+         * difference: when the data plus the 4-bit terminator ends exactly on
+         * a byte, segno adds a whole 0x00 codeword before the 0xEC/0x11 pads,
+         * where ISO/IEC 18004 7.4.10 pads only to the byte boundary (none
+         * here). Those symbols must decode the same instead. */
+        if (ok && !res.has_kanji) {
+            static uint8_t mine[SQQR_MAX_SIZE * SQQR_MAX_SIZE];
+            static SqqrResult back;
+            SqqrEncodeOptions o = {res.ec_level, version, mask, res.eci, SQQR_MODE_AUTO};
+            SqqrEncodeInfo info;
+            int erc = sqqr_encode(want, want_len, &o, mine, sizeof mine, &info);
+            int mode = sqqr_pick_mode(want, want_len), cb = 0;
+            size_t L = want_len, bits;
+            if (mode == SQQR_MODE_NUMERIC) { cb = version <= 9 ? 10 : version <= 26 ? 12 : 14; bits = 10 * (L / 3) + (L % 3 == 2 ? 7 : L % 3 == 1 ? 4 : 0); }
+            else if (mode == SQQR_MODE_ALNUM) { cb = version <= 9 ? 9 : version <= 26 ? 11 : 13; bits = 11 * (L / 2) + 6 * (L % 2); }
+            else { cb = version <= 9 ? 8 : 16; bits = 8 * L; }
+            bits += 4 + (size_t)cb + (res.eci >= 0 ? (res.eci < 128 ? 12 : res.eci < 16384 ? 20 : 28) : 0);
+            int segno_pad = (bits + 4) % 8 == 0;
+            int same = erc == SQQR_OK && info.version == version && memcmp(mine, grid, (size_t)n * n) == 0;
+            int equiv = erc == SQQR_OK && sqqr_decode_grid(mine, n, &back) == SQQR_OK && back.version == version &&
+                        back.mask == mask && back.ec_level == res.ec_level && back.len == want_len &&
+                        memcmp(back.data, want, want_len) == 0;
+            if (!(segno_pad ? equiv : same)) {
+                int diff = 0;
+                for (int i = 0; i < n * n; i++) diff += mine[i] != grid[i];
+                fprintf(stderr, "symbol %d (v%d %c mask %d): encoder rc=%d v=%d, %d modules differ\n",
+                        symbols, version, level, mask, erc, info.version, diff);
+                failures++;
+            }
+            CHECK(!segno_pad || !same); /* if this fires, segno changed and the note above is stale */
+            encoded_same += same;
+        }
         test_image(grid, n, symbols, want, want_len);
         if (symbols == 4) test_image_stride(grid, n, want, want_len);
 
@@ -288,7 +322,9 @@ static int run_fixture(const char *path) {
         symbols++;
     }
     fclose(f);
-    printf("fixture: %d symbols decoded, %d decoded again after damage\n", symbols, damaged_ok);
+    CHECK(encoded_same >= 18);
+    printf("fixture: %d symbols decoded, %d decoded again after damage, %d rebuilt exactly by the encoder\n", symbols,
+           damaged_ok, encoded_same);
     printf("images: %d of %d rendered symbols found and decoded\n", image_ok, image_tests);
     return symbols > 0 ? 0 : -1;
 }
@@ -317,8 +353,98 @@ static void test_image_stride(const uint8_t *g, int n, const uint8_t *want, size
     CHECK(rc == SQQR_OK && res.len == want_len && memcmp(res.data, want, want_len) == 0);
 }
 
+/* Encode, decode with our own decoder, compare: modes, levels, versions, masks, ECI */
+static void test_encode_roundtrip(void) {
+    uint32_t saved_rng = rng; /* the fixture damage below depends on the sequence */
+    static uint8_t g[SQQR_MAX_SIZE * SQQR_MAX_SIZE];
+    static SqqrResult r;
+    SqqrEncodeInfo info;
+    uint8_t data[3000];
+    int cases = 0;
+    for (int t = 0; t < 400; t++) {
+        int kind = t % 3;
+        size_t len = 1 + rnd() % (t < 300 ? 60 : 1200);
+        for (size_t i = 0; i < len; i++)
+            data[i] = kind == 0 ? (uint8_t)('0' + rnd() % 10)
+                    : kind == 1 ? (uint8_t)"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ $%*+-./:"[rnd() % 45]
+                                : (uint8_t)(rnd() & 0xFF);
+        SqqrEncodeOptions o = {(SqqrEcLevel)(rnd() % 4), (int)(rnd() % 8 == 0 ? rnd() % 20 : 0),
+                               (int)(rnd() % 3 == 0 ? (int)(rnd() % 8) : -1),
+                               rnd() % 5 == 0 ? 26 : -1, SQQR_MODE_AUTO};
+        int rc = sqqr_encode(data, len, &o, g, sizeof g, &info);
+        if (rc == SQQR_ERR_OVERFLOW) continue;
+        CHECK(rc == SQQR_OK);
+        if (rc != SQQR_OK) continue;
+        CHECK(info.mode == (kind == 0 ? SQQR_MODE_NUMERIC : kind == 1 ? SQQR_MODE_ALNUM : sqqr_pick_mode(data, len)));
+        CHECK(info.size == 17 + 4 * info.version && info.version >= o.min_version);
+        CHECK(o.mask < 0 || info.mask == o.mask);
+        int drc = sqqr_decode_grid(g, info.size, &r);
+        int ok = drc == SQQR_OK && r.version == info.version && r.ec_level == o.level &&
+                 r.mask == info.mask && r.len == len && memcmp(r.data, data, len) == 0 &&
+                 r.eci == o.eci && r.corrected == 0;
+        if (!ok)
+            fprintf(stderr, "encode case %d: kind %d len %zu v%d L%d mask %d eci %d: decode rc %d\n", t, kind,
+                    len, info.version, o.level, info.mask, o.eci, drc);
+        CHECK(ok);
+        /* and through the image path, at 4 px per module with a quiet zone */
+        if (info.version <= 10 && t % 7 == 0) {
+            int px = 4, qz = 4, w = (info.size + 2 * qz) * px;
+            static uint8_t img[(57 + 8) * 4 * (57 + 8) * 4];
+            for (int y = 0; y < w; y++)
+                for (int x = 0; x < w; x++) {
+                    int mr = y / px - qz, mc = x / px - qz;
+                    int dark = mr >= 0 && mc >= 0 && mr < info.size && mc < info.size && g[mr * info.size + mc];
+                    img[y * w + x] = dark ? 20 : 235;
+                }
+            static uint8_t work[SQQR_IMAGE_WORK(260, 260)];
+            CHECK(sqqr_decode_image(img, w, w, w, work, sizeof work, &r) == SQQR_OK && r.len == len &&
+                  memcmp(r.data, data, len) == 0);
+        }
+        cases++;
+    }
+    CHECK(cases > 300);
+
+    /* the smallest version is picked, and the capacity edges hold */
+    CHECK(sqqr_encode((const uint8_t *)"HELLO WORLD", 11, NULL, g, sizeof g, &info) == SQQR_OK &&
+          info.version == 1 && info.mode == SQQR_MODE_ALNUM && info.ec_level == SQQR_EC_M);
+    memset(data, '7', sizeof data);
+    SqqrEncodeOptions l = {SQQR_EC_L, 0, -1, -1, SQQR_MODE_AUTO};
+    CHECK(sqqr_encode(data, 41, &l, g, sizeof g, &info) == SQQR_OK && info.version == 1); /* 1-L holds 41 digits */
+    CHECK(sqqr_encode(data, 42, &l, g, sizeof g, &info) == SQQR_OK && info.version == 2);
+    memset(data, 'a', sizeof data);
+    SqqrEncodeOptions h = {SQQR_EC_H, 0, -1, -1, SQQR_MODE_AUTO};
+    CHECK(sqqr_encode(data, 1273, &h, g, sizeof g, &info) == SQQR_OK && info.version == 40); /* 40-H: 1273 bytes */
+    CHECK(sqqr_encode(data, 1274, &h, g, sizeof g, &info) == SQQR_ERR_OVERFLOW);
+    /* forced modes and bad options */
+    SqqrEncodeOptions num = {SQQR_EC_M, 0, -1, -1, SQQR_MODE_NUMERIC};
+    CHECK(sqqr_encode((const uint8_t *)"12A", 3, &num, g, sizeof g, &info) == SQQR_ERR_DATA);
+    SqqrEncodeOptions byte = {SQQR_EC_M, 0, -1, -1, SQQR_MODE_BYTE};
+    CHECK(sqqr_encode((const uint8_t *)"123", 3, &byte, g, sizeof g, &info) == SQQR_OK && info.mode == SQQR_MODE_BYTE);
+    SqqrEncodeOptions bad = {SQQR_EC_M, 0, 9, -1, SQQR_MODE_AUTO};
+    CHECK(sqqr_encode((const uint8_t *)"1", 1, &bad, g, sizeof g, &info) == SQQR_ERR_SIZE);
+    CHECK(sqqr_encode((const uint8_t *)"1", 1, NULL, g, 100, &info) == SQQR_ERR_SIZE); /* grid too small */
+    CHECK(sqqr_encode(NULL, 0, NULL, g, sizeof g, &info) == SQQR_OK && info.version == 1); /* empty is fine */
+    /* ECI numbers of each length survive */
+    int ecis[] = {3, 127, 128, 16383, 16384, 999999};
+    for (int i = 0; i < 6; i++) {
+        SqqrEncodeOptions e = {SQQR_EC_L, 0, -1, ecis[i], SQQR_MODE_AUTO};
+        CHECK(sqqr_encode((const uint8_t *)"abc", 3, &e, g, sizeof g, &info) == SQQR_OK &&
+              sqqr_decode_grid(g, info.size, &r) == SQQR_OK && r.eci == ecis[i]);
+    }
+    /* the chosen mask really is the lowest penalty */
+    SqqrEncodeInfo best, each;
+    CHECK(sqqr_encode((const uint8_t *)"PENALTY", 7, NULL, g, sizeof g, &best) == SQQR_OK);
+    for (int m = 0; m < 8; m++) {
+        SqqrEncodeOptions o = {SQQR_EC_M, 0, m, -1, SQQR_MODE_AUTO};
+        CHECK(sqqr_encode((const uint8_t *)"PENALTY", 7, &o, g, sizeof g, &each) == SQQR_OK &&
+              each.penalty >= best.penalty);
+    }
+    rng = saved_rng;
+}
+
 int main(int argc, char **argv) {
     test_rs();
+    test_encode_roundtrip();
     test_format_version();
     test_image_edges();
     if (argc > 1 && run_fixture(argv[1])) failures++;

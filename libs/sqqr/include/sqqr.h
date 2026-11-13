@@ -7,7 +7,10 @@
  * block table is the standard's data, cross-checked against an independent
  * encoder by tools/gen_fixtures.py.
  *
- * Two layers: sqqr_decode_grid decodes a sampled module grid (one byte per
+ * Encoding (sqqr_encode) builds a symbol from bytes: one segment in the
+ * most compact mode, optional ECI, smallest version, best-penalty mask.
+ *
+ * Two decoding layers: sqqr_decode_grid decodes a sampled module grid (one byte per
  * module, nonzero = dark), and sqqr_decode_image finds a symbol in a grayscale
  * image (finder patterns, alignment pattern, perspective sampling) and feeds it
  * to the grid decoder.
@@ -69,6 +72,37 @@ int sqqr_decode_image(const uint8_t *gray, int w, int h, int stride, void *work,
                       SqqrResult *out);
 
 const char *sqqr_strerror(int code);
+
+/* ---- encoding ---- */
+
+/* Mode indicators, as in the bitstream */
+enum { SQQR_MODE_AUTO = 0, SQQR_MODE_NUMERIC = 1, SQQR_MODE_ALNUM = 2, SQQR_MODE_BYTE = 4 };
+
+typedef struct {
+    SqqrEcLevel level; /* error correction */
+    int min_version;   /* 0 or 1..40: the smallest version to use */
+    int mask;          /* -1 for the lowest penalty, or 0..7 */
+    int eci;           /* -1 for none, else an ECI assignment number (26 = UTF-8) */
+    int mode;          /* SQQR_MODE_AUTO or a mode the data fits */
+} SqqrEncodeOptions;
+
+typedef struct {
+    int version, size, mask, mode, penalty;
+    SqqrEcLevel ec_level;
+} SqqrEncodeInfo;
+
+/* The most compact single mode for data: numeric, alphanumeric or byte */
+int sqqr_pick_mode(const uint8_t *data, size_t len);
+
+/* Encode len bytes into grid (row-major, 1 = dark, no quiet zone), which
+ * must hold size*size bytes (SQQR_MAX_SIZE^2 always does). opt NULL means
+ * level M, automatic version, mask and mode, no ECI. Returns SQQR_OK and
+ * fills info; SQQR_ERR_OVERFLOW if it does not fit in version 40 at that
+ * level; SQQR_ERR_DATA if a forced mode can't hold the data;
+ * SQQR_ERR_SIZE for bad options or a small grid. Reentrant; no
+ * allocation; about 80 KB of stack. */
+int sqqr_encode(const uint8_t *data, size_t len, const SqqrEncodeOptions *opt, uint8_t *grid,
+                size_t grid_cap, SqqrEncodeInfo *info);
 
 /* ---- lower-level pieces, exposed for tests and tools ---- */
 
