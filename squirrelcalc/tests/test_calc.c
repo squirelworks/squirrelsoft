@@ -962,6 +962,70 @@ static void test_sheet_gui(const char *dir) {
     g.show_sheet = 0;
 }
 
+static void test_geom_gui(void) {
+    calc_gui_init(&g);
+    CHECK(calc_gui_eval(&g, "A = (0, 0)") == 0 && contains(g.hist, "A = (0, 0)"));
+    CHECK(calc_gui_eval(&g, "B = (4, 0)") == 0 && calc_gui_eval(&g, "s = segment(A, B)") == 0);
+    CHECK(contains(g.hist, "s: segment, length 4"));
+    CHECK(calc_gui_eval(&g, "M = midpoint(s)") == 0 && contains(g.hist, "M = (2, 0)"));
+    CHECK(calc_gui_eval(&g, "length(s) * 2 + xcoord(M)") == 0 && contains(g.hist, "= 10"));
+    CHECK(calc_gui_eval(&g, "A = 5") == -1 && contains(g.hist, "A is a point: delete it first"));
+    CHECK(calc_gui_eval(&g, "k = 1") == 0 && calc_gui_eval(&g, "k = (1, 2)") == -1); /* k stays a number */
+    CHECK(calc_gui_eval(&g, "P = (k, 1)") == 0 && calc_gui_eval(&g, "k = 3") == 0);
+    NEAR(g.geom.o[calc_geom_find(&g.geom, "P")].x, 3, 0); /* a point follows its variable */
+    CHECK(calc_gui_eval(&g, "x = (1, 2)") == -1);       /* x is not a name for a point */
+    CHECK(calc_gui_eval(&g, "Q = intersect(s, P)") == -1 && contains(g.hist, "P is a point"));
+    CHECK(calc_gui_eval(&g, "M") == 0 && contains(g.hist, "M = (2, 0)"));
+    CHECK(calc_gui_eval(&g, "geometry") == 0 && contains(g.hist, "P = (3, 1)"));
+    CHECK(calc_gui_eval(&g, "area(s)") == -1 && contains(g.hist, "of a polygon or a circle"));
+    /* sheet functions in capitals, as spreadsheets write them */
+    CHECK(calc_gui_eval(&g, "A1 = 2") == 0 && calc_gui_eval(&g, "A2 = SUM(A1, 3)") == 0 && g.sheet.val[1][0] == 5);
+    CHECK(calc_gui_cell(&g, "A3", "=Mean(A1:A2)") == 0 && g.sheet.val[2][0] == 3.5 && !g.sheet.bad[2][0]);
+    /* a row that measures the shapes */
+    calc_gui_set(&g, 0, "y = length(s)");
+    CHECK(g.ok[0]);
+    /* drag B on the graph: the segment, its midpoint and the row follow */
+    frame();
+    sqg_rect inner = sqg_rect_inset(g.graph_at, 2);
+    int bx = (int)calc_px_x(&g.view, inner, 4), by = (int)calc_px_y(&g.view, inner, 0);
+    in.mx = bx;
+    in.my = by;
+    frame();
+    CHECK(g.hot_geom == calc_geom_find(&g.geom, "B"));
+    double v0 = g.view.xmin;
+    in.down = in.pressed = 1;
+    frame();
+    CHECK(g.drag_geom == calc_geom_find(&g.geom, "B"));
+    int tx = (int)calc_px_x(&g.view, inner, 6), ty = (int)calc_px_y(&g.view, inner, 0);
+    in.mx = tx;
+    in.my = ty;
+    frame();
+    in.down = 0;
+    in.released = 1;
+    frame();
+    CHECK(g.drag_geom == -1 && g.view.xmin == v0); /* the plane did not pan */
+    const CalcGeomObj *b = &g.geom.o[calc_geom_find(&g.geom, "B")], *m = &g.geom.o[calc_geom_find(&g.geom, "M")];
+    NEAR(b->x, 6, 0.05);
+    NEAR(m->x, b->x / 2, 1e-12);
+    double values[CALC_VARS + 1] = {0};
+    for (int i = 0; i < g.nvars; i++) values[i + 1] = g.vval[i];
+    NEAR(sqm_run(&g.prog[0], values), hypot(b->x, b->y), 1e-9);
+    /* a point made from others is not dragged: the press pans instead */
+    in.mx = (int)calc_px_x(&g.view, inner, m->x);
+    in.my = (int)calc_px_y(&g.view, inner, m->y);
+    in.down = in.pressed = 1;
+    frame();
+    CHECK(g.drag_geom == -1 && g.dragging);
+    in.down = 0;
+    in.released = 1;
+    frame();
+    /* delete takes what was built on it */
+    int rc = calc_gui_eval(&g, "delete s");
+    CHECK(rc == 0 && contains(g.hist, "delete s: 2 gone"));
+    CHECK(calc_geom_find(&g.geom, "M") < 0 && !g.ok[0] && contains(g.err[0], "s is not"));
+    CHECK(calc_gui_eval(&g, "delete s") == -1);
+}
+
 int main(int argc, char **argv) {
     const char *dir = argc > 1 ? argv[1] : ".";
     test_steps();
@@ -976,6 +1040,7 @@ int main(int argc, char **argv) {
     test_lists_gui();
     test_cas_step3();
     test_sheet_gui(dir);
+    test_geom_gui();
     printf("test_calc: %d checks, %d failed\n", checks, failures);
     return failures != 0;
 }

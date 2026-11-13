@@ -58,6 +58,13 @@ grep -q "^1,3,=B2\*2$" "$B/out2.csv" || fail "saved formulas: $(cat "$B/out2.csv
 $C --cell "Z9=1" --snapshot "$B/snap4.ppm" >/dev/null 2>&1; [ $? -eq 1 ] || fail "--cell Z9 should exit 1"
 $C --csv "$B/no-such.csv" --snapshot "$B/snap4.ppm" >/dev/null 2>&1; [ $? -eq 1 ] || fail "a missing CSV should exit 1"
 
+# geometry: a triangle, its circumcircle, a measurement in a graph row
+out=$($C --line "A = (0, 0)" --line "B = (4, 0)" --line "C = (0, 3)" --line "t = polygon(A, B, C)" \
+    --line "c = circle(A, B, C)" --line "area(t) + angle(B, A, C)" --fn "y = slope(segment(B, C)) x" \
+    --snapshot "$B/snap15.ppm" 2>&1) || fail "geometry"
+echo "$out" | grep -q "c: circle, centre (2, 1.5), radius 2.5" || fail "circumcircle: $out"
+echo "$out" | grep -q "area(t) + angle(B, A, C) = 96" || fail "measurements: $out"
+
 err=$($C --fn "sin(" --snapshot "$B/snap3.ppm" 2>&1 >/dev/null)
 echo "$err" | grep -q "y1:" || fail "parse error reported: $err"
 $C --let "x=1" --snapshot "$B/snap4.ppm" >/dev/null 2>&1; [ $? -eq 1 ] || fail "--let x=1 should exit 1"

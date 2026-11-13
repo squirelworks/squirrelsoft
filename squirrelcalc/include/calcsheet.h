@@ -17,6 +17,7 @@
  *   binompdf(n, p, k)  binomcdf(n, p, k)  poissonpdf(l, k)  poissoncdf(l, k)
  *   ncr(n, k)  npr(n, k)
  * These take numbers (they are worked out before sqmath sees the text).
+ * Their names may be in any case (SUM, Mean), as spreadsheets write them.
  *
  * Plain C11, no allocation.
  */

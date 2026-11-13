@@ -12,7 +12,7 @@ static void usage(FILE *f) {
           "  --let NAME=EXPR  define a variable first (--let a=2)\n"
           "  --line TEXT      run a calculator line first: \"a = 2\", \"solve x^2 = 2\",\n"
           "                   \"expand (x+1)^3\", \"xs = {1, 2, 3}\", \"linreg xs ys\",\n"
-          "                   \"5 ft to m\", \"units 5 kg * 9.81 m/s^2\"\n"
+          "                   \"5 ft to m\", \"units 5 kg * 9.81 m/s^2\", \"A = (1, 2)\"\n"
           "                   (with --snapshot the history is printed)\n"
           "  --csv FILE       load FILE into the spreadsheet (A1 is its first field)\n"
           "  --cell REF=TEXT  set a cell as typed: --cell A1=5, --cell \"B1==A1*2\"\n"
