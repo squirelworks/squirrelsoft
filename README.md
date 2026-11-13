@@ -15,6 +15,7 @@ libraries.
 | `squirrelsound/` | **SquirrelSound** | Spectral sound analyzer (`sqdsp`) + phone Spectroid UI |
 | `squirrelqr/` | **SquirrelQR** | Phone QR code reader only |
 | `squirrelsuica/` | **SquirrelSuica** | FeliCa Suica/PASMO reader with station-name history (USB + Android) |
+| `squirrelcalc/` | **SquirrelCalc** | Graphing calculator on `libs/sqmath` + `libs/sqgui` (desktop) |
 
 ## Build
 
@@ -59,7 +60,8 @@ squirrelsoft/
 ├── squirrelgnss/
 ├── squirrelsound/     # FFT analyzer + live mic Spectroid UI (desktop + Android)
 ├── squirrelqr/        # QR code reader (Android; desktop planned; web-demo/ unsupported)
-└── squirrelsuica/     # FeliCa reader only (nfcpy + Android NFC-F)
+├── squirrelsuica/     # FeliCa reader only (nfcpy + Android NFC-F)
+└── squirrelcalc/      # graphing calculator window (sqmath + sqgui)
 ```
 
 ## License posture
