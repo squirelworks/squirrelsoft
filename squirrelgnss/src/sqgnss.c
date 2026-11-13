@@ -398,6 +398,11 @@ static double gauss(unsigned *s) {
     return sqrt(-2.0 * log(u1)) * cos(2 * PI * u2);
 }
 
+long sqg_demo_ambiguity(SqgEcef rx, int prn) {
+    double site = fabs(rx.x) + 3 * fabs(rx.y) + 7 * fabs(rx.z);
+    return 1000L * prn + (long)fmod(site * 0.01 * (prn % 7 + 1), 997.0);
+}
+
 void sqg_demo_epoch(const SqgEphemeris *ephs, int n_eph, SqgGeodetic truth, double t_true, double clock_bias_m,
                     double mask_deg, double noise_m, unsigned seed, SqgEpoch *out) {
     SqgEcef rx;
@@ -425,5 +430,10 @@ void sqg_demo_epoch(const SqgEphemeris *ephs, int n_eph, SqgGeodetic truth, doub
         o->pseudorange_m = rho + clock_bias_m - SQG_C_LIGHT * sqg_sat_clock(&ephs[i], t_tx) + noise_m * n;
         o->snr_dbhz = 30.0 + 20.0 * sin(el * DEG);
         o->valid = 1;
+        /* carrier: the same clocks, an ambiguity of whole cycles, less noise */
+        long amb = sqg_demo_ambiguity(rx, ephs[i].prn);
+        o->carrier_cyc = (rho + clock_bias_m - SQG_C_LIGHT * sqg_sat_clock(&ephs[i], t_tx)) / SQG_L1_LAMBDA + amb +
+                         noise_m / 100 * gauss(&s) / SQG_L1_LAMBDA;
+        o->has_carrier = 1;
     }
 }

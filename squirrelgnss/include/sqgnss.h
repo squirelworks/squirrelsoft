@@ -22,6 +22,8 @@
 #define SQG_F_REL (-4.442807633e-10) /* -2 sqrt(mu) / c^2, s/m^0.5 */
 #define SQG_WEEK 604800.0
 #define SQG_DEMO_SATS 30 /* satellites in the synthetic sky */
+#define SQG_L1_HZ 1575.42e6
+#define SQG_L1_LAMBDA (SQG_C_LIGHT / SQG_L1_HZ) /* about 0.19 m */
 
 typedef struct {
     double x, y, z;
@@ -68,6 +70,8 @@ typedef struct {
     double pseudorange_m;
     double snr_dbhz;
     int valid;
+    double carrier_cyc; /* L1 carrier phase, cycles, when has_carrier */
+    int has_carrier;
 } SqgObservation;
 
 typedef struct {
@@ -137,10 +141,56 @@ int sqg_write_sqobs(const SqgTrack *tr, const char *path);
 /* SQG_DEMO_SATS satellites in 6 planes of 5 (a Walker-like layout), with
  * clock offsets; ephs needs room for SQG_DEMO_SATS. */
 void sqg_demo_ephemerides(SqgEphemeris *ephs, int *n_eph, double toe);
+/* The whole-cycle carrier ambiguity sqg_demo_epoch gives a receiver at rx
+ * for a satellite: it differs between sites and between satellites. */
+long sqg_demo_ambiguity(SqgEcef rx, int prn);
 /* The pseudoranges a receiver at truth with clock_bias_m would measure at
  * true time t_true from every satellite above mask_deg, plus Gaussian noise
- * of noise_m (seeded, repeatable). */
+ * of noise_m (seeded, repeatable). Also the L1 carrier phase: range over
+ * the wavelength plus a whole-cycle ambiguity fixed by the PRN and the
+ * site, with noise of noise_m / 100. */
 void sqg_demo_epoch(const SqgEphemeris *ephs, int n_eph, SqgGeodetic truth, double t_true, double clock_bias_m,
                     double mask_deg, double noise_m, unsigned seed, SqgEpoch *out);
+
+/* ---- epoch stream and survey ---- */
+typedef struct {
+    SqgPvtOptions opt;
+    int n_epochs, n_fixed;
+    SqgPvt pvt;          /* the latest solution */
+    int have_fix;        /* pvt is a fix */
+    double t_fix;        /* its receiver time */
+    /* speed and course from the last two fixes */
+    double speed_mps, course_deg; /* course: 0 north, 90 east */
+    int have_velocity;
+    /* occupation: the mean and spread of the fixes since the last reset, in
+     * east/north/up about the first of them */
+    SqgEcef origin;
+    SqgGeodetic origin_llh;
+    int n_avg;
+    double mean[3], m2[3];
+} SqgStream;
+
+/* opt may be NULL for the defaults */
+void sqg_stream_init(SqgStream *s, const SqgPvtOptions *opt);
+/* Solve the next epoch from the last fix (or the centre of the Earth) and
+ * add a fix to the average. Returns 0 for a fix, -1 for none. */
+int sqg_stream_push(SqgStream *s, const SqgEpoch *epoch, const SqgEphemeris *ephs, int n_eph);
+void sqg_stream_reset_average(SqgStream *s);
+/* The mean position of the occupation and the standard deviation of one
+ * fix in east, north and up (0 with fewer than 2). Returns the fixes
+ * averaged. */
+int sqg_stream_average(const SqgStream *s, SqgGeodetic *mean, SqgEnu *sigma);
+
+typedef struct {
+    SqgEnu delta;       /* target minus here */
+    double horiz_m;     /* horizontal distance */
+    double bearing_deg; /* 0 north, 90 east */
+    int on_point;       /* within tol_m horizontally */
+} SqgGuide;
+
+SqgGuide sqg_stakeout_guide(SqgGeodetic here, SqgGeodetic target, double tol_m);
+/* "go 1.230 m N, 0.450 m W (1.310 m at 339.9 deg); fill 0.100 m", or
+ * "on point (0.004 m); cut 0.020 m": cut when the target is below here */
+void sqg_guide_text(const SqgGuide *g, char *out, size_t cap);
 
 #endif
