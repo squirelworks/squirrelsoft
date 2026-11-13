@@ -123,7 +123,11 @@ int tiles_shuffle(Tiles *t) {
     if (!t->left) return -1;
     uint32_t r = t->seed ^ (0xA511E9B3u * (uint32_t)(++t->shuffles)) ^ (uint32_t)t->left;
     for (int tries = 0; deal_kinds(t, &r); tries++)
-        if (tries > 1000) return -1; /* no way to clear what is left, whatever the kinds */
+        if (tries > 1000) { /* no way to clear what is left, whatever the kinds */
+            t->dead = 1;
+            return -1;
+        }
+    t->dead = 0;
     return 0;
 }
 
@@ -143,6 +147,7 @@ int tiles_undo(Tiles *t) {
     t->here[t->taken[--t->ntaken]] = 1;
     t->here[t->taken[--t->ntaken]] = 1;
     t->left += 2;
+    t->dead = 0;
     return 0;
 }
 
@@ -168,7 +173,8 @@ int tiles_moves(const Tiles *t) {
 
 int tiles_state(const Tiles *t) {
     if (!t->left) return TILES_WON;
-    return tiles_moves(t) ? TILES_PLAYING : TILES_STUCK;
+    if (tiles_moves(t)) return TILES_PLAYING;
+    return t->dead ? TILES_DEAD : TILES_STUCK;
 }
 
 /* ---- text ---- */
@@ -209,7 +215,8 @@ static void put_num(Text *t, unsigned long v) {
 }
 
 size_t tiles_text(const Tiles *t, char *out, size_t cap) {
-    static const char *const STATE[3] = {"playing", "cleared", "stuck: shuffle or undo"};
+    static const char *const STATE[4] = {"playing", "cleared", "stuck: shuffle or undo",
+                                         "stuck: no shuffle can clear these, undo"};
     Text x = {out, cap, 0};
     put(&x, "Tiles ");
     put(&x, TILES_LAYOUT_NAMES[t->layout]);

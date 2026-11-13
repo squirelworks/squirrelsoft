@@ -85,6 +85,16 @@ echo "$err" | grep -q "gone already" || fail "match twice message: $err"
 $P --tiles hexagon >/dev/null 2>&1; [ $? -eq 2 ] || fail "a bad layout should exit 2"
 $P --tiles towers --seed 3 --snapshot "$B/tiles.ppm" || fail "tiles snapshot"
 
+# Bridge: the auction to your call, a contract, a card refused, the board played out
+out=$($P --bridge --seed 3 --show) || fail "bridge"
+echo "$out" | grep -q "^Bridge  game 3  board 1  dealer North  vulnerable none  total 0" || fail "bridge heading: $out"
+echo "$out" | grep -q "^Your call" || fail "your call: $out"
+out=$($P --bridge --seed 3 --do "bid pass" --do "bid 3D" --show) || fail "bridge contract"
+echo "$out" | grep -q "^Contract 3D by South" || fail "the contract: $out"
+err=$($P --bridge --seed 3 --do "bid pass" --do "bid 1C" 2>&1); [ $? -eq 1 ] || fail "a bid too low should exit 1"
+echo "$err" | grep -q "bid 1C: a bid must be higher than the last" || fail "low bid message: $err"
+$P --bridge --seed 3 --do "bid pass" --do "bid 3D" --snapshot "$B/bridge.ppm" || fail "bridge snapshot"
+
 # a picture of the window
 $P --freecell --seed 7 --snapshot "$B/snap.ppm" || fail "snapshot"
 [ "$(head -c 15 "$B/snap.ppm")" = "$(printf 'P6\n960 680\n255')" ] || fail "snapshot header"

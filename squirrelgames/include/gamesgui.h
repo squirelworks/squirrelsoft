@@ -13,10 +13,13 @@
  * becomes a queen); the computer plays the other side.
  * Tiles: click two free tiles of a kind to take them away; Hint shows a
  * pair, Shuffle deals the tiles left again.
+ * Bridge: calls from the bidding box, then a click on a card of your hand
+ * (or of North's, when your side declares) plays it.
  */
 #ifndef GAMESGUI_H
 #define GAMESGUI_H
 
+#include "bridge.h"
 #include "cards.h"
 #include "chess.h"
 #include "hearts.h"
@@ -30,6 +33,7 @@
 #define GAMES_HEARTS 3 /* and the fourth */
 #define GAMES_CHESS 4  /* and the fifth */
 #define GAMES_TILES 5  /* and the sixth */
+#define GAMES_BRIDGE 6 /* and the seventh */
 #define GAMES_SQUARE 24 /* a square of the mines field */
 
 typedef struct GamesGui GamesGui;
@@ -40,6 +44,7 @@ struct GamesGui {
     Hearts *hearts;
     Chess *chess;
     Tiles *tiles;
+    Bridge *bridge;
     int tiles_layout;      /* Tiles: TILES_PYRAMID, ... */
     int tiles_sel;         /* Tiles: the tile picked, or -1 */
     int hint_a, hint_b;    /* Tiles: the pair a hint shows, until hint_until */
@@ -66,9 +71,9 @@ struct GamesGui {
     char status[160];
 };
 
-void games_gui_init(GamesGui *gg, Game *game, Mines *mines, Hearts *hearts, Chess *chess, Tiles *tiles);
+void games_gui_init(GamesGui *gg, Game *game, Mines *mines, Hearts *hearts, Chess *chess, Tiles *tiles, Bridge *bridge);
 /* Show another game as it stands, without dealing: kind is GAME_KLONDIKE,
- * GAME_FREECELL, GAMES_MINES, GAMES_HEARTS, GAMES_CHESS or GAMES_TILES (the window's own Klondike
+ * GAME_FREECELL, GAMES_MINES, GAMES_HEARTS, GAMES_CHESS, GAMES_TILES or GAMES_BRIDGE (the window's own Klondike
  * or FreeCell is game's kind) */
 void games_gui_show(GamesGui *gg, int kind);
 /* The mines square under a window point: 0 with x, y, or -1 */
@@ -88,6 +93,13 @@ void games_gui_draw_piece(sqg_canvas *cv, int x, int y, int piece);
 sqg_rect games_gui_tile_rect(const GamesGui *gg, int i);
 int games_gui_tile_hit(const GamesGui *gg, int x, int y);
 void games_gui_draw_tile(sqg_canvas *cv, int x, int y, int kind);
+/* Bridge: where card i of a seat's hand is drawn, the card of a hand you
+ * play under a point (its index and seat, or -1), a call's place in the
+ * bidding box, and the Next board button */
+sqg_rect games_gui_bridge_card_rect(const GamesGui *gg, int seat, int i);
+int games_gui_bridge_hit(const GamesGui *gg, int x, int y, int *seat);
+sqg_rect games_gui_bid_rect(const GamesGui *gg, int call);
+sqg_rect games_gui_bridge_button(const GamesGui *gg);
 /* Hearts: the button in the middle (Pass, Next hand, New game) */
 sqg_rect games_gui_hearts_button(const GamesGui *gg);
 
