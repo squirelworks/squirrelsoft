@@ -1,6 +1,6 @@
 # libs/sqmath
 
-The expression engine and first CAS layer for SquirrelCalc (roadmap S5.1).
+The expression engine and first CAS layer for SquirrelCalc (roadmap S5.1); step 2 adds expansion and exact solving.
 It is written for Squirrel OS/2 and built here first. It is C11 with no OS
 calls and no allocation: an `SqmExpr` (about 13 KB) and an `SqmProgram` (about
 7 KB) are plain values the caller owns.
@@ -42,6 +42,19 @@ double y = sqm_run(&p, (double[]){0.25});
   `x - x`, `x*x = x^2`, `x^3/x = x^2`, like terms (`2x + 3x = 5x`), reduced
   fractions (`6/4 = 3/2`), `ln(e) = 1`, and `ln(exp(u)) = u`. Numbers only fold
   where the result stays exact: `sqrt(4)` becomes 2 but `sqrt(2)` stays.
+- **Expansion** (`sqm_expand`) into a sum of terms with exact fractions:
+  `(x+1)^3` is `x^3 + 3*x^2 + 3*x + 1`, `x/2 + x/3` is `5*x/6`. Parts that are
+  not polynomials stay whole and are expanded inside (`sin((x+1)^2)`), and
+  a sum in a denominator stays one part: `(x+1)/(x-1)` is
+  `x/(x - 1) + 1/(x - 1)`. **Collection** (`sqm_collect`) groups by powers of
+  one variable: `(a + b)*x^2 + (c + 1)*x + 1`.
+- **Exact solving** (`sqm_solve_for`) of an equation that expands to a
+  polynomial in the variable (`sqm_parse_eq` reads `left = right`): linear
+  and quadratic with any coefficients (`-b/a`, the quadratic formula), and
+  higher degrees with number coefficients through their rational roots down
+  to a quadratic. Answers are exact text with a value: `(1 - sqrt(5))/2`,
+  `-2*sqrt(2)`, `1/3`. Real solutions only; `x^3 = 2` and `sin(x) = 0` report
+  that there is no exact method, so use `sqm_roots`.
 - **Printing** back to text with few parentheses (`sqm_print`). The text parses
   back to the same value.
 - **Numerics**: a root in a sign-changing bracket (`sqm_solve`, Illinois false position
@@ -60,6 +73,9 @@ build/sqcalc "2x^2 - 1" x=3                 17
 build/sqcalc --diff x "ln(x)/x"             (1 - ln(x))/x^2
 build/sqcalc --simplify "x + 1 + 2x"        3*x + 1
 build/sqcalc --solve x -5 5 "x^2 - 2"       x = -1.41421356237 / x = 1.41421356237
+build/sqcalc --expand "(x+1)^3"             x^3 + 3*x^2 + 3*x + 1
+build/sqcalc --collect x "a x^2 + b x^2"    (a + b)*x^2
+build/sqcalc --solve-for x "x^2 - x = 1"    x = (1 - sqrt(5))/2 / x = (1 + sqrt(5))/2
 build/sqcalc --integrate x 0 1 "4/(1+x^2)"  3.14159265359
 build/sqcalc --table x 0 1 0.5 "x^2"
 ```
@@ -76,4 +92,4 @@ value. The suite also passes under `-fsanitize=address,undefined`.
 
 ## Next
 
-Polynomial collection and expansion, solving equations symbolically, units, and the SquirrelCalc front-end on `libs/sqgui`.
+Units, factoring, partial fractions and symbolic integrals.
