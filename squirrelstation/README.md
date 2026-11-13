@@ -23,8 +23,13 @@ In MicroStation: **File → Export → DXF/DWG** (choose DXF), then:
 ./build/squirrelstation probe something.dgn   # explains if binary DGN
 ```
 
-Imported DXF entities: `LINE`, `CIRCLE`, `ARC`, `TEXT`/`MTEXT`, `LWPOLYLINE`
-(as line segments), plus `LAYER` table → levels.
+Import reads the `LAYER` table (colour, off, frozen) as levels, `BLOCKS` as
+cells and `INSERT` as placed cells, `LINE`, `CIRCLE`, `ARC`, `TEXT`/`MTEXT`,
+`LWPOLYLINE` and R12 `POLYLINE` as one polyline or shape each (chained
+pieces past 24 vertices), polyface meshes and runs of `3DFACE` on one layer
+as meshes (in pieces of at most 16 faces). Export writes cells as `BLOCKS`,
+placements as `INSERT`, and meshes and solids as polyface meshes, so a design
+comes back with its cells. Anything unread is counted as `skipped`.
 
 ## Features
 
@@ -33,7 +38,8 @@ Imported DXF entities: `LINE`, `CIRCLE`, `ARC`, `TEXT`/`MTEXT`, `LWPOLYLINE`
   cylinder and sphere solids; length, area and volume for each
 - Levels with on/off and frozen flags (hidden and frozen levels are neither
   drawn nor snapped to)
-- Cells: element groups placed with scale and rotation, cells of cells
+- Cells: element groups placed with scale and rotation, cells of cells. The
+  members become the definition: they are drawn only where the cell is placed
 - Reference attachments: other designs shown and snapped to, moved and scaled
 - Accu-style snaps: endpoint, midpoint, centre, intersection, keypoint
   (vertices, solid and cell origins) and nearest

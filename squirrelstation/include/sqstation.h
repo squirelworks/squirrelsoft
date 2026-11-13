@@ -134,7 +134,10 @@ int sqs_add_curve(SqsDesign *d, int level_id, const SqsPoint *pts, int n);
 int sqs_add_shape(SqsDesign *d, int level_id, const SqsPoint *pts, int n);
 int sqs_add_mesh(SqsDesign *d, int level_id, const SqsPoint *pts, int n, const uint8_t (*faces)[4], int nf);
 int sqs_add_solid(SqsDesign *d, int level_id, SqsSolidKind kind, SqsPoint origin, SqsPoint size);
+/* A cell's members become its definition: they are drawn (and snapped to)
+ * only where the cell is placed, not where they were drawn. */
 int sqs_define_cell(SqsDesign *d, const char *name, SqsPoint origin, const int *member_ids, int member_count);
+int sqs_in_cell(const SqsDesign *d, int id); /* 1 when the element is a cell member */
 int sqs_place_cell(SqsDesign *d, int level_id, const char *name, SqsPoint at, double scale, double rot_deg);
 const SqsCell *sqs_find_cell(const SqsDesign *d, const char *name);
 const SqsElement *sqs_find(const SqsDesign *d, int id);
@@ -151,7 +154,7 @@ double sqs_volume(const SqsElement *e); /* solids */
 int sqs_solid_mesh(const SqsElement *e, SqsPoint *pts, int cap, int *npts, uint8_t (*faces)[4], int fcap);
 
 /* ---- the element graph as drawn ----
- * Every shown element, with cells expanded (members moved, scaled and
+ * Every shown element that is not a cell member, with cells expanded (members moved, scaled and
  * turned onto the placement) and, when refs is given, every shown element
  * of the attached references (moved and scaled). Hidden or frozen levels
  * are left out. fn gets each element (never a CELLREF), its level, and the

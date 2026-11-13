@@ -210,6 +210,16 @@ static void test_files(void) {
         fence_off |= strcmp(imp.layers[i].name, "fence") == 0 && imp.layers[i].color == 4 && !imp.layers[i].on;
     CHECK(fence_off);
     CHECK(st.plines == 1 && st.texts == 1);
+    /* the block comes back as a block, the insert as an insert, and the
+       drawing covers the same ground */
+    CHECK(st.blocks == 1 && st.inserts == 1 && st.skipped == 0);
+    const SqcBlock *peg = sqc_find_block(&imp, "peg");
+    CHECK(peg && peg->ent_count == 1 && sqc_in_block(&imp, peg->ent_ids[0]));
+    SqcPoint lo1, hi1, lo2, hi2;
+    for (int i = 0; i < S.dwg.layer_count; i++) S.dwg.layers[i].on = 1;
+    for (int i = 0; i < imp.layer_count; i++) imp.layers[i].on = 1;
+    CHECK(sqc_extents(&S.dwg, &lo1, &hi1) && sqc_extents(&imp, &lo2, &hi2));
+    CHECK(near(lo1.x, lo2.x) && near(lo1.y, lo2.y) && near(hi1.x, hi2.x) && near(hi1.y, hi2.y));
     remove(path);
 }
 

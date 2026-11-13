@@ -172,8 +172,10 @@ int main(int argc, char **argv) {
         if (rc != 0) return 1;
         if (save(&d, argv[2]) != 0) return 1;
         printf("imported → %s\n", argv[2]);
-        printf("  layers=%d lines=%d arcs=%d circles=%d texts=%d pline_segs=%d skipped=%d\n",
-               st.layers, st.lines, st.arcs, st.circles, st.texts, st.pline_segs, st.skipped);
+        printf("  layers=%d lines=%d arcs=%d circles=%d texts=%d plines=%d shapes=%d meshes=%d cells=%d "
+               "placements=%d skipped=%d\n",
+               st.layers, st.lines, st.arcs, st.circles, st.texts, st.plines, st.shapes, st.meshes, st.cells,
+               st.placements, st.skipped);
         return 0;
     }
 
@@ -326,6 +328,7 @@ int main(int argc, char **argv) {
             else if (e->type == SQS_SOLID)
                 printf(" %s", e->solid_kind == SQS_SOLID_BOX ? "box" : e->solid_kind == SQS_SOLID_CYLINDER ? "cylinder" : "sphere");
             else printf(" %d points", e->npts);
+            if (sqs_in_cell(&d, e->id)) printf(" (cell member)");
             printf("\n");
         }
         for (int i = 0; i < d.cell_count; i++) printf("  cell %s (%d elements)\n", d.cells[i].name, d.cells[i].member_count);

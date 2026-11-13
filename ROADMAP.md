@@ -139,7 +139,7 @@ These milestones predate the suite roadmap and remain open. Formats stay owned b
 - [x] Accu-style snaps (endpoint, midpoint, centre, intersection, keypoint, nearest; through cells and references) and keyed input (`xy=`, `dl=`, `di=`)
 - [x] `.sqdgn` text interchange (v2, reads v1) + `.sqdgnb` binary sketch, both bounds-checked; DXF export of every element kind
 - [ ] Desktop window on sqgui (views, AccuDraw compass, element selection)
-- [ ] DXF import of polylines as one element, BLOCKS as cells
+- [x] DXF import of polylines as one element, BLOCKS as cells, INSERT as placements, polyface and 3DFACE as meshes; export writes cells as BLOCKS
 
 ### SquirrelCAD
 - [x] Classic command loop: LINE, CIRCLE, ARC, PLINE, LAYER, BLOCK, INSERT, plus ERASE/MOVE/COPY/ROTATE/SCALE, UNDO, LIST/DIST/AREA (`squirrelcad run`)
@@ -147,7 +147,7 @@ These milestones predate the suite roadmap and remain open. Formats stay owned b
 - [x] `.sqdwg` interchange (text with spaces, damaged-file checks, unique ids)
 - [x] DXF-like export of *our* entities (layer colours, BLOCKS, INSERT; not Autodesk DXF fidelity claims)
 - [ ] Desktop window on sqgui (draw with the mouse, snaps, zoom/pan)
-- [ ] DXF import of BLOCKS/INSERT
+- [x] DXF import of BLOCKS/INSERT (nested), R12 POLYLINE, MTEXT, 3DFACE/SOLID outlines
 
 ### SquirrelGNSS
 - [x] WGS84 / ECEF / geodetic conversions (exact both ways, ENU both ways, azimuth/elevation)

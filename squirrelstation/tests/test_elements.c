@@ -102,6 +102,8 @@ static void test_cells_levels(void) {
     int m[] = {l1, a1, b1};
     CHECK(sqs_define_cell(&d, "door", P(0, 0, 0), m, 3) > 0);
     CHECK(sqs_define_cell(&d, "door", P(0, 0, 0), m, 3) == -1);
+    /* the members are the definition now, not drawn where they were */
+    CHECK(sqs_accu_snap(&d, P(2.1, 0, 0), 0.5).kind == SQS_SNAP_NONE);
     int bad[] = {999};
     CHECK(sqs_define_cell(&d, "ghost", P(0, 0, 0), bad, 1) == -1);
     int pc = sqs_place_cell(&d, walls, "door", P(100, 0, 0), 2, 90);
@@ -121,14 +123,17 @@ static void test_cells_levels(void) {
     /* a cell can't hold itself */
     int m3[] = {pc + 3};
     CHECK(sqs_define_cell(&d, "pair", P(0, 0, 0), m3, 1) == -1);
+    /* the door placement is part of "pair" now: drawn only through it */
+    CHECK(sqs_in_cell(&d, pc) && !sqs_in_cell(&d, l1 + 1000));
+    CHECK(sqs_accu_snap(&d, P(100.1, 3.9, 0), 0.5).kind == SQS_SNAP_NONE);
     /* levels: hidden and frozen are not snapped to */
     CHECK(sqs_level_set(&d, "walls", 0, 0) == 0);
-    s = sqs_accu_snap(&d, P(100.1, 3.9, 0), 0.5);
+    s = sqs_accu_snap(&d, P(0.1, 46.1, 0), 0.5);
     CHECK(s.kind == SQS_SNAP_NONE);
     sqs_level_set(&d, "walls", 1, 1);
-    CHECK(sqs_accu_snap(&d, P(100.1, 3.9, 0), 0.5).kind == SQS_SNAP_NONE);
+    CHECK(sqs_accu_snap(&d, P(0.1, 46.1, 0), 0.5).kind == SQS_SNAP_NONE);
     sqs_level_set(&d, "walls", 1, 0);
-    CHECK(sqs_accu_snap(&d, P(100.1, 3.9, 0), 0.5).kind == SQS_SNAP_ENDPOINT);
+    CHECK(sqs_accu_snap(&d, P(0.1, 46.1, 0), 0.5).kind == SQS_SNAP_ENDPOINT);
     CHECK(sqs_level_set(&d, "roof", 1, 0) == -1);
 }
 
@@ -185,6 +190,12 @@ static void test_references(void) {
     sqs_level_set(&r0, "control", 0, 0);
     CHECK(sqs_snap(&d, refs, 1, P(1019.9, 2000.1, 0), 0.5).kind == SQS_SNAP_NONE);
     remove(rp);
+}
+
+static double tri_area(SqsPoint a, SqsPoint b, SqsPoint c) {
+    double ux = b.x - a.x, uy = b.y - a.y, uz = b.z - a.z, vx = c.x - a.x, vy = c.y - a.y, vz = c.z - a.z;
+    double x = uy * vz - uz * vy, y = uz * vx - ux * vz, z = ux * vy - uy * vx;
+    return sqrt(x * x + y * y + z * z) / 2;
 }
 
 static void build_full(SqsDesign *x) {
@@ -310,12 +321,47 @@ static void test_files(void) {
     fclose(f);
     CHECK(strstr(dx, "0\nLAYER\n2\nsurvey\n70\n1\n62\n-5\n") != NULL);
     CHECK(strstr(dx, "0\nPOLYLINE\n8\nsurvey\n66\n1\n10\n0\n20\n0\n30\n0\n70\n9\n") != NULL); /* the shape */
-    CHECK(strstr(dx, "0\n3DFACE\n") != NULL);
+    CHECK(strstr(dx, "0\nPOLYLINE\n8\nDefault\n66\n1\n10\n0\n20\n0\n30\n0\n70\n64\n71\n4\n72\n2\n") != NULL); /* the mesh */
+    CHECK(strstr(dx, "70\n64\n71\n26\n72\n36\n") != NULL); /* the cylinder, once: in its cell */
+    CHECK(strstr(dx, "0\nBLOCK\n8\n0\n2\npole\n70\n0\n10\n5\n20\n5\n30\n0\n") != NULL);
+    CHECK(strstr(dx, "0\nINSERT\n8\nsurvey\n2\npole\n10\n20\n20\n0\n30\n0\n41\n0.5\n") != NULL);
     CHECK(strstr(dx, "0\nARC\n8\nsurvey\n") && strstr(dx, "50\n-90\n51\n30\n"));
     CHECK(strstr(dx, "1\nPeg 12 (found)\n") != NULL);
-    int faces = 0;
-    for (const char *q = dx; (q = strstr(q, "0\n3DFACE\n")); q++) faces++;
-    CHECK(faces == 2 + 36 + 36); /* the mesh, the cylinder and the placed pole */
+    CHECK(strstr(dx, "3DFACE") == NULL);
+    /* and back: the cell and its placement, the mesh in one piece, the
+       cylinder in pieces that fit, the curve as polylines */
+    static SqsDesign back;
+    sqs_design_init(&back, "back");
+    SqsDxfStats st;
+    CHECK(sqs_import_dxf(&back, "/tmp/sqs_full.dxf", &st) == 0);
+    CHECK(st.lines == 1 && st.arcs == 1 && st.texts == 1 && st.shapes == 1 && st.skipped == 0);
+    CHECK(st.plines == 3); /* the polyline, and the 25-point curve in two */
+    CHECK(st.cells == 1 && st.placements == 1 && st.meshes >= 3);
+    const SqsCell *pole = sqs_find_cell(&back, "pole");
+    CHECK(pole && same(pole->origin, P(5, 5, 0)) && pole->member_count == st.meshes - 1);
+    const SqsLevel *sv = sqs_level(&back, sqs_level_id(&back, "survey"));
+    CHECK(sv && sv->frozen && sv->color == 0x0000ff);
+    const SqsElement *mesh = NULL;
+    for (int i = 0; i < back.element_count; i++)
+        if (back.elements[i].type == SQS_MESH && !sqs_in_cell(&back, back.elements[i].id)) mesh = &back.elements[i];
+    CHECK(mesh && mesh->npts == 4 && mesh->nfaces == 2 && mesh->faces[1][2] == 3 && mesh->faces[1][3] == 3);
+    /* every cylinder face came back: the pieces' area adds up */
+    double area = 0;
+    for (int j = 0; pole && j < pole->member_count; j++) area += sqs_area(sqs_find(&back, pole->member_ids[j]));
+    SqsElement cyl = {0};
+    cyl.type = SQS_SOLID;
+    cyl.solid_kind = SQS_SOLID_CYLINDER;
+    cyl.size = P(0.5, 0, 3);
+    SqsPoint cp[64];
+    uint8_t cf[64][4];
+    int cnp, cnf = sqs_solid_mesh(&cyl, cp, 64, &cnp, cf, 64);
+    double want = 0;
+    for (int k = 0; k < cnf; k++) {
+        const uint8_t *q = cf[k];
+        want += tri_area(cp[q[0]], cp[q[1]], cp[q[2]]) + tri_area(cp[q[0]], cp[q[2]], cp[q[3]]);
+    }
+    CHECK(cnp == 26 && cnf == 36 && near(area, want, 1e-9));
+    remove("/tmp/sqs_full.dxf");
     remove(tp);
     remove(bp);
 }
