@@ -73,6 +73,18 @@ echo "$err" | grep -q "move e5: not a legal move here" || fail "illegal move mes
 $P --chess --level 5 >/dev/null 2>&1; [ $? -eq 2 ] || fail "level 5 should exit 2"
 $P --chess --level 1 --do "move d4" --snapshot "$B/chess.ppm" || fail "chess snapshot"
 
+# Tiles: the free tiles, a hint and the match it gives, errors
+out=$($P --tiles cross --seed 2 --show) || fail "tiles"
+echo "$out" | grep -q "^Tiles Cross  game 2  left 144  moves [0-9]*  playing" || fail "tiles heading: $out"
+hint=$($P --tiles cross --seed 2 --do hint) || fail "a hint"
+echo "$hint" | grep -q "^match [0-9]* [0-9]*$" || fail "the hint: $hint"
+out=$($P --tiles cross --seed 2 --do "$hint" --show) || fail "the hint's match"
+echo "$out" | grep -q "left 142" || fail "two tiles gone: $out"
+err=$($P --tiles cross --seed 2 --do "$hint" --do "$hint" 2>&1); [ $? -eq 1 ] || fail "a match twice should exit 1"
+echo "$err" | grep -q "gone already" || fail "match twice message: $err"
+$P --tiles hexagon >/dev/null 2>&1; [ $? -eq 2 ] || fail "a bad layout should exit 2"
+$P --tiles towers --seed 3 --snapshot "$B/tiles.ppm" || fail "tiles snapshot"
+
 # a picture of the window
 $P --freecell --seed 7 --snapshot "$B/snap.ppm" || fail "snapshot"
 [ "$(head -c 15 "$B/snap.ppm")" = "$(printf 'P6\n960 680\n255')" ] || fail "snapshot header"

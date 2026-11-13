@@ -22,7 +22,8 @@ int games_gui_run(GamesGui *gg, int max_frames) {
         int now = gg->kind >= GAMES_MINES ? gg->kind : gg->game->s.kind;
         if (now != kind) {
             kind = now;
-            sqg_window_set_title(win, kind == GAMES_CHESS     ? "Chess - SquirrelGames"
+            sqg_window_set_title(win, kind == GAMES_TILES     ? "Tiles - SquirrelGames"
+                                      : kind == GAMES_CHESS   ? "Chess - SquirrelGames"
                                       : kind == GAMES_HEARTS  ? "Hearts - SquirrelGames"
                                       : kind == GAMES_MINES   ? "Mines - SquirrelGames"
                                       : kind == GAME_FREECELL ? "FreeCell - SquirrelGames"
