@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Recordings live in the app's external Music folder and are shared from there. -->
+<paths>
+    <external-files-path name="recordings" path="Music/" />
+</paths>

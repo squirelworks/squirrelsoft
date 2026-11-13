@@ -11,6 +11,7 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.PowerManager
+import java.io.File
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
 import kotlin.math.PI
@@ -64,6 +65,65 @@ class AudioEngine(
     @Volatile var gainDb: Float = 0f
     /** Exponential smoothing 0..1 (0 = off). Spectroid-like default ≈ 0.3. */
     @Volatile var smooth: Float = 0.30f
+
+    /** Level offset (dB) added to every reading: the mic's calibration. Read live. */
+    @Volatile var calDb: Float = 0f
+
+    /** Sample rate of the running capture (0 before it starts). */
+    @Volatile var currentSampleRate: Int = 0
+        private set
+
+    /** The take being recorded, written from the capture thread. */
+    private val take = AtomicReference<WavWriter?>(null)
+    @Volatile private var takeFullReported = false
+
+    /** Seconds recorded in the current take, or -1 when not recording. */
+    val recordingSeconds: Float get() = take.get()?.seconds ?: -1f
+
+    /** True once the take hit the WAV size limit and stopped growing. */
+    val recordingFull: Boolean get() = take.get()?.full == true
+
+    /**
+     * Starts recording what is captured (after gain, before analysis) into
+     * [file] as 16-bit mono WAV. Needs a running capture; returns null, or the
+     * writer. A take stops growing if the sample rate changes underneath it.
+     */
+    fun startRecording(file: File): WavWriter? {
+        val sr = currentSampleRate
+        if (!running || sr <= 0) return null
+        stopRecording()
+        val w = WavWriter(file, sr)
+        takeFullReported = false
+        take.set(w)
+        return w
+    }
+
+    /** Ends the take (header patched) and returns it, or null if none. */
+    fun stopRecording(): WavWriter? {
+        val w = take.getAndSet(null) ?: return null
+        try {
+            w.close()
+        } catch (e: Exception) {
+            postStatus("Recording could not be finished: ${e.message}")
+        }
+        return w
+    }
+
+    private fun record(samples: FloatArray, count: Int, sampleRate: Int) {
+        val w = take.get() ?: return
+        if (w.sampleRate != sampleRate) return
+        try {
+            if (!w.write(samples, 0, count) && w.full && !takeFullReported) {
+                takeFullReported = true
+                postStatus("Recording reached the WAV size limit and stopped")
+            }
+        } catch (e: Exception) {
+            if (!takeFullReported) {
+                takeFullReported = true
+                postStatus("Recording failed: ${e.message}")
+            }
+        }
+    }
 
     @Volatile var activeLabel: String = "idle"
         private set
@@ -147,7 +207,9 @@ class AudioEngine(
             }
         }
         releaseKeepAlive()
+        stopRecording()
         activeLabel = "idle"
+        currentSampleRate = 0
     }
 
     private fun acquireKeepAlive() {
@@ -370,6 +432,7 @@ class AudioEngine(
             activeRecorder.set(rec)
             activeLabel = label
             sampleRate = sr
+            currentSampleRate = sr
         }
 
         fun dropRecorder() {
@@ -395,6 +458,7 @@ class AudioEngine(
                 }
             } else {
                 activeLabel = "demo 440 Hz"
+                currentSampleRate = sampleRate
                 postStatus("Demo tone 440 Hz")
             }
 
@@ -494,6 +558,7 @@ class AudioEngine(
                                 MicSettings.gainFactor(gainDb)
                             )
                             ring.write(floatChunk, 0, count)
+                            record(floatChunk, count, sampleRate)
                         }
                     }
                 } else if (wantMic && !useMic) {
@@ -524,6 +589,7 @@ class AudioEngine(
                         if (phase > 2.0 * PI) phase -= 2.0 * PI
                     }
                     ring.write(demoScratch, 0, count)
+                    record(demoScratch, count, sampleRate)
                     sleepQuiet((1000L * count / sampleRate).coerceAtLeast(4L))
                 }
 
@@ -564,14 +630,17 @@ class AudioEngine(
                             }
                         }
                         val peakHz = peakBin * sampleRate.toFloat() / size
-                        val row = rows.add(smoothed, plan.framesPerRow)
+                        // Calibration shifts what is shown, not the smoothing state.
+                        val cal = calDb
+                        val out = if (cal == 0f) smoothed.copyOf() else FloatArray(smoothed.size) { smoothed[it] + cal }
+                        val row = rows.add(out, plan.framesPerRow)
                         val frame = SpectrumFrame(
-                            db = smoothed.copyOf(),
+                            db = out,
                             sampleRate = sampleRate,
                             fftSize = size,
                             peakHz = peakHz,
-                            peakDb = peakDb,
-                            rmsDb = rmsDb,
+                            peakDb = peakDb + cal,
+                            rmsDb = rmsDb + cal,
                             sourceLabel = activeLabel,
                             waterfallRow = row
                         )

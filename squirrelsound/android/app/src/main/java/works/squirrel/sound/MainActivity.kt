@@ -1,16 +1,22 @@
 package works.squirrel.sound
 
 import android.Manifest
+import android.content.ClipData
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
+import android.os.Environment
 import android.widget.ArrayAdapter
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
 import androidx.lifecycle.Lifecycle
 import com.google.android.material.tabs.TabLayout
 import works.squirrel.sound.databinding.ActivityMainBinding
+import java.io.File
 
 class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
@@ -106,6 +112,30 @@ class MainActivity : AppCompatActivity() {
             applyPreset(activePreset, toast = false)
             binding.spectrum.invalidate()
         }
+
+        val modes = SpectrumControls.ViewMode.values()
+        binding.viewMode.adapter = ArrayAdapter(
+            this, android.R.layout.simple_spinner_dropdown_item,
+            modes.map {
+                getString(
+                    when (it) {
+                        SpectrumControls.ViewMode.OCTAVE -> R.string.view_octave
+                        SpectrumControls.ViewMode.THIRD_OCTAVE -> R.string.view_third
+                        SpectrumControls.ViewMode.SPECTRUM -> R.string.view_spectrum
+                    }
+                )
+            }
+        )
+        val savedMode = SpectrumControls.ViewMode.fromId(prefs.getString(KEY_VIEW_MODE, null))
+        binding.spectrum.viewMode = savedMode
+        binding.viewMode.setSelection(modes.indexOf(savedMode))
+        binding.viewMode.onItemSelectedListener = simpleItemSelected {
+            val m = modes.getOrNull(binding.viewMode.selectedItemPosition) ?: SpectrumControls.ViewMode.DEFAULT
+            binding.spectrum.viewMode = m
+            prefs.edit().putString(KEY_VIEW_MODE, m.id).apply()
+        }
+
+        binding.btnRecord.setOnClickListener { toggleRecording() }
 
         binding.btnZoomIn.setOnClickListener {
             binding.spectrum.zoomBy(1.35f)
@@ -206,7 +236,7 @@ class MainActivity : AppCompatActivity() {
     private fun setupLevelControls() {
         val floor = Levels.FLOOR_DB.toInt()
         fun dbOf(progress: Int) = (floor + progress).toFloat()
-        fun progressOf(db: Float) = (db.toInt() - floor).coerceIn(0, -floor)
+        fun progressOf(db: Float) = (db.toInt() - floor).coerceIn(0, Levels.CEIL_DB.toInt() - floor)
 
         binding.spectrum.setDbRange(
             prefs.getFloat(KEY_LEVEL_MIN, Levels.DEFAULT_MIN_DB),
@@ -283,6 +313,7 @@ class MainActivity : AppCompatActivity() {
             val current = prefs.getString(KEY_MIC_SOURCE, MicSettings.Source.PREFERRED.id)
             if (current == chosen.id) return@simpleItemSelected
             prefs.edit().putString(KEY_MIC_SOURCE, chosen.id).apply()
+            loadCalibration()
             val eng = engine
             if (eng != null && eng.source == AudioEngine.Source.MIC) {
                 startEngine(AudioEngine.Source.MIC)
@@ -303,6 +334,105 @@ class MainActivity : AppCompatActivity() {
                 prefs.edit().putInt(KEY_GAIN_DB, binding.gain.progress).apply()
             }
         })
+
+        binding.cal.max = Calibration.steps
+        loadCalibration()
+        binding.cal.setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(bar: android.widget.SeekBar?, p: Int, fromUser: Boolean) {
+                engine?.calDb = Calibration.fromProgress(p)
+                updateCalLabel()
+            }
+
+            override fun onStartTrackingTouch(bar: android.widget.SeekBar?) {}
+
+            override fun onStopTrackingTouch(bar: android.widget.SeekBar?) {
+                prefs.edit()
+                    .putFloat(Calibration.key(selectedMicSource().id), Calibration.fromProgress(binding.cal.progress))
+                    .apply()
+            }
+        })
+    }
+
+    /** The selected mic's saved calibration onto the slider and the engine. */
+    private fun loadCalibration() {
+        val db = Calibration.clamp(prefs.getFloat(Calibration.key(selectedMicSource().id), 0f))
+        binding.cal.progress = Calibration.toProgress(db)
+        engine?.calDb = db
+        updateCalLabel()
+    }
+
+    private fun currentCal(): Float = Calibration.fromProgress(binding.cal.progress)
+
+    private fun updateCalLabel() {
+        binding.calLabel.text = getString(R.string.cal_label, currentCal().toInt())
+    }
+
+    /** Rec starts a WAV take of what is being captured; pressing again saves it and offers Share. */
+    private fun toggleRecording() {
+        val eng = engine
+        if (eng != null && eng.recordingSeconds >= 0f) {
+            finishRecording(eng)
+            return
+        }
+        if (eng == null || eng.currentSampleRate <= 0) {
+            Toast.makeText(applicationContext, R.string.record_need_live, Toast.LENGTH_SHORT).show()
+            return
+        }
+        try {
+            val dir = getExternalFilesDir(Environment.DIRECTORY_MUSIC) ?: File(filesDir, "Music")
+            dir.mkdirs()
+            val file = File(dir, WavWriter.fileName(System.currentTimeMillis()))
+            if (eng.startRecording(file) == null) {
+                Toast.makeText(applicationContext, R.string.record_need_live, Toast.LENGTH_SHORT).show()
+                return
+            }
+            updateRecordButton(0f)
+        } catch (e: Exception) {
+            Toast.makeText(
+                applicationContext,
+                getString(R.string.record_failed, e.message ?: e.javaClass.simpleName),
+                Toast.LENGTH_LONG
+            ).show()
+        }
+    }
+
+    private fun finishRecording(eng: AudioEngine) {
+        val full = eng.recordingFull
+        val take = eng.stopRecording() ?: return
+        updateRecordButton(-1f)
+        showSaved(take, full)
+    }
+
+    private fun updateRecordButton(seconds: Float) {
+        binding.btnRecord.text = if (seconds < 0f) getString(R.string.record)
+        else getString(R.string.record_stop, WavWriter.duration(seconds))
+    }
+
+    private fun showSaved(take: WavWriter, full: Boolean) {
+        if (!uiAlive()) return
+        var msg = getString(R.string.record_saved, take.file.name, WavWriter.duration(take.seconds), take.sampleRate)
+        if (full) msg += getString(R.string.record_full)
+        AlertDialog.Builder(this)
+            .setTitle(R.string.record_saved_title)
+            .setMessage(msg)
+            .setPositiveButton(R.string.share) { _, _ -> shareRecording(take.file) }
+            .setNegativeButton(R.string.close, null)
+            .show()
+    }
+
+    private fun shareRecording(file: File) {
+        try {
+            val uri = FileProvider.getUriForFile(this, "$packageName.files", file)
+            val send = Intent(Intent.ACTION_SEND).apply {
+                type = "audio/wav"
+                putExtra(Intent.EXTRA_STREAM, uri)
+                clipData = ClipData.newRawUri("recording", uri)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            startActivity(Intent.createChooser(send, getString(R.string.share)))
+        } catch (_: Exception) {
+            Toast.makeText(applicationContext, R.string.share_failed, Toast.LENGTH_SHORT).show()
+        }
     }
 
     private fun selectedMicSource(): MicSettings.Source =
@@ -484,6 +614,7 @@ class MainActivity : AppCompatActivity() {
                         binding.status.setTextColor(
                             ContextCompat.getColor(this, if (ok) R.color.ok else R.color.warm)
                         )
+                        val calText = Calibration.label(currentCal())
                         binding.status.text = getString(
                             R.string.status_live,
                             frame.sourceLabel,
@@ -492,7 +623,11 @@ class MainActivity : AppCompatActivity() {
                             frame.peakHz,
                             frame.peakDb,
                             frame.rmsDb
-                        )
+                        ) + (if (calText.isEmpty()) "" else " · $calText")
+                        val rec = engine?.recordingSeconds ?: -1f
+                        if (rec >= 0f) updateRecordButton(rec)
+                        // A take that hit the size limit is finished for the user.
+                        if (engine?.recordingFull == true) engine?.let { finishRecording(it) }
                     }
                 },
                 onStatus = { msg ->
@@ -515,6 +650,7 @@ class MainActivity : AppCompatActivity() {
             eng.smooth = smooth
             eng.micSource = selectedMicSource()
             eng.gainDb = binding.gain.progress.toFloat()
+            eng.calDb = currentCal()
             eng.source = source
             try {
                 eng.start()
@@ -554,10 +690,19 @@ class MainActivity : AppCompatActivity() {
     private fun stopEngine(showIdle: Boolean) {
         val eng = engine
         engine = null
+        // Stopping capture ends a take; it is saved, and offered for sharing.
+        val full = eng?.recordingFull == true
+        val take = try {
+            eng?.stopRecording()
+        } catch (_: Exception) {
+            null
+        }
         try {
             eng?.stop()
         } catch (_: Exception) {
         }
+        safeUi { updateRecordButton(-1f) }
+        if (take != null && showIdle) showSaved(take, full)
         safeUi {
             binding.btnStart.isEnabled = true
             binding.btnStop.isEnabled = false
@@ -618,6 +763,7 @@ class MainActivity : AppCompatActivity() {
         const val KEY_MIC_SOURCE = "mic_source"
         const val KEY_GAIN_DB = "gain_db"
         const val KEY_SPLIT = "split_ratio"
+        const val KEY_VIEW_MODE = "view_mode"
         const val TAB_LIVE = 0
         const val TAB_SETTINGS = 1
         const val TAB_ADVANCED = 2
