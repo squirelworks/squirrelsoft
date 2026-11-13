@@ -3,6 +3,8 @@
  * (writes BUILD_DIR/paint.ppm) */
 #include "paintgui.h"
 #include "paintio.h"
+#include "paintz.h"
+#include "png_vectors.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -624,6 +626,9 @@ static size_t bmp_head(int hs, int w, int h, int bpp, int comp, int npal, int pa
     return 14 + (size_t)hs;
 }
 
+static uint8_t *pic8(void) { return (uint8_t *)pic; }
+static uint32_t be32t(const uint8_t *p) { return (uint32_t)p[0] << 24 | (uint32_t)p[1] << 16 | (uint32_t)p[2] << 8 | p[3]; }
+
 static int read(size_t n, int *w, int *h, char *msg) {
     return paint_read_image(buf, n, pic, sizeof pic / sizeof pic[0], w, h, msg, 120);
 }
@@ -975,7 +980,7 @@ static void test_window(const char *dir) {
     CHECK(g.mouse_in && g.mouse_x == 25 && g.mouse_y == 10);
     /* Save, Open, New through the hooks */
     click(top_x("Save"), 6 + lh / 2);
-    CHECK(saved == 1 && !strcmp(seen_path, "untitled.bmp") && !d.changed && strstr(g.status, "Saved"));
+    CHECK(saved == 1 && !strcmp(seen_path, "untitled.png") && !d.changed && strstr(g.status, "Saved"));
     snprintf(g.path, sizeof g.path, "bad.bmp");
     in.ctrl_key = 's';
     frame();
@@ -1091,6 +1096,131 @@ static void test_window_selection(void) {
     CHECK(d.sel.w == 4);
 }
 
+/* PaintZIn pieces: the stream handed over k bytes at a time */
+typedef struct {
+    const uint8_t *p;
+    size_t n, at, k;
+} Pieces;
+static size_t next_piece(PaintZIn *in, const uint8_t **p) {
+    Pieces *s = in->ctx;
+    size_t k = s->n - s->at < s->k ? s->n - s->at : s->k;
+    *p = s->p + s->at;
+    s->at += k;
+    return k;
+}
+static long inflate_in_pieces(const uint8_t *z, size_t n, size_t k, uint8_t *out, size_t cap) {
+    Pieces s = {z, n, 0, k};
+    PaintZIn in = {0, 0, next_piece, &s};
+    return paint_inflate(&in, out, cap);
+}
+static long inflate_all(const uint8_t *z, size_t n, uint8_t *out, size_t cap) {
+    PaintZIn in = {z, n, 0, 0};
+    return paint_inflate(&in, out, cap);
+}
+
+static uint8_t zsrc[6000], zout[1 << 16], zpack[1 << 16];
+
+static void test_zlib(void) {
+    CHECK(paint_crc32(0, (const uint8_t *)"123456789", 9) == 0xCBF43926u);
+    CHECK(paint_crc32(paint_crc32(0, (const uint8_t *)"1234", 4), (const uint8_t *)"56789", 5) == 0xCBF43926u);
+    CHECK(paint_adler32(1, (const uint8_t *)"Wikipedia", 9) == 0x11E60398u);
+    CHECK(paint_crc32(0, 0, 0) == 0 && paint_adler32(1, 0, 0) == 1);
+    /* what Python's zlib made: dynamic, fixed and stored blocks */
+    for (int i = 0; i < 3000; i++) zsrc[i] = (uint8_t)((i * 7 + i / 13) % 251);
+    for (int i = 0; i < 3000; i++) zsrc[3000 + i] = (uint8_t)(zsrc[i] ^ (i % 97 == 0 ? 0x55 : 0));
+    CHECK(inflate_all(Z_DYNAMIC, sizeof Z_DYNAMIC, zout, sizeof zout) == 6000 && !memcmp(zout, zsrc, 6000));
+    CHECK(inflate_in_pieces(Z_DYNAMIC, sizeof Z_DYNAMIC, 1, zout, sizeof zout) == 6000 && !memcmp(zout, zsrc, 6000));
+    CHECK(inflate_in_pieces(Z_DYNAMIC, sizeof Z_DYNAMIC, 77, zout, sizeof zout) == 6000);
+    long n = inflate_all(Z_ABC, sizeof Z_ABC, zout, sizeof zout);
+    CHECK(n == 600 && !memcmp(zout, "abcabc", 6) && !memcmp(zout + 594, "abcabc", 6));
+    CHECK(inflate_all(Z_STORED, sizeof Z_STORED, zout, sizeof zout) == 12 && !memcmp(zout, "stored bytes", 12));
+    /* what goes wrong */
+    CHECK(inflate_all(Z_DYNAMIC, sizeof Z_DYNAMIC, zout, 5999) == PAINTZ_FULL);
+    CHECK(inflate_all(Z_DYNAMIC, sizeof Z_DYNAMIC - 3, zout, sizeof zout) == PAINTZ_SHORT);
+    CHECK(inflate_all(Z_DYNAMIC, 100, zout, sizeof zout) == PAINTZ_SHORT);
+    memcpy(zpack, Z_ABC, sizeof Z_ABC);
+    zpack[sizeof Z_ABC - 1] ^= 1;
+    CHECK(inflate_all(zpack, sizeof Z_ABC, zout, sizeof zout) == PAINTZ_CHECK);
+    zpack[sizeof Z_ABC - 1] ^= 1;
+    zpack[1] ^= 1; /* the header's check */
+    CHECK(inflate_all(zpack, sizeof Z_ABC, zout, sizeof zout) == PAINTZ_BAD);
+    memcpy(zpack, Z_STORED, sizeof Z_STORED);
+    zpack[5] ^= 1; /* a stored length and its complement that disagree */
+    CHECK(inflate_all(zpack, sizeof Z_STORED, zout, sizeof zout) == PAINTZ_BAD);
+    static const uint8_t type3[] = {0x78, 0x9C, 0x07, 0, 0, 0, 1};
+    CHECK(inflate_all(type3, sizeof type3, zout, sizeof zout) == PAINTZ_BAD);
+    static const uint8_t far_back[] = {0x4B, 0x04, 0x42, 0x00}; /* raw: 'a', then a match 2 back */
+    PaintZIn in = {far_back, sizeof far_back, 0, 0};
+    CHECK(paint_inflate_raw(&in, zout, sizeof zout) == PAINTZ_BAD);
+    /* ours, and back: empty, one byte, runs, noise, text */
+    CHECK(paint_deflate(zsrc, 0, zpack, sizeof zpack) > 0 && inflate_all(zpack, paint_deflate(zsrc, 0, zpack, sizeof zpack), zout, 1) == 0);
+    size_t z = paint_deflate(zsrc, 1, zpack, sizeof zpack);
+    CHECK(z > 0 && inflate_all(zpack, z, zout, sizeof zout) == 1 && zout[0] == zsrc[0]);
+    z = paint_deflate(zsrc, 6000, zpack, sizeof zpack);
+    CHECK(z > 0 && z <= sizeof Z_DYNAMIC + 32 && inflate_all(zpack, z, zout, sizeof zout) == 6000 && !memcmp(zout, zsrc, 6000));
+    CHECK(paint_deflate(zsrc, 6000, zpack, z - 1) == 0 && paint_deflate(zsrc, 6000, zpack, z) == z);
+    uint32_t r = 12345;
+    for (int i = 0; i < 6000; i++) zsrc[i] = (uint8_t)((r = r * 1103515245u + 12345u) >> 16);
+    z = paint_deflate(zsrc, 6000, zpack, sizeof zpack);
+    CHECK(z > 6000 && z < 6000 + 20 && inflate_all(zpack, z, zout, sizeof zout) == 6000 && !memcmp(zout, zsrc, 6000));
+    memset(zsrc, 'q', 6000);
+    z = paint_deflate(zsrc, 6000, zpack, sizeof zpack);
+    CHECK(z > 0 && z < 40 && inflate_in_pieces(zpack, z, 3, zout, sizeof zout) == 6000 && !memcmp(zout, zsrc, 6000));
+    static uint8_t big[200000];
+    for (size_t i = 0; i < sizeof big; i++) big[i] = (uint8_t)("squirrels hide nuts in the "[i % 27] + (i % 1000 == 0));
+    z = paint_deflate(big, sizeof big, buf, sizeof buf);
+    CHECK(z > 0 && z < 4000);
+    PaintZIn bin = {buf, z, 0, 0};
+    CHECK(paint_inflate(&bin, pic8(), sizeof big) == (long)sizeof big && !memcmp(pic8(), big, sizeof big));
+}
+
+static void test_png(void) {
+    char msg[120];
+    int w, h;
+    for (size_t c = 0; c < sizeof PNG_CASES / sizeof PNG_CASES[0]; c++) {
+        memcpy(buf, PNG_CASES[c].png, PNG_CASES[c].n);
+        int ok = read(PNG_CASES[c].n, &w, &h, msg) == 0 && w == PNG_CASES[c].w && h == PNG_CASES[c].h;
+        CHECK(ok && !memcmp(pic, PNG_CASES[c].px, sizeof(uint32_t) * (size_t)(w * h)));
+    }
+    /* a damaged PAL2: a CRC, a palette index past the end, cut short */
+    size_t n = sizeof PNG_PAL2;
+    memcpy(buf, PNG_PAL2, n);
+    buf[20] ^= 1; /* in the IHDR */
+    CHECK(read(n, &w, &h, msg) == -1 && strstr(msg, "CRC"));
+    memcpy(buf, PNG_PAL2, n);
+    CHECK(read(n - 13, &w, &h, msg) == -1 && strstr(msg, "cut short"));
+    CHECK(read(60, &w, &h, msg) == -1 && strstr(msg, "cut short"));
+    CHECK(paint_read_image(buf, n, pic, 13 * 9 - 1, &w, &h, msg, sizeof msg) == -1 && strstr(msg, "bigger"));
+    /* our own: an RGB PNG that reads back the same */
+    paint_new(&d, 37, 21);
+    for (int i = 0; i < 37 * 21; i++) d.px[i] = 0xFF000000u | (i % 37 < 20 ? 0x3366CCu : (uint32_t)(i * 2654435761u >> 8));
+    n = paint_write_image(PAINT_FILE_PNG, d.px, 37, 21, buf, sizeof buf);
+    CHECK(n > 57 && n < 54 + 37 * 21 * 3 && !memcmp(buf, "\x89PNG\r\n\x1a\n\0\0\0\x0dIHDR", 16));
+    CHECK(buf[24] == 8 && buf[25] == 2 && buf[28] == 0 && !memcmp(buf + n - 8, "IEND", 4));
+    CHECK(read(n, &w, &h, msg) == 0 && w == 37 && h == 21 && !memcmp(pic, d.px, sizeof(uint32_t) * 37 * 21));
+    CHECK(paint_write_image(PAINT_FILE_PNG, d.px, 37, 21, buf, n - 1) > n - 1); /* too small says so */
+    CHECK(paint_write_image(PAINT_FILE_PNG, d.px, 37, 21, buf, 20) > 20);
+    n = paint_write_image(PAINT_FILE_PNG, d.px, 37, 21, buf, sizeof buf);
+    /* the IDAT stops early, its CRC made right: the data is cut short */
+    size_t idat = 33, len = (size_t)buf[idat + 2] << 8 | buf[idat + 3];
+    buf[idat + 2] = (uint8_t)((len - 10) >> 8);
+    buf[idat + 3] = (uint8_t)(len - 10);
+    uint32_t crc = paint_crc32(0, buf + idat + 4, len - 10 + 4);
+    uint8_t *e = buf + idat + 8 + len - 10;
+    e[0] = (uint8_t)(crc >> 24), e[1] = (uint8_t)(crc >> 16), e[2] = (uint8_t)(crc >> 8), e[3] = (uint8_t)crc;
+    memcpy(e + 4, "\0\0\0\0IEND\xAE\x42\x60\x82", 12);
+    CHECK(read((size_t)(e + 16 - buf), &w, &h, msg) == -1 && strstr(msg, "stops early"));
+    /* a chunk this must know and does not: it says so */
+    memcpy(buf, PNG_GRAY4, sizeof PNG_GRAY4);
+    memcpy(buf + 33 + 4, "ZZZZ", 4); /* the tEXt, renamed */
+    crc = paint_crc32(0, buf + 33 + 4, be32t(buf + 33) + 4);
+    e = buf + 33 + 8 + be32t(buf + 33);
+    e[0] = (uint8_t)(crc >> 24), e[1] = (uint8_t)(crc >> 16), e[2] = (uint8_t)(crc >> 8), e[3] = (uint8_t)crc;
+    CHECK(read(sizeof PNG_GRAY4, &w, &h, msg) == -1 && strstr(msg, "chunk this does not know"));
+    CHECK(paint_kind_of_name("a.png") == PAINT_FILE_PNG && paint_kind_of_name("B.PNG") == PAINT_FILE_PNG);
+    CHECK(paint_kind_of_name("png") == PAINT_FILE_BMP && paint_kind_of_name("x.ppm") == PAINT_FILE_PPM);
+}
+
 int main(int argc, char **argv) {
     const char *dir = argc > 1 ? argv[1] : ".";
     test_shapes();
@@ -1101,6 +1231,8 @@ int main(int argc, char **argv) {
     test_transforms();
     test_selection_commands();
     test_files();
+    test_zlib();
+    test_png();
     test_window(dir);
     test_window_selection();
     printf("test_paint: %d checks, %d failed\n", checks, failures);

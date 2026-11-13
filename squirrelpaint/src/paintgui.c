@@ -19,7 +19,7 @@ void paint_gui_init(PaintGui *g, PaintDoc *doc) {
     memset(g, 0, sizeof *g);
     g->doc = doc;
     g->zoom = ZOOM_1;
-    snprintf(g->path, sizeof g->path, "untitled.bmp");
+    snprintf(g->path, sizeof g->path, "untitled.png");
     snprintf(g->new_w, sizeof g->new_w, "%d", doc->w > 0 ? doc->w : 640);
     snprintf(g->new_h, sizeof g->new_h, "%d", doc->h > 0 ? doc->h : 480);
     static const uint32_t pal[PAINT_PALETTE] = {
