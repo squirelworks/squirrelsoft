@@ -1,8 +1,9 @@
 # SquirrelQR: Android app (android/) and desktop reader (desktop/), both on libs/sqqr.
 CC ?= gcc
 SQQR = ../libs/sqqr
+SQGUI = ../libs/sqgui
 CFLAGS ?= -std=c11 -Wall -Wextra -O2
-CFLAGS += -D_POSIX_C_SOURCE=200809L -Idesktop/include -I$(SQQR)/include
+CFLAGS += -D_POSIX_C_SOURCE=200809L -Idesktop/include -I$(SQQR)/include -I$(SQGUI)/include
 LDLIBS = -lm
 BUILD = build
 QR_VERSION := $(shell sed -n 's/^ *versionName *= *"\([^"]*\)".*/\1/p' android/app/build.gradle.kts | head -1)
@@ -25,11 +26,25 @@ CFLAGS += -DQR_HAS_ICONV
 LDLIBS += -liconv
 endif
 
-OBJ = $(BUILD)/qrimage.o $(BUILD)/qrpng.o $(BUILD)/qrtext.o $(BUILD)/capture_$(CAPTURE).o
-HDR = $(wildcard desktop/include/*.h) $(SQQR)/include/sqqr.h
-SQQR_LIB = $(SQQR)/build/libsqqr.a
+# The --gui window: libs/sqgui with its SDL2 back end when SDL2 is here.
+HAS_SDL ?= $(shell pkg-config --exists sdl2 && echo 1)
+ifeq ($(HAS_SDL),1)
+GUI_RUN = $(BUILD)/qrgui_sdl.o
+SQGUI_SDL = $(SQGUI)/build/sqgui_sdl.o
+$(BUILD)/qrgui_sdl.o: CFLAGS += $(shell pkg-config --cflags sdl2)
+LDLIBS += $(shell pkg-config --libs sdl2)
+else
+GUI_RUN = $(BUILD)/qrgui_nosdl.o
+endif
 
-.PHONY: all desktop test test-desktop test-x11 serve clean android android-test $(SQQR_LIB)
+OBJ = $(BUILD)/qrimage.o $(BUILD)/qrpng.o $(BUILD)/qrtext.o $(BUILD)/qrdecode.o \
+	$(BUILD)/qrgui.o $(BUILD)/capture_$(CAPTURE).o
+HDR = $(wildcard desktop/include/*.h) $(SQQR)/include/sqqr.h $(SQGUI)/include/sqgui.h
+SQQR_LIB = $(SQQR)/build/libsqqr.a
+SQGUI_LIB = $(SQGUI)/build/libsqgui.a
+LIBS = $(SQQR_LIB) $(SQGUI_SDL) $(SQGUI_LIB)
+
+.PHONY: all desktop test test-desktop test-x11 serve clean android android-test $(SQQR_LIB) $(SQGUI_LIB)
 
 all: desktop
 
@@ -41,21 +56,35 @@ $(BUILD):
 $(SQQR_LIB):
 	$(MAKE) -C $(SQQR) build/libsqqr.a
 
+$(SQGUI_LIB):
+	$(MAKE) -C $(SQGUI) build/libsqgui.a $(if $(SQGUI_SDL),build/sqgui_sdl.o)
+ifneq ($(SQGUI_SDL),)
+$(SQGUI_SDL): $(SQGUI_LIB)
+	@:
+endif
+
 $(BUILD)/%.o: desktop/src/%.c $(HDR) | $(BUILD)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(BUILD)/squirrelqr: desktop/src/main.c $(OBJ) $(SQQR_LIB) | $(BUILD)
-	$(CC) $(CFLAGS) $< $(OBJ) $(SQQR_LIB) -o $@ $(LDLIBS)
+$(BUILD)/squirrelqr: desktop/src/main.c $(OBJ) $(GUI_RUN) $(LIBS) | $(BUILD)
+	$(CC) $(CFLAGS) $< $(OBJ) $(GUI_RUN) $(LIBS) -o $@ $(LDLIBS)
 
-$(BUILD)/test_desktop: desktop/tests/test_desktop.c $(OBJ) $(SQQR_LIB) | $(BUILD)
-	$(CC) $(CFLAGS) $< $(OBJ) $(SQQR_LIB) -o $@ $(LDLIBS)
+$(BUILD)/test_desktop: desktop/tests/test_desktop.c $(OBJ) $(LIBS) | $(BUILD)
+	$(CC) $(CFLAGS) $< $(OBJ) $(LIBS) -o $@ $(LDLIBS)
+
+$(BUILD)/test_gui: desktop/tests/test_gui.c $(OBJ) $(LIBS) | $(BUILD)
+	$(CC) $(CFLAGS) $< $(OBJ) $(LIBS) -o $@ $(LDLIBS)
 
 test: test-desktop
 	python3 tests/test_web_static.py
 	@echo "squirrelqr tests ok"
 
-test-desktop: $(BUILD)/test_desktop $(BUILD)/squirrelqr
+test-desktop: $(BUILD)/test_desktop $(BUILD)/test_gui $(BUILD)/squirrelqr
 	$(BUILD)/test_desktop $(SQQR)/fixtures/symbols.txt $(BUILD)
+	$(BUILD)/test_gui $(BUILD)
+	@if [ "$(HAS_SDL)" = 1 ]; then \
+		SDL_VIDEODRIVER=dummy $(BUILD)/squirrelqr --gui-frames 10 $(BUILD)/fmt_P5.img && echo "squirrelqr window ok"; \
+	else echo "squirrelqr: no SDL2, window not tested"; fi
 	sh desktop/tests/cli_smoke.sh $(BUILD)
 	python3 -I desktop/tests/test_png.py $(BUILD)
 	@if [ "$(CAPTURE)" = x11 ] && command -v xvfb-run >/dev/null; then \

@@ -13,7 +13,7 @@ if ! "$q" devices >/dev/null 2>&1 && ! SDL_AUDIODRIVER=disk "$q" devices >/dev/n
     exit 0
 fi
 tmp=$(mktemp -d)
-trap 'kill $play_pid $pa_pid 2>/dev/null; rm -rf "$tmp"' EXIT
+trap 'kill $play_pid $pa_pid 2>/dev/null || true; rm -rf "$tmp"' EXIT
 pa_pid=
 play_pid=
 

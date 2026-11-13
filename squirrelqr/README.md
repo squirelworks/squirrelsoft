@@ -34,8 +34,13 @@ build/squirrelqr shot.png code.pgm   # PNG, PGM/PPM/PBM and BMP files; one line 
 build/squirrelqr --select            # drag a rectangle with the mouse; Esc cancels
 build/squirrelqr --screen --wait 10  # keep looking at the whole screen for up to 10 s
 build/squirrelqr --region 0,0,800,600 --json
+build/squirrelqr --gui [shot.png]    # small window: Select area, Whole screen, open a file, Copy text
 make test-desktop                    # unit + CLI tests; the capture test runs under xvfb-run
 ```
+
+The `--gui` window (`libs/sqgui` on SDL2) shows the last image with the
+code outlined in green, the decoded text, and the version and charset in
+the status line. Copy puts the text on the clipboard.
 
 `--json` prints the text, the charset it was read as, the symbol version and
 the corners in screen or image coordinates. Text follows the Android app's
