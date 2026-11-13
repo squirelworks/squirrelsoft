@@ -1,14 +1,14 @@
 /* paint: the SquirrelPaint core (see paint.h). Original code. */
-#include "paint.h"
+#include "paint_int.h"
 
 #include <string.h>
 
 /* ---- pixels ---- */
 
-static void dirty_reset(PaintDoc *d) { d->dirty = (PaintRect){0, 0, 0, 0}; }
+void paint__dirty_reset(PaintDoc *d) { d->dirty = (PaintRect){0, 0, 0, 0}; }
 
 /* grow the changed area to take in x0..x1, y0..y1 (inclusive, clipped) */
-static void touch(PaintDoc *d, int x0, int y0, int x1, int y1) {
+void paint__touch(PaintDoc *d, int x0, int y0, int x1, int y1) {
     if (x0 < 0) x0 = 0;
     if (y0 < 0) y0 = 0;
     if (x1 >= d->w) x1 = d->w - 1;
@@ -34,7 +34,7 @@ static void plot(PaintDoc *d, int x, int y, uint32_t c) {
 }
 
 /* x0..x1 on row y, already in order */
-static void span(PaintDoc *d, int x0, int x1, int y, uint32_t c) {
+void paint__span(PaintDoc *d, int x0, int x1, int y, uint32_t c) {
     if (y < 0 || y >= d->h) return;
     if (x0 < 0) x0 = 0;
     if (x1 >= d->w) x1 = d->w - 1;
@@ -51,7 +51,9 @@ static void undo_reset(PaintDoc *d) {
     d->nsteps = d->done = 0;
     d->used = 0;
     d->active = 0;
-    dirty_reset(d);
+    d->sel.w = d->sel.h = d->from.w = 0;
+    d->floating = d->sel_mode = 0;
+    paint__dirty_reset(d);
 }
 
 int paint_new(PaintDoc *d, int w, int h) {
@@ -89,9 +91,9 @@ static int clamp_size(int s) { return s < 1 ? 1 : s > PAINT_SIZE_MAX ? PAINT_SIZ
 void paint_dab(PaintDoc *d, int x, int y, int size, uint32_t c) {
     size = clamp_size(size);
     int x0 = x - (size - 1) / 2, y0 = y - (size - 1) / 2;
-    touch(d, x0, y0, x0 + size - 1, y0 + size - 1);
+    paint__touch(d, x0, y0, x0 + size - 1, y0 + size - 1);
     if (size <= 2) { /* a pixel, or a 2x2 square */
-        for (int j = 0; j < size; j++) span(d, x0, x0 + size - 1, y0 + j, c);
+        for (int j = 0; j < size; j++) paint__span(d, x0, x0 + size - 1, y0 + j, c);
         return;
     }
     /* row j covers the columns whose centres are within size/2 of the dab's centre */
@@ -100,7 +102,7 @@ void paint_dab(PaintDoc *d, int x, int y, int size, uint32_t c) {
         double dy = j - m;
         int i = 0;
         while (i < size && (i - m) * (i - m) + dy * dy > r2) i++;
-        if (i < size) span(d, x0 + i, x0 + size - 1 - i, y0 + j, c);
+        if (i < size) paint__span(d, x0 + i, x0 + size - 1 - i, y0 + j, c);
     }
 }
 
@@ -111,7 +113,7 @@ void paint_line(PaintDoc *d, int x0, int y0, int x1, int y1, int size, uint32_t 
     for (;;) {
         if (size <= 1) {
             plot(d, x0, y0, c);
-            touch(d, x0, y0, x0, y0);
+            paint__touch(d, x0, y0, x0, y0);
         } else {
             paint_dab(d, x0, y0, size, c);
         }
@@ -140,18 +142,18 @@ void paint_rect(PaintDoc *d, int x0, int y0, int x1, int y1, int size, int fille
     order(&x0, &x1);
     order(&y0, &y1);
     size = clamp_size(size);
-    touch(d, x0, y0, x1, y1);
+    paint__touch(d, x0, y0, x1, y1);
     if (filled || 2 * size >= x1 - x0 + 1 || 2 * size >= y1 - y0 + 1) {
-        for (int y = y0; y <= y1; y++) span(d, x0, x1, y, c);
+        for (int y = y0; y <= y1; y++) paint__span(d, x0, x1, y, c);
         return;
     }
     for (int k = 0; k < size; k++) { /* the outline, size thick, inside the box */
-        span(d, x0, x1, y0 + k, c);
-        span(d, x0, x1, y1 - k, c);
+        paint__span(d, x0, x1, y0 + k, c);
+        paint__span(d, x0, x1, y1 - k, c);
     }
     for (int y = y0 + size; y <= y1 - size; y++) {
-        span(d, x0, x0 + size - 1, y, c);
-        span(d, x1 - size + 1, x1, y, c);
+        paint__span(d, x0, x0 + size - 1, y, c);
+        paint__span(d, x1 - size + 1, x1, y, c);
     }
 }
 
@@ -183,7 +185,7 @@ void paint_ellipse(PaintDoc *d, int x0, int y0, int x1, int y1, int size, int fi
     order(&x0, &x1);
     order(&y0, &y1);
     size = clamp_size(size);
-    touch(d, x0, y0, x1, y1);
+    paint__touch(d, x0, y0, x1, y1);
     /* pixel centres are at whole numbers; the box's edges half a pixel out */
     double cx = (x0 + x1) / 2.0, cy = (y0 + y1) / 2.0;
     double rx = (x1 - x0 + 1) / 2.0, ry = (y1 - y0 + 1) / 2.0;
@@ -192,11 +194,11 @@ void paint_ellipse(PaintDoc *d, int x0, int y0, int x1, int y1, int size, int fi
         int lo, hi, ilo, ihi;
         if (y < 0 || y >= d->h || !ellipse_row(cx, cy, rx, ry, y, &lo, &hi)) continue;
         if (filled || !ellipse_row(cx, cy, irx, iry, y, &ilo, &ihi)) {
-            span(d, lo, hi, y, c);
+            paint__span(d, lo, hi, y, c);
         } else {
-            if (ilo > lo) span(d, lo, ilo - 1, y, c);
+            if (ilo > lo) paint__span(d, lo, ilo - 1, y, c);
             else plot(d, lo, y, c); /* keep the outline closed where it is steep */
-            if (ihi < hi) span(d, ihi + 1, hi, y, c);
+            if (ihi < hi) paint__span(d, ihi + 1, hi, y, c);
             else plot(d, hi, y, c);
         }
     }
@@ -250,7 +252,7 @@ long paint_flood(PaintDoc *d, int x, int y, uint32_t c, int tolerance) {
             d->todo[top++] = (uint32_t)q;
         }
     }
-    touch(d, minx, miny, maxx, maxy);
+    paint__touch(d, minx, miny, maxx, maxy);
     return count;
 }
 
@@ -258,9 +260,22 @@ long paint_flood(PaintDoc *d, int x, int y, uint32_t c, int tolerance) {
 
 static size_t area(PaintRect r) { return (size_t)r.w * (size_t)r.h; }
 
-/* swap the step's pixels with the picture's in its rectangle */
-static void swap_step(PaintDoc *d, const PaintStep *s) {
+/* swap the step's pixels with the picture's: in its rectangle, or the
+ * whole picture (the sizes swap too, with todo to hold one of them) */
+static void swap_step(PaintDoc *d, PaintStep *s) {
     uint32_t *p = d->store + s->at;
+    if (s->whole) {
+        size_t now = (size_t)d->w * (size_t)d->h, then = area(s->r);
+        memcpy(d->todo, d->px, now * sizeof *p);
+        memcpy(d->px, p, then * sizeof *p);
+        memcpy(p, d->todo, now * sizeof *p);
+        int w = d->w, h = d->h;
+        d->w = s->r.w;
+        d->h = s->r.h;
+        s->r.w = w;
+        s->r.h = h;
+        return;
+    }
     for (int j = 0; j < s->r.h; j++) {
         uint32_t *q = d->px + (size_t)(s->r.y + j) * (size_t)d->w + (size_t)s->r.x;
         for (int i = 0; i < s->r.w; i++) {
@@ -273,7 +288,7 @@ static void swap_step(PaintDoc *d, const PaintStep *s) {
 }
 
 static void drop_oldest(PaintDoc *d) {
-    size_t n = area(d->step[0].r);
+    size_t n = d->step[0].cap;
     memmove(d->store, d->store + n, (d->used - n) * sizeof d->store[0]);
     d->used -= n;
     memmove(&d->step[0], &d->step[1], (size_t)(d->nsteps - 1) * sizeof d->step[0]);
@@ -282,54 +297,74 @@ static void drop_oldest(PaintDoc *d) {
     for (int k = 0; k < d->nsteps; k++) d->step[k].at -= n;
 }
 
-/* keep r as it was in before, as a step to undo */
-static void push_step(PaintDoc *d, PaintRect r) {
+/* room for a step of need pixels at the end of the store; 0, or -1 when it
+ * can never fit (then nothing before it can be undone either) */
+static int make_room(PaintDoc *d, size_t need) {
     d->changed = 1;
     if (d->done < d->nsteps) { /* what was undone can't come back now */
         d->nsteps = d->done;
-        d->used = d->done ? d->step[d->done - 1].at + area(d->step[d->done - 1].r) : 0;
+        d->used = d->done ? d->step[d->done - 1].at + d->step[d->done - 1].cap : 0;
     }
-    size_t need = area(r);
-    if (need > PAINT_UNDO_PX) { /* too big to keep: nothing before it can be undone either */
+    if (need > PAINT_UNDO_PX) {
         d->nsteps = d->done = 0;
         d->used = 0;
-        return;
+        return -1;
     }
     while (d->nsteps && (d->nsteps == PAINT_UNDO_STEPS || d->used + need > PAINT_UNDO_PX)) drop_oldest(d);
+    return 0;
+}
+
+static void add_step(PaintDoc *d, PaintRect r, size_t cap, int whole) {
+    d->step[d->nsteps] = (PaintStep){r, d->used, cap, whole};
+    d->used += cap;
+    d->nsteps++;
+    d->done = d->nsteps;
+}
+
+void paint__push_step(PaintDoc *d, PaintRect r) {
+    if (make_room(d, area(r))) return;
     uint32_t *p = d->store + d->used;
     for (int j = 0; j < r.h; j++) {
         memcpy(p, d->before + (size_t)(r.y + j) * (size_t)d->w + (size_t)r.x, (size_t)r.w * sizeof *p);
         p += r.w;
     }
-    d->step[d->nsteps].r = r;
-    d->step[d->nsteps].at = d->used;
-    d->used += need;
-    d->nsteps++;
-    d->done = d->nsteps;
+    add_step(d, r, area(r), 0);
+}
+
+void paint__push_whole(PaintDoc *d, int ow, int oh) {
+    size_t then = (size_t)ow * (size_t)oh, now = (size_t)d->w * (size_t)d->h;
+    size_t cap = then > now ? then : now; /* undo puts the other size here */
+    if (make_room(d, cap)) return;
+    memcpy(d->store + d->used, d->before, then * sizeof d->store[0]);
+    add_step(d, (PaintRect){0, 0, ow, oh}, cap, 1);
 }
 
 int paint_can_undo(const PaintDoc *d) { return d->done > 0 && !d->active; }
 int paint_can_redo(const PaintDoc *d) { return d->done < d->nsteps && !d->active; }
 
 int paint_undo(PaintDoc *d) {
+    if (d->floating) paint_drop(d); /* what floats is a step of its own first */
     if (!paint_can_undo(d)) return -1;
     swap_step(d, &d->step[--d->done]);
+    d->sel.w = 0;
     d->changed = 1;
     return 0;
 }
 
 int paint_redo(PaintDoc *d) {
+    if (d->floating) paint_drop(d);
     if (!paint_can_redo(d)) return -1;
     swap_step(d, &d->step[d->done++]);
+    d->sel.w = 0;
     d->changed = 1;
     return 0;
 }
 
 /* ---- the tools ---- */
 
-static void save_before(PaintDoc *d) {
+void paint__save_before(PaintDoc *d) {
     memcpy(d->before, d->px, (size_t)d->w * (size_t)d->h * sizeof d->px[0]);
-    dirty_reset(d);
+    paint__dirty_reset(d);
 }
 
 /* what the press has drawn so far, taken back */
@@ -339,7 +374,7 @@ static void restore_dirty(PaintDoc *d) {
         size_t o = (size_t)(r.y + j) * (size_t)d->w + (size_t)r.x;
         memcpy(d->px + o, d->before + o, (size_t)r.w * sizeof d->px[0]);
     }
-    dirty_reset(d);
+    paint__dirty_reset(d);
 }
 
 static int iabs(int v) { return v < 0 ? -v : v; }
@@ -383,15 +418,20 @@ static int stroke_size(const PaintDoc *d) { return d->tool == PAINT_PENCIL ? 1 :
 void paint_press(PaintDoc *d, int x, int y, int button, int square) {
     if (d->active) paint_release(d, d->lx, d->ly, square);
     button = button == 2 ? 2 : 1;
+    if (d->tool == PAINT_SELECT) {
+        paint__sel_press(d, x, y);
+        return;
+    }
+    if (d->floating) paint_drop(d); /* drawing puts down what floats */
     if (d->tool == PAINT_PICKER) {
         if (x < 0 || y < 0 || x >= d->w || y >= d->h) return;
         if (button == 2) d->bg = paint_get(d, x, y);
         else d->fg = paint_get(d, x, y);
         return;
     }
-    save_before(d);
+    paint__save_before(d);
     if (d->tool == PAINT_FILL) {
-        if (paint_flood(d, x, y, button == 2 ? d->bg : d->fg, d->tolerance) > 0) push_step(d, d->dirty);
+        if (paint_flood(d, x, y, button == 2 ? d->bg : d->fg, d->tolerance) > 0) paint__push_step(d, d->dirty);
         return;
     }
     d->active = button;
@@ -404,6 +444,10 @@ void paint_press(PaintDoc *d, int x, int y, int button, int square) {
 }
 
 void paint_drag(PaintDoc *d, int x, int y, int square) {
+    if (d->sel_mode) {
+        paint__sel_drag(d, x, y);
+        return;
+    }
     if (!d->active || (x == d->lx && y == d->ly)) return;
     if (d->tool == PAINT_PENCIL || d->tool == PAINT_BRUSH || d->tool == PAINT_ERASER)
         paint_line(d, d->lx, d->ly, x, y, stroke_size(d), ink(d));
@@ -414,14 +458,20 @@ void paint_drag(PaintDoc *d, int x, int y, int square) {
 }
 
 void paint_release(PaintDoc *d, int x, int y, int square) {
+    if (d->sel_mode) {
+        paint__sel_release(d, x, y);
+        return;
+    }
     if (!d->active) return;
     if (d->tool == PAINT_LINE || d->tool == PAINT_RECT || d->tool == PAINT_ELLIPSE) shape(d, x, y, square);
     else paint_drag(d, x, y, square);
     d->active = 0;
-    if (d->dirty.w) push_step(d, d->dirty);
+    if (d->dirty.w) paint__push_step(d, d->dirty);
 }
 
 void paint_cancel(PaintDoc *d) {
+    if (d->sel_mode == 1) d->sel.w = d->sel.h = 0; /* a rectangle half drawn */
+    d->sel_mode = 0;
     if (!d->active) return;
     restore_dirty(d);
     d->active = 0;
@@ -429,7 +479,7 @@ void paint_cancel(PaintDoc *d) {
 
 /* ---- commands ---- */
 
-static void say(char *msg, size_t cap, const char *a, const char *b) {
+void paint__say(char *msg, size_t cap, const char *a, const char *b) {
     if (!cap) return;
     size_t n = 0;
     for (const char *s = a; s && *s && n + 1 < cap; s++) msg[n++] = *s;
@@ -440,21 +490,21 @@ static void say(char *msg, size_t cap, const char *a, const char *b) {
 static int lower(int c) { return c >= 'A' && c <= 'Z' ? c + 32 : c; }
 
 /* the next word: its start and length; 0 at the end */
-static size_t word(const char **p, const char **start) {
+size_t paint__word(const char **p, const char **start) {
     while (**p == ' ' || **p == '\t' || **p == ',') (*p)++;
     *start = *p;
     while (**p && **p != ' ' && **p != '\t' && **p != ',') (*p)++;
     return (size_t)(*p - *start);
 }
 
-static int is(const char *w, size_t n, const char *s) {
+int paint__is(const char *w, size_t n, const char *s) {
     size_t k = 0;
     for (; k < n && s[k]; k++)
         if (lower(w[k]) != s[k]) return 0;
     return k == n && !s[k];
 }
 
-static int number(const char *w, size_t n, int *v) {
+int paint__number(const char *w, size_t n, int *v) {
     size_t i = 0;
     int neg = 0;
     long x = 0;
@@ -485,38 +535,41 @@ int paint_parse_color(const char *s, size_t n, uint32_t *c) {
 
 int paint_command(PaintDoc *d, const char *line, char *msg, size_t msgcap) {
     const char *p = line, *w;
-    size_t n = word(&p, &w);
-    say(msg, msgcap, "", "");
+    size_t n = paint__word(&p, &w);
+    paint__say(msg, msgcap, "", "");
     if (!n) return 0;
     static const char *const tools[] = {"pencil", "brush", "eraser", "line", "rect", "ellipse", "fill", "pick"};
     int tool = -1;
-    for (int k = 0; k < PAINT_TOOLS; k++)
-        if (is(w, n, tools[k])) tool = k;
-    if (is(w, n, "undo") || is(w, n, "redo")) {
+    for (int k = 0; k < (int)(sizeof tools / sizeof tools[0]); k++)
+        if (paint__is(w, n, tools[k])) tool = k;
+    int rc;
+    if (paint__sel_command(d, w, n, p, &rc, msg, msgcap)) return rc;
+    if (paint__is(w, n, "undo") || paint__is(w, n, "redo")) {
         int redo = lower(w[0]) == 'r';
-        if (word(&p, &w)) {
-            say(msg, msgcap, redo ? "redo" : "undo", " takes nothing after it");
+        if (paint__word(&p, &w)) {
+            paint__say(msg, msgcap, redo ? "redo" : "undo", " takes nothing after it");
             return -1;
         }
         if ((redo ? paint_redo(d) : paint_undo(d)) < 0) {
-            say(msg, msgcap, redo ? "nothing to redo" : "nothing to undo", "");
+            paint__say(msg, msgcap, redo ? "nothing to redo" : "nothing to undo", "");
             return -1;
         }
         return 0;
     }
-    if (is(w, n, "clear")) {
-        save_before(d);
-        for (int y = 0; y < d->h; y++) span(d, 0, d->w - 1, y, d->bg);
-        push_step(d, (PaintRect){0, 0, d->w, d->h});
+    if (paint__is(w, n, "clear")) {
+        if (d->floating) paint_drop(d);
+        paint__save_before(d);
+        for (int y = 0; y < d->h; y++) paint__span(d, 0, d->w - 1, y, d->bg);
+        paint__push_step(d, (PaintRect){0, 0, d->w, d->h});
         return 0;
     }
-    if (is(w, n, "color") || is(w, n, "colour") || is(w, n, "bg")) {
-        int bg = is(w, n, "bg");
+    if (paint__is(w, n, "color") || paint__is(w, n, "colour") || paint__is(w, n, "bg")) {
+        int bg = paint__is(w, n, "bg");
         uint32_t c;
-        n = word(&p, &w);
+        n = paint__word(&p, &w);
         const char *e;
-        if (paint_parse_color(w, n, &c) || word(&p, &e)) {
-            say(msg, msgcap, "expected a colour as RRGGBB, as in ", bg ? "bg ffffff" : "color ff0000");
+        if (paint_parse_color(w, n, &c) || paint__word(&p, &e)) {
+            paint__say(msg, msgcap, "expected a colour as RRGGBB, as in ", bg ? "bg ffffff" : "color ff0000");
             return -1;
         }
         if (bg) d->bg = c;
@@ -526,14 +579,14 @@ int paint_command(PaintDoc *d, const char *line, char *msg, size_t msgcap) {
     int vals[64], nv = 0, right = 0, square = 0, onoff = -1;
     const char *head = w;
     size_t headn = n;
-    while ((n = word(&p, &w))) {
-        if (is(w, n, "right")) right = 1;
-        else if (is(w, n, "square")) square = 1;
-        else if (is(w, n, "on")) onoff = 1;
-        else if (is(w, n, "off")) onoff = 0;
-        else if (nv < 64 && number(w, n, &vals[nv]) == 0) nv++;
+    while ((n = paint__word(&p, &w))) {
+        if (paint__is(w, n, "right")) right = 1;
+        else if (paint__is(w, n, "square")) square = 1;
+        else if (paint__is(w, n, "on")) onoff = 1;
+        else if (paint__is(w, n, "off")) onoff = 0;
+        else if (nv < 64 && paint__number(w, n, &vals[nv]) == 0) nv++;
         else {
-            say(msg, msgcap, "not a number: ", "");
+            paint__say(msg, msgcap, "not a number: ", "");
             size_t k = 0;
             while (msg[k]) k++;
             for (size_t i = 0; i < n && k + 1 < msgcap && i < 20; i++) msg[k++] = w[i];
@@ -541,38 +594,38 @@ int paint_command(PaintDoc *d, const char *line, char *msg, size_t msgcap) {
             return -1;
         }
     }
-    if (is(head, headn, "new")) {
+    if (paint__is(head, headn, "new")) {
         if (nv != 2 || paint_new(d, vals[0], vals[1])) {
-            say(msg, msgcap, "new W H: a size from 1x1 to the largest picture", "");
+            paint__say(msg, msgcap, "new W H: a size from 1x1 to the largest picture", "");
             return -1;
         }
         return 0;
     }
-    if (is(head, headn, "size") || is(head, headn, "tolerance")) {
+    if (paint__is(head, headn, "size") || paint__is(head, headn, "tolerance")) {
         int size = lower(head[0]) == 's';
         if (nv != 1 || vals[0] < (size ? 1 : 0) || vals[0] > (size ? PAINT_SIZE_MAX : 255)) {
-            say(msg, msgcap, size ? "size N: 1 to 64" : "tolerance N: 0 to 255", "");
+            paint__say(msg, msgcap, size ? "size N: 1 to 64" : "tolerance N: 0 to 255", "");
             return -1;
         }
         if (size) d->size = vals[0];
         else d->tolerance = vals[0];
         return 0;
     }
-    if (is(head, headn, "fill") && onoff >= 0) {
+    if (paint__is(head, headn, "fill") && onoff >= 0) {
         if (nv) {
-            say(msg, msgcap, "fill on or fill off, or fill X Y", "");
+            paint__say(msg, msgcap, "fill on or fill off, or fill X Y", "");
             return -1;
         }
         d->filled = onoff;
         return 0;
     }
     if (tool < 0) {
-        say(msg, msgcap, "unknown: try line, rect, ellipse, brush, fill, color, undo", "");
+        paint__say(msg, msgcap, "unknown: try line, rect, ellipse, brush, fill, color, undo", "");
         return -1;
     }
     int stroke = tool <= PAINT_ERASER, two = tool >= PAINT_LINE && tool <= PAINT_ELLIPSE;
     if ((stroke && (nv < 2 || nv % 2)) || (two && nv != 4) || (!stroke && !two && nv != 2) || onoff >= 0) {
-        say(msg, msgcap, tools[tool],
+        paint__say(msg, msgcap, tools[tool],
             stroke ? ": X Y [X Y ...]" : two ? ": X0 Y0 X1 Y1 [square]" : ": X Y");
         return -1;
     }

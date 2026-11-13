@@ -5,8 +5,11 @@
  * the secondary in the second (the eraser the other way round); Shift
  * holds shapes to squares, circles and lines at 45 degrees; Ctrl and a
  * drag move the view, the wheel zooms about the pointer, and the arrows
- * move the view too. Ctrl+Z undoes, Ctrl+Y redoes, Ctrl+S saves, Escape
- * takes back a stroke in progress; the letters P B E L R O F I pick a tool.
+ * move the view too (or nudge a selection). Ctrl+Z undoes, Ctrl+Y redoes,
+ * Ctrl+S saves, Ctrl+X, C, V and A cut, copy, paste and select all, Delete
+ * clears the selection, Escape takes back a stroke in progress or puts the
+ * selection down; the letters P B E L R O F I S pick a tool. The edit and
+ * image buttons work on the selection, or the whole picture without one.
  * Files go through the open and save hooks, so this file has no stdio.
  */
 #ifndef PAINTGUI_H

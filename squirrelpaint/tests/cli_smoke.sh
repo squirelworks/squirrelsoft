@@ -37,6 +37,19 @@ out=$($P "$B/a.bmp" --snapshot "$B/snap.ppm") || fail "snapshot"
 [ "$out" = "64 x 48" ] || fail "snapshot says the size: $out"
 [ "$(head -c 15 "$B/snap.ppm")" = "$(printf 'P6\n960 680\n255')" ] || fail "snapshot header"
 
+# selections and transforms: a quarter turn four times, and a flip twice, change nothing
+$P "$B/a.bmp" --do "rotate 90" --do "rotate 90" --do "rotate -90" --do "rotate 270" --do "flip h" --do "flip h" \
+    --save "$B/e.bmp" || fail "turns"
+cmp -s "$B/a.bmp" "$B/e.bmp" || fail "four turns and two flips changed the picture"
+$P "$B/a.bmp" --do "select 0 0 15 11" --do "copy" --do "paste 48 36" --do "drop" --do "select 10 10 41 33" \
+    --do "crop" --do "resize 64 48 smooth" --do "canvas 70 50" --save "$B/f.ppm" || fail "select, paste, crop, resize"
+[ "$(head -c 13 "$B/f.ppm")" = "$(printf 'P6\n70 50\n255\n')" ] || fail "f.ppm size"
+$P --new 8x8 --do "color ff0000" --do "fill 0 0" --do "select 0 0 3 3" --do "move 4 4" --save "$B/g.ppm" || fail "save while floating"
+[ "$(tail -c 3 "$B/g.ppm" | od -An -tx1 | tr -d ' \n')" = "ff0000" ] || fail "what floats is saved"
+[ "$(head -c 14 "$B/g.ppm" | tail -c 3 | od -An -tx1 | tr -d ' \n')" = "ffffff" ] || fail "the hole it left is saved"
+err=$($P --new 10x10 --do "crop" 2>&1); [ $? -eq 1 ] || fail "crop with nothing selected should exit 1"
+echo "$err" | grep -q "crop: nothing is selected" || fail "crop message: $err"
+
 # errors
 err=$($P --new 10x10 --do "line 1 2 3" 2>&1); [ $? -eq 1 ] || fail "a bad command should exit 1"
 echo "$err" | grep -q "line 1 2 3: line: X0 Y0 X1 Y1" || fail "bad command message: $err"

@@ -8,9 +8,9 @@ static const double ZOOMS[] = {0.125, 0.25, 0.5, 1, 2, 3, 4, 6, 8, 12, 16, 24, 3
 #define NZOOM ((int)(sizeof ZOOMS / sizeof ZOOMS[0]))
 #define ZOOM_1 3 /* 1:1 */
 
-static const char *const TOOL_NAMES[PAINT_TOOLS] = {"Pencil", "Brush", "Eraser", "Line",
-                                                    "Rect",   "Ellipse", "Fill", "Picker"};
-static const char TOOL_KEYS[PAINT_TOOLS] = {'p', 'b', 'e', 'l', 'r', 'o', 'f', 'i'};
+static const char *const TOOL_NAMES[PAINT_TOOLS] = {"Pencil", "Brush", "Eraser", "Line",  "Rect",
+                                                    "Ellipse", "Fill", "Picker", "Select"};
+static const char TOOL_KEYS[PAINT_TOOLS] = {'p', 'b', 'e', 'l', 'r', 'o', 'f', 'i', 's'};
 
 double paint_gui_scale(int k) { return ZOOMS[k < 0 ? 0 : k >= NZOOM ? NZOOM - 1 : k]; }
 int paint_gui_zooms(void) { return NZOOM; }
@@ -107,11 +107,29 @@ static void draw_picture(PaintGui *g, sqg_ui *ui) {
         if (py >= d->h) py = d->h - 1;
         const uint32_t *row = d->px + (size_t)py * (size_t)d->w;
         uint32_t *out = cv->px + (size_t)sy * (size_t)cv->stride;
+        int floats = d->floating && py >= d->sel.y && py < d->sel.y + d->sel.h;
         for (int sx = pic.x; sx < pic.x + pic.w; sx++) {
             int px = ifloor(g->ox + (sx - a.x + 0.5) / s);
             if (px < 0) px = 0;
             if (px >= d->w) px = d->w - 1;
-            out[sx] = row[px];
+            out[sx] = floats ? paint_shown(d, px, py) : row[px];
+        }
+    }
+    /* the selection: a dashed edge, black and white so it shows on anything */
+    if (d->sel.w) {
+        int ax, ay, bx, by;
+        paint_gui_to_screen(g, d->sel.x, d->sel.y, &ax, &ay);
+        paint_gui_to_screen(g, d->sel.x + d->sel.w, d->sel.y + d->sel.h, &bx, &by);
+        ax--, ay--;
+        for (int x = ax; x <= bx; x++) {
+            uint32_t c = ((x - ax) / 4) & 1 ? 0xFFFFFFFFu : 0xFF000000u;
+            sqg_pixel(cv, x, ay, c);
+            sqg_pixel(cv, x, by, c);
+        }
+        for (int y = ay; y <= by; y++) {
+            uint32_t c = ((y - ay) / 4) & 1 ? 0xFFFFFFFFu : 0xFF000000u;
+            sqg_pixel(cv, ax, y, c);
+            sqg_pixel(cv, bx, y, c);
         }
     }
     if (s >= 8) { /* the pixel grid, faintly */
@@ -131,7 +149,7 @@ static void draw_picture(PaintGui *g, sqg_ui *ui) {
         }
     }
     /* the brush's reach under the pointer */
-    if (g->mouse_in && d->tool != PAINT_FILL && d->tool != PAINT_PICKER) {
+    if (g->mouse_in && d->tool != PAINT_FILL && d->tool != PAINT_PICKER && d->tool != PAINT_SELECT) {
         int size = d->tool == PAINT_PENCIL ? 1 : d->size;
         int bx = g->mouse_x - (size - 1) / 2, by = g->mouse_y - (size - 1) / 2, sx0, sy0, sx1, sy1;
         paint_gui_to_screen(g, bx, by, &sx0, &sy0);
@@ -172,7 +190,7 @@ static void picture_input(PaintGui *g, sqg_ui *ui) {
         }
         int b = in->pressed ? 1 : 2;
         paint_press(d, x, y, b, in->shift);
-        if (d->active) g->painting = b;
+        if (d->active || d->sel_mode) g->painting = b;
         return;
     }
     if (g->painting) {
@@ -193,6 +211,9 @@ static void swatch(sqg_canvas *cv, sqg_rect r, uint32_t c) {
     sqg_frame(cv, sqg_rect_inset(r, 1), 0xFFFFFFFFu);
 }
 
+static void edit(PaintGui *g, int what);
+static void image_op(PaintGui *g, int what);
+
 static void tools_panel(PaintGui *g, sqg_ui *ui, sqg_rect r) {
     sqg_canvas *cv = ui->cv;
     PaintDoc *d = g->doc;
@@ -208,7 +229,24 @@ static void tools_panel(PaintGui *g, sqg_ui *ui, sqg_rect r) {
             d->tool = k;
         }
     }
-    y += (PAINT_TOOLS + 1) / 2 * (lh + 2) + 6;
+    y += (PAINT_TOOLS + 1) / 2 * (lh + 2) + 4;
+    /* the selection and the picture: three buttons a row */
+    static const char *const ops[] = {"Cut", "Copy", "Paste", "Delete", "Crop", "Invert", "Flip H", "Flip V", "Rot L", "Rot R"};
+    static const char keys_of[] = {'x', 'c', 'v', 'd', 'C', 'i', 'h', 'V', 'l', 'r'};
+    int third = (r.w - 8) / 3;
+    for (int k = 0; k < 10; k++) {
+        char id[16];
+        snprintf(id, sizeof id, "op%d", k);
+        int col = k < 6 ? k % 3 : (k - 6) % 2, row = k < 6 ? k / 3 : 2 + (k - 6) / 2;
+        int bw = k < 6 ? third : (r.w - 4) / 2;
+        sqg_rect b = sqg_rect_make(r.x + col * (bw + 4), y + row * (lh + 2), bw, lh);
+        if (sqg_button(ui, sqg_id_str(id), b, ops[k]) && !g->painting) {
+            int c = keys_of[k];
+            if (c == 'x' || c == 'c' || c == 'v' || c == 'd') edit(g, c);
+            else image_op(g, c == 'C' ? 'c' : c == 'V' ? 'v' : c);
+        }
+    }
+    y += 4 * (lh + 2) + 6;
     char t[32];
     snprintf(t, sizeof t, "Size %d", d->size);
     sqg_label(ui, sqg_rect_make(r.x, y, r.w, lh), t, SQG_ALIGN_LEFT);
@@ -282,12 +320,52 @@ static void do_save(PaintGui *g) {
         say(g, "Saving files is not here");
         return;
     }
+    paint_drop(g->doc); /* what floats goes into the file */
     if (g->save_file(g, g->path, msg, sizeof msg)) {
         snprintf(g->status, sizeof g->status, "%.60s: %.90s", g->path, msg);
         return;
     }
     g->doc->changed = 0;
     snprintf(g->status, sizeof g->status, "Saved %.120s", g->path);
+}
+
+/* x cut, c copy, v paste, a select all, d delete */
+static void edit(PaintGui *g, int what) {
+    PaintDoc *d = g->doc;
+    int rc = 0;
+    switch (what) {
+    case 'x': rc = paint_cut(d); break;
+    case 'c': rc = paint_copy(d); break;
+    case 'd': rc = paint_delete(d); break;
+    case 'a':
+        paint_select_all(d);
+        d->tool = PAINT_SELECT;
+        break;
+    default: { /* paste at the top-left of what is in view, ready to drag */
+        int x, y;
+        paint_gui_to_picture(g, g->area.x, g->area.y, &x, &y);
+        rc = paint_paste(d, x, y);
+        if (!rc) d->tool = PAINT_SELECT;
+    }
+    }
+    if (rc) say(g, what == 'v' ? "Nothing to paste" : "Select something first (the Select tool, or Ctrl+A)");
+    else say(g, what == 'x' ? "Cut" : what == 'c' ? "Copied" : what == 'd' ? "Deleted" : what == 'a' ? "All selected" : "Pasted: drag it into place");
+}
+
+/* the image buttons: on the selection, or the whole picture */
+static void image_op(PaintGui *g, int what) {
+    PaintDoc *d = g->doc;
+    int rc, whole = !d->sel.w;
+    switch (what) {
+    case 'h': rc = paint_flip(d, 0); break;
+    case 'v': rc = paint_flip(d, 1); break;
+    case 'l': rc = paint_rotate(d, -1); break;
+    case 'r': rc = paint_rotate(d, 1); break;
+    case 'i': rc = paint_invert(d); break;
+    default: rc = paint_crop(d); whole = 1;
+    }
+    if (rc) say(g, what == 'c' ? "Select what to keep first" : "That would be too big");
+    else if (whole) g->view_ready = what == 'l' || what == 'r' || what == 'c' ? 0 : g->view_ready; /* a new shape: fit it */
 }
 
 static void do_undo(PaintGui *g, int redo) {
@@ -306,6 +384,15 @@ static void top_bar(PaintGui *g, sqg_ui *ui, sqg_rect r) {
     sqg_textfield(ui, sqg_id_str("neww"), sqg_row_take(&row, 40), g->new_w, sizeof g->new_w);
     sqg_label(ui, sqg_row_take(&row, sqg_text_width("x", 1)), "x", SQG_ALIGN_CENTER);
     sqg_textfield(ui, sqg_id_str("newh"), sqg_row_take(&row, 40), g->new_h, sizeof g->new_h);
+    if (sqg_button(ui, sqg_id_str("resize"), sqg_row_take(&row, sqg_button_w(ui, "Resize")), "Resize")) {
+        int w, h, sel = d->sel.w > 0;
+        if (g->painting || parse_int(g->new_w, &w) || parse_int(g->new_h, &h) || paint_resize(d, w, h, 1)) {
+            snprintf(g->status, sizeof g->status, "Resize: a size from 1 x 1 to %d x %d", PAINT_MAX_W, PAINT_MAX_H);
+        } else {
+            if (!sel) g->view_ready = 0;
+            snprintf(g->status, sizeof g->status, "%s now %d x %d", sel ? "The selection is" : "The picture is", w, h);
+        }
+    }
     if (sqg_button(ui, sqg_id_str("new"), sqg_row_take(&row, sqg_button_w(ui, "New")), "New")) {
         int w, h;
         paint_cancel(d);
@@ -346,12 +433,23 @@ static void keys(PaintGui *g, sqg_ui *ui) {
     if (in->ctrl_key == 'z') do_undo(g, 0);
     if (in->ctrl_key == 'y') do_undo(g, 1);
     if (in->ctrl_key == 's') do_save(g);
-    if (in->key == SQG_KEY_ESCAPE && d->active) {
-        paint_cancel(d);
-        g->painting = 0;
-        say(g, "Taken back");
+    if (in->ctrl_key && strchr("xcva", in->ctrl_key) && !g->painting) edit(g, in->ctrl_key);
+    if (in->key == SQG_KEY_ESCAPE) {
+        if (d->active || d->sel_mode) {
+            paint_cancel(d);
+            g->painting = 0;
+            say(g, "Taken back");
+        } else if (d->sel.w) {
+            paint_select_none(d);
+        }
     }
     if (ui->focus) return;
+    if (in->key == SQG_KEY_DELETE && d->sel.w && !g->painting) edit(g, 'd');
+    if (d->sel.w && !g->painting && in->key >= SQG_KEY_LEFT && in->key <= SQG_KEY_DOWN) { /* nudge it a pixel */
+        paint_move_selection(d, (in->key == SQG_KEY_RIGHT) - (in->key == SQG_KEY_LEFT),
+                             (in->key == SQG_KEY_DOWN) - (in->key == SQG_KEY_UP));
+        return;
+    }
     double step = 32 / paint_gui_scale(g->zoom);
     if (in->key == SQG_KEY_LEFT) g->ox -= step;
     if (in->key == SQG_KEY_RIGHT) g->ox += step;
@@ -371,7 +469,9 @@ static void status_line(PaintGui *g, sqg_ui *ui, sqg_rect r) {
                  (unsigned)(paint_get(d, g->mouse_x, g->mouse_y) & 0xFFFFFF));
     double s = paint_gui_scale(g->zoom);
     snprintf(zoom, sizeof zoom, "%d%%", (int)(s * 100 + 0.5));
-    snprintf(t, sizeof t, "%d x %d%s  %s  %s", d->w, d->h, d->changed ? " *" : "", zoom, pos);
+    char sel[48] = "";
+    if (d->sel.w) snprintf(sel, sizeof sel, "  selected %d x %d at %d, %d", d->sel.w, d->sel.h, d->sel.x, d->sel.y);
+    snprintf(t, sizeof t, "%d x %d%s  %s  %s%s", d->w, d->h, d->changed ? " *" : "", zoom, pos, sel);
     sqg_row row = sqg_row_begin(r, 8);
     sqg_label(ui, sqg_row_take(&row, sqg_text_width(t, ui->scale) + 4), t, SQG_ALIGN_LEFT);
     sqg_label(ui, sqg_row_take(&row, 0), g->status, SQG_ALIGN_RIGHT);

@@ -91,7 +91,7 @@ Every item is a checkbox. Tick it in the PR that merges its last piece. Nested b
   - [x] Notebooks: calculator lines and notes worked out top to bottom, results under each line, the whole session saved as a plain-text notebook file
 - [ ] S5.2 SquirrelPaint (MS Paint / Paintbrush class) on `sqgui`, its core freestanding.
   - [x] Window and core: pencil, brush, eraser, line, rectangle, ellipse (outlined or filled, Shift for square, circle, 45 degrees), flood fill with tolerance, colour picker, two colours and a palette, undo and redo, zoom and pan, BMP (Windows and OS/2, 1 to 32 bits) and PPM/PGM in, BMP and PPM out, drawing commands and scripts from the command line
-  - [ ] Selections: rectangle select, cut, copy, paste, move; flip, rotate, resize, crop
+  - [x] Selections: rectangle select, cut, copy, paste, move, nudge; flip, rotate, resize (nearest or smooth), crop, canvas size, invert
   - [ ] Text, spray, curves and polygons; custom colours
   - [ ] PNG in and out (own inflate and deflate)
 - [ ] S5.3 SquirrelGames (Solitaire, FreeCell, Hearts, Bridge, Chess, Minesweeper-class, Mahjongg)
