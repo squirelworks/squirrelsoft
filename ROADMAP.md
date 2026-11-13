@@ -95,6 +95,11 @@ Every item is a checkbox. Tick it in the PR that merges its last piece. Nested b
   - [x] Text (the suite's 5x7 font), spray, curves (cubic, two bends) and polygons; custom colours (typed, R/G/B sliders, into the palette)
   - [x] PNG in and out (own inflate and deflate): every colour type and depth, interlacing and transparency in; filtered and compressed RGB out
 - [ ] S5.3 SquirrelGames (Solitaire, FreeCell, Hearts, Bridge, Chess, Minesweeper-class, Mahjongg)
+  - [x] Patience: Klondike (draw 1 or 3, scoring) and FreeCell (moves of several cards as the free cells allow), seeded deals, undo, cards going home by themselves, drag and drop, the command line
+  - [ ] Minesweeper-class
+  - [ ] Hearts and Bridge
+  - [ ] Chess
+  - [ ] Mahjongg (tile matching)
 - [ ] S5.4 SquirrelDebug (desktop debugger UI for Squirrel OS/2 over serial/QEMU gdbstub)
 - Each designed so its core compiles for Squirrel OS/2 (freestanding C, no libc beyond a small shim).
 
