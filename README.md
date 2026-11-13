@@ -64,11 +64,6 @@ squirrelsoft/
 └── squirrelcalc/      # graphing calculator window (sqmath + sqgui)
 ```
 
-## License
-
-Squirrelsoft is released into the public domain under the
-[Unlicense](LICENSE).
-
 ## License posture
 
 Original Squirrelsoft source. Do not drop proprietary MicroStation, AutoCAD,
