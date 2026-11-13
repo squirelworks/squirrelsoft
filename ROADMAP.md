@@ -103,7 +103,7 @@ Every item is a checkbox. Tick it in the PR that merges its last piece. Nested b
   - [ ] Bus rows
   - [x] Export CSV (desktop `--csv` / `--csv-file`, #87)
 - SquirrelSound
-  - [ ] Multi-resolution FFT
+  - [x] Multi-resolution FFT (desktop: `sqdsp_multires_*`, MR / `--multires`)
   - [ ] Peak hold markers
     - [x] Desktop: labelled peaks on the live or held trace (`live_engine_peaks`)
     - [ ] Android
@@ -163,4 +163,4 @@ These milestones predate the suite roadmap and remain open. Formats stay owned b
 
 ### SquirrelSound desktop (sqdsp)
 - [x] Radix-2 FFT, windows, periodogram, Welch PSD, STFT; pitch, THD, SNR; WAV I/O, CLI reports, SVG plots; live SDL spectrum/waterfall + ALSA mic (done)
-- [ ] Optimize waterfall blit; multi-resolution FFT (original implementation)
+- [x] Optimize waterfall blit (cached rows, only new ones coloured); multi-resolution FFT (original implementation)

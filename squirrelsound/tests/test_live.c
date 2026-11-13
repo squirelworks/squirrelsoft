@@ -62,7 +62,7 @@ static void test_dbfs_and_colour(void) {
     expect(live_engine_init(&e, &c) == 0, "dbfs engine init");
     expect(e.cfg.db_min == LIVE_DB_DEFAULT_MIN && e.cfg.db_max == LIVE_DB_DEFAULT_MAX,
            "default range -120..-20");
-    expect(e.waterfall[0] == (float)LIVE_DB_FLOOR, "empty waterfall at floor");
+    expect(live_engine_wf_row(&e, 0)[0] == (float)LIVE_DB_FLOOR, "empty waterfall at floor");
     double x[2048];
     const double amps[3] = {1.0, 0.1, 0.001};
     const double want[3] = {0.0, -20.0, -60.0};
@@ -314,8 +314,63 @@ static void test_record(void) {
     live_audio_close(la);
 }
 
+/* Multi-resolution mode: full-scale tones read 0 dBFS in the bass and the
+ * treble; the waterfall ring keeps row 0 the newest. */
+static void test_multires_ring(void) {
+    LiveEngineConfig c;
+    memset(&c, 0, sizeof(c));
+    c.fft_size = 4096;
+    c.window = SQDSP_WIN_HANN;
+    c.sample_rate = 48000;
+    c.f_max_hz = 24000;
+    c.multires = 3;
+    LiveEngine e;
+    expect(live_engine_init(&e, &c) == 0, "multires engine init");
+    expect(e.cfg.multires == 3 && e.mr.levels == 3, "three levels planned");
+    static double x[4096];
+    const double hz[2] = {187.5, 8062.5}; /* bin centres of the finest and the coarsest level */
+    for (int t = 0; t < 2; t++) {
+        for (int i = 0; i < 4096; i++) x[i] = sin(2.0 * M_PI * hz[t] * i / 48000.0);
+        expect(live_engine_process(&e, x) == 0, "multires process");
+        if (fabs(e.peak_db) > 0.6 || fabs(e.peak_hz - hz[t]) > 12) {
+            fprintf(stderr, "  %.1f Hz -> %.2f dBFS at %.1f Hz\n", hz[t], e.peak_db, e.peak_hz);
+            expect(0, "multires tone reads 0 dBFS");
+        }
+    }
+    expect(e.frames == 2, "two frames counted");
+    {
+        /* the octave band around the treble tone reads it at 0 dB too */
+        double cen[32], lv[32];
+        size_t nb = live_engine_bands(&e, 1, cen, lv, 32);
+        double best = -999;
+        for (size_t i = 0; i < nb; i++)
+            if (fabs(log2(cen[i] / 8000.0)) < 0.5 && lv[i] > best) best = lv[i];
+        if (fabs(best) > 1.0) {
+            fprintf(stderr, "  8 kHz octave band %.2f dB\n", best);
+            expect(0, "multires band level true");
+        }
+    }
+    size_t k_lo = (size_t)(187.5 / 48000.0 * 4096 + 0.5), k_hi = (size_t)(8062.5 / 48000.0 * 4096 + 0.5);
+    const float *r0 = live_engine_wf_row(&e, 0), *r1 = live_engine_wf_row(&e, 1);
+    expect(r0[k_hi] > r0[k_lo] + 40, "row 0 holds the newest (treble) frame");
+    expect(r1[k_lo] > r1[k_hi] + 40, "row 1 holds the one before (bass)");
+    expect(live_engine_wf_row(&e, e.wf_rows - 1)[k_lo] == (float)LIVE_DB_FLOOR, "oldest row still empty");
+    /* wrap the ring: the newest stays at row 0 */
+    for (size_t f = 0; f < e.wf_rows + 3; f++) live_engine_process(&e, x);
+    expect(live_engine_wf_row(&e, 0)[k_hi] > -1 && live_engine_wf_row(&e, e.wf_rows - 1)[k_hi] > -1,
+           "ring wraps");
+    expect(live_engine_set_multires(&e, 0) == 1 && e.cfg.multires == 0, "multires off");
+    for (int i = 0; i < 4096; i++) x[i] = sin(2.0 * M_PI * 187.5 * i / 48000.0);
+    live_engine_process(&e, x);
+    expect(fabs(e.peak_db) < 0.6, "single FFT still 0 dBFS");
+    live_engine_set_multires(&e, 9);
+    expect(e.cfg.multires >= 2 && e.cfg.multires <= SQDSP_MR_MAX_LEVELS, "levels capped");
+    live_engine_free(&e);
+}
+
 int main(void) {
     test_direction();
+    test_multires_ring();
     test_bands_peaks_cal();
     test_record();
     test_dbfs_and_colour();

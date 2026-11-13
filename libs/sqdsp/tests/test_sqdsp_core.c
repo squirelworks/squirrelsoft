@@ -130,10 +130,70 @@ static void test_octave_bands(void) {
     expect(db[0] == -140, "a band with no bins gets the floor");
 }
 
+/* the loudest bin of a dB grid near hz, and its value */
+static double level_near(const double *db, size_t n, double fs, double hz) {
+    size_t k = (size_t)(hz * (double)n / fs + 0.5);
+    double best = -1e9;
+    for (size_t j = k > 2 ? k - 2 : 0; j <= k + 2 && j <= n / 2; j++)
+        if (db[j] > best) best = db[j];
+    return best;
+}
+
+static void test_multires(void) {
+    const size_t n = 8192;
+    const double fs = 48000;
+    SqdspMultires p;
+    expect(sqdsp_multires_plan(&p, n, fs, 3, 32) == 3, "three levels");
+    expect(p.size[0] == 8192 && p.size[1] == 2048 && p.size[2] == 512, "sizes quarter");
+    expect(fabs(p.cross_hz[1] - 750) < 1e-9 && fabs(p.cross_hz[2] - 3000) < 1e-9, "crossovers at q bins");
+    expect(sqdsp_multires_plan(&p, 1000, fs, 3, 32) == 0, "not a power of two");
+    expect(sqdsp_multires_plan(&p, 256, fs, 4, 32) == 2, "levels stop at 64 samples");
+    expect(sqdsp_multires_plan(&p, n, fs, 9, 32) == 4, "at most four levels");
+    expect(sqdsp_multires_plan(&p, n, 8000, 4, 200) == 3, "a crossover past Nyquist drops the level");
+
+    static double x[8192], db[4097], work[3 * 8192];
+    sqdsp_multires_plan(&p, n, fs, 3, 32);
+    expect(sqdsp_multires_spread(&p, 100) == 1 && sqdsp_multires_spread(&p, 530) == 1, "bass spread 1");
+    expect(sqdsp_multires_spread(&p, 1100) == 4 && sqdsp_multires_spread(&p, 2121) == 4, "middle spread 4");
+    expect(sqdsp_multires_spread(&p, 4300) == 16 && sqdsp_multires_spread(&p, 20000) == 16, "treble 16");
+    expect(fabs(sqdsp_multires_spread(&p, 750) - 2.5) < 1e-9, "crossover halfway");
+    expect(sqdsp_multires_spread(NULL, 100) == 0, "spread NULL");
+    /* full-scale sines on every level's grid read 0 dBFS, with either window */
+    const double tones[] = {99.609375, 1500.0, 10031.25};
+    for (int w = 0; w < 2; w++)
+        for (int t = 0; t < 3; t++) {
+            for (size_t i = 0; i < n; i++) x[i] = sin(2 * M_PI * tones[t] * (double)i / fs);
+            expect(sqdsp_multires_db(&p, x, w ? SQDSP_WIN_BLACKMAN : SQDSP_WIN_HANN, db, work) == n / 2 + 1,
+                   "bins");
+            double v = level_near(db, n, fs, tones[t]);
+            if (fabs(v) > 0.05) fprintf(stderr, "  tone %.1f Hz window %d: %.3f dB\n", tones[t], w, v);
+            expect(fabs(v) < 0.05, "a full-scale tone reads 0 dBFS");
+        }
+    /* at a crossover both levels see it: no hole */
+    for (size_t i = 0; i < n; i++) x[i] = sin(2 * M_PI * 750.0 * (double)i / fs);
+    sqdsp_multires_db(&p, x, SQDSP_WIN_HANN, db, work);
+    expect(fabs(level_near(db, n, fs, 750.0)) < 1.5, "a tone at the crossover");
+    /* the bass keeps its fine bins: two tones 18 Hz apart stay apart */
+    for (size_t i = 0; i < n; i++)
+        x[i] = sin(2 * M_PI * 99.609375 * (double)i / fs) + sin(2 * M_PI * 117.1875 * (double)i / fs);
+    sqdsp_multires_db(&p, x, SQDSP_WIN_HANN, db, work);
+    expect(db[18] < db[17] - 3 && db[19] < db[20] - 3, "a dip between bass tones 3 bins apart");
+    /* the treble follows the newest 10 ms: a burst only in the last 512
+     * samples reads full scale, where one long FFT sees it 24 dB down */
+    for (size_t i = 0; i < n; i++) x[i] = i >= n - 512 ? sin(2 * M_PI * 10031.25 * (double)i / fs) : 0;
+    sqdsp_multires_db(&p, x, SQDSP_WIN_RECT, db, work);
+    expect(fabs(level_near(db, n, fs, 10031.25)) < 0.05, "a treble burst at full scale");
+    SqdspMultires one;
+    sqdsp_multires_plan(&one, n, fs, 1, 32);
+    sqdsp_multires_db(&one, x, SQDSP_WIN_RECT, db, work);
+    expect(fabs(level_near(db, n, fs, 10031.25) + 24.08) < 0.1, "one long FFT: 24 dB down");
+}
+
 int main(void) {
     test_fft_vs_naive_dft();
     test_fft_impulse();
     test_octave_bands();
+    test_multires();
     if (failures) {
         fprintf(stderr, "%d sqdsp core failure(s)\n", failures);
         return 1;

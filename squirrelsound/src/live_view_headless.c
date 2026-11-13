@@ -137,6 +137,7 @@ int live_view_gui_snapshot(LiveAudio *audio, LiveEngine *engine, const LiveViewO
     sqg_begin(&ui, &cv, &in);
     live_gui_frame(&g, &ui, engine);
     sqg_end(&ui);
+    live_gui_free(&g);
     stop_recording(&rec, audio);
     live_audio_stop(audio);
     int rc = sqg_write_ppm(&cv, o->snapshot);

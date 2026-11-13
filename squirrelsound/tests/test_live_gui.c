@@ -169,6 +169,8 @@ int main(int argc, char **argv)
     x += sqg_button_w(&ui, "Peaks") + 4;
     int fountain_x = x + sqg_button_w(&ui, "Fountain") / 2;
     x += sqg_button_w(&ui, "Fountain") + 4;
+    int mr_x = x + sqg_button_w(&ui, "MR") / 2;
+    x += sqg_button_w(&ui, "MR") + 4;
     int rec_x = x + sqg_button_w(&ui, "Rec") / 2;
 
     click(run_x, y1);
@@ -318,6 +320,62 @@ int main(int argc, char **argv)
     CHECK(e.cfg.f_max_hz - e.cfg.f_min_hz < span);
     CHECK(g.range == -1);
 
+    /* MR: the multi-resolution spectrum, by button and by key */
+    CHECK(e.cfg.multires == 0);
+    click(mr_x, y1);
+    CHECK(e.cfg.multires == 3 && e.mr.levels == 3);
+    feed(1000, 3);
+    frame();
+    CHECK(fabs(e.peak_hz - 1000) < 30);
+    live_gui_key(&g, &e, 'x', 0);
+    CHECK(e.cfg.multires == 0);
+    live_gui_key(&g, &e, 'x', 0);
+    CHECK(e.cfg.multires == 3);
+    click(mr_x, y1);
+    CHECK(e.cfg.multires == 0);
+
+    /* the LOFARgram colours only new rows, and the cache draws exactly
+     * what colouring every row would */
+    {
+        static uint32_t keep[W * H];
+        sqg_rect wr = g.waterfall;
+        live_gui_set_range(&g, &e, LIVE_RANGE_MUSIC);
+        frame();
+        CHECK(g.wf.recoloured == (long)e.wf_rows);
+        frame();
+        CHECK(g.wf.recoloured == 0);
+        feed(440, 1);
+        frame();
+        CHECK(g.wf.recoloured == 1);
+        feed(880, 3);
+        frame();
+        CHECK(g.wf.recoloured == 3);
+        memcpy(keep, px, sizeof keep);
+        g.wf.valid = 0;
+        frame();
+        CHECK(g.wf.recoloured == (long)e.wf_rows);
+        int same = 1;
+        for (int y = wr.y; y < wr.y + wr.h; y++)
+            for (int xx = wr.x; xx < wr.x + wr.w; xx++)
+                same &= keep[y * W + xx] == px[y * W + xx];
+        CHECK(same);
+        /* more than a screenful at once: everything again */
+        feed(660, (int)e.wf_rows + 2);
+        frame();
+        CHECK(g.wf.recoloured == (long)e.wf_rows);
+        /* a zoom recolours all; the fountain only flips the order */
+        live_gui_zoom(&g, &e, 0.5, 0.5);
+        frame();
+        CHECK(g.wf.recoloured == (long)e.wf_rows);
+        uint32_t top = get(W / 2, wr.y + 2);
+        g.fountain = 1;
+        frame();
+        CHECK(g.wf.recoloured == 0);
+        CHECK(get(W / 2, wr.y + wr.h - 1) == top || e.wf_rows < (size_t)wr.h);
+        g.fountain = 0;
+        live_gui_set_range(&g, &e, LIVE_RANGE_HUMAN);
+    }
+
     /* tiny canvas: nothing to draw into, but no crash */
     static uint32_t small[40 * 20];
     sqg_canvas sc;
@@ -333,6 +391,7 @@ int main(int argc, char **argv)
     if (argc > 1)
         CHECK(sqg_write_ppm(&cv, argv[1]) == 0);
 
+    live_gui_free(&g);
     live_engine_free(&e);
     printf("test_live_gui: %d checks, %d failed\n", checks, failures);
     return failures ? 1 : 0;

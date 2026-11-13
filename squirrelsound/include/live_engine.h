@@ -23,6 +23,7 @@ typedef struct {
     double f_min_hz;
     double f_max_hz;
     double cal_db;  /* calibration offset added to every level (per device) */
+    int multires;   /* 0 or 1: one FFT; 2 to 4: that many resolutions (sqdsp_multires) */
 } LiveEngineConfig;
 
 typedef struct {
@@ -34,7 +35,11 @@ typedef struct {
     double *mag_hold;
     double *freq;
     double *time;  /* last frame's samples, before the window (scope view) */
-    float *waterfall; /* rows * bins, newest at row 0 after scroll */
+    float *waterfall; /* rows * bins, a ring: read it with live_engine_wf_row */
+    size_t wf_head;   /* where the newest row is */
+    unsigned long frames; /* frames processed, so a viewer knows what is new */
+    SqdspMultires mr; /* the levels in use when cfg.multires > 1 */
+    double *mr_work;
     double window_sum; /* sum of window coefficients, for dBFS scaling */
     size_t bins;
     size_t wf_rows;
@@ -49,6 +54,12 @@ void live_engine_free(LiveEngine *e);
 int live_engine_process(LiveEngine *e, const double *samples);
 
 void live_engine_reset_hold(LiveEngine *e);
+/* Row r of the waterfall, 0 the newest, wf_rows - 1 the oldest */
+const float *live_engine_wf_row(const LiveEngine *e, size_t r);
+/* Switch the multi-resolution spectrum (levels 2 to 4) or back to one FFT
+ * (0 or 1). The hold is reset: levels read differently in the noise.
+ * Returns the levels in use (1 for one FFT). */
+int live_engine_set_multires(LiveEngine *e, int levels);
 void live_engine_set_freq_range(LiveEngine *e, double fmin, double fmax);
 
 /* Opaque 0xAARRGGBB colour for t in 0..1: black > blue > cyan > green >

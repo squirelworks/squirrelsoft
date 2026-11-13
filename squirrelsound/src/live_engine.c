@@ -26,8 +26,9 @@ int live_engine_init(LiveEngine *e, const LiveEngineConfig *cfg) {
     e->freq = (double *)malloc(e->bins * sizeof(double));
     e->time = (double *)calloc(cfg->fft_size, sizeof(double));
     e->waterfall = (float *)calloc(e->wf_rows * e->bins, sizeof(float));
+    e->mr_work = (double *)malloc(3 * cfg->fft_size * sizeof(double));
     if (!e->window || !e->frame || !e->scratch || !e->mag || !e->mag_hold || !e->freq ||
-        !e->time || !e->waterfall) {
+        !e->time || !e->waterfall || !e->mr_work) {
         live_engine_free(e);
         return -1;
     }
@@ -39,7 +40,20 @@ int live_engine_init(LiveEngine *e, const LiveEngineConfig *cfg) {
     for (size_t k = 0; k < e->bins; k++)
         e->freq[k] = cfg->sample_rate * (double)k / (double)cfg->fft_size;
     live_engine_reset_hold(e);
+    live_engine_set_multires(e, cfg->multires);
     return 0;
+}
+
+int live_engine_set_multires(LiveEngine *e, int levels) {
+    if (!e || !e->mr_work) return 0;
+    int got = levels > 1 ? sqdsp_multires_plan(&e->mr, e->cfg.fft_size, e->cfg.sample_rate, levels, 32.0) : 0;
+    e->cfg.multires = got > 1 ? got : 0;
+    live_engine_reset_hold(e);
+    return got > 1 ? got : 1;
+}
+
+const float *live_engine_wf_row(const LiveEngine *e, size_t r) {
+    return e->waterfall + ((e->wf_head + r) % e->wf_rows) * e->bins;
 }
 
 void live_engine_free(LiveEngine *e) {
@@ -52,6 +66,7 @@ void live_engine_free(LiveEngine *e) {
     free(e->freq);
     free(e->time);
     free(e->waterfall);
+    free(e->mr_work);
     memset(e, 0, sizeof(*e));
 }
 
@@ -81,9 +96,15 @@ int live_engine_process(LiveEngine *e, const double *samples) {
     if (!e || !samples) return -1;
     memcpy(e->frame, samples, e->cfg.fft_size * sizeof(double));
     memcpy(e->time, samples, e->cfg.fft_size * sizeof(double));
-    sqdsp_apply_window(e->frame, e->window, e->cfg.fft_size);
-    size_t nb = sqdsp_magnitude_spectrum(e->frame, e->cfg.fft_size, e->mag, e->scratch);
-    if (nb != e->bins) return -1;
+    int mr = e->cfg.multires > 1;
+    if (mr) {
+        /* already dBFS, stitched from the levels */
+        if (sqdsp_multires_db(&e->mr, samples, e->cfg.window, e->mag, e->mr_work) != e->bins) return -1;
+    } else {
+        sqdsp_apply_window(e->frame, e->window, e->cfg.fft_size);
+        size_t nb = sqdsp_magnitude_spectrum(e->frame, e->cfg.fft_size, e->mag, e->scratch);
+        if (nb != e->bins) return -1;
+    }
 
     /* dBFS: one-sided bins scale by 2/sum(w), DC and Nyquist by 1/sum(w), so a
      * full-scale sine reads 0 dBFS whatever the window. */
@@ -93,7 +114,7 @@ int live_engine_process(LiveEngine *e, const double *samples) {
     for (size_t k = 0; k < e->bins; k++) {
         double scale = (k == 0 || (double)k == half) ? 1.0 / e->window_sum
                                                      : 2.0 / e->window_sum;
-        double db = 20.0 * log10(e->mag[k] * scale + 1e-20) + e->cfg.cal_db;
+        double db = (mr ? e->mag[k] : 20.0 * log10(e->mag[k] * scale + 1e-20)) + e->cfg.cal_db;
         if (db < LIVE_DB_FLOOR) db = LIVE_DB_FLOOR;
         e->mag[k] = db;
         if (e->cfg.max_hold) {
@@ -114,10 +135,11 @@ int live_engine_process(LiveEngine *e, const double *samples) {
             e->peak_hz = e->freq[i0] * (1.0 - frac) + e->freq[i0 + 1] * frac;
     }
 
-    /* Scroll waterfall down; insert newest at row 0 */
-    memmove(e->waterfall + e->bins, e->waterfall,
-            (e->wf_rows - 1) * e->bins * sizeof(float));
-    for (size_t k = 0; k < e->bins; k++) e->waterfall[k] = (float)e->mag[k];
+    /* the newest row goes in front of the ring: nothing moves */
+    e->wf_head = (e->wf_head + e->wf_rows - 1) % e->wf_rows;
+    float *row = e->waterfall + e->wf_head * e->bins;
+    for (size_t k = 0; k < e->bins; k++) row[k] = (float)e->mag[k];
+    e->frames++;
     return 0;
 }
 
@@ -169,7 +191,18 @@ size_t live_engine_bands(const LiveEngine *e, int fraction, double *centre, doub
     if (n > MAXB) n = MAXB;
     if (n > cap) n = cap;
     double enbw = sqdsp_window_enbw(e->window, e->cfg.fft_size);
-    sqdsp_band_levels_db(e->mag, e->freq, e->bins, lo, hi, n, enbw, LIVE_DB_FLOOR, lv);
+    const double *mag = e->mag;
+    if (e->cfg.multires > 1) {
+        /* each bin counts for less where a coarser level spread it wider;
+         * mr_work is only scratch between frames */
+        double *w = e->mr_work;
+        for (size_t k = 0; k < e->bins; k++) {
+            double s = sqdsp_multires_spread(&e->mr, e->freq[k]);
+            w[k] = e->mag[k] - (s > 0 ? 10.0 * log10(s) : 0.0);
+        }
+        mag = w;
+    }
+    sqdsp_band_levels_db(mag, e->freq, e->bins, lo, hi, n, enbw, LIVE_DB_FLOOR, lv);
     for (size_t i = 0; i < n; i++) {
         if (centre) centre[i] = c[i];
         if (db) db[i] = lv[i];

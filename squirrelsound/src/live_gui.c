@@ -3,6 +3,7 @@
 #include "live_gui.h"
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #define COL_BG      0xFF0A1018u
@@ -56,6 +57,25 @@ void live_gui_set_cal(LiveGui *g, LiveEngine *e, double db)
     e->peak_db += d;
     g->band_n = 0;
     g->cal_changed = 1;
+}
+
+void live_gui_free(LiveGui *g)
+{
+    free(g->wf.px);
+    free(g->wf.bin);
+    g->wf.px = NULL;
+    g->wf.bin = NULL;
+    g->wf.cap_px = 0;
+    g->wf.cap_bin = 0;
+    g->wf.valid = 0;
+}
+
+void live_gui_set_multires(LiveGui *g, LiveEngine *e, int on)
+{
+    int was = e->cfg.multires > 1;
+    live_engine_set_multires(e, on ? 3 : 0);
+    if ((e->cfg.multires > 1) != was)
+        g->band_n = 0;
 }
 
 LiveDirection live_gui_direction(const LiveGui *g)
@@ -127,6 +147,7 @@ int live_gui_key(LiveGui *g, LiveEngine *e, int ascii, int sqg_key)
     case 'r': live_gui_reset_hold(g, e); break;
     case 'v': g->view = (g->view + 1) % LIVE_VIEW_COUNT; break;
     case 'p': g->peaks = !g->peaks; break;
+    case 'x': live_gui_set_multires(g, e, e->cfg.multires <= 1); break;
     case 'R': g->record = !g->record; g->record_changed = 1; break;
     case '-': live_gui_set_cal(g, e, e->cfg.cal_db - 1); break;
     case '=': case '+': live_gui_set_cal(g, e, e->cfg.cal_db + 1); break;
@@ -181,6 +202,9 @@ static void toolbar(LiveGui *g, sqg_ui *ui, LiveEngine *e, sqg_rect area)
     if (sqg_toggle(ui, sqg_id_str("fountain"),
                    sqg_row_take(&row, sqg_button_w(ui, "Fountain")), "Fountain", &g->fountain))
         g->dir_changed = 1;
+    int mr = e->cfg.multires > 1;
+    if (sqg_toggle(ui, sqg_id_str("mr"), sqg_row_take(&row, sqg_button_w(ui, "MR")), "MR", &mr))
+        live_gui_set_multires(g, e, mr);
     if (sqg_toggle(ui, sqg_id_str("rec"), sqg_row_take(&row, sqg_button_w(ui, "Rec")), "Rec",
                    &g->record))
         g->record_changed = 1;
@@ -209,11 +233,12 @@ static int db_to_y(double db, double dmin, double dmax, sqg_rect r)
     double span = dmax - dmin;
     if (span < 1)
         span = 1;
-    int y = r.y + r.h - 1 - (int)((db - dmin) / span * (r.h - 1));
-    if (y < r.y)
-        y = r.y;
-    if (y > r.y + r.h - 1)
-        y = r.y + r.h - 1;
+    double t = (db - dmin) / span; /* clamp before the cast: -inf dB is no int */
+    if (!(t > 0))
+        t = 0;
+    if (t > 1)
+        t = 1;
+    int y = r.y + r.h - 1 - (int)(t * (r.h - 1));
     return y;
 }
 
@@ -422,7 +447,46 @@ static void scope(sqg_ui *ui, LiveEngine *e, sqg_rect r)
     cv->clip = old;
 }
 
-static void lofargram(sqg_ui *ui, LiveEngine *e, sqg_rect r, size_t b0, size_t b1,
+/* Make the colour cache fit this layout; 0 when it cannot (then draw direct) */
+static int wf_cache_fit(LiveGui *g, LiveEngine *e, sqg_rect r, size_t b0, size_t b1, float dmin,
+                        float span)
+{
+    size_t need = e->wf_rows * (size_t)r.w;
+    if (need > g->wf.cap_px) {
+        uint32_t *p = (uint32_t *)realloc(g->wf.px, need * sizeof *p);
+        if (!p)
+            return 0;
+        g->wf.px = p;
+        g->wf.cap_px = need;
+        g->wf.valid = 0;
+    }
+    if (r.w > g->wf.cap_bin) {
+        int *b = (int *)realloc(g->wf.bin, (size_t)r.w * sizeof *b);
+        if (!b)
+            return 0;
+        g->wf.bin = b;
+        g->wf.cap_bin = r.w;
+        g->wf.valid = 0;
+    }
+    if (!g->wf.valid || g->wf.w != r.w || g->wf.rows != e->wf_rows || g->wf.bins != e->bins ||
+        g->wf.b0 != b0 || g->wf.b1 != b1 || g->wf.src != e->waterfall || g->wf.dmin != dmin ||
+        g->wf.span != span || e->frames < g->wf.frames) {
+        for (int x = 0; x < r.w; x++)
+            g->wf.bin[x] = (int)bin_for_x(e, r.x + x, r, b0, b1);
+        g->wf.w = r.w;
+        g->wf.rows = e->wf_rows;
+        g->wf.bins = e->bins;
+        g->wf.b0 = b0;
+        g->wf.b1 = b1;
+        g->wf.src = e->waterfall;
+        g->wf.dmin = dmin;
+        g->wf.span = span;
+        g->wf.valid = 2; /* everything is stale */
+    }
+    return 1;
+}
+
+static void lofargram(LiveGui *g, sqg_ui *ui, LiveEngine *e, sqg_rect r, size_t b0, size_t b1,
                       LiveDirection dir)
 {
     sqg_canvas *cv = ui->cv;
@@ -430,12 +494,39 @@ static void lofargram(sqg_ui *ui, LiveEngine *e, sqg_rect r, size_t b0, size_t b
     if (span < 1)
         span = 1;
     sqg_rect c = sqg_rect_intersect(r, cv->clip);
+    if (c.w <= 0 || c.h <= 0 || e->wf_rows == 0)
+        return;
+    g->wf.recoloured = 0;
+    if (!wf_cache_fit(g, e, r, b0, b1, dmin, span)) {
+        for (int y = c.y; y < c.y + c.h; y++) {
+            size_t row = live_waterfall_row_for_y(y - r.y, r.h, e->wf_rows, dir);
+            const float *src = live_engine_wf_row(e, row);
+            uint32_t *dst = cv->px + (size_t)y * (size_t)cv->stride;
+            for (int x = c.x; x < c.x + c.w; x++)
+                dst[x] = live_color_argb((src[bin_for_x(e, x, r, b0, b1)] - dmin) / span);
+        }
+        return;
+    }
+    /* colour only what is new: every row after a change of layout, else
+     * the rows the engine pushed since the last frame */
+    size_t fresh = e->wf_rows;
+    if (g->wf.valid == 1 && e->frames - g->wf.frames < e->wf_rows)
+        fresh = (size_t)(e->frames - g->wf.frames);
+    for (size_t k = 0; k < fresh; k++) {
+        size_t phys = (e->wf_head + k) % e->wf_rows;
+        const float *src = e->waterfall + phys * e->bins;
+        uint32_t *dst = g->wf.px + phys * (size_t)r.w;
+        for (int x = 0; x < r.w; x++)
+            dst[x] = live_color_argb((src[g->wf.bin[x]] - dmin) / span);
+    }
+    g->wf.recoloured = (long)fresh;
+    g->wf.frames = e->frames;
+    g->wf.valid = 1;
     for (int y = c.y; y < c.y + c.h; y++) {
         size_t row = live_waterfall_row_for_y(y - r.y, r.h, e->wf_rows, dir);
-        const float *src = e->waterfall + row * e->bins;
-        uint32_t *dst = cv->px + (size_t)y * (size_t)cv->stride;
-        for (int x = c.x; x < c.x + c.w; x++)
-            dst[x] = live_color_argb((src[bin_for_x(e, x, r, b0, b1)] - dmin) / span);
+        size_t phys = (e->wf_head + row) % e->wf_rows;
+        memcpy(cv->px + (size_t)y * (size_t)cv->stride + c.x,
+               g->wf.px + phys * (size_t)r.w + (c.x - r.x), (size_t)c.w * sizeof(uint32_t));
     }
 }
 
@@ -471,6 +562,6 @@ void live_gui_frame(LiveGui *g, sqg_ui *ui, LiveEngine *e)
             peak_labels(ui, e, g->spectrum);
         break;
     }
-    lofargram(ui, e, g->waterfall, b0, b1, live_gui_direction(g));
+    lofargram(g, ui, e, g->waterfall, b0, b1, live_gui_direction(g));
     sqg_hline(cv, 0, cv->w - 1, g->waterfall.y, COL_AXIS);
 }

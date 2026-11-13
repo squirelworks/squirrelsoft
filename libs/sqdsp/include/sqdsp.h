@@ -93,4 +93,42 @@ void sqdsp_band_levels_db(const double *mag_db, const double *freq, size_t nbins
                           const double *lo, const double *hi, size_t nbands, double enbw,
                           double floor_db, double *out_db);
 
+/* ---- multi-resolution spectrum ----
+ * One FFT size can't serve the whole band: the bass needs long frames for
+ * fine bins, the treble wants short ones to follow fast changes. Level k
+ * takes the newest n / 4^k samples of a frame of n, so each level is four
+ * times shorter (and its bins four times wider) than the last. A frequency
+ * f uses the shortest level whose bin is still at most f / q wide (about
+ * constant relative resolution), and neighbouring levels are crossfaded in
+ * dB over an octave around each crossover, so the joins don't step. */
+#define SQDSP_MR_MAX_LEVELS 4
+
+typedef struct {
+    int levels;                          /* 1 to SQDSP_MR_MAX_LEVELS */
+    size_t size[SQDSP_MR_MAX_LEVELS];    /* n, n/4, n/16, n/64 */
+    double cross_hz[SQDSP_MR_MAX_LEVELS]; /* level k takes over from k-1 here (k >= 1) */
+    size_t n;
+    double fs;
+} SqdspMultires;
+
+/* Plan levels for a frame of n samples at fs (n a power of two; levels are
+ * dropped while the shortest would be under 64 samples). q: bins per
+ * frequency, 32 is a good start. Returns the levels, or 0 for bad input. */
+int sqdsp_multires_plan(SqdspMultires *p, size_t n, double fs, int levels, double q);
+
+/* The stitched spectrum of the frame x (p->n samples) in dBFS on the
+ * n-point grid (n/2 + 1 values, bin k at k fs / n): a full-scale sine reads
+ * 0 dB at every level, whatever the window. Each level is windowed with
+ * win over its own samples. work needs 3 n doubles. Returns n/2 + 1. A
+ * level's noise floor per bin is higher (6 dB for each step) since its bins
+ * are wider: tones read true, noise does not. */
+size_t sqdsp_multires_db(const SqdspMultires *p, const double *x, SqdspWindow win, double *db_out,
+                         double *work);
+/* How many grid bins one bin of the level showing frequency hz spans (n
+ * over that level's length; blended as the power is in a crossfade), or 0
+ * for bad input. A tone spreads over that many times more grid bins than
+ * on one n-point FFT, so a band power sum divides each bin by it as well
+ * as by the window's ENBW. */
+double sqdsp_multires_spread(const SqdspMultires *p, double hz);
+
 #endif
