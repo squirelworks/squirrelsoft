@@ -11,6 +11,7 @@ typedef struct {
     WavStream *ws;
     char path[1024];
     size_t dropped;  /* samples the tap skipped because the UI fell behind */
+    int full;        /* the WAV hit its 32-bit size limit; the caller should stop */
 } LiveRecorder;
 
 /* Start at "now". path NULL or "" picks squirrelsound-YYYYMMDD-HHMMSS.wav

@@ -9,7 +9,7 @@
 #include <stdio.h>
 
 int qr_gui_run(const char *first_file, int max_frames) {
-    sqg_window *win = sqg_window_open("SquirrelQR", 560, 460);
+    sqg_window *win = sqg_window_open("SquirrelQR", 600, 560);
     if (!win) {
         fprintf(stderr, "squirrelqr: could not open a window: %s\n", SDL_GetError());
         return 2;

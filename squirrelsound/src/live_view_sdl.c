@@ -71,6 +71,11 @@ int live_view_sdl_run(LiveAudio *audio, LiveEngine *engine, const LiveViewOption
         /* Audio keeps flowing while stopped so the source never backs up */
         for (int i = 0; i < 4; i++) live_audio_poll(audio);
         live_record_pump(&rec, audio);
+        if (rec.full && g.record) { /* 32-bit WAV limit reached: close this take */
+            fprintf(stderr, "\n%s is full (WAV size limit); recording stopped\n", rec.path);
+            g.record = 0;
+            g.record_changed = 1;
+        }
         if (live_audio_read(audio, buf, nfft) >= nfft && !g.paused && live_gui_take_frame(&g))
             live_engine_process(engine, buf);
 

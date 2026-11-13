@@ -22,6 +22,10 @@ typedef struct WavStream WavStream;
 WavStream *wav_stream_open(const char *path, uint32_t sample_rate);
 int wav_stream_write(WavStream *w, const double *samples, size_t n);
 double wav_stream_seconds(const WavStream *w);
+/* 1 once the 32-bit RIFF size limit is reached (about 12 h of 48 kHz mono);
+ * write then returns -1 and close reports the loss */
+int wav_stream_full(const WavStream *w);
+void wav_stream_skip_for_test(WavStream *w, uint64_t frames);
 int wav_stream_close(WavStream *w); /* frees w; 0 if everything was written */
 
 #endif

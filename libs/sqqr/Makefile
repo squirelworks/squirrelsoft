@@ -1,4 +1,4 @@
-# libs/sqqr: QR Code decoding core (C11, no OS calls, no allocation).
+# libs/sqqr: QR Code decoding and encoding core (C11, no OS calls, no allocation).
 # Consumers add -I$(SQQR)/include and link $(SQQR)/build/libsqqr.a -lm.
 CC ?= gcc
 CFLAGS ?= -std=c11 -Wall -Wextra -O2
@@ -15,13 +15,19 @@ all: $(BUILD)/libsqqr.a $(BUILD)/sqqr_decode
 $(BUILD):
 	mkdir -p $(BUILD)
 
-$(BUILD)/sqqr.o: src/sqqr.c include/sqqr.h | $(BUILD)
+$(BUILD)/sqqr.o: src/sqqr.c src/sqqr_internal.h include/sqqr.h | $(BUILD)
 	$(CC) $(CFLAGS) -c src/sqqr.c -o $@
 
 $(BUILD)/sqqr_locate.o: src/sqqr_locate.c include/sqqr.h | $(BUILD)
 	$(CC) $(CFLAGS) -c src/sqqr_locate.c -o $@
 
-$(BUILD)/libsqqr.a: $(BUILD)/sqqr.o $(BUILD)/sqqr_locate.o
+$(BUILD)/sqqr_encode.o: src/sqqr_encode.c src/sqqr_internal.h include/sqqr.h | $(BUILD)
+	$(CC) $(CFLAGS) -c src/sqqr_encode.c -o $@
+
+$(BUILD)/sqqr_content.o: src/sqqr_content.c include/sqqr_content.h | $(BUILD)
+	$(CC) $(CFLAGS) -c src/sqqr_content.c -o $@
+
+$(BUILD)/libsqqr.a: $(BUILD)/sqqr.o $(BUILD)/sqqr_locate.o $(BUILD)/sqqr_encode.o $(BUILD)/sqqr_content.o
 	$(AR) rcs $@ $^
 
 $(BUILD)/test_sqqr: tests/test_sqqr.c $(BUILD)/libsqqr.a
@@ -40,8 +46,12 @@ fixture:
 check-tables:
 	$(PYTHON) -I tools/gen_fixtures.py --check-tables src/sqqr.c
 
-test: $(BUILD)/test_sqqr $(BUILD)/sqqr_decode
+$(BUILD)/test_content: tests/test_content.c $(BUILD)/libsqqr.a
+	$(CC) $(CFLAGS) $< $(BUILD)/libsqqr.a -o $@
+
+test: $(BUILD)/test_sqqr $(BUILD)/test_content $(BUILD)/sqqr_decode
 	$(BUILD)/test_sqqr $(FIXTURE)
+	$(BUILD)/test_content
 
 clean:
 	rm -rf $(BUILD)

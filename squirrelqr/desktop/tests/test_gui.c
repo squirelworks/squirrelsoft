@@ -152,6 +152,42 @@ int main(int argc, char **argv) {
     CHECK(strstr(g.status, "/nonexistent/x.png") != NULL);
     CHECK(g.img.gray != NULL);
 
+    /* Make row: type text, Make QR; the made code decodes back and shows its fields */
+    {
+        int my = pad + 2 * (lh + pad) + lh / 2;
+        int mx = pad + sqg_text_width("File", 1) + 4 + 6 + 20;
+        click(mx, my);
+        CHECK(ui.focus == sqg_id_str("make"));
+        const char *wifi = "WIFI:T:WPA;S:Nest;P:acorns;;";
+        for (size_t i = 0; i < strlen(wifi); i += 16) {
+            snprintf(in.text, sizeof in.text, "%.16s", wifi + i);
+            frame();
+        }
+        CHECK(strcmp(g.make, wifi) == 0);
+        int makeqr_x = W - pad - sqg_button_w(&ui, "Save PNG") - 6 - sqg_button_w(&ui, "Make QR") / 2;
+        click(makeqr_x, my);
+        CHECK(g.has_made && g.found && strcmp(g.text, wifi) == 0);
+        CHECK(strstr(g.details, "[Wi-Fi network]") == g.details);
+        CHECK(strstr(g.details, "Network: Nest\n") && strstr(g.details, "Password: acorns\n"));
+        CHECK(strstr(g.status, "made: version") == g.status);
+        frame();
+        CHECK(count(g.preview_at, COL_OUTLINE) > 40);
+        char png[700];
+        snprintf(png, sizeof png, "%s/gui_made.png", argv[1]);
+        CHECK(qr_gui_save(&g, png) == 0 && strstr(g.status, "Saved ") == g.status);
+        CHECK(qr_gui_open(&g, png) == 1 && strcmp(g.text, wifi) == 0); /* the PNG reads back */
+        CHECK(qr_gui_make(&g, "") == 0 && strstr(g.status, "Type the text"));
+        static char huge[3000];
+        memset(huge, 'x', sizeof huge - 1);
+        CHECK(qr_gui_make(&g, huge) == 0 && strstr(g.status, "too much"));
+        /* plain text shows no type header */
+        CHECK(qr_gui_make(&g, "just words") == 1 && strcmp(g.details, "just words") == 0);
+        static QrGui fresh;
+        qr_gui_init(&fresh);
+        CHECK(qr_gui_save(&fresh, png) == -1 && strstr(fresh.status, "Make a code first"));
+        qr_gui_free(&fresh);
+    }
+
     /* caller messages */
     qr_gui_status(&g, "Cancelled");
     CHECK(strcmp(g.status, "Cancelled") == 0);

@@ -37,7 +37,7 @@ Every item is a checkbox. Tick it in the PR that merges its last piece. Nested b
   - [x] Station table loader (`sqf_station_index` / `sqf_station_resolve` over `squirrelsuica/data/StationCode.csv`), checked against `resolve_rail` on 806 codes (#70).
   - [ ] PASMO / WAON history parsing in C
 - [x] `libs/sqdsp` is the SquirrelSound core: Android spectrum frames go through it via JNI, `Fft.kt` as fallback (#67).
-- [x] `libs/sqqr` (C): original QR decoder so desktop and Squirrel OS/2 don't depend on ML Kit.
+- [x] `libs/sqqr` (C): original QR decoder so desktop and Squirrel OS/2 don't depend on ML Kit; now also the encoder and payload parsing.
   - [x] Step 1: decode a sampled module grid (format/version, unmasking, de-interleaving, Reed–Solomon, all data modes) (#59).
   - [x] Step 2: find a symbol in a grayscale image (binarization, finder search, alignment, homography, light-on-dark) (#63).
   - [x] Step 3: SquirrelQR on Android uses it through JNI when ML Kit finds nothing (#65).
@@ -106,7 +106,13 @@ Every item is a checkbox. Tick it in the PR that merges its last piece. Nested b
   - [x] Desktop scope view (the oscilloscope of #28 on the desktop; Android stays under S0.4)
 - SquirrelQR
   - [ ] Generate QR
+    - [x] Shared core: `sqqr_encode` (numeric/alphanumeric/byte, ECI, all versions and levels, penalty-scored mask; matches segno's fixtures)
+    - [x] Desktop: `--encode` / `--wifi` to PNG, SVG, PGM or the terminal; Make QR and Save PNG in the window
+    - [ ] Android (JNI bridge already builds the encoder)
   - [ ] Wi-Fi / vCard parsing
+    - [x] Shared core: `sqqr_content` (Wi-Fi, vCard, MECARD, mailto/MATMSG, tel, SMS, geo, links)
+    - [x] Desktop: `--details`, `"type"`/`"fields"` in `--json`, fields in the window
+    - [ ] Android
   - [ ] Batch scan
   - [ ] Torch / zoom
 

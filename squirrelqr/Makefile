@@ -37,7 +37,7 @@ else
 GUI_RUN = $(BUILD)/qrgui_nosdl.o
 endif
 
-OBJ = $(BUILD)/qrimage.o $(BUILD)/qrpng.o $(BUILD)/qrtext.o $(BUILD)/qrdecode.o \
+OBJ = $(BUILD)/qrimage.o $(BUILD)/qrpng.o $(BUILD)/qrtext.o $(BUILD)/qrdecode.o $(BUILD)/qrmake.o \
 	$(BUILD)/qrgui.o $(BUILD)/capture_$(CAPTURE).o
 HDR = $(wildcard desktop/include/*.h) $(SQQR)/include/sqqr.h $(SQGUI)/include/sqgui.h
 SQQR_LIB = $(SQQR)/build/libsqqr.a

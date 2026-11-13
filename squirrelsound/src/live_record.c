@@ -30,7 +30,10 @@ void live_record_pump(LiveRecorder *r, LiveAudio *audio) {
         size_t dropped, n = live_audio_take(audio, buf, sizeof buf / sizeof buf[0], &dropped);
         r->dropped += dropped;
         if (n == 0) break;
-        wav_stream_write(r->ws, buf, n);
+        if (wav_stream_write(r->ws, buf, n) != 0) {
+            r->full = wav_stream_full(r->ws);
+            break;
+        }
     }
 }
 
