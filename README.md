@@ -16,6 +16,7 @@ libraries.
 | `squirrelqr/` | **SquirrelQR** | Phone QR code reader only |
 | `squirrelsuica/` | **SquirrelSuica** | FeliCa Suica/PASMO reader with station-name history (USB + Android) |
 | `squirrelcalc/` | **SquirrelCalc** | Graphing calculator on `libs/sqmath` + `libs/sqgui` (desktop) |
+| `squirrelpaint/` | **SquirrelPaint** | Paint program on `libs/sqgui` (desktop; freestanding core) |
 
 ## Build
 
@@ -61,7 +62,8 @@ squirrelsoft/
 ├── squirrelsound/     # FFT analyzer + live mic Spectroid UI (desktop + Android)
 ├── squirrelqr/        # QR code reader (Android; desktop planned; web-demo/ unsupported)
 ├── squirrelsuica/     # FeliCa reader only (nfcpy + Android NFC-F)
-└── squirrelcalc/      # graphing calculator window (sqmath + sqgui)
+├── squirrelcalc/      # graphing calculator window (sqmath + sqgui)
+└── squirrelpaint/     # paint program (sqgui; BMP and PPM)
 ```
 
 ## License
