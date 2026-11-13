@@ -12,6 +12,8 @@ static void usage(FILE *f) {
           "  --line TEXT      run a calculator line first: \"a = 2\", \"solve x^2 = 2\",\n"
           "                   \"expand (x+1)^3\" (with --snapshot the history is printed)\n"
           "  --roots          mark the roots\n"
+          "  --crossings      mark where the functions cross\n"
+          "  --table          show the table of values instead of the graph\n"
           "  --deriv          also graph d/dx y1\n"
           "  --snapshot FILE  draw one 900x600 frame to FILE (PPM) and exit, no window\n"
           "  --gui-frames N   close the window after N frames (testing)\n"
@@ -43,12 +45,14 @@ int main(int argc, char **argv) {
                 fprintf(stderr, "squirrelcalc: --let %s: expected NAME=EXPR with a value\n", s);
                 return 1;
             }
-            for (int k = 0; k < nfn; k++) calc_gui_set(&g, k, g.fx[k]);
         } else if (!strcmp(a, "--line") && more) {
             calc_gui_eval(&g, argv[++i]);
-            for (int k = 0; k < nfn; k++) calc_gui_set(&g, k, g.fx[k]);
         } else if (!strcmp(a, "--roots")) {
             g.show_roots = 1;
+        } else if (!strcmp(a, "--crossings")) {
+            g.show_cross = 1;
+        } else if (!strcmp(a, "--table")) {
+            g.show_table = 1;
         } else if (!strcmp(a, "--deriv")) {
             g.show_deriv = 1;
         } else if (!strcmp(a, "--snapshot") && more) {

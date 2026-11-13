@@ -23,12 +23,19 @@ build/squirrelcalc --fn "x^2 - 2" --fn "2 sin(x)" --roots
   `d/dx sin(x)^2`, and `solve x^2 - x = 1` (or `solve a t + 1 = 0 for t`).
   Answers stay exact (`(1 - sqrt(5))/2`) with the value beside them, and a
   symbolic answer gets a value once its names are defined.
+- **Integrals:** `integrate y1 from 0 to 2` (or any expression of x, with
+  bounds such as `pi/2` or a variable) gives the value and shades the area
+  between the curve and the x axis. Reset clears the shading.
 - **Roots** rings every root in view and lists them at the bottom.
+  **Crossings** does the same for every point where two functions meet.
   **d/dx y1** draws the derivative of y1 and prints it, simplified.
 - **Graph:** the wheel zooms about the pointer, dragging pans, and `-`, `+`,
   Reset and Square do what they say. The pointer position is shown above the
-  graph. Curves break at poles (`1/x`, `tan(x)`) and gaps (`floor(x)`)
+  graph. Click a curve to trace it: the point and its value stay pinned, and
+  Left and Right move it one pixel. Click empty space to let go. Curves break at poles (`1/x`, `tan(x)`) and gaps (`floor(x)`)
   instead of joining across them. Esc closes the window.
+- **Table** shows x and every function from Start by Step in place of the
+  graph; the wheel scrolls it.
 
 ## Command line
 
@@ -38,6 +45,8 @@ build/squirrelcalc --fn "x^2 - 2" --fn "2 sin(x)" --roots
 --line TEXT      run a calculator line first ("a = 2", "solve x^2 = 2");
                  with --snapshot the history is printed
 --roots          mark the roots
+--crossings      mark where the functions cross
+--table          show the table instead of the graph
 --deriv          also graph d/dx y1
 --snapshot FILE  draw one 900x600 frame to FILE (PPM) and exit, with no window;
                  the roots line is printed
@@ -50,7 +59,7 @@ or no window.
 ## Code
 
 - `calcgraph.c`: the view (pan, zoom, square), plane-to-pixel maps, tick
-  steps and labels, axes and grid, curve plotting, root rings.
+  steps and labels, axes and grid, curve plotting, point rings, area shading.
 - `calcgui.c`: the panel, the calculator line and its variables.
 - `calc_sdl.c` / `calc_nosdl.c`: the window loop, with or without SDL2.
 
@@ -59,5 +68,6 @@ or no window.
 `make test` runs `tests/test_calc.c` (tick steps and labels, view maps, zoom
 about a point, pan, plotted pixels for `x`, `1/x`, `sqrt(x)`, the calculator
 line and its errors, roots, the derivative, wheel zoom and drag pan through
-the panel), `tests/cli_smoke.sh`, and ten frames of the real window with
+the panel, crossings, integrals and their shading, trace by click and arrow
+keys, the table), `tests/cli_smoke.sh`, and ten frames of the real window with
 `SDL_VIDEODRIVER=dummy` when SDL2 is installed.

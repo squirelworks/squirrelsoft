@@ -153,6 +153,19 @@ static void test_plot(void) {
     calc_draw_axes(&cv, r, &far);
     calc_plot(&cv, r, &far, &p, values, 0, RED);
 
+    /* shading y = 1 from 0 to 5: 100 columns at 20 px per unit, none outside */
+    calc_draw_axes(&cv, r, &v);
+    CHECK(compile1("1", &p) == 0);
+    CHECK(calc_shade(&cv, r, &v, &p, values, 0, 5, 0, 0x80FF0000u) == 100);
+    uint32_t shaded = px[290 * W + 350];
+    CHECK(shaded != 0xFFFFFFFFu && ((shaded >> 16) & 0xFF) > ((shaded >> 8) & 0xFF));
+    CHECK(px[290 * W + 290] == 0xFFFFFFFFu || px[290 * W + 290] == 0xFFE4E8EEu);
+    CHECK(px[270 * W + 350] == 0xFFFFFFFFu || px[270 * W + 350] == 0xFFE4E8EEu); /* above y = 1 */
+    CHECK(calc_shade(&cv, r, &v, &p, values, 0, NAN, 1, 0x80FF0000u) == 0);
+    double pxs[2] = {2, 50}, pys[2] = {3, 0};
+    CHECK(calc_mark_points(&cv, r, &v, pxs, pys, 2, RED) == 1);
+    CHECK(count(sqg_rect_make(337, 237, 6, 6), RED) > 0);
+
     double xs[3] = {0, 5, 50};
     CHECK(calc_mark_roots(&cv, r, &v, xs, 3, RED) == 2);
     CHECK(count(sqg_rect_make(397, 297, 6, 6), RED) > 0);
@@ -286,12 +299,121 @@ static void test_gui(const char *dir) {
     sqg_end(&ui);
 }
 
+static void click(int x, int y) {
+    in.mx = x;
+    in.my = y;
+    in.down = in.pressed = 1;
+    frame();
+    in.down = 0;
+    in.released = 1;
+    frame();
+}
+
+static int differ(const uint32_t *a, const uint32_t *b, int n) {
+    int d = 0;
+    for (int i = 0; i < n; i++) d += a[i] != b[i];
+    return d;
+}
+
+static void test_analysis(void) {
+    static uint32_t before[W * H];
+    sqg_canvas_init(&cv, px, W, H, W);
+    sqg_ui_init(&ui, NULL, 1);
+    memset(&in, 0, sizeof in);
+    in.mx = in.my = -1;
+    calc_gui_init(&g);
+    calc_gui_set(&g, 0, "x^2 - 2");
+    calc_gui_set(&g, 1, "x");
+
+    /* crossings of y1 and y2 at x = -1 and 2 */
+    g.show_cross = 1;
+    frame();
+    CHECK(g.ncross == 2);
+    if (g.ncross == 2) {
+        NEAR(g.cross_x[0], -1, 1e-9);
+        NEAR(g.cross_y[0], -1, 1e-9);
+        NEAR(g.cross_x[1], 2, 1e-9);
+        NEAR(g.cross_y[1], 2, 1e-9);
+    }
+    CHECK(contains(g.status, "Crossings  y1=y2 at (-1, -1)  y1=y2 at (2, 2)"));
+    calc_gui_set(&g, 1, "");
+    frame();
+    CHECK(g.ncross == 0 && contains(g.status, "Crossings none in view"));
+    calc_gui_set(&g, 1, "x");
+    g.show_cross = 0;
+    frame();
+    CHECK(contains(g.status, "click a curve"));
+
+    /* integrals, and the shaded area */
+    memcpy(before, px, sizeof before);
+    CHECK(calc_gui_eval(&g, "integrate y1 from 0 to 3") == 0 && contains(g.hist, "integrate y1 from 0 to 3 = 3"));
+    NEAR(calc_gui_var(&g, "ans"), 3, 1e-9);
+    CHECK(g.area_on && g.area_fn == 0);
+    frame();
+    CHECK(differ(before, px, W * H) > 1000);
+    CHECK(calc_gui_eval(&g, "integrate x^2 from 0 to 1") == 0 && contains(g.hist, "= 0.333333333333"));
+    CHECK(g.area_on && g.area_fn == -1);
+    CHECK(calc_gui_eval(&g, "k = 2") == 0);
+    CHECK(calc_gui_eval(&g, "integrate k x from 0 to k") == 0 && contains(g.hist, "integrate k x from 0 to k = 4"));
+    CHECK(calc_gui_eval(&g, "integrate sin(x) from 0 to pi") == 0 && contains(g.hist, "= 2"));
+    CHECK(calc_gui_eval(&g, "integrate y4 from 0 to 1") == -1 && contains(g.hist, "that function is empty"));
+    CHECK(calc_gui_eval(&g, "integrate x from 0") == -1 && contains(g.hist, "write integrate EXPR from A to B"));
+    CHECK(calc_gui_eval(&g, "integrate x from 0 to q") == -1 && contains(g.hist, "the bounds need values"));
+    CHECK(calc_gui_eval(&g, "integrate q x from 0 to 1") == -1 && contains(g.hist, "a name has no value"));
+    CHECK(calc_gui_eval(&g, "integrate y1 from 0 to 1") == 0 && g.area_fn == 0);
+    calc_gui_set(&g, 0, "x^2 - 3"); /* the area was of the old y1 */
+    CHECK(!g.area_on);
+    calc_gui_set(&g, 0, "x^2 - 2");
+
+    /* trace: a click near y1 at x = 1 pins it there; Right steps one pixel */
+    frame();
+    sqg_rect inner = sqg_rect_inset(g.graph_at, 2);
+    int cx = (int)calc_px_x(&g.view, inner, 1), cy = (int)calc_px_y(&g.view, inner, -1);
+    CalcView keep = g.view;
+    click(cx, cy + 3);
+    CHECK(g.trace_fn == 0);
+    NEAR(g.trace_x, 1, (g.view.xmax - g.view.xmin) / inner.w);
+    CHECK(!memcmp(&keep, &g.view, sizeof keep)); /* a click does not pan */
+    double tx = g.trace_x;
+    in.key = SQG_KEY_RIGHT;
+    frame();
+    NEAR(g.trace_x, tx + (g.view.xmax - g.view.xmin) / inner.w, 1e-12);
+    CHECK(count(sqg_rect_make(cx - 6, cy - 6, 12, 12), 0xFF2060D0u) > 10);
+    click(cx, (int)calc_px_y(&g.view, inner, 1) + 1); /* on y2 = x at x = 1 */
+    CHECK(g.trace_fn == 1);
+    click(inner.x + 20, inner.y + 20); /* nothing there */
+    CHECK(g.trace_fn == -1);
+    click(cx, cy);
+    CHECK(g.trace_fn == 0);
+    calc_gui_set(&g, 0, "x^"); /* an error stops the trace */
+    CHECK(g.trace_fn == -1);
+    calc_gui_set(&g, 0, "x^2 - 2");
+
+    /* the table */
+    g.show_table = 1;
+    in.mx = in.my = -1;
+    frame();
+    CHECK(!g.mouse_in);
+    in.mx = inner.x + 100;
+    in.my = inner.y + 200;
+    in.wheel = -1;
+    frame();
+    CHECK(g.table_top == 3);
+    snprintf(g.tstep, sizeof g.tstep, "0");
+    frame(); /* an error message, not a hang */
+    snprintf(g.tstep, sizeof g.tstep, "pi/4");
+    frame();
+    g.show_table = 0;
+    frame();
+}
+
 int main(int argc, char **argv) {
     const char *dir = argc > 1 ? argv[1] : ".";
     test_steps();
     test_view();
     test_plot();
     test_gui(dir);
+    test_analysis();
     printf("test_calc: %d checks, %d failed\n", checks, failures);
     return failures != 0;
 }

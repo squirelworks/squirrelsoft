@@ -10,6 +10,8 @@
 #define CALC_N 4      /* functions */
 #define CALC_VARS 8   /* user variables, ans included */
 #define CALC_ROOTS 16 /* roots kept per function */
+#define CALC_PAIRS 6  /* pairs of functions, for crossings */
+#define CALC_CROSS 16 /* crossings kept */
 
 typedef struct {
     char fx[CALC_N][160];      /* what is typed for y1..y4 */
@@ -34,6 +36,25 @@ typedef struct {
     double mouse_x, mouse_y;   /* the pointer on the plane */
     double roots[CALC_N][CALC_ROOTS];
     int nroots[CALC_N];
+    /* crossings: yi - yj for each pair, and where they meet in view */
+    int show_cross;
+    SqmProgram cprog[CALC_PAIRS];
+    int cok[CALC_PAIRS];
+    double cross_x[CALC_CROSS], cross_y[CALC_CROSS];
+    int cross_pair[CALC_CROSS];
+    int ncross;
+    /* trace: a point pinned on a curve by a click, moved with Left/Right */
+    int trace_fn; /* -1: none */
+    double trace_x;
+    int press_mx, press_my;
+    /* the area from "integrate ... from a to b", until Reset */
+    int area_on, area_fn; /* area_fn: which yi, or -1 for its own expression */
+    SqmProgram area_prog;
+    double area_a, area_b, area_value;
+    /* the table view in place of the graph */
+    int show_table;
+    char tstart[32], tstep[32];
+    int table_top;
     char status[200];
 } CalcGui;
 
@@ -44,7 +65,8 @@ void calc_gui_set(CalcGui *g, int i, const char *text);
 
 /* Run a calculator line: "2+3", "a = 2" (defines a for the graphs too),
  * "ans*2", or a CAS command: "expand (x+1)^2", "collect x a x + b x",
- * "d/dx x^3", "solve x^2 - x = 1" (for x, or "... for a"). Adds the result
+ * "d/dx x^3", "solve x^2 - x = 1" (for x, or "... for a"), or
+ * "integrate y1 from 0 to 2" (any expression of x; it also shades the area). Adds the result
  * to the history. Returns 0, or -1 on an error (also in the history). */
 int calc_gui_eval(CalcGui *g, const char *line);
 
