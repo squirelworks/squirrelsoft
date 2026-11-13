@@ -145,9 +145,10 @@ These milestones predate the suite roadmap and remain open. Formats stay owned b
 - [ ] DXF-like export of *our* entities (not Autodesk DXF fidelity claims)
 
 ### SquirrelGNSS
-- [ ] WGS84 / ECEF / geodetic conversions
-- [ ] Broadcast-ephemeris style Kepler propagator (simplified)
-- [ ] Pseudorange least-squares PVT
+- [x] WGS84 / ECEF / geodetic conversions (exact both ways, ENU both ways, azimuth/elevation)
+- [x] Broadcast-ephemeris Kepler propagator with harmonic corrections, satellite clock and relativistic term
+- [x] Pseudorange least-squares PVT: elevation mask and weighting, H/V/T DOP, residuals, fault detection and exclusion
+- [ ] RINEX navigation and observation input
 - [ ] Continuous epoch stream + survey stakeout helpers
 - [ ] Dual-frequency / RTK double-difference hooks (math first)
 
