@@ -207,10 +207,13 @@ static void test_pvt(void) {
     CHECK(tr.n_epochs == 5 && sqg_baseline_length(tr.solutions[4].pos, truth) < 5);
 }
 
+void test_rinex(int *checks, int *failures);
+
 int main(void) {
     test_geodesy();
     test_orbits();
     test_pvt();
+    test_rinex(&checks, &failures);
     printf("test_sqgnss: %d checks, %d failed\n", checks, failures);
     return failures != 0;
 }

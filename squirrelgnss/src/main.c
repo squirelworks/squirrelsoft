@@ -1,5 +1,6 @@
 /* squirrelgnss: command line over sqgnss. Original code. */
 #include "sqgnss.h"
+#include "sqrinex.h"
 
 #include <math.h>
 #include <stdio.h>
@@ -25,13 +26,172 @@ static void usage(FILE *f) {
           "  squirrelgnss sky [LAT,LON,H]            the demo satellites in view: PRN, azimuth, elevation\n"
           "  squirrelgnss demo-track [EPOCHS] [--at LAT,LON,H] [--noise M] [--fault PRN:METRES]\n"
           "                          [--mask DEG] [--out FILE.sqobs]\n"
+          "  squirrelgnss rinex-demo OBS NAV [EPOCHS] [--at LAT,LON,H] [--noise M]\n"
+          "  squirrelgnss solve OBS NAV [--mask DEG] [--truth LAT,LON,H]\n"
           "  squirrelgnss help\n"
           "demo-track solves a synthetic 30-satellite sky; --fault adds a bias to one\n"
-          "satellite, which the fault detection should exclude.\n",
+          "satellite, which the fault detection should exclude.\n"
+          "rinex-demo writes the synthetic sky as RINEX 3 observation and navigation\n"
+          "files; solve reads GPS from RINEX 2.11 or 3.x files (a receiver's own, or\n"
+          "those) and prints a fix for every epoch.\n",
           f);
 }
 
 static const SqgGeodetic HOME = {35.681236, 139.767125, 40.0};
+
+/* the whole of a file, NUL-terminated, or NULL */
+static char *slurp(const char *path) {
+    FILE *f = fopen(path, "rb");
+    if (!f) return NULL;
+    char *buf = NULL;
+    size_t len = 0, cap = 0, got;
+    do {
+        if (cap - len < 65536) {
+            cap = cap ? cap * 2 : 1 << 20;
+            char *more = realloc(buf, cap + 1);
+            if (!more) {
+                free(buf);
+                fclose(f);
+                return NULL;
+            }
+            buf = more;
+        }
+        got = fread(buf + len, 1, cap - len, f);
+        len += got;
+    } while (got > 0);
+    fclose(f);
+    buf[len] = 0;
+    return buf;
+}
+
+static int rinex_demo(int argc, char **argv) {
+    if (argc < 4) return usage(stderr), 2;
+    const char *obs_path = argv[2], *nav_path = argv[3];
+    int n = 10;
+    double noise = 0.5;
+    SqgGeodetic truth = HOME;
+    for (int i = 4; i < argc; i++) {
+        int more = i + 1 < argc;
+        if (!strcmp(argv[i], "--noise") && more) noise = atof(argv[++i]);
+        else if (!strcmp(argv[i], "--at") && more) {
+            if (!parse_llh(argv[++i], &truth)) return usage(stderr), 2;
+        } else if (argv[i][0] != '-' && i == 4) n = atoi(argv[i]);
+        else return usage(stderr), 2;
+    }
+    if (n < 1) n = 1;
+    if (n > 2880) n = 2880; /* a day at 30 s */
+    const int week = 2444;
+    const double t0 = 432000.0; /* 2026-11-13 00:00 GPS */
+    SqgEphemeris ephs[SQG_DEMO_SATS];
+    int n_eph;
+    sqg_demo_ephemerides(ephs, &n_eph, t0);
+    for (int i = 0; i < n_eph; i++) ephs[i].week = week;
+    FILE *nav = fopen(nav_path, "w"), *obs = fopen(obs_path, "w");
+    if (!nav || !obs) {
+        fprintf(stderr, "squirrelgnss: could not write %s\n", !nav ? nav_path : obs_path);
+        if (nav) fclose(nav);
+        if (obs) fclose(obs);
+        return 1;
+    }
+    sqr_write_nav(nav, ephs, n_eph);
+    SqgEcef approx;
+    sqg_geodetic_to_ecef(truth, &approx);
+    sqr_write_obs_header(obs, &approx);
+    for (int k = 0; k < n; k++) {
+        SqgEpoch ep;
+        sqg_demo_epoch(ephs, n_eph, truth, t0 + 30.0 * k, 15.0, 5.0, noise, 777u + (unsigned)k, &ep);
+        sqr_write_obs_epoch(obs, week, &ep);
+    }
+    int bad = ferror(nav) || ferror(obs);
+    bad |= fclose(nav) != 0;
+    bad |= fclose(obs) != 0;
+    if (bad) {
+        fprintf(stderr, "squirrelgnss: write failed\n");
+        return 1;
+    }
+    printf("wrote %s (%d epochs) and %s (%d satellites)\n", obs_path, n, nav_path, n_eph);
+    return 0;
+}
+
+static int solve(int argc, char **argv) {
+    if (argc < 4) return usage(stderr), 2;
+    SqgPvtOptions opt;
+    sqg_pvt_options_default(&opt);
+    SqgGeodetic truth;
+    int have_truth = 0;
+    for (int i = 4; i < argc; i++) {
+        int more = i + 1 < argc;
+        if (!strcmp(argv[i], "--mask") && more) opt.elev_mask_deg = atof(argv[++i]);
+        else if (!strcmp(argv[i], "--truth") && more) {
+            if (!parse_llh(argv[++i], &truth)) return usage(stderr), 2;
+            have_truth = 1;
+        } else return usage(stderr), 2;
+    }
+    char *obs_text = slurp(argv[2]), *nav_text = slurp(argv[3]);
+    if (!obs_text || !nav_text) {
+        fprintf(stderr, "squirrelgnss: could not read %s\n", !obs_text ? argv[2] : argv[3]);
+        free(obs_text);
+        free(nav_text);
+        return 1;
+    }
+    static SqrNav nav;
+    SqrError err;
+    int rc = 0;
+    SqrObs r;
+    if (sqr_read_nav(nav_text, &nav, &err) < 0) {
+        fprintf(stderr, "%s:%d: %s\n", argv[3], err.line, err.msg);
+        rc = 1;
+    } else if (sqr_obs_open(&r, obs_text, &err)) {
+        fprintf(stderr, "%s:%d: %s\n", argv[2], err.line, err.msg);
+        rc = 1;
+    }
+    if (rc) {
+        free(obs_text);
+        free(nav_text);
+        return rc;
+    }
+    SqgEcef truth_ecef = {0, 0, 0}, last = {r.approx[0], r.approx[1], r.approx[2]};
+    if (have_truth) sqg_geodetic_to_ecef(truth, &truth_ecef);
+    printf("# %d GPS ephemerides (%d other records skipped), pseudorange %s\n", nav.n, nav.skipped, r.code_name);
+    int epochs = 0, fixed = 0, week, got;
+    SqgEpoch ep;
+    while ((got = sqr_obs_next(&r, &ep, &week, &err)) == 1) {
+        epochs++;
+        SqgEphemeris sel[SQG_MAX_SATS];
+        int n_sel = sqr_nav_select(&nav, week, ep.t_receiver, sel, SQG_MAX_SATS);
+        int y, mo, d, h, mi;
+        double sec;
+        sqr_calendar(week, ep.t_receiver, &y, &mo, &d, &h, &mi, &sec);
+        printf("%04d-%02d-%02d %02d:%02d:%04.1f", y, mo, d, h, mi, sec);
+        SqgPvt p;
+        if (sqg_solve_pvt_opt(&ep, sel, n_sel, last, &opt, &p)) {
+            printf(" no fix (%d observations, %d ephemerides)\n", ep.n_obs, n_sel);
+            continue;
+        }
+        fixed++;
+        last = p.pos;
+        SqgGeodetic g;
+        sqg_ecef_to_geodetic(p.pos, &g);
+        printf(" used=%d lat=%.8f lon=%.8f h=%.3f hdop=%.2f vdop=%.2f rms=%.2f", p.n_used, g.lat_deg, g.lon_deg,
+               g.height_m, p.hdop, p.vdop, p.rms_m);
+        if (have_truth) {
+            SqgEnu e;
+            char t1[40], t2[40], t3[40];
+            sqg_ecef_to_enu(truth_ecef, p.pos, truth, &e);
+            printf(" err E=%s N=%s U=%s", num(e.e, 2, t1), num(e.n, 2, t2), num(e.u, 2, t3));
+        }
+        if (p.excluded_prn > 0) printf(" excluded=PRN%02d", p.excluded_prn);
+        printf("\n");
+    }
+    if (got < 0) {
+        fprintf(stderr, "%s:%d: %s\n", argv[2], err.line, err.msg);
+        rc = 1;
+    }
+    printf("# %d epochs, %d fixed\n", epochs, fixed);
+    free(obs_text);
+    free(nav_text);
+    return rc;
+}
 
 int main(int argc, char **argv) {
     if (argc < 2) {
@@ -141,6 +301,8 @@ int main(int argc, char **argv) {
         }
         return 0;
     }
+    if (!strcmp(cmd, "rinex-demo")) return rinex_demo(argc, argv);
+    if (!strcmp(cmd, "solve")) return solve(argc, argv);
     usage(stderr);
     return 2;
 }

@@ -59,6 +59,8 @@ typedef struct {
     /* satellite clock: af0 + af1 (t - toc) + af2 (t - toc)^2, seconds */
     double toc, af0, af1, af2;
     double tgd; /* group delay, s */
+    int week;   /* GPS week of toe (0 when not known) */
+    int health; /* 0 is healthy */
 } SqgEphemeris;
 
 typedef struct {
