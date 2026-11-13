@@ -80,7 +80,7 @@ Every item is a checkbox. Tick it in the PR that merges its last piece. Nested b
 - [ ] Desktop builds on windows and macos runners (comes with S3.5).
 
 ## S5 — Squirrel OS/2 apps built here first
-- [ ] S5.1 SquirrelCalc (Desmos/TI-Nspire class: graphing, CAS, geometry, stats, spreadsheet, notebooks) on `sqmath` + `sqgui`.
+- [x] S5.1 SquirrelCalc (Desmos/TI-Nspire class: graphing, CAS, geometry, stats, spreadsheet, notebooks) on `sqmath` + `sqgui`.
   - [x] Desktop graphing window: four functions of x, variables from the calculator line, roots, d/dx, pan and zoom, `--snapshot` headless render
   - [x] Tables, integrals with shading, crossings and trace in the window
   - [x] Parametric and polar curves, sliders for variables
@@ -88,7 +88,7 @@ Every item is a checkbox. Tick it in the PR that merges its last piece. Nested b
   - [x] CAS in the calculator line: `expand`, `collect`, `d/dx`, `solve ... [for v]`
   - [x] Spreadsheet and statistics: Sheet view (A1:H50, formulas, fill, CSV), quartiles, histograms, box plots, normal/binomial/Poisson distributions, functions of ranges and lists
   - [x] Geometry: points, segments, lines, rays, circles, polygons; midpoint, intersect, perpendicular, parallel, bisector that follow their parts; dragging; measurements in any expression
-  - [ ] Notebooks
+  - [x] Notebooks: calculator lines and notes worked out top to bottom, results under each line, the whole session saved as a plain-text notebook file
 - [ ] S5.2 SquirrelPaint
 - [ ] S5.3 SquirrelGames (Solitaire, FreeCell, Hearts, Bridge, Chess, Minesweeper-class, Mahjongg)
 - [ ] S5.4 SquirrelDebug (desktop debugger UI for Squirrel OS/2 over serial/QEMU gdbstub)
