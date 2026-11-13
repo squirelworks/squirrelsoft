@@ -24,6 +24,9 @@
 #define SQG_DEMO_SATS 30 /* satellites in the synthetic sky */
 #define SQG_L1_HZ 1575.42e6
 #define SQG_L1_LAMBDA (SQG_C_LIGHT / SQG_L1_HZ) /* about 0.19 m */
+#define SQG_L2_HZ 1227.60e6
+#define SQG_L2_LAMBDA (SQG_C_LIGHT / SQG_L2_HZ)                 /* about 0.244 m */
+#define SQG_WL_LAMBDA (SQG_C_LIGHT / (SQG_L1_HZ - SQG_L2_HZ))   /* the wide lane, about 0.862 m */
 
 typedef struct {
     double x, y, z;
@@ -72,6 +75,11 @@ typedef struct {
     int valid;
     double carrier_cyc; /* L1 carrier phase, cycles, when has_carrier */
     int has_carrier;
+    /* L2, when has_l2: both the pseudorange and the carrier phase */
+    double pseudorange2_m;
+    double carrier2_cyc;
+    int has_l2;
+    int slip; /* the receiver lost lock on a carrier since the last epoch */
 } SqgObservation;
 
 typedef struct {
@@ -151,6 +159,23 @@ long sqg_demo_ambiguity(SqgEcef rx, int prn);
  * site, with noise of noise_m / 100. */
 void sqg_demo_epoch(const SqgEphemeris *ephs, int n_eph, SqgGeodetic truth, double t_true, double clock_bias_m,
                     double mask_deg, double noise_m, unsigned seed, SqgEpoch *out);
+
+/* The same sky with more of the real thing. */
+typedef struct {
+    double clock_bias_m, mask_deg, noise_m; /* as for sqg_demo_epoch */
+    unsigned seed;
+    /* 0: ambiguities fixed by the site, as sqg_demo_epoch. Otherwise by this
+     * receiver wherever it is, so a moving receiver keeps them. */
+    long receiver;
+    int dual;        /* also L2 code and carrier */
+    double iono_m;   /* L1 ionospheric delay at the zenith: code late, carrier early, x (77/60)^2 on L2 */
+} SqgDemoOptions;
+/* The whole-cycle ambiguity of a receiver (not 0) on band 1 or 2. */
+long sqg_demo_receiver_ambiguity(long receiver, int prn, int band);
+/* With o->dual 0, o->iono_m 0 and o->receiver 0 this gives exactly what
+ * sqg_demo_epoch gives. */
+void sqg_demo_epoch_opt(const SqgEphemeris *ephs, int n_eph, SqgGeodetic truth, double t_true, const SqgDemoOptions *o,
+                        SqgEpoch *out);
 
 /* ---- epoch stream and survey ---- */
 typedef struct {

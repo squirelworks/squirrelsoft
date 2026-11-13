@@ -29,7 +29,9 @@ formulas. None of it comes from vendor receiver firmware.
   10-bit week is mended. For each epoch, the nearest healthy ephemeris
   within 4 hours is picked. Observations use C1C (then C1, C1W, P1, C1P) for
   the pseudorange, L1C (then L1, L1W, L1P) for the carrier phase, and S1C
-  or S1 for the SNR. Event blocks are skipped.
+  or S1 for the SNR. L2 is read when there is both a code (C2W, C2L, C2X,
+  C2S, P2, C2) and a carrier (L2W, L2L, L2X, L2S, L2), and a loss-of-lock
+  flag on either carrier marks a slip. Event blocks are skipped.
   Errors give the line number. A RINEX 3 writer makes synthetic files to
   match.
 - **Track:** an epoch track seeded from the last fix, and a `.sqobs` log.
@@ -42,16 +44,32 @@ formulas. None of it comes from vendor receiver firmware.
 - **Differential (sqrtk):** a base at a known place and a rover seeing the
   same satellites.
   - DGNSS: code double differences in one epoch, to the code noise.
-  - Static RTK: code and L1 carrier double differences over a session,
+  - Integer ambiguities by integer least squares in the LAMBDA style:
+    the float covariance is factored, decorrelated by integer Gauss
+    transformations and swaps, and searched depth-first with a shrinking
+    ellipsoid for the best two sets. A fix is kept only when the second
+    best fits at least 3 times worse (the ratio test). `sqg_ils` is public.
+  - Dual frequency: the Melbourne-Wubbena combination (free of geometry
+    and ionosphere) gives each satellite pair's wide-lane ambiguity, about
+    86 cm. Once those are whole numbers, the L2 code and carrier join L1 on
+    the same ambiguities (N2 = N1 - wide lane), which fixes in far fewer
+    epochs.
+  - Static RTK: code and carrier double differences over a session,
     solving for the rover and one float ambiguity per satellite pair, then
-    rounding to whole cycles. The fix is kept only when a ratio test passes:
-    each ambiguity moved one cycle toward its float value must fit at least
-    3 times worse. This is single frequency, and the fix is rounding plus
-    the ratio test, not LAMBDA, so a short session can stay float.
+    the integer search.
+  - Kinematic RTK (`SqgRtkFilter`): epoch by epoch for a moving rover. Each
+    epoch's rover position is eliminated into an information matrix over
+    the ambiguities alone, so they gather strength while the rover moves;
+    once fixed, every epoch is placed to the centimetre. A slip flagged by
+    the receiver or seen as a jump in the geometry-free carrier restarts
+    that one ambiguity; a fix whose carrier stops fitting is dropped; a lost
+    reference satellite starts the set over.
 - **Synthetic sky:** 30 satellites in 6 planes with clock offsets, and
   pseudoranges and L1 carrier phase (with whole-cycle ambiguities that
   differ by site and satellite) for any site, clock bias, mask and seeded
-  noise. It's for tests and demos.
+  noise. `sqg_demo_epoch_opt` adds L2, an ionosphere (code late, carrier
+  early, 1.65 times more on L2) and ambiguities that belong to a receiver
+  wherever it goes. It's for tests and demos.
 
 ## Build
 
@@ -75,12 +93,19 @@ make test
 ./build/squirrelgnss solve station.obs brdc.nav --average   # plus the occupation mean and spread
 ./build/squirrelgnss guide 35.0,139.0,50 35.00001,139.0,50.1  # go 1.109 m N (...); fill 0.100 m
 ./build/squirrelgnss rtk-demo --baseline 300,-150,4          # synthetic static RTK session
+./build/squirrelgnss rtk-demo 20 --dual --iono 3             # L1 + L2: fixed in 20 epochs
+./build/squirrelgnss rtk-demo --kinematic --dual             # a rover driving a 100 m circle
+./build/squirrelgnss rtk-demo --kinematic --dual --write b.26o r.26o n.26n   # ... saved as RINEX
 ./build/squirrelgnss rtk base.obs rover.obs brdc.nav --base-at 35.681236,139.767125,40
+./build/squirrelgnss rtk base.obs rover.obs brdc.nav --base-at 35.681236,139.767125,40 --kinematic
 ```
 
 `rtk` pairs the base and rover epochs by time and prints `fixed` or
-`float`, the ratio, the rover position and the float ambiguities. Both
-receivers need L1 carrier phase in their RINEX files.
+`float`, the ratio, `L1` or `L1+L2`, the rover position and the float
+ambiguities. With `--kinematic` it prints one line per epoch (time, fixed or
+float, ratio, double differences, wide lanes fixed, position, slips) and a
+count of fixed epochs. Both receivers need carrier phase in their RINEX
+files; L2 is used when both have it.
 
 `solve` prints one line per epoch: GPS time, satellites used, latitude,
 longitude, height, HDOP, VDOP, residual RMS, any excluded satellite, and the
@@ -111,8 +136,9 @@ tests cover:
   observation types and more than 12 satellites in an epoch; mixed files;
   ephemeris selection; and the error cases (no header end, a cut-short
   record, a bad number, a navigation file opened as observations, no
-  pseudorange type, an event block, a bad epoch line), and the L1 carrier
-  round trip
+  pseudorange type, an event block, a bad epoch line), the L1 carrier
+  round trip, and L2 code and carrier with loss-of-lock flags in RINEX 3
+  and 2.11
 - the stream: a 60-epoch occupation's mean and spread, exact noiseless
   averaging, speed and course of a moving receiver, and a lost fix
 - guidance text: both legs, on point, on grade, due north, a short buffer
@@ -121,3 +147,11 @@ tests cover:
 - static RTK over 20 epochs: every integer ambiguity right, within 1 cm
   horizontally and 2 cm vertically with 3 mm phase noise, exact without
   noise, float when the ratio can't pass, and no carrier
+- integer least squares against a brute-force search on 40 correlated
+  covariances (2 to 5 ambiguities), where rounding alone is wrong in many
+- dual frequency through 3 m of ionosphere: every wide lane and L1
+  ambiguity right in 12 epochs, a ratio far above L1 alone on the same data
+- kinematic: a rover on a circle fixed within seconds and within 6 cm on
+  every fixed epoch, the true ambiguities, a millimetre without noise;
+  slips flagged and unflagged (on L1, and on both carriers), an unflagged
+  L1-only slip dropped rather than trusted, and a lost reference

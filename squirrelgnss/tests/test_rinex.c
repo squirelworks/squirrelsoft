@@ -140,7 +140,7 @@ static void test_rinex3(void) {
         total += ep.n_obs;
     }
     const char *obs = slurp(f);
-    CHECK(strstr(obs, "G    3 C1C L1C S1C") != NULL);
+    CHECK(strstr(obs, "G    5 C1C L1C S1C C2W L2W") != NULL);
     int epochs;
     double worst = solve_all(obs, &nav, &epochs);
     CHECK(epochs == 10);
@@ -324,11 +324,51 @@ static void test_errors(void) {
     CHECK(sqr_obs_next(&r, &ep, &week, &err) == -1 && err.line == 9);
 }
 
+/* L2 code and carrier, and the loss-of-lock flag, both ways; a RINEX 2
+ * file with P2 and L2 */
+static void test_dual(void) {
+    FILE *f = tmpfile();
+    sqr_write_obs_header(f, NULL);
+    SqgDemoOptions o = {25.0, 5.0, 0.3, 9, 77, 1, 4.0};
+    SqgEpoch a;
+    sqg_demo_epoch_opt(eph, n_eph, HOME, T0, &o, &a);
+    a.obs[2].slip = 1;
+    a.obs[3].has_l2 = 0;
+    sqr_write_obs_epoch(f, WEEK, &a);
+    const char *obs = slurp(f);
+    SqrObs r;
+    SqrError err;
+    CHECK(sqr_obs_open(&r, obs, &err) == 0 && r.code2_index == 3 && r.carrier2_index == 4);
+    SqgEpoch b;
+    int week;
+    CHECK(sqr_obs_next(&r, &b, &week, &err) == 1 && b.n_obs == a.n_obs);
+    CHECK(b.obs[0].has_l2 && fabs(b.obs[0].pseudorange2_m - a.obs[0].pseudorange2_m) < 6e-4);
+    CHECK(fabs(b.obs[0].carrier2_cyc - a.obs[0].carrier2_cyc) < 6e-4 && !b.obs[0].slip);
+    CHECK(b.obs[2].slip && b.obs[2].has_l2 && !b.obs[3].has_l2 && b.obs[3].has_carrier);
+    /* the L2 code is later than L1 by (77/60)^2 - 1 of the L1 delay */
+    double g = (SQG_L1_HZ / SQG_L2_HZ) * (SQG_L1_HZ / SQG_L2_HZ);
+    CHECK(b.obs[0].pseudorange2_m - b.obs[0].pseudorange_m > (g - 1) * 4.0 - 3);
+
+    /* RINEX 2.11 with P2 and L2, the flag after L1 */
+    char text[4096];
+    snprintf(text, sizeof text,
+             "     2.11           OBSERVATION DATA    G (GPS)             RINEX VERSION / TYPE\n"
+             "     4    C1    L1    P2    L2                              # / TYPES OF OBSERV\n"
+             "                                                            END OF HEADER\n"
+             " 24  1 15 12  0  0.0000000  0  1G05\n"
+             "  21000000.123   110355555.1231  21000003.456    85991234.567 \n");
+    SqrObs r2;
+    CHECK(sqr_obs_open(&r2, text, &err) == 0 && r2.code2_index == 2 && r2.carrier2_index == 3);
+    CHECK(sqr_obs_next(&r2, &b, &week, &err) == 1 && b.n_obs == 1);
+    CHECK(b.obs[0].has_l2 && b.obs[0].slip && fabs(b.obs[0].pseudorange2_m - 21000003.456) < 1e-6);
+}
+
 void test_rinex(int *checks, int *failures) {
     nchecks = checks;
     nfails = failures;
     test_time();
     test_rinex3();
+    test_dual();
     test_rinex2();
     test_mixed_and_select();
     test_errors();

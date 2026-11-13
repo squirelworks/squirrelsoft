@@ -30,8 +30,9 @@ static void usage(FILE *f) {
           "  squirrelgnss rinex-demo OBS NAV [EPOCHS] [--at LAT,LON,H] [--noise M] [--seed N]\n"
           "  squirrelgnss solve OBS NAV [--mask DEG] [--truth LAT,LON,H] [--average]\n"
           "  squirrelgnss guide HERE TARGET [--tol M]  which way and how far to the target\n"
-          "  squirrelgnss rtk-demo [EPOCHS] [--baseline E,N,U] [--noise M]\n"
-          "  squirrelgnss rtk BASE_OBS ROVER_OBS NAV --base-at LAT,LON,H [--truth LAT,LON,H]\n"
+          "  squirrelgnss rtk-demo [EPOCHS] [--baseline E,N,U] [--noise M] [--dual] [--iono M]\n"
+          "                       [--kinematic] [--write BASE_OBS ROVER_OBS NAV]\n"
+          "  squirrelgnss rtk BASE_OBS ROVER_OBS NAV --base-at LAT,LON,H [--truth LAT,LON,H] [--kinematic]\n"
           "  squirrelgnss help\n"
           "demo-track solves a synthetic 30-satellite sky; --fault adds a bias to one\n"
           "satellite, which the fault detection should exclude.\n"
@@ -39,9 +40,12 @@ static void usage(FILE *f) {
           "files; solve reads GPS from RINEX 2.11 or 3.x files (a receiver's own, or\n"
           "those) and prints a fix for every epoch; --average adds the mean of the\n"
           "occupation and the spread of one fix.\n"
-          "rtk-demo and rtk solve a static rover from code and L1 carrier double\n"
-          "differences against a base at a known place, fixing the whole-cycle\n"
-          "ambiguities when the ratio test passes (single frequency).\n",
+          "rtk-demo and rtk solve a rover from code and carrier double differences\n"
+          "against a base at a known place, fixing the whole-cycle ambiguities by\n"
+          "integer least squares when the ratio test passes. With L2 (--dual, or in\n"
+          "the files) the wide lanes are fixed first and both carriers are used.\n"
+          "--kinematic follows a moving rover epoch by epoch (the demo drives a\n"
+          "100 m circle at 5 m/s); --write saves the demo as RINEX for rtk.\n",
           f);
 }
 
@@ -221,8 +225,8 @@ static int solve(int argc, char **argv) {
 static void print_rtk(const SqgRtk *k, const SqgGeodetic *truth) {
     SqgGeodetic g;
     sqg_ecef_to_geodetic(k->rover, &g);
-    printf("%s epochs=%d ref=PRN%02d dd=%d ratio=%.1f rms=%.4f m\n", k->fixed ? "fixed" : "float", k->n_epochs,
-           k->ref_prn, k->n_dd, k->ratio, k->rms_phase_m);
+    printf("%s epochs=%d ref=PRN%02d dd=%d ratio=%.1f rms=%.4f m%s\n", k->fixed ? "fixed" : "float", k->n_epochs,
+           k->ref_prn, k->n_dd, k->ratio, k->rms_phase_m, k->dual ? " L1+L2" : " L1");
     printf("rover lat=%.9f lon=%.9f h=%.4f\n", g.lat_deg, g.lon_deg, g.height_m);
     printf("ambiguities");
     for (int j = 0; j < k->n_dd; j++) printf(" PRN%02d=%.2f", k->prn[j], k->float_amb[j]);
@@ -237,40 +241,129 @@ static void print_rtk(const SqgRtk *k, const SqgGeodetic *truth) {
 #define RTK_MAX_EPOCHS 1024
 static SqgEpoch rtk_base[RTK_MAX_EPOCHS], rtk_rover[RTK_MAX_EPOCHS];
 
+/* one kinematic epoch: time, state, ratio, satellites, and where (or how far off) */
+static void print_fix(int week, const SqgRtkFix *f, const SqgGeodetic *truth) {
+    SqgGeodetic g;
+    sqg_ecef_to_geodetic(f->pos, &g);
+    int y, mo, d, h, mi;
+    double sec;
+    sqr_calendar(week, f->t, &y, &mo, &d, &h, &mi, &sec);
+    printf("%02d:%02d:%04.1f %s ratio=%.1f dd=%d wl=%d", h, mi, sec, f->fixed ? "fixed" : "float", f->ratio, f->n_dd,
+           f->wide_lanes);
+    if (truth) {
+        SqgEnu e = sqg_stakeout_delta(*truth, g);
+        char t1[40], t2[40], t3[40];
+        printf(" err E=%s N=%s U=%s", num(e.e, 3, t1), num(e.n, 3, t2), num(e.u, 3, t3));
+    } else
+        printf(" lat=%.9f lon=%.9f h=%.4f", g.lat_deg, g.lon_deg, g.height_m);
+    if (f->slips) printf(" slips=%d", f->slips);
+    if (f->reset) printf(" reset");
+    if (f->dropped) printf(" dropped");
+    printf("\n");
+}
+
 static int rtk_demo(int argc, char **argv) {
-    int n = 40; /* 10 minutes at 15 s */
-    double noise = 0.3;
+    int n = -1, dual = 0, kin = 0;
+    double noise = 0.3, iono = 0;
     SqgEnu bl = {123.456, -78.9, 2.5};
+    const char *wb = NULL, *wr = NULL, *wn = NULL;
     for (int i = 2; i < argc; i++) {
         int more = i + 1 < argc;
         if (!strcmp(argv[i], "--noise") && more) noise = atof(argv[++i]);
-        else if (!strcmp(argv[i], "--baseline") && more) {
+        else if (!strcmp(argv[i], "--iono") && more) iono = atof(argv[++i]);
+        else if (!strcmp(argv[i], "--dual")) dual = 1;
+        else if (!strcmp(argv[i], "--kinematic")) kin = 1;
+        else if (!strcmp(argv[i], "--write") && i + 3 < argc) {
+            wb = argv[++i];
+            wr = argv[++i];
+            wn = argv[++i];
+        } else if (!strcmp(argv[i], "--baseline") && more) {
             if (sscanf(argv[++i], "%lf,%lf,%lf", &bl.e, &bl.n, &bl.u) != 3) return usage(stderr), 2;
         } else if (argv[i][0] != '-' && i == 2) n = atoi(argv[i]);
         else return usage(stderr), 2;
     }
+    if (n < 0) n = kin ? 120 : 40; /* two minutes at 1 s, or ten at 15 s */
     if (n < 1) n = 1;
     if (n > RTK_MAX_EPOCHS) n = RTK_MAX_EPOCHS;
+    const int week = 2444;
+    const double t0 = 432000.0, dt = kin ? 1.0 : 15.0;
     SqgEphemeris ephs[SQG_DEMO_SATS];
     int n_eph;
-    sqg_demo_ephemerides(ephs, &n_eph, 100000.0);
-    SqgEcef base_pos, rover_pos;
-    SqgGeodetic rover;
+    sqg_demo_ephemerides(ephs, &n_eph, t0);
+    for (int i = 0; i < n_eph; i++) ephs[i].week = week;
+    SqgEcef base_pos;
     sqg_geodetic_to_ecef(HOME, &base_pos);
-    sqg_enu_to_ecef(base_pos, HOME, bl, &rover_pos);
-    sqg_ecef_to_geodetic(rover_pos, &rover);
+    /* the rover: at the baseline, or driving a 100 m circle round it at 5 m/s */
+    static SqgGeodetic where[RTK_MAX_EPOCHS];
     for (int k = 0; k < n; k++) {
-        sqg_demo_epoch(ephs, n_eph, HOME, 100000.0 + 15.0 * k, 400.0 + k, 5.0, noise, 31u + (unsigned)k,
-                       &rtk_base[k]);
-        sqg_demo_epoch(ephs, n_eph, rover, 100000.0 + 15.0 * k, -900.0 - 2.0 * k, 5.0, noise, 5003u + (unsigned)k,
-                       &rtk_rover[k]);
+        SqgEnu at = bl;
+        if (kin) {
+            double a = 5.0 * k / 100.0;
+            at.e += 100 * cos(a);
+            at.n += 100 * sin(a);
+        }
+        SqgEcef p;
+        sqg_enu_to_ecef(base_pos, HOME, at, &p);
+        sqg_ecef_to_geodetic(p, &where[k]);
+        SqgDemoOptions ob = {400.0 + k, 5.0, noise, 31u + (unsigned)k, 11, dual, iono};
+        SqgDemoOptions orv = {-900.0 - 2.0 * k, 5.0, noise, 5003u + (unsigned)k, 22, dual, iono};
+        sqg_demo_epoch_opt(ephs, n_eph, HOME, t0 + dt * k, &ob, &rtk_base[k]);
+        sqg_demo_epoch_opt(ephs, n_eph, where[k], t0 + dt * k, &orv, &rtk_rover[k]);
+    }
+    if (wb) {
+        FILE *fb = fopen(wb, "w"), *fr = fopen(wr, "w"), *fn = fopen(wn, "w");
+        int bad = !fb || !fr || !fn;
+        if (!bad) {
+            SqgEcef rp;
+            sqg_geodetic_to_ecef(where[0], &rp);
+            sqr_write_nav(fn, ephs, n_eph);
+            sqr_write_obs_header(fb, &base_pos);
+            sqr_write_obs_header(fr, &rp);
+            for (int k = 0; k < n; k++) {
+                sqr_write_obs_epoch(fb, week, &rtk_base[k]);
+                sqr_write_obs_epoch(fr, week, &rtk_rover[k]);
+            }
+            bad = ferror(fb) || ferror(fr) || ferror(fn);
+        }
+        if (fb) bad |= fclose(fb) != 0;
+        if (fr) bad |= fclose(fr) != 0;
+        if (fn) bad |= fclose(fn) != 0;
+        if (bad) {
+            fprintf(stderr, "squirrelgnss: could not write the RINEX files\n");
+            return 1;
+        }
+    }
+    if (kin) {
+        static SqgRtkFilter flt;
+        sqg_rtk_filter_init(&flt, base_pos, NULL);
+        int fixed = 0, first = -1;
+        double worst = 0;
+        for (int k = 0; k < n; k++) {
+            SqgRtkFix fx;
+            if (sqg_rtk_filter_push(&flt, &rtk_base[k], &rtk_rover[k], ephs, n_eph, &fx)) {
+                printf("epoch %d: no solution\n", k);
+                continue;
+            }
+            print_fix(week, &fx, &where[k]);
+            if (fx.fixed) {
+                SqgEcef t;
+                sqg_geodetic_to_ecef(where[k], &t);
+                worst = fmax(worst, sqg_baseline_length(fx.pos, t));
+                fixed++;
+                if (first < 0) first = k;
+            }
+        }
+        printf("# %d epochs, %d fixed", n, fixed);
+        if (first >= 0) printf(", first fix at epoch %d, worst fixed error %.3f m", first, worst);
+        printf("\n");
+        return 0;
     }
     SqgRtk out;
     if (sqg_rtk_static(rtk_base, rtk_rover, n, ephs, n_eph, base_pos, NULL, &out)) {
         fprintf(stderr, "squirrelgnss: no RTK solution\n");
         return 1;
     }
-    print_rtk(&out, &rover);
+    print_rtk(&out, &where[0]);
     return 0;
 }
 
@@ -298,10 +391,11 @@ static SqgEpoch rtk_in_base[RTK_MAX_EPOCHS], rtk_in_rover[RTK_MAX_EPOCHS];
 static int rtk(int argc, char **argv) {
     if (argc < 5) return usage(stderr), 2;
     SqgGeodetic base, truth;
-    int have_base = 0, have_truth = 0;
+    int have_base = 0, have_truth = 0, kin = 0;
     for (int i = 5; i < argc; i++) {
         int more = i + 1 < argc;
-        if (!strcmp(argv[i], "--base-at") && more) {
+        if (!strcmp(argv[i], "--kinematic")) kin = 1;
+        else if (!strcmp(argv[i], "--base-at") && more) {
             if (!parse_llh(argv[++i], &base)) return usage(stderr), 2;
             have_base = 1;
         } else if (!strcmp(argv[i], "--truth") && more) {
@@ -337,7 +431,19 @@ static int rtk(int argc, char **argv) {
         sqg_geodetic_to_ecef(base, &base_pos);
         SqgRtk out;
         printf("# %d common epochs, %d ephemerides\n", n, n_sel);
-        if (n == 0 || sqg_rtk_static(rtk_base, rtk_rover, n, sel, n_sel, base_pos, NULL, &out)) {
+        if (kin && n > 0) {
+            static SqgRtkFilter flt;
+            sqg_rtk_filter_init(&flt, base_pos, NULL);
+            int fixed = 0;
+            for (int k = 0; k < n; k++) {
+                SqgRtkFix fx;
+                if (sqg_rtk_filter_push(&flt, &rtk_base[k], &rtk_rover[k], sel, n_sel, &fx)) continue;
+                print_fix(week, &fx, NULL);
+                fixed += fx.fixed;
+            }
+            printf("# %d epochs, %d fixed\n", n, fixed);
+            rc = 0;
+        } else if (n == 0 || sqg_rtk_static(rtk_base, rtk_rover, n, sel, n_sel, base_pos, NULL, &out)) {
             fprintf(stderr, "squirrelgnss: no RTK solution (common epochs with carrier on 5 satellites needed)\n");
         } else {
             print_rtk(&out, have_truth ? &truth : NULL);
