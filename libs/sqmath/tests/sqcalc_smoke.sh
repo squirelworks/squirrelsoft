@@ -37,6 +37,13 @@ expect "5*x" --simplify "2x + 3x"
 expect "$(printf 'x = -1.41421356237\nx = 1.41421356237')" --solve x -5 5 "x^2 - 2"
 expect 2 --integrate x 0 pi "sin(x)"
 expect "$(printf '0\t0\n0.5\t0.25\n1\t1')" --table x 0 1 0.5 "x^2"
+expect "x^3 + 3*x^2 + 3*x + 1" --expand "(x+1)^3"
+expect "(a + b)*x^2 + x" --collect x "a x^2 + b x^2 + x"
+expect "$(printf 'x = (1 - sqrt(5))/2  (-0.61803398875)\nx = (1 + sqrt(5))/2  (1.61803398875)')" --solve-for x "x^2 - x = 1"
+expect "$(printf 'x = 2\nx = 3')" --solve-for x "x^2 + 6 = 5x"
+expect "x = -b/a" --solve-for x "a x + b = 0"
+expect "no real solution" --solve-for x "x^2 = -1"
+expect "every x" --solve-for x "2x = x + x"
 expect undefined "sqrt(-1)"
 expect undefined "1/0"
 status 0 --help
@@ -49,6 +56,11 @@ status 2 --bogus
 status 2 --digits 40 pi
 status 2 "x" y
 status 2 --table x 1 0 0.1 x
+status 1 --solve-for x "x^3 = 2"
+status 1 --solve-for x "x = 1 = 2"
+status 1 --expand "(2x+1)^64"
+status 2 --expand
+status 2 --solve-for x
 "$C" "2 * (3" 2>&1 | grep -q '^        \^$' || { echo "FAIL: caret under the error"; fail=1; }
 "$C" --solve x 2 3 "x^2 - 2" 2>&1 | grep -q 'no sign change' || { echo "FAIL: no-root message"; fail=1; }
 

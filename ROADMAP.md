@@ -43,7 +43,8 @@ Every item is a checkbox. Tick it in the PR that merges its last piece. Nested b
   - [x] Step 3: SquirrelQR on Android uses it through JNI when ML Kit finds nothing (#65).
 - [ ] `libs/sqmath` (C): expression engine/CAS core for the calculator suite.
   - [x] Step 1: parser (implied multiplication, factorial, error positions), evaluation, compiled programs, symbolic derivatives with simplification, printing, roots, integrals, number display; `sqcalc` CLI
-  - [ ] Step 2: polynomial collection and expansion, symbolic equation solving, units
+  - [x] Step 2: expansion and collection with exact fractions, exact equation solving (linear, quadratic, rational roots, symbolic coefficients), equations as `left = right`; `sqcalc --expand/--collect/--solve-for`
+  - [ ] Step 3: units, factoring, partial fractions, symbolic integrals
 - [x] `libs/sqgui` (C): tiny immediate-mode widget layer over SDL2 for desktop, designed to port to Squirrel OS/2's wm/gfx: a 32-bit canvas core with no OS calls, Warp-grey widgets, the OS/2 5x7 font, and an SDL2 window back end.
 - [ ] JNI smoke tests for every Android app that uses a core (each lib already has `make test` unit tests).
   - [x] SquirrelQR: `make test` builds `sqqr_jni.c` for the host and drives it from a JVM (`squirrelqr/android/jni-smoke`)
@@ -81,7 +82,8 @@ Every item is a checkbox. Tick it in the PR that merges its last piece. Nested b
 - [ ] S5.1 SquirrelCalc (Desmos/TI-Nspire class: graphing, CAS, geometry, stats, spreadsheet, notebooks) on `sqmath` + `sqgui`.
   - [x] Desktop graphing window: four functions of x, variables from the calculator line, roots, d/dx, pan and zoom, `--snapshot` headless render
   - [ ] Tables, integrals and intersections in the window; parametric and polar curves
-  - [ ] CAS panel (needs `sqmath` step 2), geometry, stats, spreadsheet, notebooks
+  - [x] CAS in the calculator line: `expand`, `collect`, `d/dx`, `solve ... [for v]`
+  - [ ] Geometry, stats, spreadsheet, notebooks
 - [ ] S5.2 SquirrelPaint
 - [ ] S5.3 SquirrelGames (Solitaire, FreeCell, Hearts, Bridge, Chess, Minesweeper-class, Mahjongg)
 - [ ] S5.4 SquirrelDebug (desktop debugger UI for Squirrel OS/2 over serial/QEMU gdbstub)

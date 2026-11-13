@@ -9,6 +9,8 @@ static void usage(FILE *f) {
     fputs("usage: squirrelcalc [options]\n"
           "  --fn EXPR        graph EXPR as the next of y1..y4 (a function of x)\n"
           "  --let NAME=EXPR  define a variable first (--let a=2)\n"
+          "  --line TEXT      run a calculator line first: \"a = 2\", \"solve x^2 = 2\",\n"
+          "                   \"expand (x+1)^3\" (with --snapshot the history is printed)\n"
           "  --roots          mark the roots\n"
           "  --deriv          also graph d/dx y1\n"
           "  --snapshot FILE  draw one 900x600 frame to FILE (PPM) and exit, no window\n"
@@ -41,6 +43,9 @@ int main(int argc, char **argv) {
                 fprintf(stderr, "squirrelcalc: --let %s: expected NAME=EXPR with a value\n", s);
                 return 1;
             }
+            for (int k = 0; k < nfn; k++) calc_gui_set(&g, k, g.fx[k]);
+        } else if (!strcmp(a, "--line") && more) {
+            calc_gui_eval(&g, argv[++i]);
             for (int k = 0; k < nfn; k++) calc_gui_set(&g, k, g.fx[k]);
         } else if (!strcmp(a, "--roots")) {
             g.show_roots = 1;
@@ -76,6 +81,7 @@ int main(int argc, char **argv) {
             fprintf(stderr, "squirrelcalc: could not write %s\n", snapshot);
             return 1;
         }
+        if (g.hist[0]) printf("%s\n", g.hist);
         if (g.status[0]) printf("%s\n", g.status);
         return 0;
     }

@@ -4,7 +4,8 @@
  * Parses calculator input ("2x^2 - sin(x)/3", "atan2(y, x)", "5!") into an
  * expression tree, evaluates it, compiles it to a small stack program for
  * fast repeated evaluation (graphing, tables), differentiates and simplifies
- * it symbolically, prints it back, and finds roots and integrals numerically.
+ * it symbolically, expands and solves equations exactly, prints it back, and
+ * finds roots and integrals numerically.
  *
  * C11, no OS calls, no allocation: every structure is a fixed-size value the
  * caller owns (SqmExpr is about 13 KB, SqmProgram about 7 KB).
@@ -29,7 +30,9 @@ enum {
     SQM_ERR_ARGS = -4,    /* a function called with the wrong number of arguments */
     SQM_ERR_DEPTH = -5,   /* nested deeper than SQM_MAX_DEPTH */
     SQM_ERR_DIFF = -6,    /* no derivative rule (min, max, mod, factorial) */
-    SQM_ERR_NAME = -7     /* name too long */
+    SQM_ERR_NAME = -7,    /* name too long */
+    SQM_ERR_RANGE = -8,   /* numbers too big for exact fractions */
+    SQM_ERR_SOLVE = -9    /* no exact method for this equation */
 };
 
 typedef enum {
@@ -143,6 +146,40 @@ int sqm_simplify(const SqmExpr *in, SqmExpr *out);
  * "x^2 + 3*x - 1", "-(x + 1)", "(-2)^x", "-x/2", "2*x*sin(x)". Returns the length
  * the full text needs, like snprintf (out is always terminated if cap > 0). */
 size_t sqm_print(const SqmExpr *e, char *out, size_t cap);
+
+/* Expand products and whole powers into a sum of terms with exact
+ * fractions: (x + 1)^2 is x^2 + 2*x + 1, (a + b)(a - b) is a^2 - b^2.
+ * Parts that are not polynomials stay whole and are expanded inside:
+ * sin((x+1)^2) is sin(x^2 + 2*x + 1), and (x + 1)/(x - 1) is
+ * x/(x - 1) + 1/(x - 1). Terms come highest degree first. Uses about
+ * 100 KB of stack at the deepest nesting. SQM_ERR_RANGE when a fraction
+ * outgrows 62 bits, SQM_ERR_FULL past 64 terms or 8 distinct parts. */
+int sqm_expand(const SqmExpr *in, SqmExpr *out);
+
+/* Expand, then group the terms by powers of var:
+ * a x^2 + b x^2 + c x  becomes  (a + b)*x^2 + c*x. */
+int sqm_collect(const SqmExpr *in, const char *var, SqmExpr *out);
+
+/* Parse "left = right" as left - right (plain text with no = parses as is).
+ * Error positions are in the whole text. */
+int sqm_parse_eq(const char *text, SqmExpr *out, SqmError *err);
+
+typedef struct {
+    char text[128]; /* "-sqrt(2)", "(1 + sqrt(5))/2", "-b/a" */
+    double value;   /* NaN when it depends on other variables */
+} SqmSolution;
+
+/*
+ * Solve eq = 0 for var exactly, where eq expands to a polynomial in var:
+ * linear and quadratic with any coefficients (other variables stay symbols),
+ * and higher degrees with number coefficients through their rational roots,
+ * leaving a quadratic. Real solutions only, each once, in increasing order
+ * (symbolic ones last). Writes up to cap solutions and the number in *count:
+ * 0 when there is none, -1 when every value works (x - x). Returns SQM_OK,
+ * or SQM_ERR_SOLVE when var is inside a function (sin(x) = 0) or a factor
+ * of degree 3 or more is left; the solutions found so far are still written.
+ */
+int sqm_solve_for(const SqmExpr *eq, const char *var, SqmSolution *out, int cap, int *count);
 
 /* ---- numeric ---- */
 

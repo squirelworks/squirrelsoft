@@ -195,6 +195,26 @@ static void test_gui(const char *dir) {
     CHECK(calc_gui_eval(&g, "a = a + 1") == 0);
     NEAR(calc_gui_var(&g, "a"), 3, 0);
 
+    /* CAS lines */
+    g.hist[0] = 0;
+    CHECK(calc_gui_eval(&g, "expand (x+1)^2") == 0 && contains(g.hist, "expand (x+1)^2 = x^2 + 2*x + 1"));
+    CHECK(calc_gui_eval(&g, "d/dx x^3 + a x") == 0 && contains(g.hist, "= 3*x^2 + a"));
+    CHECK(calc_gui_eval(&g, "collect x a x + b x") == 0 && contains(g.hist, "= (a + b)*x"));
+    CHECK(calc_gui_eval(&g, "solve x^2 - x = 1") == 0);
+    CHECK(contains(g.hist, "\n  x = (1 - sqrt(5))/2  (-0.618034)\n  x = (1 + sqrt(5))/2  (1.61803)"));
+    NEAR(calc_gui_var(&g, "ans"), (1 - sqrt(5)) / 2, 1e-12);
+    CHECK(calc_gui_eval(&g, "solve 2x + 4 = 0") == 0 && contains(g.hist, "  x = -2"));
+    CHECK(calc_gui_eval(&g, "solve k t + 1 = 0 for t") == 0 && contains(g.hist, "  t = -1/k"));
+    CHECK(calc_gui_eval(&g, "solve a t = 1 for t") == 0 && contains(g.hist, "  t = 1/a  (0.333333)")); /* a = 3 */
+    CHECK(calc_gui_eval(&g, "solve x^2 = -4") == 0 && contains(g.hist, "no real solution"));
+    CHECK(calc_gui_eval(&g, "solve x^3 = 2") == -1 && contains(g.hist, "can't solve this exactly"));
+    CHECK(calc_gui_eval(&g, "solve x = 1 = 2") == -1 && contains(g.hist, "more than one ="));
+    CHECK(calc_gui_eval(&g, "solve x = 1 for 2") == -1);
+    CHECK(calc_gui_eval(&g, "collect x") == -1);
+    CHECK(calc_gui_eval(&g, "expand (") == -1);
+    CHECK(calc_gui_eval(&g, "expanded = 4") == 0); /* a name, not the command */
+    NEAR(calc_gui_var(&g, "expanded"), 4, 0);
+
     /* a drawn frame: both curves, roots of y1 at +-sqrt(2) */
     g.show_roots = 1;
     frame();

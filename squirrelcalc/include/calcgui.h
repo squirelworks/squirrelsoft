@@ -43,8 +43,9 @@ void calc_gui_init(CalcGui *g);
 void calc_gui_set(CalcGui *g, int i, const char *text);
 
 /* Run a calculator line: "2+3", "a = 2" (defines a for the graphs too),
- * "ans*2". Adds the result to the history. Returns 0, or -1 on an error
- * (also in the history). */
+ * "ans*2", or a CAS command: "expand (x+1)^2", "collect x a x + b x",
+ * "d/dx x^3", "solve x^2 - x = 1" (for x, or "... for a"). Adds the result
+ * to the history. Returns 0, or -1 on an error (also in the history). */
 int calc_gui_eval(CalcGui *g, const char *line);
 
 /* Value of a user variable, or NAN */

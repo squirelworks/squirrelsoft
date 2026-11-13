@@ -16,6 +16,10 @@ out=$($C --let a=3 --fn "a x" --fn "x + a" --roots --snapshot "$B/snap2.ppm") ||
 echo "$out" | grep -q "y1: 0" || fail "a x has a root at 0: $out"
 echo "$out" | grep -q "y2: -3" || fail "x + a has a root at -3: $out"
 
+out=$($C --line "solve x^2 - x = 1" --line "expand (x+1)^3" --snapshot "$B/snap5.ppm") || fail "--line"
+echo "$out" | grep -q "x = (1 + sqrt(5))/2" || fail "solve line: $out"
+echo "$out" | grep -q "= x^3 + 3\*x^2 + 3\*x + 1" || fail "expand line: $out"
+
 err=$($C --fn "sin(" --snapshot "$B/snap3.ppm" 2>&1 >/dev/null)
 echo "$err" | grep -q "y1:" || fail "parse error reported: $err"
 $C --let "x=1" --snapshot "$B/snap4.ppm" >/dev/null 2>&1; [ $? -eq 1 ] || fail "--let x=1 should exit 1"

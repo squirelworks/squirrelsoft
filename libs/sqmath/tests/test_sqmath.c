@@ -248,7 +248,7 @@ static void diff_case(const char *in, const char *want) {
     static const double X[] = {0.37, 0.81, 1.6, 2.3};
     for (size_t k = 0; k < 4; k++) {
         double h = 1e-6, p[2] = {X[k] + h, 0.6}, m[2] = {X[k] - h, 0.6}, at[2] = {X[k], 0.6};
-        double fp, fm, d;
+        double fp = 0, fm = 0, d;
         CHECK(sqm_eval(&ex, XY, p, 2, &fp) == SQM_OK && sqm_eval(&ex, XY, m, 2, &fm) == SQM_OK);
         CHECK(sqm_eval(&ex2, XY, at, 2, &d) == SQM_OK);
         double num = (fp - fm) / (2 * h);
@@ -333,7 +333,7 @@ static void test_simplify(void) {
     }
     /* simplifying keeps the value */
     for (size_t i = 0; i < sizeof SAMPLES / sizeof SAMPLES[0]; i++) {
-        double a, b, p[2] = {1.7, 0.9};
+        double a = 0, b = 0, p[2] = {1.7, 0.9};
         CHECK(sqm_parse(SAMPLES[i], &ex, NULL) == SQM_OK && sqm_simplify(&ex, &ex2) == SQM_OK);
         CHECK(sqm_eval(&ex, XY, p, 2, &a) == SQM_OK && sqm_eval(&ex2, XY, p, 2, &b) == SQM_OK);
         if (!near(a, b, 1e-12)) fprintf(stderr, "  simplify %s changed the value: %.17g vs %.17g\n", SAMPLES[i], a, b);
@@ -406,6 +406,144 @@ static void test_format(void) {
     CHECK(sqm_format(12345, 12, tiny, sizeof tiny) == 5 && !strcmp(tiny, "123"));
 }
 
+/* ---- expansion, collection, solving ---- */
+
+static void expand_case(const char *in, const char *want) {
+    char out[1024];
+    CHECK(sqm_parse(in, &ex3, NULL) == SQM_OK);
+    int rc = sqm_expand(&ex3, &ex2);
+    out[0] = 0;
+    if (rc == SQM_OK) sqm_print(&ex2, out, sizeof out);
+    if (rc != SQM_OK || strcmp(out, want))
+        fprintf(stderr, "  expand %s: got \"%s\" (%s), want \"%s\"\n", in, out, sqm_strerror(rc), want);
+    CHECK(rc == SQM_OK && !strcmp(out, want));
+    /* the same value at a few points */
+    static const double P[3][2] = {{0.7, -1.3}, {2.5, 0.4}, {-1.9, 3.1}};
+    for (int k = 0; k < 3 && rc == SQM_OK; k++) {
+        double a = val(in, P[k][0], P[k][1]), b = val(out, P[k][0], P[k][1]);
+        if (!near(a, b, 1e-9)) fprintf(stderr, "  expand %s at %g: %.17g vs %.17g\n", in, P[k][0], a, b);
+        CHECK(near(a, b, 1e-9));
+    }
+}
+
+static void collect_case(const char *in, const char *var, const char *want) {
+    char out[1024] = "";
+    CHECK(sqm_parse(in, &ex3, NULL) == SQM_OK);
+    int rc = sqm_collect(&ex3, var, &ex2);
+    if (rc == SQM_OK) sqm_print(&ex2, out, sizeof out);
+    if (rc != SQM_OK || strcmp(out, want))
+        fprintf(stderr, "  collect %s: got \"%s\" (%s), want \"%s\"\n", in, out, sqm_strerror(rc), want);
+    CHECK(rc == SQM_OK && !strcmp(out, want));
+}
+
+/* want: the solutions joined with "; ", or "none", or "every" */
+static void solve_case(const char *eq, int want_rc, const char *want) {
+    SqmSolution sol[8];
+    int n = 99;
+    char got[1200] = "";
+    SqmError err;
+    CHECK(sqm_parse_eq(eq, &ex3, &err) == SQM_OK);
+    int rc = sqm_solve_for(&ex3, "x", sol, 8, &n);
+    if (n < 0) snprintf(got, sizeof got, "every");
+    else if (n == 0) snprintf(got, sizeof got, "none");
+    for (int k = 0; k < n; k++) {
+        size_t len = strlen(got);
+        snprintf(got + len, sizeof got - len, "%s%s", k ? "; " : "", sol[k].text);
+        /* each solution makes the equation hold */
+        if (isfinite(sol[k].value)) {
+            double xy[2] = {sol[k].value, 0}, r;
+            CHECK(sqm_eval(&ex3, XY, xy, 2, &r) == SQM_OK && fabs(r) < 1e-9);
+        }
+    }
+    if (rc != want_rc || strcmp(got, want))
+        fprintf(stderr, "  solve %s: got \"%s\" (%d), want \"%s\" (%d)\n", eq, got, rc, want, want_rc);
+    CHECK(rc == want_rc && !strcmp(got, want));
+}
+
+static void test_cas(void) {
+    expand_case("(x+1)^2", "x^2 + 2*x + 1");
+    expand_case("(x - 1)(x + 1)", "x^2 - 1");
+    expand_case("(x+y)^3", "x^3 + 3*x^2*y + 3*x*y^2 + y^3");
+    expand_case("(x+1)^3 - x^3", "3*x^2 + 3*x + 1");
+    expand_case("(2x+3)^5", "32*x^5 + 240*x^4 + 720*x^3 + 1080*x^2 + 810*x + 243");
+    expand_case("-(x - 1)^2", "-x^2 + 2*x - 1");
+    expand_case("x/2 + x/3", "5*x/6");
+    expand_case("0.1x + 0.2x", "3*x/10");
+    expand_case("x (x + y) / y", "x^2/y + x");
+    expand_case("1/(2x)", "1/(2*x)");
+    expand_case("(x+1)/(x-1)", "x/(x - 1) + 1/(x - 1)");
+    expand_case("(1+x)^-2", "1/(x + 1)^2");
+    expand_case("sin((x+1)^2) + sin(x^2 + 2x + 1)", "2*sin(x^2 + 2*x + 1)");
+    expand_case("pi (x + 1)", "pi*x + pi");
+    expand_case("sqrt(4) x + atan2(y, x)^2", "atan2(y, x)^2 + 2*x");
+    expand_case("2^10 x - 3!", "1024*x - 6");
+    expand_case("x - x", "0");
+    expand_case("(x^2)^3 x^-6", "1");
+    expand_case("e^x e^x", "(e^x)^2");
+    /* limits: 62-bit fractions, 64 terms, 8 parts */
+    CHECK(sqm_parse("(2x + 1)^64", &ex3, NULL) == SQM_OK && sqm_expand(&ex3, &ex2) == SQM_ERR_RANGE);
+    CHECK(sqm_parse("(x + y + x y + 1)^9", &ex3, NULL) == SQM_OK && sqm_expand(&ex3, &ex2) == SQM_ERR_FULL);
+    CHECK(sqm_parse("a+b+c+d+f+g+h+k+m", &ex3, NULL) == SQM_OK && sqm_expand(&ex3, &ex2) == SQM_ERR_FULL);
+    CHECK(sqm_expand(&ex3, &ex3) == SQM_ERR_SYNTAX);
+
+    collect_case("a x^2 + b x^2 + c x + x + 1", "x", "(a + b)*x^2 + (c + 1)*x + 1");
+    collect_case("(x + a)^2", "x", "x^2 + 2*a*x + a^2");
+    collect_case("a x + b x - 1/x", "x", "(a + b)*x - 1/x");
+    collect_case("y^2 + 2", "x", "y^2 + 2");
+    collect_case("x - x", "x", "0");
+
+    solve_case("2x + 3", SQM_OK, "-3/2");
+    solve_case("x/3 + 1/2 = 0", SQM_OK, "-3/2");
+    solve_case("x^2 = 2", SQM_OK, "-sqrt(2); sqrt(2)");
+    solve_case("x^2 - 5x + 6 = 0", SQM_OK, "2; 3");
+    solve_case("x^2 - x - 1", SQM_OK, "(1 - sqrt(5))/2; (1 + sqrt(5))/2");
+    solve_case("2x^2 = 3", SQM_OK, "-sqrt(6)/2; sqrt(6)/2");
+    solve_case("x^2 = 8", SQM_OK, "-2*sqrt(2); 2*sqrt(2)");
+    solve_case("4x^2 - 4x + 1", SQM_OK, "1/2");
+    solve_case("x^2 + 1 = 0", SQM_OK, "none");
+    solve_case("x^3 - 6x^2 + 11x = 6", SQM_OK, "1; 2; 3");
+    solve_case("6x^3 - 11x^2 + 6x - 1", SQM_OK, "1/3; 1/2; 1");
+    solve_case("x^3 = x", SQM_OK, "-1; 0; 1");
+    solve_case("x^4 - 5x^2 + 4", SQM_OK, "-2; -1; 1; 2");
+    solve_case("x^5 = x", SQM_OK, "-1; 0; 1");
+    solve_case("(x - 1)^2 (x + 2)", SQM_OK, "-2; 1");
+    solve_case("x + 1/x = 5/2", SQM_OK, "1/2; 2");
+    solve_case("x^3 - 3x^2 + x + 1", SQM_OK, "1 - sqrt(2); 1; 1 + sqrt(2)");
+    solve_case("a x + b = 0", SQM_OK, "-b/a");
+    solve_case("x - x", SQM_OK, "every");
+    solve_case("1 = 2", SQM_OK, "none");
+    solve_case("sin(x) = 0", SQM_ERR_SOLVE, "none");
+    solve_case("x^3 = 2", SQM_ERR_SOLVE, "none");
+    solve_case("x (x^3 - 2)", SQM_ERR_SOLVE, "0");
+    {
+        SqmSolution sol[2];
+        int n;
+        CHECK(sqm_parse("a x^2 + b x + c", &ex3, NULL) == SQM_OK);
+        CHECK(sqm_solve_for(&ex3, "x", sol, 2, &n) == SQM_OK && n == 2);
+        /* the quadratic formula: check it numerically with a = 2, b = -3, c = -5 (roots -1, 5/2) */
+        const char *N[] = {"a", "b", "c"};
+        double v[3] = {2, -3, -5}, r0 = 0, r1 = 0;
+        CHECK(sqm_parse(sol[0].text, &ex2, NULL) == SQM_OK && sqm_eval(&ex2, N, v, 3, &r0) == SQM_OK);
+        CHECK(sqm_parse(sol[1].text, &ex2, NULL) == SQM_OK && sqm_eval(&ex2, N, v, 3, &r1) == SQM_OK);
+        CHECK((near(r0, -1, 1e-12) && near(r1, 2.5, 1e-12)) || (near(r1, -1, 1e-12) && near(r0, 2.5, 1e-12)));
+        CHECK(isnan(sol[0].value));
+        /* cap smaller than the count */
+        CHECK(sqm_parse("x^4 - 5x^2 + 4", &ex3, NULL) == SQM_OK);
+        CHECK(sqm_solve_for(&ex3, "x", sol, 2, &n) == SQM_OK && n == 2);
+    }
+
+    /* equations */
+    SqmError err;
+    double v;
+    CHECK(sqm_parse_eq("x^2 = 2x + 1", &ex3, &err) == SQM_OK);
+    CHECK(sqm_eval(&ex3, XY, (double[]){3, 0}, 2, &v) == SQM_OK && v == 2);
+    CHECK(sqm_parse_eq("y = 2", &ex3, &err) == SQM_OK && sqm_eval(&ex3, XY, (double[]){0, 5}, 2, &v) == SQM_OK && v == 3);
+    CHECK(sqm_parse_eq("x + 1", &ex3, &err) == SQM_OK);
+    CHECK(sqm_parse_eq("x = 1 = 2", &ex3, &err) == SQM_ERR_SYNTAX && err.pos == 6);
+    CHECK(sqm_parse_eq("x = 2 +", &ex3, &err) == SQM_ERR_SYNTAX && err.pos == 7);
+    CHECK(sqm_parse_eq("= 2", &ex3, &err) == SQM_ERR_SYNTAX && err.pos == 0);
+}
+
 /* random token strings: whatever parses must print, reparse, compile, simplify
  * and differentiate without changing its value (or crashing) */
 static unsigned rng = 12345;
@@ -422,7 +560,7 @@ static int same_value(double a, double b) {
 static void test_fuzz(void) {
     static const char *TOK[] = {"x", "y", "2", "0.5", "3", "pi", "e", "+", "-", "*", "/", "^", "(", ")", "(",
                                 ")", "!", "sin(", "ln(", "sqrt(", "abs(", "min(", ",", " ", "exp(", "1e2"};
-    int parsed = 0;
+    int parsed = 0, expanded = 0;
     for (int t = 0; t < 20000; t++) {
         char text[200];
         size_t k = 0;
@@ -468,8 +606,22 @@ static void test_fuzz(void) {
         }
         rc = sqm_diff(&ex, "x", &ex3);
         CHECK(rc == SQM_OK || rc == SQM_ERR_DIFF || rc == SQM_ERR_FULL);
+        rc = sqm_expand(&ex, &ex2);
+        CHECK(rc == SQM_OK || rc == SQM_ERR_FULL || rc == SQM_ERR_RANGE || rc == SQM_ERR_DEPTH);
+        if (rc == SQM_OK && isfinite(a)) {
+            CHECK(sqm_eval(&ex2, XY, p, 2, &b) == SQM_OK);
+            /* expanding big powers cancels digits: compare loosely */
+            int ok = !isfinite(b) || fabs(a - b) <= 1e-6 * (1 + fabs(a));
+            if (!ok) {
+                sqm_print(&ex2, out, sizeof out);
+                fprintf(stderr, "  fuzz: expand %s -> %s: %.17g vs %.17g\n", text, out, a, b);
+            }
+            CHECK(ok);
+        }
+        if (rc == SQM_OK) expanded++;
     }
     CHECK(parsed > 300);
+    CHECK(expanded > parsed / 2);
 }
 
 int main(void) {
@@ -480,6 +632,7 @@ int main(void) {
     test_simplify();
     test_numeric();
     test_format();
+    test_cas();
     test_fuzz();
     printf("test_sqmath: %d checks, %d failed\n", checks, failures);
     return failures ? 1 : 0;

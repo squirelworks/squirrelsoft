@@ -37,6 +37,8 @@ const char *sqm_strerror(int code) {
         case SQM_ERR_DEPTH: return "nested too deeply";
         case SQM_ERR_DIFF: return "no derivative rule";
         case SQM_ERR_NAME: return "name too long";
+        case SQM_ERR_RANGE: return "numbers too big to keep exact";
+        case SQM_ERR_SOLVE: return "can't solve this exactly";
         default: return "error";
     }
 }

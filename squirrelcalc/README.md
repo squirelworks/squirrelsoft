@@ -19,6 +19,10 @@ build/squirrelcalc --fn "x^2 - 2" --fn "2 sin(x)" --roots
   variable that the graphs can use (`y1 = a sin(x)` redraws when `a`
   changes), and `ans` is the last result. Anything not finite shows as
   `undefined`.
+- **CAS lines** in the calculator: `expand (x+1)^3`, `collect x a x + b x`,
+  `d/dx sin(x)^2`, and `solve x^2 - x = 1` (or `solve a t + 1 = 0 for t`).
+  Answers stay exact (`(1 - sqrt(5))/2`) with the value beside them, and a
+  symbolic answer gets a value once its names are defined.
 - **Roots** rings every root in view and lists them at the bottom.
   **d/dx y1** draws the derivative of y1 and prints it, simplified.
 - **Graph:** the wheel zooms about the pointer, dragging pans, and `-`, `+`,
@@ -31,6 +35,8 @@ build/squirrelcalc --fn "x^2 - 2" --fn "2 sin(x)" --roots
 ```
 --fn EXPR        graph EXPR as the next of y1..y4
 --let NAME=EXPR  define a variable first (--let a=2)
+--line TEXT      run a calculator line first ("a = 2", "solve x^2 = 2");
+                 with --snapshot the history is printed
 --roots          mark the roots
 --deriv          also graph d/dx y1
 --snapshot FILE  draw one 900x600 frame to FILE (PPM) and exit, with no window;

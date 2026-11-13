@@ -3,6 +3,9 @@
  *   sqcalc "2x^2 - 1" x=3            evaluate (values may be expressions: x=pi/2)
  *   sqcalc --diff x "x^2 sin(x)"     derivative, printed (and its value with x=...)
  *   sqcalc --simplify "2x + 3x"
+ *   sqcalc --expand "(x + 1)^3"
+ *   sqcalc --collect x "a x^2 + b x^2 + x"
+ *   sqcalc --solve-for x "x^2 - x = 1"   exact solutions: x = (1 - sqrt(5))/2 ...
  *   sqcalc --solve x -5 5 "x^2 - 2"  every sign-change root in [-5, 5]
  *   sqcalc --integrate x 0 pi "sin(x)"
  *   sqcalc --table x 0 1 0.25 "x^2"
@@ -28,6 +31,9 @@ static void usage(FILE *f) {
             "usage: sqcalc [--digits N] EXPR [name=value ...]\n"
             "       sqcalc --diff VAR EXPR [name=value ...]\n"
             "       sqcalc --simplify EXPR\n"
+            "       sqcalc --expand EXPR\n"
+            "       sqcalc --collect VAR EXPR\n"
+            "       sqcalc --solve-for VAR EQUATION      (exact: x^2 = 2 gives x = -sqrt(2) / x = sqrt(2))\n"
             "       sqcalc --solve VAR LO HI EXPR [name=value ...]\n"
             "       sqcalc --integrate VAR A B EXPR [name=value ...]\n"
             "       sqcalc --table VAR FROM TO STEP EXPR [name=value ...]\n"
@@ -141,6 +147,38 @@ int main(int argc, char **argv) {
         char b[4096];
         sqm_print(&ex2, b, sizeof b);
         puts(b);
+        return 0;
+    }
+    if (!strcmp(mode, "--expand") || !strcmp(mode, "--collect")) {
+        int collect = mode[2] == 'c';
+        if (i + 2 + collect != argc) return usage(stderr), 2;
+        if (parse(argv[i + 1 + collect], &ex)) return 1;
+        int rc = collect ? sqm_collect(&ex, argv[i + 1], &ex2) : sqm_expand(&ex, &ex2);
+        if (rc) return fprintf(stderr, "sqcalc: %s\n", sqm_strerror(rc)), 1;
+        char b[4096];
+        sqm_print(&ex2, b, sizeof b);
+        puts(b);
+        return 0;
+    }
+    if (!strcmp(mode, "--solve-for")) {
+        if (i + 3 != argc) return usage(stderr), 2;
+        const char *var = argv[i + 1], *text = argv[i + 2];
+        SqmError err;
+        if (sqm_parse_eq(text, &ex, &err) != SQM_OK) {
+            fprintf(stderr, "sqcalc: %s\n  %s\n  %*s^\n", err.msg, text, err.pos, "");
+            return 1;
+        }
+        SqmSolution sol[32];
+        int n, rc = sqm_solve_for(&ex, var, sol, 32, &n);
+        if (n < 0) printf("every %s\n", var);
+        else if (n == 0 && rc == SQM_OK) printf("no real solution\n");
+        for (int k = 0; k < n; k++) {
+            char v[64];
+            sqm_format(sol[k].value, digits, v, sizeof v);
+            if (sol[k].value == sol[k].value && strcmp(v, sol[k].text)) printf("%s = %s  (%s)\n", var, sol[k].text, v);
+            else printf("%s = %s\n", var, sol[k].text);
+        }
+        if (rc) return fprintf(stderr, "sqcalc: %s\n", sqm_strerror(rc)), 1;
         return 0;
     }
     if (!strcmp(mode, "--diff")) {
