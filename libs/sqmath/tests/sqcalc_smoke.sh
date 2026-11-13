@@ -71,5 +71,12 @@ status 2 --solve-for x
 "$C" "2 * (3" 2>&1 | grep -q '^        \^$' || { echo "FAIL: caret under the error"; fail=1; }
 "$C" --solve x 2 3 "x^2 - 2" 2>&1 | grep -q 'no sign change' || { echo "FAIL: no-root message"; fail=1; }
 
+[ "$("$C" --units "3 ft + 2 in to cm")" = "96.52 cm" ] || { echo "FAIL: --units"; fail=1; }
+[ "$("$C" --digits 4 --units "100 km/h to mph")" = "62.14 mph" ] || { echo "FAIL: --units digits"; fail=1; }
+[ "$("$C" --units "5 kg * 9.81 m/s^2")" = "49.05 N" ] || { echo "FAIL: --units SI"; fail=1; }
+status 1 --units "5 m to kg"
+status 2 --units
+"$C" --units "3 m + 2 s" 2>&1 | grep -q '^      \^$' || { echo "FAIL: --units caret"; fail=1; }
+
 [ $fail = 0 ] && echo "sqcalc smoke ok"
 exit $fail

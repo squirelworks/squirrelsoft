@@ -678,9 +678,33 @@ static int cas_line(CalcGui *g, const char *line) {
     return 0;
 }
 
+/* "units 3 ft + 2 in", "convert 65 mph to km/h", or any line with " to " or
+ * "->" that no command took: "5 ft to m" = 1.524 m; ans gets the number */
+static int units_line(CalcGui *g, const char *line) {
+    const char *rest = command(line, "units");
+    if (!rest) rest = command(line, "convert");
+    if (!rest && !strstr(line, " to ") && !strstr(line, "->")) return -2;
+    if (!rest) rest = line;
+    char out[400], res[160];
+    SqmError err;
+    int rc = sqm_units_line(rest, 12, res, sizeof res, &err);
+    if (rc != SQM_OK) {
+        char msg[96];
+        snprintf(msg, sizeof msg, "%.40s at \"%.20s\"", err.msg, rest + err.pos);
+        hist_error(g, line, err.pos > 0 ? msg : err.msg);
+        return -1;
+    }
+    snprintf(out, sizeof out, "%.200s = %.190s", line, res);
+    hist_add(g, out);
+    double v = strtod(res, NULL);
+    if (isfinite(v) && !strchr(res, '\xc2')) set_var(g, "ans", v);
+    return 0;
+}
+
 int calc_gui_eval(CalcGui *g, const char *line) {
     int cas = cas_line(g, line);
     if (cas == -2) cas = list_line(g, line);
+    if (cas == -2) cas = units_line(g, line);
     if (cas != -2) return cas;
     {
         /* a list's name alone shows it */

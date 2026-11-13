@@ -1,6 +1,6 @@
 # libs/sqmath
 
-The expression engine and first CAS layer for SquirrelCalc (roadmap S5.1); step 2 adds expansion and exact solving.
+The expression engine and first CAS layer for SquirrelCalc (roadmap S5.1); step 2 adds expansion and exact solving, step 3 factoring and integrals, step 4 units.
 It is written for Squirrel OS/2 and built here first. It is C11 with no OS
 calls and no allocation: an `SqmExpr` (about 13 KB) and an `SqmProgram` (about
 7 KB) are plain values the caller owns.
@@ -90,6 +90,23 @@ double y = sqm_run(&p, (double[]){0.25});
   (`sqm_integrate`).
 - **Calculator display** of a number (`sqm_format`): N significant digits, no
   trailing zeros, and `undefined` for anything not finite (0/0, sqrt(-1), 1/0, overflow).
+- **Units** (`sqm_units_line`, `sqm_qty`, `sqm_qty_to`): quantities carry
+  their powers of m kg s A K mol cd bit, and arithmetic checks them.
+  - `3 ft + 2 in to cm` is `96.52 cm`, `60 mi/h * 2.5 h to km` is
+    `241.4016 km`, `5 kg * 9.81 m/s^2` is `49.05 N`, `1200 W * 3 h to kWh` is
+    `3.6 kWh`, and `3 m + 2 s` is an error at the `+`.
+  - Results without a target are shown in SI, with a derived name when one
+    fits (N, J, W, Pa, Hz, C, V, ohm, F, T, Wb, H, S) and otherwise as
+    `m/s^2` or `kg/(s^3*K)`.
+  - SI prefixes on metric units (km, mA, kWh, MeV, GHz) and binary ones on
+    data (KiB, MiB, GiB). US customary, survey (`usft`, chain, rod, acre),
+    nautical, pressure, energy and power units are included.
+  - Side by side binds tighter than `*` and `/`, so `2 V / 1 ohm` is 2 A
+    and `kg m^2/s^2` is a joule. `m2` means `m^2`.
+  - Angles are dimensionless radians, with deg, gon, arcmin, arcsec and rev;
+    `sin(30 deg)` is 0.5 and `35.681236 deg to dms` is `35°40'52.45"`.
+  - `degC` and `degF` are absolute temperatures and only stand alone
+    (`20 degC to degF`); differences use K.
 
 ## Command line
 
@@ -108,6 +125,8 @@ build/sqcalc --apart x "1/(x^3 + x)"        1/x - x/(x^2 + 1)
 build/sqcalc --antideriv x "x^2 sin(x)"     2*x*sin(x) - x^2*cos(x) + 2*cos(x)
 build/sqcalc --integrate x 0 1 "4/(1+x^2)"  3.14159265359
 build/sqcalc --table x 0 1 0.5 "x^2"
+build/sqcalc --units "3 ft + 2 in to cm"    96.52 cm
+build/sqcalc --units "5 kg * 9.81 m/s^2"    49.05 N
 ```
 
 ## Tests
@@ -126,6 +145,10 @@ by differentiating it back, over about 70 integrands and 150 random ratios of
 products of linear and quadratic factors. The suite also passes under
 `-fsanitize=address,undefined`.
 
+Units have about 110 exact conversion and error cases with error positions.
+Every unit converts to itself, and 20,000 random strings are evaluated to
+check that nothing crashes and every error has a position.
+
 ## Next
 
-Units.
+Geometry, statistics and spreadsheet layers for SquirrelCalc.

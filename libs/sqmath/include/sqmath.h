@@ -33,7 +33,8 @@ enum {
     SQM_ERR_NAME = -7,    /* name too long */
     SQM_ERR_RANGE = -8,   /* numbers too big for exact fractions */
     SQM_ERR_SOLVE = -9,   /* no exact method for this equation */
-    SQM_ERR_NOFORM = -10  /* no exact form found (factor, apart, integral) */
+    SQM_ERR_NOFORM = -10, /* no exact form found (factor, apart, integral) */
+    SQM_ERR_UNITS = -11   /* units that don't fit: adding m to s, converting m to kg */
 };
 
 typedef enum {
@@ -236,5 +237,42 @@ double sqm_integrate(const SqmProgram *p, double *values, int slot, double a, do
  * "undefined" for anything not finite (0/0, sqrt(-1), 1/0, overflow), as
  * graphing calculators show it. Returns the length like snprintf. */
 size_t sqm_format(double x, int digits, char *out, size_t cap);
+
+/* ---- units ----
+ * A quantity is a number in SI base units and the powers of the base units
+ * m kg s A K mol cd bit. Expressions use the units by name, with SI
+ * prefixes where they make sense (km, mA, kWh, MiB):
+ *   "60 mi/h * 2.5 h"   "3 ft + 2 in"   "5 kg * 9.81 m/s^2"   "sqrt(2 m^2)"
+ *   "sin(30 deg)"       "1200 W * 3 h"  "100 km/h"            "m2" = "m^2"
+ * Angles have no dimension (radians); deg, gon, arcmin, arcsec, rev are
+ * angle units. degC and degF are absolute temperatures and only stand
+ * alone ("20 degC"); use K for differences.
+ * Units include: m in ft usft yd mi nmi ch rod au ly, g t lb oz, s sec min
+ * h hr d day wk yr, ha acre L l cc gal qt pt floz, mph kph kn, N lbf, J cal
+ * Wh eV BTU, W hp, Pa bar atm psi mmHg torr, Hz rpm, A C Ah V ohm F T Wb H
+ * S, K degC degF degR, mol cd, bit B byte, rad deg gon arcmin arcsec rev
+ * percent. */
+#define SQM_DIMS 8
+typedef struct {
+    double value;              /* in SI base units */
+    signed char dim[SQM_DIMS]; /* powers of m kg s A K mol cd bit */
+} SqmQty;
+
+/* Evaluate a quantity expression. Returns SQM_OK or an error code
+ * (SQM_ERR_UNITS for units that don't fit, SQM_ERR_UNKNOWN for a name that
+ * is not a unit). */
+int sqm_qty(const char *text, SqmQty *out, SqmError *err);
+/* q in the unit `unit` (any unit expression: "km/h", "ft", "degF"). */
+int sqm_qty_to(const SqmQty *q, const char *unit, double *out, SqmError *err);
+/* The SI units of q: "N", "m/s^2", "kg/(m*s)", or "" with no dimension. */
+size_t sqm_qty_units(const SqmQty *q, char *out, size_t cap);
+/* "9.81 m/s^2": the value and its SI units. */
+size_t sqm_qty_print(const SqmQty *q, int digits, char *out, size_t cap);
+/* A calculator line: "EXPR", "EXPR to UNIT" (or "->"), "EXPR to dms" for an
+ * angle in degrees, minutes and seconds, or "EXPR to si". out gets
+ * "1.524 m", "35°40'52.45\"", ... */
+int sqm_units_line(const char *text, int digits, char *out, size_t cap, SqmError *err);
+/* 1 when name is a unit (with or without a prefix) */
+int sqm_is_unit(const char *name);
 
 #endif

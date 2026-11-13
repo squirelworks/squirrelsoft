@@ -818,6 +818,191 @@ static void test_step3(void) {
     CHECK(!strcmp(sqm_strerror(SQM_ERR_NOFORM), "no exact form found"));
 }
 
+static int line_is(const char *in, const char *want) {
+    char out[128];
+    SqmError e;
+    if (sqm_units_line(in, 10, out, sizeof out, &e) != SQM_OK) {
+        fprintf(stderr, "units: %s -> error %s\n", in, e.msg);
+        return 0;
+    }
+    if (strcmp(out, want)) fprintf(stderr, "units: %s -> %s, want %s\n", in, out, want);
+    return !strcmp(out, want);
+}
+
+static int line_err(const char *in, int code, int pos) {
+    char out[128];
+    SqmError e;
+    int rc = sqm_units_line(in, 10, out, sizeof out, &e);
+    if (rc != code || e.code != code || (pos >= 0 && e.pos != pos))
+        fprintf(stderr, "units: %s -> rc %d code %d pos %d (%s)\n", in, rc, e.code, e.pos, e.msg);
+    return rc == code && e.code == code && (pos < 0 || e.pos == pos);
+}
+
+static void test_units(void) {
+    /* conversions */
+    CHECK(line_is("5 ft to m", "1.524 m"));
+    CHECK(line_is("3 ft + 2 in to cm", "96.52 cm"));
+    CHECK(line_is("60 mi/h * 2.5 h to km", "241.4016 km"));
+    CHECK(line_is("100 km/h to mph", "62.13711922 mph"));
+    CHECK(line_is("65 mph -> km/h", "104.60736 km/h"));
+    CHECK(line_is("1 kn to km/h", "1.852 km/h"));
+    CHECK(line_is("1 mi to usft", "5279.98944 usft"));
+    CHECK(line_is("1 ch to ft", "66.000132 ft"));
+    CHECK(line_is("1 ch to usft", "66 usft"));
+    CHECK(line_is("1 acre to m2", "4046.856422 m2"));
+    CHECK(line_is("1 ha to acre", "2.471053815 acre"));
+    CHECK(line_is("1 m^3 to L", "1000 L"));
+    CHECK(line_is("1 gal to L", "3.785411784 L"));
+    CHECK(line_is("250 mL to floz", "8.453505675 floz"));
+    CHECK(line_is("1 lb to g", "453.59237 g"));
+    CHECK(line_is("1 t to lb", "2204.622622 lb"));
+    CHECK(line_is("1200 W * 3 h to kWh", "3.6 kWh"));
+    CHECK(line_is("1 kWh to MJ", "3.6 MJ"));
+    CHECK(line_is("1 kcal to J", "4184 J"));
+    CHECK(line_is("1 hp to W", "745.6998716 W"));
+    CHECK(line_is("1 atm to psi", "14.69594878 psi"));
+    CHECK(line_is("1 atm to mbar", "1013.25 mbar"));
+    CHECK(line_is("760 torr to atm", "1 atm"));
+    CHECK(line_is("1 mA * 3 h to mAh", "3 mAh"));
+    CHECK(line_is("3.5 ms to s", "0.0035 s"));
+    CHECK(line_is("10 min to s", "600 s"));
+    CHECK(line_is("1 d to h", "24 h"));
+    CHECK(line_is("1 GiB to MB", "1073.741824 MB"));
+    CHECK(line_is("1 KiB to bit", "8192 bit"));
+    CHECK(line_is("3000 rpm to Hz", "50 Hz"));
+    CHECK(line_is("2e3 m to km", "2 km"));
+    CHECK(line_is("1 \xce\xa9 * 2 A to V", "2 V"));
+    CHECK(line_is("1 \xc2\xb5m to nm", "1000 nm"));
+    CHECK(line_is("1 um to nm", "1000 nm"));
+    /* temperatures */
+    CHECK(line_is("20 degC to degF", "68 degF"));
+    CHECK(line_is("98.6 degF to degC", "37 degC"));
+    CHECK(line_is("-40 degF to degC", "-40 degC"));
+    CHECK(line_is("300 K to degC", "26.85 degC"));
+    CHECK(line_is("0 degC to K", "273.15 K"));
+    CHECK(line_is("0 degF to degR", "459.67 degR"));
+    CHECK(line_is("25 \xc2\xb0" "C to degF", "77 degF"));
+    CHECK(line_is("20 degC", "293.15 K"));
+    CHECK(line_err("20 degC + 5 K", SQM_ERR_UNITS, -1));
+    CHECK(line_err("2 * 20 degC", SQM_ERR_UNITS, -1));
+    CHECK(line_err("1 K to degC/s", SQM_ERR_UNITS, -1));
+    /* angles */
+    CHECK(line_is("sin(30 deg)", "0.5"));
+    CHECK(line_is("round(cos(100 gon) * 1e9)", "0"));
+    CHECK(line_is("100 gon to deg", "90 deg"));
+    CHECK(line_is("1 rev to deg", "360 deg"));
+    CHECK(line_is("pi rad to deg", "180 deg"));
+    CHECK(line_is("90 \xc2\xb0 to rad", "1.570796327 rad"));
+    CHECK(line_is("35.681236 deg to dms", "35\xc2\xb0" "40'52.45\""));
+    CHECK(line_is("-0.5 deg to dms", "-0\xc2\xb0" "30'00.00\""));
+    CHECK(line_is("(1 deg + 30 arcmin) to dms", "1\xc2\xb0" "30'00.00\""));
+    CHECK(line_is("29.9999999 deg to dms", "30\xc2\xb0" "00'00.00\""));
+    CHECK(line_is("acos(0) to deg", "90 deg"));
+    CHECK(line_is("12.5 percent * 80", "10"));
+    /* SI results and derived names */
+    CHECK(line_is("5 kg * 9.81 m/s^2", "49.05 N"));
+    CHECK(line_is("1 N m to J", "1 J"));
+    CHECK(line_is("1 N*m", "1 J"));
+    CHECK(line_is("1 kg/(m s^2)", "1 Pa"));
+    CHECK(line_is("1/s", "1 Hz"));
+    CHECK(line_is("1 ohm * 2 A", "2 V"));
+    CHECK(line_is("2 V / 1 ohm", "2 A"));
+    CHECK(line_is("1 C/s", "1 A"));
+    CHECK(line_is("2 m/s", "2 m/s"));
+    CHECK(line_is("9.81 m/s^2", "9.81 m/s^2"));
+    CHECK(line_is("(1 m)^-2", "1 m^-2"));
+    CHECK(line_is("1/(s K)", "1 s^-1*K^-1"));
+    CHECK(line_is("1 W/m^2/K", "1 kg/(s^3*K)"));
+    CHECK(line_is("3 m * 4 m", "12 m^2"));
+    CHECK(line_is("sqrt(2 m^2)", "1.414213562 m"));
+    CHECK(line_is("cbrt(27 m^3) to cm", "300 cm"));
+    CHECK(line_is("abs(-3 m)", "3 m"));
+    CHECK(line_is("(2 m)^2 / 4 m", "1 m"));
+    CHECK(line_is("2 m2", "2 m^2"));
+    CHECK(line_is("1 m to si", "1 m"));
+    CHECK(line_is("2^10", "1024"));
+    CHECK(line_is("1 km / 1 m", "1000"));
+    CHECK(line_is("1/s K", "1 s^-1*K^-1"));
+    CHECK(line_is("6 m / 2 s * 3 s", "9 m"));
+    CHECK(line_is("1 mol", "1 mol"));
+    CHECK(line_is("2 cd", "2 cd"));
+    CHECK(line_is("4 B", "32 bit"));
+    CHECK(line_is("1 kg m^2/s^2 to eV", "6.241509074e18 eV"));
+    /* errors and where they are */
+    CHECK(line_err("3 m + 2 s", SQM_ERR_UNITS, 4));
+    CHECK(line_err("5 m to kg", SQM_ERR_UNITS, 7));
+    CHECK(line_err("sqrt(2 m)", SQM_ERR_UNITS, 4));
+    CHECK(line_err("sin(2 m)", SQM_ERR_UNITS, 3));
+    CHECK(line_err("2 m^1.5", SQM_ERR_UNITS, -1));
+    CHECK(line_err("2^(1 m)", SQM_ERR_UNITS, -1));
+    CHECK(line_err("2 x", SQM_ERR_UNKNOWN, 2));
+    CHECK(line_err("5 ft to furlong", SQM_ERR_UNKNOWN, 8));
+    CHECK(line_err("foo(2)", SQM_ERR_UNKNOWN, 0));
+    CHECK(line_err("2 m +", SQM_ERR_SYNTAX, 5));
+    CHECK(line_err("(2 m", SQM_ERR_SYNTAX, 4));
+    CHECK(line_err("2 m )", SQM_ERR_SYNTAX, 4));
+    CHECK(line_err("5 m to ", SQM_ERR_SYNTAX, -1));
+    CHECK(line_err("1 m to 0 m", SQM_ERR_RANGE, -1));
+    CHECK(line_err("1 m^60 * 1 m^60", SQM_ERR_RANGE, -1) && line_err("1 m^101", SQM_ERR_RANGE, -1));
+    CHECK(line_err("5 kg to dms", SQM_ERR_UNITS, -1));
+    CHECK(line_err("1 verylongunitnamehere", SQM_ERR_NAME, 2));
+    char deep[200];
+    memset(deep, '(', 100);
+    strcpy(deep + 100, "1");
+    CHECK(line_err(deep, SQM_ERR_DEPTH, -1));
+    CHECK(!strcmp(sqm_strerror(SQM_ERR_UNITS), "units don't match"));
+    /* the API pieces */
+    SqmQty q;
+    SqmError e;
+    double v;
+    CHECK(sqm_qty("1 ft", &q, &e) == SQM_OK && fabs(q.value - 0.3048) < 1e-15 && q.dim[0] == 1);
+    CHECK(sqm_qty_to(&q, "in", &v, &e) == SQM_OK && fabs(v - 12) < 1e-12);
+    CHECK(sqm_qty_to(&q, "s", &v, &e) == SQM_ERR_UNITS && e.code == SQM_ERR_UNITS);
+    CHECK(sqm_qty("", &q, &e) == SQM_ERR_SYNTAX);
+    char small[6];
+    CHECK(sqm_qty("5 kg m/s^2", &q, &e) == SQM_OK && sqm_qty_print(&q, 10, small, sizeof small) == 3 &&
+          !strcmp(small, "5 N"));
+    CHECK(sqm_qty("2 kg m^2 / s^3 / A", &q, &e) == SQM_OK && sqm_qty_print(&q, 10, small, sizeof small) == 3);
+    CHECK(sqm_qty("1 kg/(m s)", &q, &e) == SQM_OK && sqm_qty_units(&q, small, sizeof small) == 8 &&
+          strlen(small) == 5);
+    const char *names[] = {"m",  "in",  "ft",   "usft", "yd",  "mi",    "nmi",  "ch",  "rod",    "au",   "ly",
+                           "g",  "t",   "lb",   "oz",   "s",   "sec",   "min",  "h",   "hr",     "d",    "day",
+                           "wk", "yr",  "ha",   "acre", "L",   "l",     "cc",   "gal", "qt",     "pt",   "floz",
+                           "mph", "kph", "kn",  "N",    "lbf", "J",     "cal",  "Wh",  "eV",     "BTU",  "W",
+                           "hp", "Pa",  "bar",  "atm",  "psi", "mmHg",  "torr", "Hz",  "rpm",    "A",    "C",
+                           "Ah", "V",   "ohm",  "F",    "T",   "Wb",    "H",    "S",   "K",      "degC", "degF",
+                           "degR", "mol", "cd", "bit",  "B",   "byte",  "rad",  "deg", "gon",    "arcmin",
+                           "arcsec", "rev", "percent", "km", "mg", "kWh", "MeV", "MiB", "kohm", "mrad", "GHz",
+                           "kPa", "mL", "dam"};
+    int all = 1;
+    for (size_t k = 0; k < sizeof names / sizeof names[0]; k++)
+        if (!sqm_is_unit(names[k])) fprintf(stderr, "not a unit: %s\n", names[k]), all = 0;
+    CHECK(all);
+    CHECK(!sqm_is_unit("x") && !sqm_is_unit("kft") && !sqm_is_unit("Kim") && !sqm_is_unit("") && !sqm_is_unit("kmin"));
+    /* every unit converts to itself and round trips through SI */
+    int rt = 1;
+    for (size_t k = 0; k < sizeof names / sizeof names[0]; k++) {
+        char line[64], want[64];
+        snprintf(line, sizeof line, "7.25 %s to %s", names[k], names[k]);
+        snprintf(want, sizeof want, "7.25 %s", names[k]);
+        rt &= line_is(line, want);
+    }
+    CHECK(rt);
+    /* nothing crashes on junk */
+    unsigned seed = 99;
+    const char alpha[] = "0123456789.e+-*/^() mkgsftinhdegC\xc2\xb0\xce\xa9toKiB->";
+    int ok = 1;
+    for (int k = 0; k < 20000; k++) {
+        char in[24], out[64];
+        int n = 1 + (int)((seed = seed * 1103515245u + 12345u) >> 16) % 23;
+        for (int i = 0; i < n; i++) in[i] = alpha[((seed = seed * 1103515245u + 12345u) >> 16) % (sizeof alpha - 1)];
+        in[n] = 0;
+        int rc = sqm_units_line(in, 10, out, sizeof out, &e);
+        if (rc != SQM_OK && (e.code != rc || e.pos < 0 || e.pos > n)) ok = 0;
+    }
+    CHECK(ok);
+}
+
 int main(void) {
     test_eval();
     test_errors();
@@ -829,6 +1014,7 @@ int main(void) {
     test_cas();
     test_fuzz();
     test_step3();
+    test_units();
     printf("test_sqmath: %d checks, %d failed\n", checks, failures);
     return failures ? 1 : 0;
 }
