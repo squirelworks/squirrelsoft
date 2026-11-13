@@ -14,12 +14,14 @@ static void usage(FILE *f) {
           "  --hearts         Hearts, you and three computer players, to 100\n"
           "  --chess          Chess against the computer (you white)\n"
           "  --level N        Chess: the computer's strength, 1 to 4 (3)\n"
+          "  --tiles LAYOUT   Tiles, matching pairs: pyramid, towers or cross\n"
           "  --seed N         the deal (0 to 4294967295; the same number, the same deal)\n"
           "  --do CMD         play: \"draw\", \"move t3 t5\", \"move w f1\", \"smart t2\", \"auto\",\n"
           "                   \"finish\", \"undo\", \"new freecell 7\" (no window then);\n"
           "                   Mines: \"open 4 4\", \"flag 0 1\", \"chord 2 2\", \"new medium 5\";\n"
           "                   Hearts: \"pass QS AH KH\", \"play 2C\", \"next\", \"new 9\";\n"
-          "                   Chess: \"move e4\", \"move Nf3\", \"undo\", \"go\", \"new black\", \"fen ...\"\n"
+          "                   Chess: \"move e4\", \"move Nf3\", \"undo\", \"go\", \"new black\", \"fen ...\";\n"
+          "                   Tiles: \"match 12 40\", \"hint\", \"undo\", \"shuffle\", \"new cross 3\"\n"
           "  --script FILE    the same, one command a line (# for comments)\n"
           "  --show           print the table as text after the commands\n"
           "  --snapshot FILE  draw one 960x680 frame of the window to FILE (PPM), no window\n"
@@ -34,18 +36,21 @@ static Game game; /* about 1 MB with its undo */
 static Mines mines;
 static Hearts hearts;
 static Chess chess;
-static int play_mines, play_hearts, play_chess;
+static Tiles tiles;
+static int play_mines, play_hearts, play_chess, play_tiles;
 static GamesGui gui;
 
 static int run_command(const char *where, const char *cmd) {
     char msg[120];
-    if (play_chess    ? chess_command(&chess, cmd, msg, sizeof msg)
+    if (play_tiles    ? tiles_command(&tiles, cmd, msg, sizeof msg)
+        : play_chess  ? chess_command(&chess, cmd, msg, sizeof msg)
         : play_hearts ? hearts_command(&hearts, cmd, msg, sizeof msg)
         : play_mines  ? mines_command(&mines, cmd, msg, sizeof msg)
                       : game_command(&game, cmd, msg, sizeof msg)) {
         fprintf(stderr, "squirrelgames: %s%s: %s\n", where, cmd, msg);
         return -1;
     }
+    if (msg[0]) printf("%s\n", msg); /* what a command answers, as a hint */
     return 0;
 }
 
@@ -75,7 +80,7 @@ static int run_script(const char *path) {
 int main(int argc, char **argv) {
     int kind = GAME_KLONDIKE, draw = 1, frames = 0, show = 0, batch = 0;
     unsigned long seed = 1;
-    int mw = 9, mh = 9, mm = 10, level = 3;
+    int mw = 9, mh = 9, mm = 10, level = 3, layout = TILES_PYRAMID;
     const char *snapshot = NULL;
     for (int i = 1; i < argc; i++) {
         const char *a = argv[i];
@@ -98,11 +103,19 @@ int main(int argc, char **argv) {
                 fprintf(stderr, "squirrelgames: --mines %s: small, medium, large, or WxHxM as in 20x12x40\n", z);
                 return 2;
             }
-            play_mines = 1, play_hearts = play_chess = 0;
+            play_mines = 1, play_hearts = play_chess = play_tiles = 0;
         } else if (!strcmp(a, "--hearts")) {
-            play_hearts = 1, play_mines = play_chess = 0;
+            play_hearts = 1, play_mines = play_chess = play_tiles = 0;
         } else if (!strcmp(a, "--chess")) {
-            play_chess = 1, play_mines = play_hearts = 0;
+            play_chess = 1, play_mines = play_hearts = play_tiles = 0;
+        } else if (!strcmp(a, "--tiles") && more) {
+            const char *z = argv[++i];
+            layout = !strcmp(z, "pyramid") ? TILES_PYRAMID : !strcmp(z, "towers") ? TILES_TOWERS : !strcmp(z, "cross") ? TILES_CROSS : -1;
+            if (layout < 0) {
+                fprintf(stderr, "squirrelgames: --tiles %s: pyramid, towers or cross\n", z);
+                return 2;
+            }
+            play_tiles = 1, play_mines = play_hearts = play_chess = 0;
         } else if (!strcmp(a, "--level") && more) {
             char *end;
             level = (int)strtol(argv[++i], &end, 10);
@@ -139,16 +152,19 @@ int main(int argc, char **argv) {
     hearts_new(&hearts, (uint32_t)seed);
     chess_new(&chess, (uint32_t)seed);
     chess.level = level;
+    tiles_new(&tiles, layout, (uint32_t)seed);
     for (int i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "--seed") || !strcmp(argv[i], "--snapshot") || !strcmp(argv[i], "--gui-frames") ||
-            !strcmp(argv[i], "--mines") || !strcmp(argv[i], "--level"))
+            !strcmp(argv[i], "--mines") || !strcmp(argv[i], "--level") || !strcmp(argv[i], "--tiles"))
             i++;
         else if (!strcmp(argv[i], "--do") && run_command("", argv[++i])) return 1;
         else if (!strcmp(argv[i], "--script") && run_script(argv[++i])) return 1;
     }
     if (show) {
         static char text[8192];
-        if (play_chess) {
+        if (play_tiles) {
+            tiles_text(&tiles, text, sizeof text);
+        } else if (play_chess) {
             chess_text(&chess, text, sizeof text);
         } else if (play_hearts) {
             hearts_text(&hearts, text, sizeof text);
@@ -162,9 +178,10 @@ int main(int argc, char **argv) {
         }
         fputs(text, stdout);
     }
-    games_gui_init(&gui, &game, &mines, &hearts, &chess);
+    games_gui_init(&gui, &game, &mines, &hearts, &chess, &tiles);
     if (play_hearts) games_gui_show(&gui, GAMES_HEARTS);
     if (play_chess) games_gui_show(&gui, GAMES_CHESS);
+    if (play_tiles) games_gui_show(&gui, GAMES_TILES);
     if (play_mines) games_gui_show(&gui, GAMES_MINES);
     if (snapshot) {
         enum { W = 960, H = 680 };

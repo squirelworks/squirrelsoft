@@ -11,6 +11,8 @@
  * the Pass button) or plays it; the computer plays West, North and East.
  * Chess: click a piece, then where it goes (a pawn reaching the last rank
  * becomes a queen); the computer plays the other side.
+ * Tiles: click two free tiles of a kind to take them away; Hint shows a
+ * pair, Shuffle deals the tiles left again.
  */
 #ifndef GAMESGUI_H
 #define GAMESGUI_H
@@ -20,12 +22,14 @@
 #include "hearts.h"
 #include "mines.h"
 #include "sqgui.h"
+#include "tiles.h"
 
 #define GAMES_CARD_W 80
 #define GAMES_CARD_H 110
 #define GAMES_MINES 2  /* the third game the window plays, beside GAME_KLONDIKE and GAME_FREECELL */
 #define GAMES_HEARTS 3 /* and the fourth */
 #define GAMES_CHESS 4  /* and the fifth */
+#define GAMES_TILES 5  /* and the sixth */
 #define GAMES_SQUARE 24 /* a square of the mines field */
 
 typedef struct GamesGui GamesGui;
@@ -35,6 +39,11 @@ struct GamesGui {
     Mines *mines;
     Hearts *hearts;
     Chess *chess;
+    Tiles *tiles;
+    int tiles_layout;      /* Tiles: TILES_PYRAMID, ... */
+    int tiles_sel;         /* Tiles: the tile picked, or -1 */
+    int hint_a, hint_b;    /* Tiles: the pair a hint shows, until hint_until */
+    long hint_until;
     int chess_sel;         /* Chess: the square of the piece picked up, or -1 */
     int chess_side;        /* Chess: you play white (0), black (1) or both (2) */
     int kind;              /* the game shown: GAME_KLONDIKE, GAME_FREECELL or GAMES_MINES */
@@ -57,9 +66,9 @@ struct GamesGui {
     char status[160];
 };
 
-void games_gui_init(GamesGui *gg, Game *game, Mines *mines, Hearts *hearts, Chess *chess);
+void games_gui_init(GamesGui *gg, Game *game, Mines *mines, Hearts *hearts, Chess *chess, Tiles *tiles);
 /* Show another game as it stands, without dealing: kind is GAME_KLONDIKE,
- * GAME_FREECELL, GAMES_MINES, GAMES_HEARTS or GAMES_CHESS (the window's own Klondike
+ * GAME_FREECELL, GAMES_MINES, GAMES_HEARTS, GAMES_CHESS or GAMES_TILES (the window's own Klondike
  * or FreeCell is game's kind) */
 void games_gui_show(GamesGui *gg, int kind);
 /* The mines square under a window point: 0 with x, y, or -1 */
@@ -74,6 +83,11 @@ sqg_rect games_gui_chess_rect(const GamesGui *gg, int sq);
 int games_gui_chess_square(const GamesGui *gg, int x, int y);
 /* Draw a chess piece (chess.h's, white positive) in a 48x48 square at x, y */
 void games_gui_draw_piece(sqg_canvas *cv, int x, int y, int piece);
+/* Tiles: where tile i is drawn (its face), and the tile on top under a
+ * point (-1 for none); one tile's face and side at x, y */
+sqg_rect games_gui_tile_rect(const GamesGui *gg, int i);
+int games_gui_tile_hit(const GamesGui *gg, int x, int y);
+void games_gui_draw_tile(sqg_canvas *cv, int x, int y, int kind);
 /* Hearts: the button in the middle (Pass, Next hand, New game) */
 sqg_rect games_gui_hearts_button(const GamesGui *gg);
 

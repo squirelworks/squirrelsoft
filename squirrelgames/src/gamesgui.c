@@ -11,8 +11,10 @@
 #define INK_RED 0xFFC81E1Eu
 #define INK_BLACK 0xFF141414u
 
-void games_gui_init(GamesGui *gg, Game *game, Mines *mines, Hearts *hearts, Chess *chess) {
+void games_gui_init(GamesGui *gg, Game *game, Mines *mines, Hearts *hearts, Chess *chess, Tiles *tiles) {
     memset(gg, 0, sizeof *gg);
+    gg->tiles = tiles;
+    gg->tiles_sel = gg->hint_a = gg->hint_b = -1;
     gg->chess = chess;
     gg->chess_sel = -1;
     gg->game = game;
@@ -211,12 +213,15 @@ static uint32_t current_seed(const GamesGui *gg) {
     return gg->kind == GAMES_MINES    ? gg->mines->seed
            : gg->kind == GAMES_HEARTS ? gg->hearts->seed
            : gg->kind == GAMES_CHESS  ? gg->chess->seed
+           : gg->kind == GAMES_TILES  ? gg->tiles->seed
                                       : gg->game->s.seed;
 }
 
 static void hearts_deal(GamesGui *gg, uint32_t seed);
 static void chess_start(GamesGui *gg, uint32_t seed);
 static void chess_said(GamesGui *gg);
+static void tiles_deal(GamesGui *gg, uint32_t seed);
+static void tiles_said(GamesGui *gg);
 
 static void deal(GamesGui *gg, uint32_t seed) {
     if (gg->kind == GAMES_HEARTS) {
@@ -225,6 +230,10 @@ static void deal(GamesGui *gg, uint32_t seed) {
     }
     if (gg->kind == GAMES_CHESS) {
         chess_start(gg, seed);
+        return;
+    }
+    if (gg->kind == GAMES_TILES) {
+        tiles_deal(gg, seed);
         return;
     }
     if (gg->kind == GAMES_MINES) {
@@ -713,7 +722,12 @@ void games_gui_show(GamesGui *gg, int kind) {
     gg->kind = kind;
     gg->dragging = gg->pending = 0;
     snprintf(gg->seed_text, sizeof gg->seed_text, "%lu", (unsigned long)current_seed(gg));
-    if (kind == GAMES_CHESS) {
+    if (kind == GAMES_TILES) {
+        gg->tiles_layout = gg->tiles->layout;
+        gg->tiles_sel = gg->hint_a = gg->hint_b = -1;
+        tiles_said(gg);
+        say(gg, "Click two free tiles of a kind to take them away");
+    } else if (kind == GAMES_CHESS) {
         gg->chess_side = gg->chess->human[0] && gg->chess->human[1] ? 2 : gg->chess->human[1] ? 1 : 0;
         gg->chess_sel = -1;
         gg->next_ms = gg->ms + 300;
@@ -926,14 +940,184 @@ static void draw_chess(GamesGui *gg, sqg_ui *ui) {
     cv->clip = old;
 }
 
+/* ---- tiles ---- */
+
+#define TILE_W 40
+#define TILE_H 46
+#define TILE_D 5 /* the depth a layer shows */
+
+static void disc(sqg_canvas *cv, int cx, int cy, int r, uint32_t c) {
+    for (int j = -r; j <= r; j++)
+        for (int i = -r; i <= r; i++)
+            if (i * i + j * j <= r * r + r / 2) sqg_pixel(cv, cx + i, cy + j, c);
+}
+
+void games_gui_draw_tile(sqg_canvas *cv, int x, int y, int kind) {
+    static const uint8_t PIPS[9][9] = {{4}, {1, 7}, {0, 4, 8}, {0, 2, 6, 8}, {0, 2, 4, 6, 8}, {0, 2, 3, 5, 6, 8},
+                                       {0, 2, 3, 4, 5, 6, 8}, {0, 1, 2, 3, 5, 6, 7, 8}, {0, 1, 2, 3, 4, 5, 6, 7, 8}};
+    sqg_fill(cv, sqg_rect_make(x - TILE_D, y + TILE_D, TILE_W, TILE_H), 0xFFB8A27Au); /* the side, below and left */
+    sqg_frame(cv, sqg_rect_make(x - TILE_D, y + TILE_D, TILE_W, TILE_H), 0xFF5A4A30u);
+    sqg_rect f = sqg_rect_make(x, y, TILE_W, TILE_H);
+    sqg_fill(cv, f, 0xFFF6F0DEu);
+    sqg_frame(cv, f, 0xFF5A4A30u);
+    if (kind < TILES_WINDS) {
+        int n = kind % 9 + 1, suit = kind / 9;
+        if (suit == 2) { /* numbers: the figure, and a bar under it */
+            char d[2] = {(char)('0' + n), 0};
+            sqg_text(cv, x + (TILE_W - sqg_text_width(d, 4)) / 2, y + 6, d, 0xFFB41E1Eu, 4);
+            sqg_fill(cv, sqg_rect_make(x + 10, y + TILE_H - 10, TILE_W - 20, 3), 0xFF1E3C8Cu);
+            return;
+        }
+        for (int k = 0; k < n; k++) {
+            int cell = PIPS[n - 1][k], cx = x + 10 + (cell % 3) * 10, cy = y + 10 + (cell / 3) * 13;
+            if (suit == 0) {
+                disc(cv, cx, cy, 4, 0xFF1E50B4u);
+                disc(cv, cx, cy, 1, 0xFFF6F0DEu);
+            } else {
+                sqg_fill(cv, sqg_rect_make(cx - 2, cy - 5, 4, 11), 0xFF1E8C3Cu);
+                sqg_hline(cv, cx - 2, cx + 1, cy, 0xFF0E5A22u);
+            }
+        }
+        return;
+    }
+    int c = x + TILE_W / 2, m = y + TILE_H / 2;
+    if (kind < TILES_DRAGONS) { /* the winds: E S W N */
+        char d[2] = {"ESWN"[kind - TILES_WINDS], 0};
+        sqg_text(cv, x + (TILE_W - sqg_text_width(d, 4)) / 2, y + 9, d, 0xFF202020u, 4);
+    } else if (kind == TILES_DRAGONS) { /* red: a diamond */
+        for (int j = -12; j <= 12; j++) sqg_hline(cv, c - (12 - (j < 0 ? -j : j)), c + (12 - (j < 0 ? -j : j)), m + j, 0xFFC82828u);
+    } else if (kind == TILES_DRAGONS + 1) { /* green: a square in a square */
+        sqg_fill(cv, sqg_rect_make(c - 11, m - 11, 22, 22), 0xFF1E8C3Cu);
+        sqg_fill(cv, sqg_rect_make(c - 5, m - 5, 10, 10), 0xFFF6F0DEu);
+    } else if (kind == TILES_DRAGONS + 2) { /* white: two frames */
+        sqg_frame(cv, sqg_rect_make(x + 6, y + 6, TILE_W - 12, TILE_H - 12), 0xFF1E50B4u);
+        sqg_frame(cv, sqg_rect_make(x + 9, y + 9, TILE_W - 18, TILE_H - 18), 0xFF1E50B4u);
+    } else if (kind == TILES_SUN) {
+        for (int k = 0; k < 8; k++) {
+            static const int DX[8] = {1, 1, 0, -1, -1, -1, 0, 1}, DY[8] = {0, 1, 1, 1, 0, -1, -1, -1};
+            sqg_line(cv, c + DX[k] * 9, m + DY[k] * 9, c + DX[k] * 14, m + DY[k] * 14, 0xFFE07814u);
+        }
+        disc(cv, c, m, 7, 0xFFF0A020u);
+    } else { /* the moon: a disc with a bite out of it */
+        disc(cv, c, m, 11, 0xFF2A3A78u);
+        disc(cv, c + 6, m - 3, 9, 0xFFF6F0DEu);
+    }
+}
+
+static int tiles_ox(const GamesGui *gg, int *oy) {
+    const Tiles *t = gg->tiles;
+    int maxx = 0, maxy = 0, maxz = 0;
+    for (int i = 0; i < t->n; i++) {
+        if (t->x[i] > maxx) maxx = t->x[i];
+        if (t->y[i] > maxy) maxy = t->y[i];
+        if (t->z[i] > maxz) maxz = t->z[i];
+    }
+    int w = (maxx + 2) * TILE_W / 2, h = (maxy + 2) * TILE_H / 2;
+    *oy = gg->board.y + (gg->board.h - h) / 2;
+    return gg->board.x + (gg->board.w - w) / 2;
+}
+
+sqg_rect games_gui_tile_rect(const GamesGui *gg, int i) {
+    const Tiles *t = gg->tiles;
+    int oy, ox = tiles_ox(gg, &oy);
+    return sqg_rect_make(ox + t->x[i] * TILE_W / 2 + t->z[i] * TILE_D, oy + t->y[i] * TILE_H / 2 - t->z[i] * TILE_D, TILE_W,
+                         TILE_H);
+}
+
+/* the order to draw: layer by layer, top to bottom, right to left */
+static int tile_order(const Tiles *t, int *order) {
+    int n = 0;
+    for (int i = 0; i < t->n; i++)
+        if (t->here[i]) order[n++] = i;
+    for (int a = 1; a < n; a++)
+        for (int b = a; b > 0; b--) {
+            int p = order[b - 1], q = order[b];
+            int later = t->z[p] != t->z[q] ? t->z[p] > t->z[q] : t->y[p] != t->y[q] ? t->y[p] > t->y[q] : t->x[p] < t->x[q];
+            if (!later) break;
+            order[b - 1] = q, order[b] = p;
+        }
+    return n;
+}
+
+int games_gui_tile_hit(const GamesGui *gg, int x, int y) {
+    int order[TILES_MAX], n = tile_order(gg->tiles, order);
+    for (int k = n - 1; k >= 0; k--)
+        if (sqg_rect_contains(games_gui_tile_rect(gg, order[k]), x, y)) return order[k];
+    return -1;
+}
+
+static void tiles_said(GamesGui *gg) {
+    const Tiles *t = gg->tiles;
+    int st = tiles_state(t);
+    if (st == TILES_WON) say(gg, "Cleared!");
+    else if (st == TILES_STUCK) say(gg, "No pair can go: Shuffle, or Undo");
+    else snprintf(gg->status, sizeof gg->status, "%d pairs can go", tiles_moves(t));
+}
+
+static void tiles_deal(GamesGui *gg, uint32_t seed) {
+    tiles_new(gg->tiles, gg->tiles_layout, seed);
+    gg->tiles_sel = gg->hint_a = gg->hint_b = -1;
+    snprintf(gg->seed_text, sizeof gg->seed_text, "%lu", (unsigned long)seed);
+    tiles_said(gg);
+}
+
+static void tiles_input(GamesGui *gg, sqg_ui *ui) {
+    const sqg_input *in = &ui->in;
+    Tiles *t = gg->tiles;
+    if (ui->active || !in->pressed) return;
+    int i = games_gui_tile_hit(gg, in->mx, in->my);
+    if (i < 0) {
+        if (sqg_rect_contains(gg->board, in->mx, in->my)) gg->tiles_sel = -1;
+        return;
+    }
+    if (!tiles_free(t, i)) {
+        say(gg, "That tile is not free: something is on it, or on both sides");
+        return;
+    }
+    if (gg->tiles_sel == i) {
+        gg->tiles_sel = -1;
+        return;
+    }
+    if (gg->tiles_sel >= 0 && t->kind[gg->tiles_sel] == t->kind[i]) {
+        tiles_match(t, gg->tiles_sel, i);
+        gg->tiles_sel = gg->hint_a = gg->hint_b = -1;
+        tiles_said(gg);
+        return;
+    }
+    gg->tiles_sel = i;
+}
+
+static void draw_tiles(GamesGui *gg, sqg_ui *ui) {
+    sqg_canvas *cv = ui->cv;
+    const Tiles *t = gg->tiles;
+    sqg_fill(cv, gg->board, 0xFF2E5560u);
+    sqg_rect old = sqg_clip(cv, gg->board);
+    int order[TILES_MAX], n = tile_order(t, order);
+    for (int k = 0; k < n; k++) {
+        int i = order[k];
+        sqg_rect r = games_gui_tile_rect(gg, i);
+        games_gui_draw_tile(cv, r.x, r.y, t->kind[i]);
+        if (i == gg->tiles_sel) sqg_blend(cv, sqg_rect_inset(r, 1), 0x60F0C020u);
+        if ((i == gg->hint_a || i == gg->hint_b) && gg->ms < gg->hint_until) sqg_blend(cv, sqg_rect_inset(r, 1), 0x6020C040u);
+    }
+    if (!t->left) {
+        const char *s = "Cleared!";
+        int w = sqg_text_width(s, 6);
+        sqg_rect b = sqg_rect_make(gg->board.x + (gg->board.w - w) / 2 - 20, gg->board.y + gg->board.h / 2 - 40, w + 40, 80);
+        sqg_blend(cv, b, 0xC0000000u);
+        sqg_text(cv, b.x + 20, b.y + 19, s, 0xFFFFE070u, 6);
+    }
+    cv->clip = old;
+}
+
 /* ---- the top bar ---- */
 
 static void top_bar(GamesGui *gg, sqg_ui *ui, sqg_rect r) {
     Game *g = gg->game;
     sqg_row row = sqg_row_begin(r, 4);
-    static const char *const KINDS[5] = {"Klondike", "FreeCell", "Mines", "Hearts", "Chess"};
+    static const char *const KINDS[6] = {"Klondike", "FreeCell", "Mines", "Hearts", "Chess", "Tiles"};
     int kind = gg->kind;
-    if (sqg_segments(ui, sqg_id_str("kind"), sqg_row_take(&row, 400), KINDS, 5, &kind)) {
+    if (sqg_segments(ui, sqg_id_str("kind"), sqg_row_take(&row, 420), KINDS, 6, &kind)) {
         uint32_t seed = current_seed(gg);
         gg->kind = kind;
         deal(gg, seed);
@@ -945,6 +1129,35 @@ static void top_bar(GamesGui *gg, sqg_ui *ui, sqg_rect r) {
         static const char *const SIZES[3] = {"Small", "Medium", "Large"};
         if (sqg_segments(ui, sqg_id_str("msize"), sqg_row_take(&row, 180), SIZES, 3, &gg->mines_size))
             deal(gg, gg->mines->seed);
+    }
+    if (gg->kind == GAMES_TILES) {
+        Tiles *t = gg->tiles;
+        sqg_row_take(&row, 6);
+        if (sqg_segments(ui, sqg_id_str("tlayout"), sqg_row_take(&row, 180), TILES_LAYOUT_NAMES, TILES_LAYOUTS, &gg->tiles_layout))
+            tiles_deal(gg, t->seed);
+        sqg_row_take(&row, 6);
+        if (sqg_button(ui, sqg_id_str("new"), sqg_row_take(&row, sqg_button_w(ui, "New")), "New") || ui->in.ctrl_key == 'n')
+            tiles_deal(gg, t->seed * 2654435761u + 12345u);
+        if (sqg_button(ui, sqg_id_str("again"), sqg_row_take(&row, sqg_button_w(ui, "Restart")), "Restart"))
+            tiles_deal(gg, t->seed);
+        if (sqg_button(ui, sqg_id_str("undo"), sqg_row_take(&row, sqg_button_w(ui, "Undo")), "Undo") || ui->in.ctrl_key == 'z') {
+            gg->tiles_sel = -1;
+            if (tiles_undo(t)) say(gg, "Nothing to undo");
+            else tiles_said(gg);
+        }
+        if (sqg_button(ui, sqg_id_str("hint"), sqg_row_take(&row, sqg_button_w(ui, "Hint")), "Hint") || ui->in.ctrl_key == 'h') {
+            if (tiles_hint(t, &gg->hint_a, &gg->hint_b)) say(gg, t->left ? "No pair can go: Shuffle, or Undo" : "Cleared!");
+            else gg->hint_until = gg->ms + 1500;
+        }
+        if (sqg_button(ui, sqg_id_str("shuffle"), sqg_row_take(&row, sqg_button_w(ui, "Shuffle")), "Shuffle")) {
+            gg->tiles_sel = gg->hint_a = gg->hint_b = -1;
+            if (tiles_shuffle(t)) say(gg, t->left ? "These tiles cannot be dealt to clear" : "Cleared!");
+            else {
+                tiles_said(gg);
+                snprintf(gg->status + strlen(gg->status), sizeof gg->status - strlen(gg->status), " (shuffled)");
+            }
+        }
+        return;
     }
     if (gg->kind == GAMES_CHESS) {
         static const char *const SIDES[3] = {"White", "Black", "Both"}, *const LEVELS[4] = {"1", "2", "3", "4"};
@@ -1001,6 +1214,9 @@ static void status_line(GamesGui *gg, sqg_ui *ui, sqg_rect r) {
     if (gg->kind == GAMES_MINES)
         snprintf(t, sizeof t, "%d x %d, %d mines   Field %lu", gg->mines->w, gg->mines->h, gg->mines->mines,
                  (unsigned long)gg->mines->seed);
+    else if (gg->kind == GAMES_TILES)
+        snprintf(t, sizeof t, "%s   Game %lu   Tiles left %d", TILES_LAYOUT_NAMES[gg->tiles->layout],
+                 (unsigned long)gg->tiles->seed, gg->tiles->left);
     else if (gg->kind == GAMES_CHESS)
         snprintf(t, sizeof t, "Chess   Level %d   Move %d", gg->chess->level, gg->chess->pos.fullmove);
     else if (gg->kind == GAMES_HEARTS)
@@ -1025,6 +1241,9 @@ void games_gui_frame(GamesGui *gg, sqg_ui *ui) {
     if (gg->kind == GAMES_MINES) {
         mines_input(gg, ui);
         draw_mines(gg, ui);
+    } else if (gg->kind == GAMES_TILES) {
+        tiles_input(gg, ui);
+        draw_tiles(gg, ui);
     } else if (gg->kind == GAMES_CHESS) {
         chess_input(gg, ui);
         draw_chess(gg, ui);

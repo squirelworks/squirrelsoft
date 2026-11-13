@@ -1,8 +1,9 @@
 # SquirrelGames
 
 Card and board games on `libs/sqgui`, roadmap item S5.3. So far:
-patience (Klondike and FreeCell), Mines, Hearts and Chess. The rules
-(`cards.c`, `mines.c`, `hearts.c`, `chess.c`) are freestanding
+patience (Klondike and FreeCell), Mines, Hearts, Chess and Tiles. The
+rules (`cards.c`, `mines.c`, `hearts.c`, `chess.c`, `tiles.c`) are
+freestanding
 C11 with no allocation and no stdio, and `make test` checks that they
 need nothing from outside but `memcpy`, `memmove`, `memset` and
 `strlen`, so they move to Squirrel OS/2 as they are. Only `games_sdl.c`
@@ -58,6 +59,16 @@ build/squirrelgames --freecell --seed 7
   written in the usual notation (`Nf3`, `exd5`, `O-O`, `e8=Q`) or as
   squares (`e2e4`, `e7e8n`).
 
+- **Tiles**: a tile-matching patience in the Mahjongg family. 144 tiles,
+  four of each of 36 kinds (circles, bars and numbers 1 to 9, the four
+  winds, three dragons, the sun and the moon, all drawn for SquirrelGames),
+  stacked in one of three layouts of its own: Pyramid, Towers, Cross.
+  Take away two of a kind while both are free: nothing on top, and
+  nothing beside them on the left or on the right. Every deal can be
+  cleared (it is made by taking the tiles away in pairs from the full
+  layout); Shuffle deals the tiles left again the same way when you are
+  stuck.
+
 A deal (or a field, or a chess game) is a number from 0 to 4294967295: the same number
 always gives the same deal (shuffled with SquirrelGames' own generator,
 so the numbers are its own).
@@ -90,6 +101,9 @@ so the numbers are its own).
   line can choose). You play White, Black (the board turns round) or
   Both; Level 1 to 4; New; Undo (Ctrl+Z) takes back to your last move.
   The moves are listed beside the board, and the pieces are drawn here.
+- Tiles: click a free tile, then another of its kind. Pyramid, Towers or
+  Cross; New; Restart; Undo (Ctrl+Z, as far back as the start); Hint
+  (Ctrl+H) lights a pair that can go; Shuffle.
 
 ## Command line
 
@@ -99,6 +113,7 @@ so the numbers are its own).
 --hearts         Hearts
 --chess          Chess (you White, level 3)
 --level N        Chess: the computer's level, 1 to 4
+--tiles LAYOUT   Tiles: pyramid, towers or cross
 --seed N         the deal
 --do CMD         play (see below); in order with --script
 --script FILE    commands one a line, # for comments
@@ -158,6 +173,17 @@ new [white|black|both] [SEED]     move M     undo     go     level N     fen FEN
 position. `--show` prints the board (White at the bottom, capitals for
 White), the moves and the FEN.
 
+Tiles commands, with tiles by the numbers `--show` gives them:
+
+```
+new pyramid|towers|cross [SEED]     match I J     hint     undo     shuffle
+```
+
+`hint` prints a `match` that would go. `--show` prints the counts and
+each free tile as `NUMBER:KIND`, the kinds as C1-C9 (circles), B1-B9
+(bars), N1-N9 (numbers), WE WS WW WN (winds), DR DG DW (dragons), SU and
+MO.
+
 ## Tests
 
 `make test` runs `tests/test_games.c`: deals (every card once, the same
@@ -180,6 +206,10 @@ passant and promotion hard), FEN both ways and what is not a position,
 each special move, the notation and which piece it names, checkmate,
 stalemate and each draw, undo, the computer finding a mate and a free
 queen, games the computer plays against itself, the commands, and moves,
-undo, sides and levels in the window. Then `tests/cli_smoke.sh`, the
+undo, sides and levels in the window. For Tiles: every layout whole (four
+of each kind, each upper tile on tiles below) and 120 deals cleared by the
+order they were made in, which tiles are free, matches and their refusals,
+undo, shuffles that keep the tiles and clear, the commands, and a deal
+cleared in the window by clicks. Then `tests/cli_smoke.sh`, the
 freestanding check, and ten frames of the real window with
 `SDL_VIDEODRIVER=dummy` when SDL2 is installed.

@@ -5,6 +5,7 @@
 #include "gamesgui.h"
 #include "hearts.h"
 #include "mines.h"
+#include "tiles.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -24,6 +25,7 @@ static Game g;
 static Mines mn;
 static Hearts hh;
 static Chess ch;
+static Tiles tt;
 
 /* a pile from names: "AS 2H #KD" (# for face down) */
 static void set(int pile, const char *cards) {
@@ -514,7 +516,7 @@ static void drag_card(int pile, int index, int to) {
 }
 static int top_x(const char *label) { /* the top bar's buttons, by what the window draws: find the label */
     static const char *const order[] = {"Klondike/FreeCell", "Draw 3", "Deal", "#seed", "Play", "New", "Restart", "Undo", "Home"};
-    int x = 6 + 400 + 4;
+    int x = 6 + 420 + 4;
     int lh = sqg_line_h(&ui);
     (void)lh;
     for (size_t k = 1; k < sizeof order / sizeof order[0]; k++) {
@@ -535,7 +537,7 @@ static void test_window(const char *dir) {
     sqg_ui_init(&ui, NULL, 1);
     memset(&in, 0, sizeof in);
     game_new(&g, GAME_KLONDIKE, 1, 42);
-    games_gui_init(&gg, &g, &mn, &hh, &ch);
+    games_gui_init(&gg, &g, &mn, &hh, &ch, &tt);
     frame();
     int lh = sqg_line_h(&ui), x, y;
     /* the cards are drawn: the AH on column 5, face up, white with red */
@@ -642,14 +644,14 @@ static void test_window(const char *dir) {
 static void test_window_mines(void) {
     int lh = sqg_line_h(&ui);
     game_new(&g, GAME_KLONDIKE, 1, 42);
-    games_gui_init(&gg, &g, &mn, &hh, &ch);
+    games_gui_init(&gg, &g, &mn, &hh, &ch, &tt);
     gg.ms = 1000;
     frame();
-    click(6 + 400 * 5 / 10, 6 + lh / 2); /* Mines */
+    click(6 + 420 * 5 / 12, 6 + lh / 2); /* Mines */
     CHECK(gg.kind == GAMES_MINES && mn.w == 9 && mn.seed == 42 && strstr(gg.status, "Mines, field 42"));
-    click(6 + 400 + 4 + 180 * 5 / 6, 6 + lh / 2); /* Large */
+    click(6 + 420 + 4 + 180 * 5 / 6, 6 + lh / 2); /* Large */
     CHECK(gg.mines_size == MINES_LARGE && mn.w == 30 && mn.mines == 99);
-    click(6 + 400 + 4 + 180 / 6, 6 + lh / 2); /* Small again */
+    click(6 + 420 + 4 + 180 / 6, 6 + lh / 2); /* Small again */
     CHECK(mn.w == 9);
     /* a click opens; the clock runs from then */
     sqg_rect r = games_gui_square_rect(&gg, 4, 4);
@@ -687,7 +689,7 @@ static void test_window_mines(void) {
             }
     CHECK(mn.state == MINES_WON && strstr(gg.status, "Cleared in 1 seconds"));
     /* Restart: the same field again, hidden; New: another */
-    int bx = 6 + 400 + 4 + 180 + 4 + 6 + 4 + sqg_text_width("Deal", 1) + 4 + 4 + 90 + 4 + sqg_button_w(&ui, "Play") + 4;
+    int bx = 6 + 420 + 4 + 180 + 4 + 6 + 4 + sqg_text_width("Deal", 1) + 4 + 4 + 90 + 4 + sqg_button_w(&ui, "Play") + 4;
     int newx = bx + sqg_button_w(&ui, "New") / 2;
     int againx = bx + sqg_button_w(&ui, "New") + 4 + sqg_button_w(&ui, "Restart") / 2;
     click(againx, 6 + lh / 2);
@@ -913,10 +915,10 @@ static void test_hearts(void) {
 static void test_window_hearts(void) {
     int lh = sqg_line_h(&ui);
     game_new(&g, GAME_KLONDIKE, 1, 5);
-    games_gui_init(&gg, &g, &mn, &hh, &ch);
+    games_gui_init(&gg, &g, &mn, &hh, &ch, &tt);
     gg.ms = 1000;
     frame();
-    click(6 + 400 * 7 / 10, 6 + lh / 2); /* Hearts */
+    click(6 + 420 * 7 / 12, 6 + lh / 2); /* Hearts */
     CHECK(gg.kind == GAMES_HEARTS && hh.seed == 5 && hh.phase == HEARTS_PASSING && strstr(gg.status, "pass left"));
     /* three cards chosen, raised; a fourth refused; one put back */
     for (int i = 0; i < 3; i++) {
@@ -975,7 +977,7 @@ static void test_window_hearts(void) {
     /* New: another game; Restart: this one from the start */
     gg.ms += 10000;
     hh.score[1] = 50;
-    int bx = 6 + 400 + 4 + 6 + 4 + sqg_text_width("Deal", 1) + 4 + 4 + 90 + 4 + sqg_button_w(&ui, "Play") + 4;
+    int bx = 6 + 420 + 4 + 6 + 4 + sqg_text_width("Deal", 1) + 4 + 4 + 90 + 4 + sqg_button_w(&ui, "Play") + 4;
     click(bx + sqg_button_w(&ui, "New") + 4 + sqg_button_w(&ui, "Restart") / 2, 6 + lh / 2);
     CHECK(hh.seed == 5 && hh.hand_no == 0 && hh.score[1] == 0);
     click(bx + sqg_button_w(&ui, "New") / 2, 6 + lh / 2);
@@ -1156,10 +1158,10 @@ static void test_window_chess(void) {
     int lh = sqg_line_h(&ui);
     game_new(&g, GAME_KLONDIKE, 1, 3);
     chess_new(&ch, 3);
-    games_gui_init(&gg, &g, &mn, &hh, &ch);
+    games_gui_init(&gg, &g, &mn, &hh, &ch, &tt);
     gg.ms = 1000;
     frame();
-    click(6 + 400 * 9 / 10, 6 + lh / 2); /* Chess */
+    click(6 + 420 * 9 / 12, 6 + lh / 2); /* Chess */
     CHECK(gg.kind == GAMES_CHESS && ch.n == 0 && ch.human[0] && !ch.human[1] && strstr(gg.status, "Your move"));
     /* a1 at the bottom left; a square from a point */
     sqg_rect a1 = games_gui_chess_rect(&gg, 0), h8 = games_gui_chess_rect(&gg, 63);
@@ -1184,7 +1186,7 @@ static void test_window_chess(void) {
     frame();
     CHECK(ch.n == 2 && ch.pos.side == CHESS_WHITE && strstr(gg.status, "Your move"));
     /* Undo: back to your move; Black: the board turns round and the computer starts */
-    int x = 6 + 400 + 4 + 6 + 4 + sqg_text_width("You play", 1) + 4 + 4;
+    int x = 6 + 420 + 4 + 6 + 4 + sqg_text_width("You play", 1) + 4 + 4;
     int levels = x + 150 + 4 + 6 + 4 + sqg_text_width("Level", 1) + 4 + 4;
     int newx = levels + 100 + 4 + 6 + 4;
     int undox = newx + sqg_button_w(&ui, "New") + 4;
@@ -1210,6 +1212,200 @@ static void test_window_chess(void) {
     CHECK(ch.pos.sq[CHESS_SQ(4, 7)] == CHESS_QUEEN && chess_state(&ch) == CHESS_CHECKMATE && strstr(gg.status, "White wins"));
 }
 
+/* ---- tiles ---- */
+
+static int tok(const char *line) {
+    char msg[120];
+    int rc = tiles_command(&tt, line, msg, sizeof msg);
+    if (rc) printf("  %s: %s\n", line, msg);
+    return rc == 0;
+}
+static int tfails(const char *line, const char *why) {
+    char msg[120];
+    int rc = tiles_command(&tt, line, msg, sizeof msg);
+    if (rc == 0 || !strstr(msg, why)) {
+        printf("  %s: rc %d, said \"%s\"\n", line, rc, msg);
+        return 0;
+    }
+    return 1;
+}
+
+/* a free tile and one that is not, of other kinds or the same */
+static int find_tile(int want_free, int kind_of, int not_kind) {
+    for (int i = 0; i < tt.n; i++)
+        if (tt.here[i] && tiles_free(&tt, i) == want_free && (kind_of < 0 || tt.kind[i] == kind_of) &&
+            (not_kind < 0 || tt.kind[i] != not_kind))
+            return i;
+    return -1;
+}
+
+static void test_tiles(void) {
+    /* every layout: 144 tiles, four of each kind, no two in one place, each
+     * upper tile on tiles below; and every deal clears by its plan */
+    int whole = 1, clears = 1;
+    for (int layout = 0; layout < TILES_LAYOUTS; layout++)
+        for (uint32_t seed = 0; seed < 40; seed++) {
+            CHECK(tiles_new(&tt, layout, seed) == 0);
+            int per[TILES_KINDS] = {0};
+            for (int i = 0; i < tt.n; i++) {
+                per[tt.kind[i]]++;
+                int under = tt.z[i] == 0;
+                for (int k = 0; k < tt.n; k++) {
+                    if (k == i) continue;
+                    int dx = tt.x[k] - tt.x[i], dy = tt.y[k] - tt.y[i];
+                    if (tt.z[k] == tt.z[i] && dx > -2 && dx < 2 && dy > -2 && dy < 2) whole = 0;
+                    if (tt.z[k] == tt.z[i] - 1 && dx > -2 && dx < 2 && dy > -2 && dy < 2) under = 1;
+                }
+                whole &= under;
+            }
+            whole &= tt.n == 144 && tt.left == 144 && tt.nplan == 144;
+            for (int k = 0; k < TILES_KINDS; k++) whole &= per[k] == 4;
+            for (int p = 0; p + 1 < tt.nplan; p += 2) clears &= tiles_match(&tt, tt.plan[p], tt.plan[p + 1]) == 0;
+            clears &= tiles_state(&tt) == TILES_WON && tt.left == 0;
+        }
+    CHECK(whole && clears);
+    CHECK(tiles_new(&tt, 3, 1) == -1 && tiles_new(&tt, -1, 1) == -1);
+    /* the same number, the same deal */
+    static Tiles a, b;
+    tiles_new(&a, TILES_CROSS, 8), tiles_new(&b, TILES_CROSS, 8);
+    CHECK(!memcmp(&a, &b, sizeof a));
+    tiles_new(&b, TILES_CROSS, 9);
+    CHECK(memcmp(a.kind, b.kind, sizeof a.kind) != 0);
+    /* free: nothing on top, and one side open */
+    tiles_new(&tt, TILES_PYRAMID, 3);
+    CHECK(tiles_free(&tt, 0) && tiles_free(&tt, 9) && !tiles_free(&tt, 1)); /* the corners; the next along */
+    CHECK(!tiles_free(&tt, 11 + 10)); /* under the second layer */
+    int top = tt.n - 1;
+    CHECK(tt.z[top] == 2 && tiles_free(&tt, top));
+    /* a match: both free, the same kind; then undo */
+    int i = find_tile(1, -1, -1), j = -1;
+    for (int k = 0; k < tt.n; k++)
+        if (k != i && tt.kind[k] == tt.kind[i] && tiles_free(&tt, k)) j = k;
+    if (j < 0) { /* no free partner for the first: any free pair */
+        CHECK(tiles_hint(&tt, &i, &j) == 0);
+    }
+    int other = find_tile(1, -1, tt.kind[i]), stuck = find_tile(0, tt.kind[i], -1);
+    CHECK(tiles_match(&tt, i, other) == -1 && tiles_match(&tt, i, i) == -1);
+    if (stuck >= 0) CHECK(tiles_match(&tt, i, stuck) == -1);
+    int moves = tiles_moves(&tt);
+    CHECK(moves > 0 && tiles_match(&tt, i, j) == 0 && tt.left == 142 && !tt.here[i] && tiles_match(&tt, i, j) == -1);
+    CHECK(tiles_undo(&tt) == 0 && tt.left == 144 && tt.here[i] && tt.here[j] && tiles_moves(&tt) == moves && tiles_undo(&tt) == -1);
+    /* stuck: no pair free; a shuffle deals what is left so it clears */
+    tiles_new(&tt, TILES_PYRAMID, 3);
+    int stuck_seen = 0, shuffled_clears = 1;
+    for (uint32_t seed = 0; seed < 30; seed++) {
+        tiles_new(&tt, (int)(seed % 3), seed);
+        int h1, h2;
+        while (tiles_state(&tt) == TILES_PLAYING && !tiles_hint(&tt, &h1, &h2)) tiles_match(&tt, h1, h2);
+        if (tiles_state(&tt) != TILES_STUCK) continue;
+        stuck_seen++;
+        int left = tt.left, per[TILES_KINDS] = {0}, after[TILES_KINDS] = {0};
+        for (int k = 0; k < tt.n; k++)
+            if (tt.here[k]) per[tt.kind[k]]++;
+        CHECK(tiles_hint(&tt, &h1, &h2) == -1 && tiles_moves(&tt) == 0);
+        if (tiles_shuffle(&tt)) { /* (a few left that no deal could clear, as two tiles one on the other) */
+            shuffled_clears &= tt.left == left && tiles_state(&tt) == TILES_STUCK;
+            stuck_seen--;
+            continue;
+        }
+        shuffled_clears &= tt.left == left && tt.nplan == left && tt.shuffles == 1;
+        for (int k = 0; k < tt.n; k++)
+            if (tt.here[k]) after[tt.kind[k]]++;
+        shuffled_clears &= !memcmp(per, after, sizeof per); /* the same tiles, other places */
+        for (int p = 0; p + 1 < tt.nplan; p += 2) shuffled_clears &= tiles_match(&tt, tt.plan[p], tt.plan[p + 1]) == 0;
+        shuffled_clears &= tiles_state(&tt) == TILES_WON;
+    }
+    CHECK(stuck_seen > 5 && shuffled_clears);
+    CHECK(tiles_shuffle(&tt) == -1); /* nothing left */
+    char name[3];
+    tiles_kind_name(0, name);
+    CHECK(!strcmp(name, "C1"));
+    tiles_kind_name(17, name);
+    CHECK(!strcmp(name, "B9"));
+    tiles_kind_name(TILES_NUMBERS + 4, name);
+    CHECK(!strcmp(name, "N5"));
+    tiles_kind_name(TILES_DRAGONS + 1, name);
+    CHECK(!strcmp(name, "DG"));
+    tiles_kind_name(TILES_MOON, name);
+    CHECK(!strcmp(name, "MO"));
+
+    /* the commands */
+    CHECK(tok("new towers 4") && tt.layout == TILES_TOWERS && tt.seed == 4 && tok("new Cross") && tt.seed == 5);
+    CHECK(tfails("new", "new pyramid") && tfails("new hexagon", "new pyramid") && tfails("jump", "unknown"));
+    char msg[120];
+    CHECK(tiles_command(&tt, "hint", msg, sizeof msg) == 0 && !strncmp(msg, "match ", 6));
+    CHECK(tok(msg) && tt.left == 142 && tok("undo") && tt.left == 144 && tfails("undo", "nothing"));
+    i = find_tile(1, -1, -1), other = find_tile(1, -1, tt.kind[i]);
+    char line[40];
+    snprintf(line, sizeof line, "match %d %d", i, other);
+    CHECK(tfails(line, "not the same kind"));
+    stuck = find_tile(0, -1, -1);
+    snprintf(line, sizeof line, "match %d %d", i, stuck);
+    CHECK(tfails(line, "not free") && tfails("match 1 1", "two different") && tfails("match 1 999", "match I J"));
+    CHECK(tok("shuffle") && tt.shuffles == 1 && tt.left == 144);
+    char text[2048];
+    tiles_text(&tt, text, sizeof text);
+    CHECK(strstr(text, "Tiles Cross  game 5  left 144  moves ") && strstr(text, "\nFree ") && strstr(text, ":"));
+}
+
+static void test_window_tiles(void) {
+    int lh = sqg_line_h(&ui);
+    game_new(&g, GAME_KLONDIKE, 1, 6);
+    games_gui_init(&gg, &g, &mn, &hh, &ch, &tt);
+    gg.ms = 1000;
+    frame();
+    click(6 + 420 * 11 / 12, 6 + lh / 2); /* Tiles */
+    CHECK(gg.kind == GAMES_TILES && tt.seed == 6 && tt.layout == TILES_PYRAMID && tt.left == 144 && strstr(gg.status, "pairs can go"));
+    /* the top tile is the one hit; a tile that is not free says so */
+    int top = tt.n - 1;
+    sqg_rect r = games_gui_tile_rect(&gg, top);
+    CHECK(games_gui_tile_hit(&gg, r.x + 20, r.y + 20) == top && games_gui_tile_hit(&gg, 3, 300) == -1);
+    int stuck = find_tile(0, -1, -1);
+    r = games_gui_tile_rect(&gg, stuck);
+    int hit = games_gui_tile_hit(&gg, r.x + 2, r.y + 2);
+    if (hit == stuck) {
+        click(r.x + 2, r.y + 2);
+        CHECK(gg.tiles_sel == -1 && strstr(gg.status, "not free"));
+    }
+    /* Hint, then the two clicked: gone */
+    int x = 6 + 420 + 4 + 6 + 4 + 180 + 4 + 6 + 4;
+    int hintx = x + sqg_button_w(&ui, "New") + 4 + sqg_button_w(&ui, "Restart") + 4 + sqg_button_w(&ui, "Undo") + 4;
+    click(hintx + 8, 6 + lh / 2);
+    CHECK(gg.hint_a >= 0 && gg.hint_b >= 0 && gg.hint_until > gg.ms);
+    int a = gg.hint_a, b = gg.hint_b;
+    sqg_rect ra = games_gui_tile_rect(&gg, a), rb = games_gui_tile_rect(&gg, b);
+    CHECK(games_gui_tile_hit(&gg, ra.x + 20, ra.y + 20) == a && games_gui_tile_hit(&gg, rb.x + 20, rb.y + 20) == b);
+    click(ra.x + 20, ra.y + 20);
+    CHECK(gg.tiles_sel == a);
+    click(rb.x + 20, rb.y + 20);
+    CHECK(!tt.here[a] && !tt.here[b] && tt.left == 142 && gg.tiles_sel == -1);
+    /* Undo puts them back; Restart the same deal, New another; a layout */
+    click(x + sqg_button_w(&ui, "New") + 4 + sqg_button_w(&ui, "Restart") + 4 + 8, 6 + lh / 2);
+    CHECK(tt.left == 144 && tt.here[a]);
+    tiles_match(&tt, a, b);
+    click(x + sqg_button_w(&ui, "New") + 4 + 8, 6 + lh / 2);
+    CHECK(tt.left == 144 && tt.seed == 6);
+    click(x + 8, 6 + lh / 2);
+    CHECK(tt.seed != 6 && tt.layout == TILES_PYRAMID);
+    click(6 + 420 + 4 + 6 + 4 + 180 * 5 / 6, 6 + lh / 2); /* Cross */
+    CHECK(tt.layout == TILES_CROSS && gg.tiles_layout == TILES_CROSS && tt.left == 144);
+    /* cleared by its plan through the window: said so */
+    int by_click = 0, last_click = 0;
+    for (int p = 0; p + 1 < tt.nplan; p += 2) {
+        ra = games_gui_tile_rect(&gg, tt.plan[p]);
+        rb = games_gui_tile_rect(&gg, tt.plan[p + 1]);
+        if (games_gui_tile_hit(&gg, ra.x + 20, ra.y + 20) != tt.plan[p] || games_gui_tile_hit(&gg, rb.x + 20, rb.y + 20) != tt.plan[p + 1])
+            tiles_match(&tt, tt.plan[p], tt.plan[p + 1]), last_click = 0; /* (one only half in view: by hand) */
+        else {
+            click(ra.x + 20, ra.y + 20);
+            click(rb.x + 20, rb.y + 20);
+            by_click++, last_click = 1;
+        }
+    }
+    frame();
+    CHECK(tt.left == 0 && tiles_state(&tt) == TILES_WON && by_click > 50 && (!last_click || strstr(gg.status, "Cleared")));
+}
+
 int main(int argc, char **argv) {
     const char *dir = argc > 1 ? argv[1] : ".";
     test_deals();
@@ -1226,6 +1422,8 @@ int main(int argc, char **argv) {
     test_window_hearts();
     test_chess();
     test_window_chess();
+    test_tiles();
+    test_window_tiles();
     printf("test_games: %d checks, %d failed\n", checks, failures);
     return failures != 0;
 }

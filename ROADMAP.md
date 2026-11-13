@@ -100,7 +100,7 @@ Every item is a checkbox. Tick it in the PR that merges its last piece. Nested b
   - [x] Hearts: three computer players, passing, the usual first-trick and broken-hearts rules, shooting the moon, to 100
   - [ ] Bridge
   - [x] Chess: every rule and draw, standard notation and FEN, a computer player with four levels, White, Black or two people
-  - [ ] Mahjongg (tile matching)
+  - [x] Mahjongg (tile matching): Tiles, three layouts of its own, deals that can always be cleared, hint, shuffle, undo
 - [ ] S5.4 SquirrelDebug (desktop debugger UI for Squirrel OS/2 over serial/QEMU gdbstub)
 - Each designed so its core compiles for Squirrel OS/2 (freestanding C, no libc beyond a small shim).
 
