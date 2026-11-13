@@ -101,7 +101,8 @@ Every item is a checkbox. Tick it in the PR that merges its last piece. Nested b
   - [x] Bridge: you South with three computer players, the auction with doubles, dummy, duplicate scoring with boards going round
   - [x] Chess: every rule and draw, standard notation and FEN, a computer player with four levels, White, Black or two people
   - [x] Mahjongg (tile matching): Tiles, three layouts of its own, deals that can always be cleared, hint, shuffle, undo
-- [ ] S5.4 SquirrelDebug (desktop debugger UI for Squirrel OS/2 over serial/QEMU gdbstub)
+- [x] S5.4 SquirrelDebug (desktop debugger UI for Squirrel OS/2 over serial/QEMU gdbstub)
+  - [x] The GDB remote protocol, an x86 disassembler (16 and 32 bits, NASM syntax), registers, memory, breakpoints, step, next, run to, continue and stop, real and protected mode told apart by QEMU's monitor, symbols from nm, a practice machine, TCP, serial and QEMU started by it, the window and the command line
 - Each designed so its core compiles for Squirrel OS/2 (freestanding C, no libc beyond a small shim).
 
 ## S6 — Repo split (#32)

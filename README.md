@@ -17,7 +17,8 @@ libraries.
 | `squirrelsuica/` | **SquirrelSuica** | FeliCa Suica/PASMO reader with station-name history (USB + Android) |
 | `squirrelcalc/` | **SquirrelCalc** | Graphing calculator on `libs/sqmath` + `libs/sqgui` (desktop) |
 | `squirrelpaint/` | **SquirrelPaint** | Paint program on `libs/sqgui` (desktop; freestanding core) |
-| `squirrelgames/` | **SquirrelGames** | Klondike and FreeCell on `libs/sqgui` (desktop; freestanding core) |
+| `squirrelgames/` | **SquirrelGames** | Patience, Mines, Hearts, Bridge, Chess and Tiles on `libs/sqgui` (desktop; freestanding core) |
+| `squirreldebug/` | **SquirrelDebug** | Debugger for Squirrel OS/2 over QEMU's gdbstub or a serial line, on `libs/sqgui` (desktop; freestanding core) |
 
 ## Build
 
@@ -65,7 +66,8 @@ squirrelsoft/
 ├── squirrelsuica/     # FeliCa reader only (nfcpy + Android NFC-F)
 ├── squirrelcalc/      # graphing calculator window (sqmath + sqgui)
 ├── squirrelpaint/     # paint program (sqgui; PNG, BMP and PPM)
-└── squirrelgames/     # card games (sqgui; Klondike, FreeCell)
+├── squirrelgames/     # card and board games (sqgui)
+└── squirreldebug/     # debugger over QEMU's gdbstub or serial (sqgui)
 ```
 
 ## License
