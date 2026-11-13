@@ -11,9 +11,10 @@
 #define INK_RED 0xFFC81E1Eu
 #define INK_BLACK 0xFF141414u
 
-void games_gui_init(GamesGui *gg, Game *game) {
+void games_gui_init(GamesGui *gg, Game *game, Mines *mines) {
     memset(gg, 0, sizeof *gg);
     gg->game = game;
+    gg->mines = mines;
     gg->kind = game->s.kind;
     gg->draw3 = game->s.draw == 3;
     gg->auto_home = 1;
@@ -203,7 +204,17 @@ static void after_move(GamesGui *gg) {
     if (game_won(&g->s)) snprintf(gg->status, sizeof gg->status, "Won in %d moves!", g->s.moves);
 }
 
+static uint32_t current_seed(const GamesGui *gg) { return gg->kind == GAMES_MINES ? gg->mines->seed : gg->game->s.seed; }
+
 static void deal(GamesGui *gg, uint32_t seed) {
+    if (gg->kind == GAMES_MINES) {
+        int w, h, n;
+        mines_size_of(gg->mines_size, &w, &h, &n);
+        mines_new(gg->mines, w, h, n, seed);
+        snprintf(gg->seed_text, sizeof gg->seed_text, "%lu", (unsigned long)seed);
+        snprintf(gg->status, sizeof gg->status, "Mines, field %lu: the first square is always clear", (unsigned long)seed);
+        return;
+    }
     game_new(gg->game, gg->kind, gg->draw3 ? 3 : 1, seed);
     snprintf(gg->seed_text, sizeof gg->seed_text, "%lu", (unsigned long)seed);
     gg->dragging = gg->pending = 0;
@@ -352,20 +363,140 @@ static void draw_table(GamesGui *gg, sqg_ui *ui) {
     cv->clip = old;
 }
 
+/* ---- mines ---- */
+
+static const char *const MINE_ART[9] = {"....#....", ".#.###.#.", "..#####..", ".##.####.", "#########",
+                                        ".#######.", "..#####..", ".#.###.#.", "....#...."};
+static const char *const FLAG_ART[9] = {"...##....", "...####..", "...######", "...####..", "...##....",
+                                        "...#.....", "...#.....", "..####...", ".######.."};
+
+static void art(sqg_canvas *cv, const char *const *a, int x, int y, int scale, uint32_t c, uint32_t pole) {
+    for (int j = 0; j < 9; j++)
+        for (int i = 0; i < 9; i++)
+            if (a[j][i] == '#')
+                sqg_fill(cv, sqg_rect_make(x + i * scale, y + j * scale, scale, scale), a == FLAG_ART && (j >= 5 || i == 3) ? pole : c);
+}
+
+static sqg_rect field_rect(const GamesGui *gg) {
+    const Mines *m = gg->mines;
+    int w = m->w * GAMES_SQUARE, h = m->h * GAMES_SQUARE;
+    return sqg_rect_make(gg->board.x + (gg->board.w - w) / 2, gg->board.y + 56 + (gg->board.h - 56 - h) / 3, w, h);
+}
+
+sqg_rect games_gui_square_rect(const GamesGui *gg, int x, int y) {
+    sqg_rect f = field_rect(gg);
+    return sqg_rect_make(f.x + x * GAMES_SQUARE, f.y + y * GAMES_SQUARE, GAMES_SQUARE, GAMES_SQUARE);
+}
+
+int games_gui_square(const GamesGui *gg, int sx, int sy, int *x, int *y) {
+    sqg_rect f = field_rect(gg);
+    if (!sqg_rect_contains(f, sx, sy)) return -1;
+    *x = (sx - f.x) / GAMES_SQUARE;
+    *y = (sy - f.y) / GAMES_SQUARE;
+    return 0;
+}
+
+static void mines_said(GamesGui *gg) {
+    const Mines *m = gg->mines;
+    if (m->state == MINES_WON) snprintf(gg->status, sizeof gg->status, "Cleared in %ld seconds!", m->ticks / 1000);
+    else if (m->state == MINES_LOST) say(gg, "Boom. New for another field, or Restart for this one");
+    else say(gg, "");
+}
+
+static void mines_input(GamesGui *gg, sqg_ui *ui) {
+    const sqg_input *in = &ui->in;
+    Mines *m = gg->mines;
+    if (m->state == MINES_PLAYING && m->laid && gg->ms > gg->last_ms) {
+        long dt = gg->ms - gg->last_ms;
+        m->ticks += dt > 1000 ? 1000 : dt; /* (a long pause, as when the window was away, counts a second) */
+    }
+    if (ui->active || m->state != MINES_PLAYING) return;
+    int x, y;
+    if (!(in->pressed || in->pressed2) || games_gui_square(gg, in->mx, in->my, &x, &y)) return;
+    uint8_t s = mines_at(m, x, y);
+    if (in->pressed2) mines_mark(m, x, y, 1);
+    else if ((s & MINE_OPEN) && (s & 15)) mines_chord(m, x, y);
+    else mines_open(m, x, y);
+    mines_said(gg);
+}
+
+static void draw_mines(GamesGui *gg, sqg_ui *ui) {
+    sqg_canvas *cv = ui->cv;
+    const Mines *m = gg->mines;
+    sqg_fill(cv, gg->board, 0xFF5A6470u);
+    sqg_rect f = field_rect(gg);
+    /* the counters: mines less flags, and the seconds */
+    char t[32];
+    snprintf(t, sizeof t, "%03d", mines_left(m) < -99 ? -99 : mines_left(m));
+    sqg_rect c = sqg_rect_make(f.x, f.y - 46, 80, 36);
+    sqg_fill(cv, c, 0xFF101010u);
+    sqg_text(cv, c.x + 6, c.y + 4, t, 0xFFFF4030u, 4);
+    long secs = m->ticks / 1000;
+    snprintf(t, sizeof t, "%03ld", secs > 999 ? 999 : secs);
+    c.x = f.x + f.w - 80;
+    sqg_fill(cv, c, 0xFF101010u);
+    sqg_text(cv, c.x + 6, c.y + 4, t, 0xFFFF4030u, 4);
+    const char *face = m->state == MINES_WON ? "Cleared" : m->state == MINES_LOST ? "Boom" : "";
+    if (*face) {
+        int w = sqg_text_width(face, 3);
+        sqg_text(cv, f.x + (f.w - w) / 2, f.y - 40, face, m->state == MINES_WON ? 0xFFFFE070u : 0xFFFF6050u, 3);
+    }
+    static const uint32_t NUM[9] = {0, 0xFF1E3CD2u, 0xFF0E7A1Eu, 0xFFD21E1Eu, 0xFF14147Au,
+                                    0xFF7A1414u, 0xFF0E7A7Au, 0xFF141414u, 0xFF6E6E6Eu};
+    for (int y = 0; y < m->h; y++)
+        for (int x = 0; x < m->w; x++) {
+            sqg_rect r = games_gui_square_rect(gg, x, y);
+            uint8_t s = mines_at(m, x, y);
+            int lost = m->state == MINES_LOST, mine = s & MINE_HERE;
+            if (s & MINE_OPEN || (lost && mine && !(s & MINE_FLAG))) {
+                int boom = lost && x == m->boom_x && y == m->boom_y;
+                sqg_fill(cv, r, boom ? 0xFFE03020u : 0xFFD8D8D8u);
+                sqg_hline(cv, r.x, r.x + r.w - 1, r.y + r.h - 1, 0xFF9A9A9Au);
+                sqg_vline(cv, r.x + r.w - 1, r.y, r.y + r.h - 1, 0xFF9A9A9Au);
+                if (mine) art(cv, MINE_ART, r.x + 3, r.y + 3, 2, 0xFF141414u, 0);
+                else if (s & 15) {
+                    char d[2] = {(char)('0' + (s & 15)), 0};
+                    sqg_text(cv, r.x + 7, r.y + 5, d, NUM[s & 15], 2);
+                }
+                continue;
+            }
+            sqg_fill(cv, r, 0xFFBEBEBEu); /* raised: light above and left, dark below and right */
+            sqg_fill(cv, sqg_rect_make(r.x, r.y, r.w, 2), 0xFFF4F4F4u);
+            sqg_fill(cv, sqg_rect_make(r.x, r.y, 2, r.h), 0xFFF4F4F4u);
+            sqg_fill(cv, sqg_rect_make(r.x, r.y + r.h - 2, r.w, 2), 0xFF7A7A7Au);
+            sqg_fill(cv, sqg_rect_make(r.x + r.w - 2, r.y, 2, r.h), 0xFF7A7A7Au);
+            if (s & MINE_FLAG) {
+                art(cv, FLAG_ART, r.x + 3, r.y + 3, 2, 0xFFD21E1Eu, 0xFF141414u);
+                if (lost && !mine) { /* a flag where there was none: crossed */
+                    sqg_line(cv, r.x + 3, r.y + 3, r.x + r.w - 4, r.y + r.h - 4, 0xFF141414u);
+                    sqg_line(cv, r.x + r.w - 4, r.y + 3, r.x + 3, r.y + r.h - 4, 0xFF141414u);
+                }
+            } else if (s & MINE_ASK) {
+                sqg_text(cv, r.x + 7, r.y + 5, "?", 0xFF141414u, 2);
+            }
+        }
+}
+
 /* ---- the top bar ---- */
 
 static void top_bar(GamesGui *gg, sqg_ui *ui, sqg_rect r) {
     Game *g = gg->game;
     sqg_row row = sqg_row_begin(r, 4);
-    static const char *const KINDS[2] = {"Klondike", "FreeCell"};
+    static const char *const KINDS[3] = {"Klondike", "FreeCell", "Mines"};
     int kind = gg->kind;
-    if (sqg_segments(ui, sqg_id_str("kind"), sqg_row_take(&row, 160), KINDS, 2, &kind)) {
+    if (sqg_segments(ui, sqg_id_str("kind"), sqg_row_take(&row, 240), KINDS, 3, &kind)) {
+        uint32_t seed = current_seed(gg);
         gg->kind = kind;
-        deal(gg, g->s.seed);
+        deal(gg, seed);
     }
     if (gg->kind == GAME_KLONDIKE &&
         sqg_checkbox(ui, sqg_id_str("draw3"), sqg_row_take(&row, sqg_text_width("Draw 3", 1) + 24), "Draw 3", &gg->draw3))
         deal(gg, g->s.seed);
+    if (gg->kind == GAMES_MINES) {
+        static const char *const SIZES[3] = {"Small", "Medium", "Large"};
+        if (sqg_segments(ui, sqg_id_str("msize"), sqg_row_take(&row, 180), SIZES, 3, &gg->mines_size))
+            deal(gg, gg->mines->seed);
+    }
     sqg_row_take(&row, 6);
     sqg_label(ui, sqg_row_take(&row, sqg_text_width("Deal", 1) + 4), "Deal", SQG_ALIGN_LEFT);
     int typed = sqg_textfield(ui, sqg_id_str("seed"), sqg_row_take(&row, 90), gg->seed_text, sizeof gg->seed_text);
@@ -376,9 +507,10 @@ static void top_bar(GamesGui *gg, sqg_ui *ui, sqg_rect r) {
         else deal(gg, (uint32_t)v);
     }
     if (sqg_button(ui, sqg_id_str("new"), sqg_row_take(&row, sqg_button_w(ui, "New")), "New") || ui->in.ctrl_key == 'n')
-        deal(gg, g->s.seed * 2654435761u + 12345u);
+        deal(gg, current_seed(gg) * 2654435761u + 12345u);
     if (sqg_button(ui, sqg_id_str("again"), sqg_row_take(&row, sqg_button_w(ui, "Restart")), "Restart"))
-        deal(gg, g->s.seed);
+        deal(gg, current_seed(gg));
+    if (gg->kind == GAMES_MINES) return;
     sqg_row_take(&row, 6);
     if (sqg_button(ui, sqg_id_str("undo"), sqg_row_take(&row, sqg_button_w(ui, "Undo")), "Undo") || ui->in.ctrl_key == 'z')
         do_undo(gg);
@@ -392,7 +524,10 @@ static void top_bar(GamesGui *gg, sqg_ui *ui, sqg_rect r) {
 static void status_line(GamesGui *gg, sqg_ui *ui, sqg_rect r) {
     const GameState *s = &gg->game->s;
     char t[96];
-    if (s->kind == GAME_KLONDIKE) snprintf(t, sizeof t, "Score %d   Moves %d", s->score, s->moves);
+    if (gg->kind == GAMES_MINES)
+        snprintf(t, sizeof t, "%d x %d, %d mines   Field %lu", gg->mines->w, gg->mines->h, gg->mines->mines,
+                 (unsigned long)gg->mines->seed);
+    else if (s->kind == GAME_KLONDIKE) snprintf(t, sizeof t, "Score %d   Moves %d", s->score, s->moves);
     else snprintf(t, sizeof t, "Moves %d   Cards that can move together: %d", s->moves, game_most(s, -1));
     sqg_row row = sqg_row_begin(r, 8);
     sqg_label(ui, sqg_row_take(&row, sqg_text_width(t, ui->scale) + 4), t, SQG_ALIGN_LEFT);
@@ -407,7 +542,13 @@ void games_gui_frame(GamesGui *gg, sqg_ui *ui) {
     int top = pad + lh + pad, status_y = cv->h - pad - lh;
     gg->board = sqg_rect_make(0, top, cv->w, status_y - pad - top);
     top_bar(gg, ui, sqg_rect_make(pad, pad, cv->w - 2 * pad, lh));
-    table_input(gg, ui);
-    draw_table(gg, ui);
+    if (gg->kind == GAMES_MINES) {
+        mines_input(gg, ui);
+        draw_mines(gg, ui);
+    } else {
+        table_input(gg, ui);
+        draw_table(gg, ui);
+    }
+    gg->last_ms = gg->ms;
     status_line(gg, ui, sqg_rect_make(pad, status_y, cv->w - 2 * pad, lh));
 }
