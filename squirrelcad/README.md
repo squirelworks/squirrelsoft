@@ -53,7 +53,12 @@ Sample: `samples/autocad_bridge.dxf`.
 - **Interchange:** text `.sqdwg` and ASCII DXF (R12).
   - The DXF export writes layer colours (negative when off), a BLOCKS
     section and real INSERTs.
-  - The import reads layer colours and on/off.
+  - The import reads layer colours and on/off, `BLOCKS` as blocks and
+    `INSERT` as inserts (nested ones too; `*Model_Space` and the like are
+    left out), R12 `POLYLINE`/`VERTEX` as well as `LWPOLYLINE` (chained
+    pieces past 16 vertices), `MTEXT` in pieces, and `3DFACE`/`SOLID` as
+    closed outlines. A bad number or an overlong line costs one entity,
+    never the rest of the file.
   - The `.sqdwg` reader keeps text with spaces, refuses damaged files
     instead of overrunning, and never reuses an id.
 

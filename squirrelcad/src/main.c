@@ -192,8 +192,10 @@ int main(int argc, char **argv) {
             return 1;
         }
         printf("imported → %s\n", argv[2]);
-        printf("  layers=%d lines=%d circles=%d arcs=%d texts=%d plines=%d skipped=%d\n",
-               st.layers, st.lines, st.circles, st.arcs, st.texts, st.plines, st.skipped);
+        printf("  layers=%d lines=%d circles=%d arcs=%d texts=%d plines=%d blocks=%d inserts=%d faces=%d "
+               "skipped=%d\n",
+               st.layers, st.lines, st.circles, st.arcs, st.texts, st.plines, st.blocks, st.inserts, st.faces,
+               st.skipped);
         free(d);
         return 0;
     }

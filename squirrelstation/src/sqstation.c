@@ -457,15 +457,39 @@ static void emit(const SqsDesign *d, const SqsElement *e, const SqsLevel *outer,
     }
 }
 
+int sqs_in_cell(const SqsDesign *d, int id) {
+    for (int c = 0; c < d->cell_count; c++)
+        for (int j = 0; j < d->cells[c].member_count; j++)
+            if (d->cells[c].member_ids[j] == id) return 1;
+    return 0;
+}
+
+/* which elements (by index) belong to a cell definition */
+static void members(const SqsDesign *d, unsigned char *in) {
+    memset(in, 0, SQS_MAX_ELEMENTS);
+    for (int c = 0; c < d->cell_count; c++)
+        for (int j = 0; j < d->cells[c].member_count; j++)
+            for (int i = 0; i < d->element_count; i++)
+                if (d->elements[i].id == d->cells[c].member_ids[j]) {
+                    in[i] = 1;
+                    break;
+                }
+}
+
 void sqs_visit(const SqsDesign *d, const SqsDesign *const *refs, int nrefs, SqsVisit fn, void *ctx) {
     Walk w = {fn, ctx, VISIT_BUDGET};
-    for (int i = 0; i < d->element_count; i++) emit(d, &d->elements[i], NULL, NULL, 0, -1, 0, &w);
+    unsigned char in[SQS_MAX_ELEMENTS];
+    members(d, in);
+    for (int i = 0; i < d->element_count; i++)
+        if (!in[i]) emit(d, &d->elements[i], NULL, NULL, 0, -1, 0, &w);
     for (int r = 0; r < nrefs && r < d->ref_count; r++) {
         if (!refs || !refs[r] || !d->refs[r].display) continue;
         const SqsDesign *rd = refs[r];
         SqsPoint zero = {0, 0, 0};
         Xf x = {zero, d->refs[r].offset, d->refs[r].scale, 0};
-        for (int i = 0; i < rd->element_count; i++) emit(rd, &rd->elements[i], NULL, &x, 1, r, 0, &w);
+        members(rd, in);
+        for (int i = 0; i < rd->element_count; i++)
+            if (!in[i]) emit(rd, &rd->elements[i], NULL, &x, 1, r, 0, &w);
     }
 }
 

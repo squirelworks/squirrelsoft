@@ -19,14 +19,25 @@ static void trim(char *s) {
     if (p != s) memmove(s, p, strlen(p) + 1);
 }
 
+/* one line without its line end, the rest of an overlong one dropped so
+ * pairs stay in step */
+static int read_line(FILE *f, char *buf, size_t cap) {
+    if (!fgets(buf, (int)cap, f)) return 0;
+    if (!strchr(buf, '\n')) {
+        int c;
+        while ((c = fgetc(f)) != EOF && c != '\n') {
+        }
+    }
+    size_t n = strlen(buf);
+    while (n && (buf[n - 1] == '\n' || buf[n - 1] == '\r')) buf[--n] = 0;
+    return 1;
+}
+
 static int read_pair(FILE *f, DxfPair *p) {
-    char a[256], b[256];
-    if (!fgets(a, sizeof(a), f)) return 0;
-    if (!fgets(b, sizeof(b), f)) return 0;
-    trim(a);
-    trim(b);
+    char a[256];
+    if (!read_line(f, a, sizeof a) || !read_line(f, p->val, sizeof p->val)) return 0;
     p->code = atoi(a);
-    snprintf(p->val, sizeof(p->val), "%s", b);
+    if (p->code != 1 && p->code != 3) trim(p->val); /* text keeps its spaces */
     return 1;
 }
 
@@ -105,6 +116,303 @@ static void ensure_default_level(SqsDesign *d) {
     if (d->level_count == 0) sqs_design_init(d, d->title[0] ? d->title : "dxf");
 }
 
+/* the seven basic DXF colours (ACI 1..7) as 0xRRGGBB */
+static const uint32_t BASIC[8] = {0, 0xff0000, 0xffff00, 0x00ff00, 0x00ffff, 0x0000ff, 0xff00ff, 0xffffff};
+
+#define OBJ_PTS 256 /* vertices of one polyline, or points of one polyface, read */
+#define OBJ_FACES 256
+
+/* one DXF object (from its 0 group to the next), gathered before use */
+typedef struct {
+    char type[32];
+    char layer[SQS_MAX_NAME];
+    char name[SQS_MAX_NAME]; /* group 2 */
+    char text[SQS_MAX_NAME];
+    SqsPoint p[4];           /* groups 10..13 */
+    double r, a0, a1, sx, rot;
+    int has_a1, flags, color, vi[4], bad;
+    SqsPoint pts[OBJ_PTS];   /* LWPOLYLINE vertices */
+    int npts, over;
+} Obj;
+
+typedef struct {
+    SqsDesign *d;
+    SqsDxfStats *st;
+    char section[16];
+    int in_layers;
+    int in_block, skip_block; /* a BLOCK being read becomes a cell */
+    char block[SQS_MAX_NAME];
+    SqsPoint base;
+    int ids[SQS_MAX_CELL_MEMBERS], nids, lost;
+    /* a POLYLINE (or polyface mesh) being read, or a run of 3DFACEs */
+    int poly, closed, face_run, over;
+    char poly_layer[SQS_MAX_NAME];
+    SqsPoint pv[OBJ_PTS];
+    int npv;
+    int fc[OBJ_FACES][4];
+    int nfc;
+} Imp;
+
+static int is_finite(double v) { return v == v && v - v == 0; }
+
+static double num(Obj *o, const char *v) {
+    double x = atof(v);
+    if (!is_finite(x)) {
+        o->bad = 1;
+        return 0;
+    }
+    return x;
+}
+
+/* a block or cell name as a cell name: no spaces, and short enough */
+static void cell_name(char *out, const char *in) {
+    snprintf(out, SQS_MAX_NAME, "%.63s", in);
+    for (char *p = out; *p; p++)
+        if (*p == ' ' || *p == '\t') *p = '_';
+}
+
+static void took(Imp *im, int id, int *count) {
+    if (id <= 0) {
+        im->st->skipped++;
+        return;
+    }
+    (*count)++;
+    if (!im->in_block) return;
+    if (im->nids < SQS_MAX_CELL_MEMBERS) im->ids[im->nids++] = id;
+    else im->lost = 1;
+}
+
+/* an outline of any length: a shape or a polyline when it fits, else chained
+ * polylines of at most SQS_MAX_PTS vertices */
+static void put_poly(Imp *im, int lid, const SqsPoint *v, int n, int closed) {
+    SqsDxfStats *st = im->st;
+    if (n < 2) {
+        st->skipped++;
+        return;
+    }
+    if (closed && n >= 3 && n <= SQS_MAX_PTS) {
+        int id = sqs_add_shape(im->d, lid, v, n);
+        if (id > 0) {
+            took(im, id, &st->shapes);
+            return;
+        }
+    } else if (!closed && n <= SQS_MAX_PTS) {
+        took(im, sqs_add_pline(im->d, lid, v, n), &st->plines);
+        return;
+    }
+    static SqsPoint tmp[OBJ_PTS + 1];
+    memcpy(tmp, v, (size_t)n * sizeof v[0]);
+    if (closed) tmp[n++] = v[0];
+    for (int at = 0; at < n - 1;) {
+        int k = n - at < SQS_MAX_PTS ? n - at : SQS_MAX_PTS;
+        took(im, sqs_add_pline(im->d, lid, tmp + at, k), &st->plines);
+        at += k - 1;
+    }
+}
+
+/* faces over points as meshes of at most SQS_MAX_FACES faces and
+ * SQS_MAX_PTS points each */
+static void put_mesh(Imp *im, int lid, const SqsPoint *p, int np, const int (*fc)[4], int nf) {
+    int map[OBJ_PTS];
+    for (int at = 0; at < nf;) {
+        SqsPoint mp[SQS_MAX_PTS];
+        uint8_t mf[SQS_MAX_FACES][4];
+        int n = 0, k = 0;
+        for (int i = 0; i < np; i++) map[i] = -1;
+        while (at < nf && k < SQS_MAX_FACES) {
+            const int *f = fc[at];
+            int ok = 1, need = 0;
+            for (int j = 0; j < 4; j++) {
+                if (f[j] < 0 || f[j] >= np) ok = 0;
+                else if (map[f[j]] < 0) {
+                    int seen = 0;
+                    for (int q = 0; q < j; q++) seen |= f[q] == f[j];
+                    need += !seen;
+                }
+            }
+            if (!ok) {
+                im->st->skipped++;
+                at++;
+                continue;
+            }
+            if (n + need > SQS_MAX_PTS) break;
+            for (int j = 0; j < 4; j++) {
+                if (map[f[j]] < 0) map[f[j]] = n, mp[n++] = p[f[j]];
+                mf[k][j] = (uint8_t)map[f[j]];
+            }
+            k++;
+            at++;
+        }
+        if (k > 0) {
+            /* a lone triangle has three points: pad so the mesh is valid */
+            while (n < 3) mp[n] = mp[n - 1], n++;
+            took(im, sqs_add_mesh(im->d, lid, mp, n, (const uint8_t(*)[4])mf, k), &im->st->meshes);
+        }
+    }
+}
+
+/* the end of a POLYLINE, a polyface or a run of 3DFACEs */
+static void end_poly(Imp *im) {
+    if (!im->poly && !im->face_run) return;
+    int lid = level_id_by_name(im->d, im->poly_layer);
+    if (im->nfc > 0) put_mesh(im, lid, im->pv, im->npv, (const int(*)[4])im->fc, im->nfc);
+    else if (im->poly) put_poly(im, lid, im->pv, im->npv, im->closed);
+    if (im->over) im->st->skipped++;
+    im->poly = im->face_run = im->over = 0;
+    im->npv = im->nfc = 0;
+}
+
+/* a point of the polyface or face run, shared when it is already there */
+static int vertex(Imp *im, SqsPoint p, int share) {
+    if (share)
+        for (int i = 0; i < im->npv; i++)
+            if (im->pv[i].x == p.x && im->pv[i].y == p.y && im->pv[i].z == p.z) return i;
+    if (im->npv >= OBJ_PTS) return -1;
+    im->pv[im->npv] = p;
+    return im->npv++;
+}
+
+static void finish(Imp *im, Obj *o) {
+    SqsDesign *d = im->d;
+    SqsDxfStats *st = im->st;
+    if (!o->type[0]) return;
+    /* a run of 3DFACEs ends at anything else, or at another level */
+    if (im->face_run && (!eqi(o->type, "3DFACE") || strcmp(o->layer, im->poly_layer) != 0)) end_poly(im);
+    if (eqi(o->type, "SECTION")) {
+        snprintf(im->section, sizeof im->section, "%.15s", o->name);
+        return;
+    }
+    if (eqi(o->type, "ENDSEC")) {
+        end_poly(im);
+        im->section[0] = 0;
+        im->in_layers = 0;
+        return;
+    }
+    if (eqi(im->section, "TABLES")) {
+        if (eqi(o->type, "TABLE")) im->in_layers = eqi(o->name, "LAYER");
+        else if (eqi(o->type, "ENDTAB")) im->in_layers = 0;
+        else if (im->in_layers && eqi(o->type, "LAYER") && o->name[0]) {
+            int known = sqs_level_id(d, o->name) >= 0;
+            int id = level_id_by_name(d, o->name);
+            if (id < 0) return;
+            if (!known) st->layers++;
+            for (int i = 0; i < d->level_count; i++)
+                if (d->levels[i].id == id) {
+                    int c = o->color < 0 ? -o->color : o->color;
+                    if (c >= 1 && c <= 7) d->levels[i].color = BASIC[c];
+                    /* a negative colour means off; a frozen layer is written off too */
+                    d->levels[i].frozen = (o->flags & 1) != 0;
+                    d->levels[i].visible = o->color >= 0 || d->levels[i].frozen;
+                }
+        }
+        return;
+    }
+    int blocks = eqi(im->section, "BLOCKS");
+    if (!blocks && !eqi(im->section, "ENTITIES")) return;
+    if (blocks && eqi(o->type, "BLOCK")) {
+        end_poly(im);
+        im->in_block = 1;
+        im->nids = im->lost = 0;
+        cell_name(im->block, o->name);
+        /* *Model_Space, *Paper_Space and anonymous blocks are not cells */
+        im->skip_block = o->name[0] == 0 || o->name[0] == '*' || sqs_find_cell(d, im->block) != NULL;
+        im->base = o->p[0];
+        return;
+    }
+    if (blocks && eqi(o->type, "ENDBLK")) {
+        end_poly(im);
+        if (im->in_block && !im->skip_block) {
+            if (im->nids > 0 && sqs_define_cell(d, im->block, im->base, im->ids, im->nids) > 0) st->cells++;
+            else st->skipped++;
+            if (im->lost) st->skipped++;
+        }
+        im->in_block = 0;
+        return;
+    }
+    if (blocks && !im->in_block) return;
+    if (im->in_block && im->skip_block) return;
+
+    if (eqi(o->type, "VERTEX")) {
+        if (!im->poly) return;
+        if (o->bad) {
+            im->over = 1;
+            return;
+        }
+        if (o->flags & 16) return; /* a spline frame point */
+        if ((o->flags & 128) && !(o->flags & 64)) {
+            /* a polyface face: 1-based point numbers, negative for a hidden edge */
+            if (im->nfc >= OBJ_FACES) {
+                im->over = 1;
+                return;
+            }
+            int *f = im->fc[im->nfc++];
+            for (int j = 0; j < 4; j++) f[j] = abs(o->vi[j]) - 1;
+            if (f[3] < 0) f[3] = f[2];
+            return;
+        }
+        if (vertex(im, o->p[0], 0) < 0) im->over = 1;
+        return;
+    }
+    if (eqi(o->type, "SEQEND")) {
+        end_poly(im);
+        return;
+    }
+    if (im->poly) end_poly(im); /* a POLYLINE without its SEQEND */
+    if (o->bad) {
+        st->skipped++;
+        return;
+    }
+    int lid = level_id_by_name(d, o->layer);
+    if (lid < 0) {
+        st->skipped++;
+        return;
+    }
+    if (eqi(o->type, "LINE")) {
+        took(im, sqs_add_line(d, lid, o->p[0], o->p[1]), &st->lines);
+    } else if (eqi(o->type, "CIRCLE")) {
+        took(im, sqs_add_arc(d, lid, o->p[0], o->r, 0, 360), &st->circles);
+    } else if (eqi(o->type, "ARC")) {
+        double sweep = (o->has_a1 ? o->a1 : 360) - o->a0;
+        sweep = fmod(sweep, 360.0);
+        if (sweep <= 0) sweep += 360.0;
+        took(im, sqs_add_arc(d, lid, o->p[0], o->r, o->a0, sweep), &st->arcs);
+    } else if (eqi(o->type, "TEXT") || eqi(o->type, "MTEXT")) {
+        took(im, sqs_add_text(d, lid, o->p[0], o->text), &st->texts);
+    } else if (eqi(o->type, "LWPOLYLINE")) {
+        put_poly(im, lid, o->pts, o->npts, o->flags & 1);
+        if (o->over) st->skipped++;
+    } else if (eqi(o->type, "POLYLINE")) {
+        if (o->flags & 16) { /* an M x N polygon mesh */
+            st->skipped++;
+            return;
+        }
+        im->poly = 1;
+        im->closed = o->flags & 1;
+        im->npv = im->nfc = im->over = 0;
+        snprintf(im->poly_layer, sizeof im->poly_layer, "%s", o->layer);
+    } else if (eqi(o->type, "3DFACE")) {
+        if (!im->face_run) {
+            im->face_run = 1;
+            im->npv = im->nfc = im->over = 0;
+            snprintf(im->poly_layer, sizeof im->poly_layer, "%s", o->layer);
+        }
+        int f[4];
+        for (int j = 0; j < 4; j++) f[j] = vertex(im, o->p[j], 1);
+        if (f[0] < 0 || f[1] < 0 || f[2] < 0 || f[3] < 0 || im->nfc >= OBJ_FACES) {
+            end_poly(im); /* full: what is gathered goes out, this face is lost */
+            st->skipped++;
+            return;
+        }
+        memcpy(im->fc[im->nfc++], f, sizeof f);
+    } else if (eqi(o->type, "INSERT")) {
+        char nm[SQS_MAX_NAME];
+        cell_name(nm, o->name);
+        took(im, sqs_place_cell(d, lid, nm, o->p[0], o->sx, o->rot), &st->placements);
+    } else {
+        st->skipped++;
+    }
+}
+
 int sqs_import_dxf(SqsDesign *d, const char *path, SqsDxfStats *stats_out) {
     SqsDxfStats st;
     memset(&st, 0, sizeof(st));
@@ -124,201 +432,58 @@ int sqs_import_dxf(SqsDesign *d, const char *path, SqsDxfStats *stats_out) {
     if (!f) return -1;
     ensure_default_level(d);
 
+    static Imp im; /* about 16 KB: off the stack */
+    static Obj o;
+    memset(&im, 0, sizeof im);
+    memset(&o, 0, sizeof o);
+    im.d = d;
+    im.st = &st;
     DxfPair pair;
-    char entity[64] = "";
-    char layer[SQS_MAX_NAME] = "0";
-    double x = 0, y = 0, z = 0, x1 = 0, y1 = 0, z1 = 0;
-    double radius = 0, a0 = 0, a1 = 0;
-    char text[SQS_MAX_NAME] = "";
-    int in_entities = 0;
-    int in_layer_table = 0;
-    int collecting = 0;
-
-    /* LWPOLYLINE state */
-    int lw_n = 0;
-    int lw_closed = 0;
-    SqsPoint lw_pts[256];
-    int lw_count = 0;
-    double lw_bulge = 0; /* ignored for now except as skip */
-
     while (read_pair(f, &pair)) {
         if (pair.code == 0) {
-            /* finish previous entity */
-            if (collecting && in_entities) {
-                int lid = level_id_by_name(d, layer);
-                if (eqi(entity, "LINE")) {
-                    SqsPoint a = {x, y, z}, b = {x1, y1, z1};
-                    if (sqs_add_line(d, lid, a, b) > 0) st.lines++;
-                    else st.skipped++;
-                } else if (eqi(entity, "CIRCLE")) {
-                    SqsPoint c = {x, y, z};
-                    if (sqs_add_arc(d, lid, c, radius, 0, 360) > 0) {
-                        st.circles++;
-                        st.arcs++;
-                    } else
-                        st.skipped++;
-                } else if (eqi(entity, "ARC")) {
-                    SqsPoint c = {x, y, z};
-                    double sweep = a1 - a0;
-                    while (sweep <= 0) sweep += 360.0;
-                    while (sweep > 360) sweep -= 360.0;
-                    if (sqs_add_arc(d, lid, c, radius, a0, sweep) > 0) st.arcs++;
-                    else st.skipped++;
-                } else if (eqi(entity, "TEXT") || eqi(entity, "MTEXT")) {
-                    SqsPoint p = {x, y, z};
-                    if (sqs_add_text(d, lid, p, text) > 0) st.texts++;
-                    else st.skipped++;
-                } else if (eqi(entity, "LWPOLYLINE")) {
-                    if (lw_closed && lw_count >= 2) {
-                        if (lw_count < 256) lw_pts[lw_count++] = lw_pts[0];
-                    }
-                    for (int i = 1; i < lw_count; i++) {
-                        if (sqs_add_line(d, lid, lw_pts[i - 1], lw_pts[i]) > 0) {
-                            st.lines++;
-                            st.pline_segs++;
-                        } else
-                            st.skipped++;
-                    }
-                } else if (entity[0] && !eqi(entity, "LAYER") && !eqi(entity, "VERTEX") &&
-                           !eqi(entity, "SEQEND") && !eqi(entity, "POLYLINE")) {
-                    st.skipped++;
-                }
-            }
-
-            collecting = 0;
-            lw_count = 0;
-            lw_n = 0;
-            lw_closed = 0;
-            lw_bulge = 0;
-            radius = 0;
-            a0 = a1 = 0;
-            text[0] = 0;
-            layer[0] = '0';
-            layer[1] = 0;
-            x = y = z = x1 = y1 = z1 = 0;
-
-            snprintf(entity, sizeof(entity), "%.63s", pair.val);
-            if (eqi(entity, "SECTION")) {
-                /* next 2 = name */
-            } else if (eqi(entity, "ENDSEC")) {
-                in_entities = 0;
-                in_layer_table = 0;
-            } else if (eqi(entity, "EOF")) {
-                break;
-            } else if (eqi(entity, "TABLE")) {
-                /* wait for 2 = table name */
-            } else if (eqi(entity, "ENDTAB")) {
-                in_layer_table = 0;
-            } else if (eqi(entity, "LAYER") && in_layer_table) {
-                collecting = 1; /* layer table entry uses code 2 for name */
-            } else if (in_entities && (eqi(entity, "LINE") || eqi(entity, "CIRCLE") ||
-                                       eqi(entity, "ARC") || eqi(entity, "TEXT") ||
-                                       eqi(entity, "MTEXT") || eqi(entity, "LWPOLYLINE") ||
-                                       eqi(entity, "POLYLINE") || eqi(entity, "POINT"))) {
-                collecting = 1;
-            }
+            finish(&im, &o);
+            memset(&o, 0, sizeof o);
+            snprintf(o.type, sizeof o.type, "%.31s", pair.val);
+            snprintf(o.layer, sizeof o.layer, "0");
+            o.sx = 1;
+            if (eqi(o.type, "EOF")) break;
             continue;
         }
-
-        if (pair.code == 2) {
-            if (eqi(entity, "SECTION")) {
-                if (eqi(pair.val, "ENTITIES")) in_entities = 1;
-            } else if (eqi(entity, "TABLE") && eqi(pair.val, "LAYER")) {
-                in_layer_table = 1;
-            } else if (collecting && in_layer_table && eqi(entity, "LAYER")) {
-                level_id_by_name(d, pair.val);
-                st.layers++;
-            }
-        }
-
-        if (!collecting) continue;
-
-        if (pair.code == 8) {
-            snprintf(layer, sizeof(layer), "%.63s", pair.val);
-        } else if (pair.code == 10) {
-            x = atof(pair.val);
-            if (eqi(entity, "LWPOLYLINE") && lw_count < 256) {
-                lw_pts[lw_count].x = x;
-                lw_pts[lw_count].y = 0;
-                lw_pts[lw_count].z = 0;
-            }
-        } else if (pair.code == 20) {
-            y = atof(pair.val);
-            if (eqi(entity, "LWPOLYLINE") && lw_count < 256) {
-                lw_pts[lw_count].y = y;
-                lw_count++;
-            }
-        } else if (pair.code == 30)
-            z = atof(pair.val);
-        else if (pair.code == 11)
-            x1 = atof(pair.val);
-        else if (pair.code == 21)
-            y1 = atof(pair.val);
-        else if (pair.code == 31)
-            z1 = atof(pair.val);
-        else if (pair.code == 40)
-            radius = atof(pair.val);
-        else if (pair.code == 50)
-            a0 = atof(pair.val);
-        else if (pair.code == 51)
-            a1 = atof(pair.val);
-        else if (pair.code == 1 || pair.code == 3)
-            snprintf(text, sizeof(text), "%.63s", pair.val);
-        else if (pair.code == 70 && eqi(entity, "LWPOLYLINE"))
-            lw_closed = (atoi(pair.val) & 1) != 0;
-        else if (pair.code == 90 && eqi(entity, "LWPOLYLINE"))
-            lw_n = atoi(pair.val);
-        else if (pair.code == 42)
-            lw_bulge = atof(pair.val);
-        (void)lw_n;
-        (void)lw_bulge;
+        const char *v = pair.val;
+        int c = pair.code;
+        if (c == 8) snprintf(o.layer, sizeof o.layer, "%.63s", v);
+        else if (c == 2) snprintf(o.name, sizeof o.name, "%.63s", v);
+        else if (c == 1 || (c == 3 && eqi(o.type, "MTEXT"))) {
+            /* MTEXT comes in pieces: 3s, then the last in 1 */
+            size_t n = strlen(o.text);
+            if (!eqi(o.type, "MTEXT")) n = 0;
+            for (const char *q = v; *q && n + 1 < sizeof o.text; q++) o.text[n++] = *q;
+            o.text[n] = 0;
+        } else if (c == 10 && eqi(o.type, "LWPOLYLINE")) {
+            if (o.npts < OBJ_PTS) o.pts[o.npts++] = (SqsPoint){num(&o, v), 0, 0};
+            else o.over = 1;
+        } else if (c == 20 && eqi(o.type, "LWPOLYLINE")) {
+            if (o.npts > 0 && !o.over) o.pts[o.npts - 1].y = num(&o, v);
+        } else if (c >= 10 && c <= 13) o.p[c - 10].x = num(&o, v);
+        else if (c >= 20 && c <= 23) o.p[c - 20].y = num(&o, v);
+        else if (c >= 30 && c <= 33) o.p[c - 30].z = num(&o, v);
+        else if (c == 40) o.r = num(&o, v);
+        else if (c == 41) o.sx = num(&o, v);
+        else if (c == 50) o.a0 = o.rot = num(&o, v);
+        else if (c == 51) o.a1 = num(&o, v), o.has_a1 = 1;
+        else if (c == 62) o.color = atoi(v);
+        else if (c == 70) o.flags = atoi(v);
+        else if (c >= 71 && c <= 74) o.vi[c - 71] = atoi(v);
     }
-
-    /* Flush final entity if the file ended without a trailing type-0 marker. */
-    if (collecting && in_entities) {
-        int lid = level_id_by_name(d, layer);
-        if (eqi(entity, "LINE")) {
-            SqsPoint a = {x, y, z}, b = {x1, y1, z1};
-            if (sqs_add_line(d, lid, a, b) > 0) st.lines++;
-        } else if (eqi(entity, "CIRCLE")) {
-            SqsPoint c = {x, y, z};
-            if (sqs_add_arc(d, lid, c, radius, 0, 360) > 0) {
-                st.circles++;
-                st.arcs++;
-            }
-        } else if (eqi(entity, "ARC")) {
-            SqsPoint c = {x, y, z};
-            double sweep = a1 - a0;
-            while (sweep <= 0) sweep += 360.0;
-            if (sqs_add_arc(d, lid, c, radius, a0, sweep) > 0) st.arcs++;
-        } else if (eqi(entity, "TEXT") || eqi(entity, "MTEXT")) {
-            SqsPoint p = {x, y, z};
-            if (sqs_add_text(d, lid, p, text) > 0) st.texts++;
-        } else if (eqi(entity, "LWPOLYLINE")) {
-            if (lw_closed && lw_count >= 2 && lw_count < 256) lw_pts[lw_count++] = lw_pts[0];
-            for (int i = 1; i < lw_count; i++) {
-                if (sqs_add_line(d, lid, lw_pts[i - 1], lw_pts[i]) > 0) {
-                    st.lines++;
-                    st.pline_segs++;
-                }
-            }
-        }
-    }
-
+    finish(&im, &o);
+    end_poly(&im);
     fclose(f);
     if (stats_out) *stats_out = st;
     return 0;
 }
 
-static const char *level_name(const SqsDesign *d, int id) {
-    for (int i = 0; i < d->level_count; i++)
-        if (d->levels[i].id == id) return d->levels[i].name;
-    return "0";
-}
-
 /* the nearest of the seven basic DXF colours to 0xRRGGBB */
 static int aci(uint32_t rgb) {
-    static const uint32_t BASIC[8] = {0, 0xff0000, 0xffff00, 0x00ff00, 0x00ffff, 0x0000ff, 0xff00ff, 0xffffff};
     int best = 7;
     long bd = -1;
     for (int k = 1; k <= 7; k++) {
@@ -331,19 +496,6 @@ static int aci(uint32_t rgb) {
     return best;
 }
 
-typedef struct {
-    FILE *f;
-    const SqsDesign *d;
-} Out;
-
-static void face3d(FILE *f, const char *lay, SqsPoint a, SqsPoint b, SqsPoint c, SqsPoint d) {
-    fprintf(f, "0\n3DFACE\n8\n%s\n", lay);
-    fprintf(f, "10\n%.15g\n20\n%.15g\n30\n%.15g\n", a.x, a.y, a.z);
-    fprintf(f, "11\n%.15g\n21\n%.15g\n31\n%.15g\n", b.x, b.y, b.z);
-    fprintf(f, "12\n%.15g\n22\n%.15g\n32\n%.15g\n", c.x, c.y, c.z);
-    fprintf(f, "13\n%.15g\n23\n%.15g\n33\n%.15g\n", d.x, d.y, d.z);
-}
-
 static void polyline(FILE *f, const char *lay, const SqsPoint *p, int n, int closed) {
     /* a 3D polyline keeps z on every vertex */
     fprintf(f, "0\nPOLYLINE\n8\n%s\n66\n1\n10\n0\n20\n0\n30\n0\n70\n%d\n", lay, 8 | (closed ? 1 : 0));
@@ -352,11 +504,22 @@ static void polyline(FILE *f, const char *lay, const SqsPoint *p, int n, int clo
     fprintf(f, "0\nSEQEND\n8\n%s\n", lay);
 }
 
-static void write_el(const SqsElement *e, const SqsLevel *lv, int ref, void *ctx) {
-    (void)ref;
-    Out *o = ctx;
-    FILE *f = o->f;
-    const char *lay = lv ? lv->name : level_name(o->d, e->level_id);
+/* a polyface mesh: the points, then each face by 1-based point numbers */
+static void polyface(FILE *f, const char *lay, const SqsPoint *p, int np, const uint8_t (*fc)[4], int nf) {
+    fprintf(f, "0\nPOLYLINE\n8\n%s\n66\n1\n10\n0\n20\n0\n30\n0\n70\n64\n71\n%d\n72\n%d\n", lay, np, nf);
+    for (int i = 0; i < np; i++)
+        fprintf(f, "0\nVERTEX\n8\n%s\n10\n%.15g\n20\n%.15g\n30\n%.15g\n70\n192\n", lay, p[i].x, p[i].y, p[i].z);
+    for (int k = 0; k < nf; k++) {
+        fprintf(f, "0\nVERTEX\n8\n%s\n10\n0\n20\n0\n30\n0\n70\n128\n71\n%d\n72\n%d\n73\n%d\n", lay, fc[k][0] + 1,
+                fc[k][1] + 1, fc[k][2] + 1);
+        if (fc[k][3] != fc[k][2]) fprintf(f, "74\n%d\n", fc[k][3] + 1);
+    }
+    fprintf(f, "0\nSEQEND\n8\n%s\n", lay);
+}
+
+static void write_el(FILE *f, const SqsDesign *d, const SqsElement *e) {
+    const SqsLevel *lv = sqs_level(d, e->level_id);
+    const char *lay = lv ? lv->name : "0";
     switch (e->type) {
     case SQS_LINE:
         fprintf(f, "0\nLINE\n8\n%s\n", lay);
@@ -395,26 +558,30 @@ static void write_el(const SqsElement *e, const SqsLevel *lv, int ref, void *ctx
         break;
     }
     case SQS_MESH:
-        for (int k = 0; k < e->nfaces; k++)
-            face3d(f, lay, e->pts[e->faces[k][0]], e->pts[e->faces[k][1]], e->pts[e->faces[k][2]],
-                   e->pts[e->faces[k][3]]);
+        polyface(f, lay, e->pts, e->npts, (const uint8_t(*)[4])e->faces, e->nfaces);
         break;
     case SQS_SOLID: {
+        /* R12 has no solids: the solid's surface as a polyface mesh */
         SqsPoint p[64];
         uint8_t fc[64][4];
         int np, nf = sqs_solid_mesh(e, p, 64, &np, fc, 64);
-        for (int k = 0; k < nf; k++) face3d(f, lay, p[fc[k][0]], p[fc[k][1]], p[fc[k][2]], p[fc[k][3]]);
+        if (nf > 0) polyface(f, lay, p, np, (const uint8_t(*)[4])fc, nf);
         break;
     }
+    case SQS_CELLREF:
+        fprintf(f, "0\nINSERT\n8\n%s\n2\n%s\n", lay, e->text);
+        fprintf(f, "10\n%.15g\n20\n%.15g\n30\n%.15g\n", e->a.x, e->a.y, e->a.z);
+        fprintf(f, "41\n%.15g\n42\n%.15g\n43\n%.15g\n50\n%.15g\n", e->scale, e->scale, e->scale, e->rot_deg);
+        break;
     default:
         break;
     }
 }
 
-/* Levels as layers with their colours (negative when hidden or frozen), then
- * every shown element with cells expanded: lines, arcs and circles, text,
- * 3D polylines for polylines, shapes and curves, and 3DFACEs for meshes and
- * solids. R12 (AC1009) ASCII DXF. */
+/* Levels as layers with their colours (negative when hidden, flag 1 when
+ * frozen), cells as BLOCKS, then the elements: lines, arcs and circles,
+ * text, 3D polylines for polylines, shapes and curves, polyface meshes for
+ * meshes and solids, and INSERTs for placed cells. R12 (AC1009) ASCII DXF. */
 int sqs_export_dxf(const SqsDesign *d, const char *path) {
     FILE *f = fopen(path, "w");
     if (!f) return -1;
@@ -435,13 +602,22 @@ int sqs_export_dxf(const SqsDesign *d, const char *path) {
     }
     fprintf(f, "0\nENDTAB\n0\nENDSEC\n");
 
+    fprintf(f, "0\nSECTION\n2\nBLOCKS\n");
+    for (int i = 0; i < d->cell_count; i++) {
+        const SqsCell *c = &d->cells[i];
+        fprintf(f, "0\nBLOCK\n8\n0\n2\n%s\n70\n0\n10\n%.15g\n20\n%.15g\n30\n%.15g\n3\n%s\n", c->name, c->origin.x,
+                c->origin.y, c->origin.z, c->name);
+        for (int j = 0; j < c->member_count; j++) {
+            const SqsElement *m = sqs_find(d, c->member_ids[j]);
+            if (m) write_el(f, d, m);
+        }
+        fprintf(f, "0\nENDBLK\n8\n0\n");
+    }
+    fprintf(f, "0\nENDSEC\n");
+
     fprintf(f, "0\nSECTION\n2\nENTITIES\n");
-    Out o = {f, d};
-    /* hidden levels still go out (the layer is off), so walk a copy with every level shown */
-    static SqsDesign all;
-    all = *d;
-    for (int i = 0; i < all.level_count; i++) all.levels[i].visible = 1, all.levels[i].frozen = 0;
-    sqs_visit(&all, NULL, 0, write_el, &o);
+    for (int i = 0; i < d->element_count; i++)
+        if (!sqs_in_cell(d, d->elements[i].id)) write_el(f, d, &d->elements[i]);
     fprintf(f, "0\nENDSEC\n0\nEOF\n");
     int bad = ferror(f);
     bad |= fclose(f) != 0;

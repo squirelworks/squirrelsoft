@@ -11,10 +11,11 @@ DXF back into MicroStation. See `samples/microstation_bridge.dxf`.
 
 A design holds levels, elements, cell definitions and reference attachments.
 `sqs_visit` walks it as drawn: hidden and frozen levels left out, cell
-placements expanded (innermost transform first, at most four deep and a fixed
+members drawn only through their placements, cell placements expanded (innermost transform first, at most four deep and a fixed
 number of elements per walk), and attached references moved and scaled.
-Snapping, DXF export and the CLI all go through that one walk, so what is
-snapped to is what is drawn.
+Snapping and the CLI go through that one walk, so what is snapped to is what
+is drawn. DXF export instead writes the structure (BLOCKS and INSERTs) so
+that cells survive the trip.
 
 `.sqdgn` is line-oriented text (`SQDGN 2`, one record per line). `.sqdgnb` is
 `SQDGNB\1\0` followed by tagged little-endian records, each with its length;
