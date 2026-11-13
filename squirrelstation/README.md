@@ -26,14 +26,21 @@ In MicroStation: **File → Export → DXF/DWG** (choose DXF), then:
 Imported DXF entities: `LINE`, `CIRCLE`, `ARC`, `TEXT`/`MTEXT`, `LWPOLYLINE`
 (as line segments), plus `LAYER` table → levels.
 
-## Features (v0)
+## Features
 
-- 3D point / line / arc / text elements
-- Named levels with display flags
-- Cells (reusable element groups) and cell library stubs
-- Accu-style endpoint / midpoint / intersection snaps
-- Text `.sqdgn` + ASCII DXF interchange
-- CLI: create, list, snap-query, DXF import/export
+- Elements: line, arc/circle, text, polyline, curve (Catmull-Rom through its
+  points), shape (closed outline), mesh (triangles and quads), and box,
+  cylinder and sphere solids; length, area and volume for each
+- Levels with on/off and frozen flags (hidden and frozen levels are neither
+  drawn nor snapped to)
+- Cells: element groups placed with scale and rotation, cells of cells
+- Reference attachments: other designs shown and snapped to, moved and scaled
+- Accu-style snaps: endpoint, midpoint, centre, intersection, keypoint
+  (vertices, solid and cell origins) and nearest
+- AccuDraw-style keyins: `xy=x,y[,z]`, `dl=dx,dy[,dz]`, `di=dist,angle`
+- Files: text `.sqdgn` (v2, reads v1) and binary `.sqdgnb`, every record and
+  length checked; `convert` between them; ASCII DXF import and export (solids
+  and meshes export as 3DFACE, curves as sampled polylines)
 
 ## Build
 
@@ -46,9 +53,18 @@ make test
 ## Example
 
 ```bash
-./build/squirrelstation new demo.sqdgn
-./build/squirrelstation line demo.sqdgn 0,0,0 10,0,0
-./build/squirrelstation arc demo.sqdgn 0,0,0 5 0 90
-./build/squirrelstation import-dxf from_ms.sqdgn samples/microstation_bridge.dxf
-./build/squirrelstation list from_ms.sqdgn
+S=./build/squirrelstation
+$S new demo.sqdgn
+$S level demo.sqdgn walls 0xFF0000
+$S line demo.sqdgn 0,0 dl=10,0 --level walls     # id 3
+$S shape demo.sqdgn 20,0 30,0 30,10 20,10
+$S curve demo.sqdgn 0,20 di=10,0 dl=0,5
+$S solid demo.sqdgn box 40,0,0 2,3,4
+$S cell demo.sqdgn door 0,0 3
+$S place demo.sqdgn door 100,0 2 90
+$S attach demo.sqdgn survey.sqdgn 200,0,0 1
+$S snap demo.sqdgn 100.1,19.9 0.5             # endpoint of the placed door
+$S measure demo.sqdgn 3
+$S convert demo.sqdgn demo.sqdgnb
+$S export-dxf demo.sqdgn demo.dxf
 ```

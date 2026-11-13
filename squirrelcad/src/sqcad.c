@@ -1,5 +1,6 @@
 #include "sqcad.h"
 
+#include <limits.h>
 #include <math.h>
 #include <stdio.h>
 #include <string.h>
@@ -308,6 +309,13 @@ int sqc_read_sqdwg(SqcDrawing *dwg, const char *path) {
         }
     }
     fclose(f);
+    f = NULL;
+    /* ids are positive and leave room to hand out more */
+    for (int i = 0; i < dwg->ent_count; i++)
+        if (dwg->ents[i].id <= 0 || dwg->ents[i].id >= INT_MAX / 2) goto bad;
+    for (int i = 0; i < dwg->layer_count; i++)
+        if (dwg->layers[i].id <= 0 || dwg->layers[i].id >= INT_MAX / 2) goto bad;
+    if (dwg->next_id < 0 || dwg->next_id >= INT_MAX / 2) goto bad;
     /* ids must stay unique after this: never hand out one already used */
     for (int i = 0; i < dwg->ent_count; i++)
         if (dwg->ents[i].id >= dwg->next_id) dwg->next_id = dwg->ents[i].id + 1;
@@ -320,7 +328,7 @@ int sqc_read_sqdwg(SqcDrawing *dwg, const char *path) {
     }
     return 0;
 bad:
-    fclose(f);
+    if (f) fclose(f);
     return -2;
 }
 
@@ -413,15 +421,18 @@ double sqc_ent_area(const SqcEntity *e) {
 }
 
 #define VISIT_DEPTH 8
+#define VISIT_BUDGET 200000 /* entities given out by one visit, however inserts nest */
 
 static void visit_ent(const SqcDrawing *dwg, const SqcEntity *e, const SqcLayer *outer, SqcPoint base, double s,
-                      double rot, SqcPoint move, int depth, SqcVisit fn, void *ctx) {
+                      double rot, SqcPoint move, int depth, SqcVisit fn, void *ctx, int *budget) {
+    if (*budget <= 0) return;
     const SqcLayer *L = sqc_layer_of(dwg, e->layer_id);
     if (outer && (!L || strcmp(L->name, "0") == 0)) L = outer; /* layer 0 parts take the insert's layer */
     if (L && !L->on) return;
     if (e->type != SQC_ENT_INSERT) {
         SqcEntity t = *e;
         if (depth > 0) sqc_transform(&t, base, s, rot, move);
+        --*budget;
         fn(&t, L, ctx);
         return;
     }
@@ -432,7 +443,7 @@ static void visit_ent(const SqcDrawing *dwg, const SqcEntity *e, const SqcLayer 
     SqcEntity at = *e;
     if (depth > 0) sqc_transform(&at, base, s, rot, move);
     SqcPoint mv = {at.p1.x - b->base.x, at.p1.y - b->base.y, at.p1.z - b->base.z};
-    for (int j = 0; j < b->ent_count; j++) {
+    for (int j = 0; j < b->ent_count && *budget > 0; j++) {
         const SqcEntity *m = NULL;
         for (int i = 0; i < dwg->ent_count; i++)
             if (dwg->ents[i].id == b->ent_ids[j]) m = &dwg->ents[i];
@@ -443,22 +454,24 @@ static void visit_ent(const SqcDrawing *dwg, const SqcEntity *e, const SqcLayer 
             const SqcLayer *ML = sqc_layer_of(dwg, t.layer_id);
             if (!ML || strcmp(ML->name, "0") == 0) ML = L;
             if (ML && !ML->on) continue;
+            --*budget;
             fn(&t, ML, ctx);
         } else {
             /* a nested insert: place it, then expand it at the next depth with no further transform */
             sqc_transform(&t, b->base, at.scale, at.rotation_deg, mv);
             SqcPoint zero = {0, 0, 0};
-            visit_ent(dwg, &t, L, zero, 1, 0, zero, depth + 1 > 0 ? depth + 1 : 1, fn, ctx);
+            visit_ent(dwg, &t, L, zero, 1, 0, zero, depth + 1, fn, ctx, budget);
         }
     }
 }
 
 void sqc_visit(const SqcDrawing *dwg, SqcVisit fn, void *ctx) {
     SqcPoint zero = {0, 0, 0};
-    for (int i = 0; i < dwg->ent_count; i++) {
+    int budget = VISIT_BUDGET;
+    for (int i = 0; i < dwg->ent_count && budget > 0; i++) {
         const SqcEntity *e = &dwg->ents[i];
         if (sqc_in_block(dwg, e->id)) continue;
-        visit_ent(dwg, e, NULL, zero, 1, 0, zero, 0, fn, ctx);
+        visit_ent(dwg, e, NULL, zero, 1, 0, zero, 0, fn, ctx, &budget);
     }
 }
 

@@ -1,6 +1,7 @@
 #include "sqs_dxf.h"
 
 #include <ctype.h>
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -196,7 +197,7 @@ int sqs_import_dxf(SqsDesign *d, const char *path, SqsDxfStats *stats_out) {
             layer[1] = 0;
             x = y = z = x1 = y1 = z1 = 0;
 
-            snprintf(entity, sizeof(entity), "%s", pair.val);
+            snprintf(entity, sizeof(entity), "%.63s", pair.val);
             if (eqi(entity, "SECTION")) {
                 /* next 2 = name */
             } else if (eqi(entity, "ENDSEC")) {
@@ -233,7 +234,7 @@ int sqs_import_dxf(SqsDesign *d, const char *path, SqsDxfStats *stats_out) {
         if (!collecting) continue;
 
         if (pair.code == 8) {
-            snprintf(layer, sizeof(layer), "%s", pair.val);
+            snprintf(layer, sizeof(layer), "%.63s", pair.val);
         } else if (pair.code == 10) {
             x = atof(pair.val);
             if (eqi(entity, "LWPOLYLINE") && lw_count < 256) {
@@ -262,7 +263,7 @@ int sqs_import_dxf(SqsDesign *d, const char *path, SqsDxfStats *stats_out) {
         else if (pair.code == 51)
             a1 = atof(pair.val);
         else if (pair.code == 1 || pair.code == 3)
-            snprintf(text, sizeof(text), "%s", pair.val);
+            snprintf(text, sizeof(text), "%.63s", pair.val);
         else if (pair.code == 70 && eqi(entity, "LWPOLYLINE"))
             lw_closed = (atoi(pair.val) & 1) != 0;
         else if (pair.code == 90 && eqi(entity, "LWPOLYLINE"))
@@ -315,6 +316,105 @@ static const char *level_name(const SqsDesign *d, int id) {
     return "0";
 }
 
+/* the nearest of the seven basic DXF colours to 0xRRGGBB */
+static int aci(uint32_t rgb) {
+    static const uint32_t BASIC[8] = {0, 0xff0000, 0xffff00, 0x00ff00, 0x00ffff, 0x0000ff, 0xff00ff, 0xffffff};
+    int best = 7;
+    long bd = -1;
+    for (int k = 1; k <= 7; k++) {
+        long dr = (long)((rgb >> 16) & 255) - (long)((BASIC[k] >> 16) & 255);
+        long dg = (long)((rgb >> 8) & 255) - (long)((BASIC[k] >> 8) & 255);
+        long db = (long)(rgb & 255) - (long)(BASIC[k] & 255);
+        long dd = dr * dr + dg * dg + db * db;
+        if (bd < 0 || dd < bd) bd = dd, best = k;
+    }
+    return best;
+}
+
+typedef struct {
+    FILE *f;
+    const SqsDesign *d;
+} Out;
+
+static void face3d(FILE *f, const char *lay, SqsPoint a, SqsPoint b, SqsPoint c, SqsPoint d) {
+    fprintf(f, "0\n3DFACE\n8\n%s\n", lay);
+    fprintf(f, "10\n%.15g\n20\n%.15g\n30\n%.15g\n", a.x, a.y, a.z);
+    fprintf(f, "11\n%.15g\n21\n%.15g\n31\n%.15g\n", b.x, b.y, b.z);
+    fprintf(f, "12\n%.15g\n22\n%.15g\n32\n%.15g\n", c.x, c.y, c.z);
+    fprintf(f, "13\n%.15g\n23\n%.15g\n33\n%.15g\n", d.x, d.y, d.z);
+}
+
+static void polyline(FILE *f, const char *lay, const SqsPoint *p, int n, int closed) {
+    /* a 3D polyline keeps z on every vertex */
+    fprintf(f, "0\nPOLYLINE\n8\n%s\n66\n1\n10\n0\n20\n0\n30\n0\n70\n%d\n", lay, 8 | (closed ? 1 : 0));
+    for (int i = 0; i < n; i++)
+        fprintf(f, "0\nVERTEX\n8\n%s\n10\n%.15g\n20\n%.15g\n30\n%.15g\n70\n32\n", lay, p[i].x, p[i].y, p[i].z);
+    fprintf(f, "0\nSEQEND\n8\n%s\n", lay);
+}
+
+static void write_el(const SqsElement *e, const SqsLevel *lv, int ref, void *ctx) {
+    (void)ref;
+    Out *o = ctx;
+    FILE *f = o->f;
+    const char *lay = lv ? lv->name : level_name(o->d, e->level_id);
+    switch (e->type) {
+    case SQS_LINE:
+        fprintf(f, "0\nLINE\n8\n%s\n", lay);
+        fprintf(f, "10\n%.15g\n20\n%.15g\n30\n%.15g\n", e->a.x, e->a.y, e->a.z);
+        fprintf(f, "11\n%.15g\n21\n%.15g\n31\n%.15g\n", e->b.x, e->b.y, e->b.z);
+        break;
+    case SQS_ARC:
+        if (fabs(e->sweep_deg) >= 359.999) {
+            fprintf(f, "0\nCIRCLE\n8\n%s\n", lay);
+            fprintf(f, "10\n%.15g\n20\n%.15g\n30\n%.15g\n40\n%.15g\n", e->a.x, e->a.y, e->a.z, e->radius);
+        } else {
+            /* DXF arcs run counter-clockwise from 50 to 51 */
+            double s = e->sweep_deg >= 0 ? e->start_deg : e->start_deg + e->sweep_deg;
+            double end = s + fabs(e->sweep_deg);
+            fprintf(f, "0\nARC\n8\n%s\n", lay);
+            fprintf(f, "10\n%.15g\n20\n%.15g\n30\n%.15g\n40\n%.15g\n", e->a.x, e->a.y, e->a.z, e->radius);
+            fprintf(f, "50\n%.15g\n51\n%.15g\n", s, end);
+        }
+        break;
+    case SQS_TEXT:
+        fprintf(f, "0\nTEXT\n8\n%s\n", lay);
+        fprintf(f, "10\n%.15g\n20\n%.15g\n30\n%.15g\n", e->a.x, e->a.y, e->a.z);
+        fprintf(f, "40\n1.0\n1\n%s\n", e->text);
+        break;
+    case SQS_PLINE:
+    case SQS_SHAPE:
+        polyline(f, lay, e->pts, e->npts, e->type == SQS_SHAPE);
+        break;
+    case SQS_CURVE: {
+        /* R12 has no spline: the curve as a fine polyline through its points */
+        enum { STEPS = 8 };
+        SqsPoint p[(SQS_MAX_PTS - 1) * STEPS + 1];
+        int n = 0, steps = STEPS * (e->npts - 1);
+        for (int k = 0; k <= steps; k++) p[n++] = sqs_curve_at(e, (double)k / steps);
+        polyline(f, lay, p, n, 0);
+        break;
+    }
+    case SQS_MESH:
+        for (int k = 0; k < e->nfaces; k++)
+            face3d(f, lay, e->pts[e->faces[k][0]], e->pts[e->faces[k][1]], e->pts[e->faces[k][2]],
+                   e->pts[e->faces[k][3]]);
+        break;
+    case SQS_SOLID: {
+        SqsPoint p[64];
+        uint8_t fc[64][4];
+        int np, nf = sqs_solid_mesh(e, p, 64, &np, fc, 64);
+        for (int k = 0; k < nf; k++) face3d(f, lay, p[fc[k][0]], p[fc[k][1]], p[fc[k][2]], p[fc[k][3]]);
+        break;
+    }
+    default:
+        break;
+    }
+}
+
+/* Levels as layers with their colours (negative when hidden or frozen), then
+ * every shown element with cells expanded: lines, arcs and circles, text,
+ * 3D polylines for polylines, shapes and curves, and 3DFACEs for meshes and
+ * solids. R12 (AC1009) ASCII DXF. */
 int sqs_export_dxf(const SqsDesign *d, const char *path) {
     FILE *f = fopen(path, "w");
     if (!f) return -1;
@@ -326,43 +426,24 @@ int sqs_export_dxf(const SqsDesign *d, const char *path) {
 
     fprintf(f, "0\nSECTION\n2\nTABLES\n");
     fprintf(f, "0\nTABLE\n2\nLAYER\n70\n%d\n", d->level_count > 0 ? d->level_count : 1);
-    if (d->level_count == 0) {
-        fprintf(f, "0\nLAYER\n2\n0\n70\n0\n62\n7\n6\nCONTINUOUS\n");
-    }
+    if (d->level_count == 0) fprintf(f, "0\nLAYER\n2\n0\n70\n0\n62\n7\n6\nCONTINUOUS\n");
     for (int i = 0; i < d->level_count; i++) {
         const SqsLevel *lv = &d->levels[i];
-        int color = 7;
-        fprintf(f, "0\nLAYER\n2\n%s\n70\n0\n62\n%d\n6\nCONTINUOUS\n", lv->name, color);
+        int c = aci(lv->color);
+        fprintf(f, "0\nLAYER\n2\n%s\n70\n%d\n62\n%d\n6\nCONTINUOUS\n", lv->name, lv->frozen ? 1 : 0,
+                lv->visible && !lv->frozen ? c : -c);
     }
     fprintf(f, "0\nENDTAB\n0\nENDSEC\n");
 
     fprintf(f, "0\nSECTION\n2\nENTITIES\n");
-    for (int i = 0; i < d->element_count; i++) {
-        const SqsElement *e = &d->elements[i];
-        const char *lay = level_name(d, e->level_id);
-        if (e->type == SQS_LINE) {
-            fprintf(f, "0\nLINE\n8\n%s\n", lay);
-            fprintf(f, "10\n%.15g\n20\n%.15g\n30\n%.15g\n", e->a.x, e->a.y, e->a.z);
-            fprintf(f, "11\n%.15g\n21\n%.15g\n31\n%.15g\n", e->b.x, e->b.y, e->b.z);
-        } else if (e->type == SQS_ARC) {
-            if (e->sweep_deg >= 359.999) {
-                fprintf(f, "0\nCIRCLE\n8\n%s\n", lay);
-                fprintf(f, "10\n%.15g\n20\n%.15g\n30\n%.15g\n40\n%.15g\n", e->a.x, e->a.y,
-                        e->a.z, e->radius);
-            } else {
-                double end = e->start_deg + e->sweep_deg;
-                fprintf(f, "0\nARC\n8\n%s\n", lay);
-                fprintf(f, "10\n%.15g\n20\n%.15g\n30\n%.15g\n40\n%.15g\n", e->a.x, e->a.y,
-                        e->a.z, e->radius);
-                fprintf(f, "50\n%.15g\n51\n%.15g\n", e->start_deg, end);
-            }
-        } else if (e->type == SQS_TEXT) {
-            fprintf(f, "0\nTEXT\n8\n%s\n", lay);
-            fprintf(f, "10\n%.15g\n20\n%.15g\n30\n%.15g\n", e->a.x, e->a.y, e->a.z);
-            fprintf(f, "40\n1.0\n1\n%s\n", e->text);
-        }
-    }
+    Out o = {f, d};
+    /* hidden levels still go out (the layer is off), so walk a copy with every level shown */
+    static SqsDesign all;
+    all = *d;
+    for (int i = 0; i < all.level_count; i++) all.levels[i].visible = 1, all.levels[i].frozen = 0;
+    sqs_visit(&all, NULL, 0, write_el, &o);
     fprintf(f, "0\nENDSEC\n0\nEOF\n");
-    fclose(f);
-    return 0;
+    int bad = ferror(f);
+    bad |= fclose(f) != 0;
+    return bad ? -1 : 0;
 }

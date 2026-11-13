@@ -7,7 +7,7 @@ OBJ = $(BUILD)/sqstation.o $(BUILD)/sqs_dxf.o
 
 .PHONY: all test clean
 
-all: $(BUILD)/squirrelstation $(BUILD)/test_sqstation $(BUILD)/test_dxf
+all: $(BUILD)/squirrelstation $(BUILD)/test_sqstation $(BUILD)/test_dxf $(BUILD)/test_elements
 
 $(BUILD):
 	mkdir -p $(BUILD)
@@ -27,8 +27,13 @@ $(BUILD)/test_sqstation: tests/test_sqstation.c $(OBJ) | $(BUILD)
 $(BUILD)/test_dxf: tests/test_dxf.c $(OBJ) | $(BUILD)
 	$(CC) $(CFLAGS) tests/test_dxf.c $(OBJ) -o $@ $(LDFLAGS)
 
-test: $(BUILD)/test_sqstation $(BUILD)/test_dxf $(BUILD)/squirrelstation
+$(BUILD)/test_elements: tests/test_elements.c $(OBJ) | $(BUILD)
+	$(CC) $(CFLAGS) tests/test_elements.c $(OBJ) -o $@ $(LDFLAGS)
+
+test: $(BUILD)/test_sqstation $(BUILD)/test_dxf $(BUILD)/test_elements $(BUILD)/squirrelstation
 	$(BUILD)/test_sqstation
+	$(BUILD)/test_elements
+	sh tests/cli_smoke.sh $(BUILD)
 	cd $(CURDIR) && $(BUILD)/test_dxf
 	@tmp=$$(mktemp /tmp/sqsXXXXXX.sqdgn); dxf=samples/microstation_bridge.dxf; \
 	$(BUILD)/squirrelstation import-dxf $$tmp $$dxf && \

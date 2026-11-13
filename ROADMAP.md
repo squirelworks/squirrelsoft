@@ -134,10 +134,12 @@ Every item is a checkbox. Tick it in the PR that merges its last piece. Nested b
 These milestones predate the suite roadmap and remain open. Formats stay owned by this project (`.sqdgn`, `.sqdwg`, `.sqobs`).
 
 ### SquirrelStation
-- [ ] Element graph: line, arc, curve, mesh, solid placeholders
-- [ ] Levels, cells, reference attachments
-- [ ] Accu-style snaps and precise keyed input
-- [ ] `.sqdgn` text interchange + binary sketch
+- [x] Element graph: line, arc, polyline, curve (Catmull-Rom), shape, mesh, box/cylinder/sphere solids; length, area, volume
+- [x] Levels (on/off, frozen), cells (nested placements with scale and rotation), reference attachments (moved and scaled)
+- [x] Accu-style snaps (endpoint, midpoint, centre, intersection, keypoint, nearest; through cells and references) and keyed input (`xy=`, `dl=`, `di=`)
+- [x] `.sqdgn` text interchange (v2, reads v1) + `.sqdgnb` binary sketch, both bounds-checked; DXF export of every element kind
+- [ ] Desktop window on sqgui (views, AccuDraw compass, element selection)
+- [ ] DXF import of polylines as one element, BLOCKS as cells
 
 ### SquirrelCAD
 - [x] Classic command loop: LINE, CIRCLE, ARC, PLINE, LAYER, BLOCK, INSERT, plus ERASE/MOVE/COPY/ROTATE/SCALE, UNDO, LIST/DIST/AREA (`squirrelcad run`)
