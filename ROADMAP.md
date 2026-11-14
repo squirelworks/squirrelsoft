@@ -1,6 +1,6 @@
 # SquirrelSoft roadmap
 
-State as of `main` at `df90602` (2026-11-14). Android native apps (Kotlin, Android Views, CameraX/ML Kit, AudioRecord, NfcF):
+State as of `main` at `ea697b9` (2026-11-14). Android native apps (Kotlin, Android Views, CameraX/ML Kit, AudioRecord, NfcF):
 **SquirrelSuica 0.0.12**, **SquirrelSuicaAnalysis 0.0.3**, **SquirrelSound 0.0.13**, **SquirrelQR 0.1.6** on Play closed testing;
 `main` also has SquirrelSound **0.0.14** / **0.0.15**, SquirrelQR **0.1.7**, SquirrelSuica **0.0.13** / **0.0.14** waiting for Play upload *(Squirrel)*.
 Desktop C tools: SquirrelStation, SquirrelCAD, SquirrelGNSS, `sqdsp` + live SDL spectrum, and the desktop readers

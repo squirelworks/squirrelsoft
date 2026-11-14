@@ -85,10 +85,13 @@ it. Bugs then get fixed once.
 ### 3c. Keep the docs honest automatically
 During this hand-off the roadmaps were several merged PRs behind `main`
 (boxes for EINJ, UAS, A.6, P.9 and others were done but unticked). Add a small
-`tools/docs_lint.py` to each repo's CI: every `- [x]` box in `TODO.md` that
-names a check must find that check in `tools/regress.sh` / `tests/smoke.sh`,
-and every check named by an open box must not exist yet. It is cheap and
-stops the drift that makes hand-offs expensive.
+`tools/docs_lint.py` to each repo's CI: every `- [x]` box in `TODO.md` /
+`ROADMAP.md` that names a check must find that check in the repo's harness
+(`tools/regress.sh`, `tests/smoke.sh`, or squirrelsoft's `make test` targets
+and scripts), and every check named by an open box must not exist yet. It is
+cheap and stops the drift that makes hand-offs expensive. squirrelsoft has
+`tools/docs_lint.py` on `make test` (allowlist at
+`tools/docs_lint_allowlist.txt`); BIOS and OS/2 still need the same.
 
 ### 3d. Make the test gates scale
 `regress.sh` runs about 750 checks in one long serial QEMU session, and
