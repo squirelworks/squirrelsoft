@@ -1,0 +1,29 @@
+# Suggested CI for squirrelsoft-cad (Station + CAD; copy to .github/workflows/ci.yml after split).
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  host:
+    name: make test (Station + CAD)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install SDL2
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libsdl2-dev libsdl2-ttf-dev xvfb xauth
+      - name: make test
+        run: |
+          make -C libs/sqgui test
+          make -C squirrelstation test
+          make -C squirrelcad test

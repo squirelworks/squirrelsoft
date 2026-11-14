@@ -1,0 +1,50 @@
+# Suggested CI for squirrelsoft-qr (copy to .github/workflows/ci.yml after split).
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  host:
+    name: make test (sqqr + SquirrelQR desktop)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install SDL2 / X11
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libsdl2-dev libsdl2-ttf-dev libx11-dev xvfb xauth
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: make test
+        run: |
+          make -C libs/sqqr test
+          make -C libs/sqgui test
+          make -C squirrelqr test
+
+  android:
+    name: Android squirrelqr
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: squirrelqr/android
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Assemble debug APK and run unit tests
+        run: ./gradlew --no-daemon :app:assembleDebug :app:testDebugUnitTest

@@ -117,7 +117,8 @@ The same states are labels on the GitHub issues (`status: done`, `status: in pro
 - Each designed so its core compiles for Squirrel OS/2 (freestanding C, no libc beyond a small shim).
 
 ## S6 — Repo split (#32)
-- [ ] *(Squirrel creates the repos; Cursor/Codex prepares the tree)* When an app has its own core lib, desktop + Android front-ends and CI: move to `squirrelsoft-suica`, `squirrelsoft-soundanalysis`, `squirrelsoft-qr`, `squirrelsoft-cad` (Station+CAD), `squirrelsoft-gnss`, `squirrelsoft-calc`, `squirrelsoft-games`, keeping history (`git filter-repo` by the human). `squirrelsoft` stays as the umbrella with shared libs and Play scripts. The human performs the actual repo creation.
+- [x] Prep inventory (agent): `scripts/s6_repo_split_prep.sh`, `docs/s6-repo-split.md`, `docs/s6-ci-stubs/` — path lists, suggested CI, umbrella README link draft. No remotes created or deleted.
+- [ ] *(Squirrel)* When an app has its own core lib, desktop + Android front-ends and CI: move to `squirrelsoft-suica`, `squirrelsoft-suica-analysis`, `squirrelsoft-soundanalysis`, `squirrelsoft-qr`, `squirrelsoft-cad` (Station+CAD), `squirrelsoft-gnss`, `squirrelsoft-calc`, `squirrelsoft-games`, keeping history (`git filter-repo` by the human). `squirrelsoft` stays as the umbrella with shared libs and Play scripts. The human performs the actual repo creation.
 
 ## Ongoing per app
 - SquirrelSuica
