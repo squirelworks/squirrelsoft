@@ -3,10 +3,14 @@ SQDSP = ../libs/sqdsp
 SQGUI = ../libs/sqgui
 # _DARWIN_C_SOURCE: mkdtemp and friends stay visible on macOS with POSIX_C_SOURCE.
 CFLAGS ?= -std=c11 -Wall -Wextra -O2 -D_POSIX_C_SOURCE=200809L -D_DARWIN_C_SOURCE
-CFLAGS += -Iinclude -I$(SQDSP)/include -I$(SQGUI)/include
+CFLAGS += -Iinclude -I$(SQDSP)/include -I$(SQGUI)/include -Isrc
 
 LDFLAGS ?= -lm
 BUILD = build
+
+UNAME_S := $(shell uname -s 2>/dev/null || echo Unknown)
+IS_WIN := $(findstring MINGW,$(UNAME_S))$(findstring MSYS,$(UNAME_S))$(findstring CYGWIN,$(UNAME_S))
+IS_MAC := $(findstring Darwin,$(UNAME_S))
 
 # Optional live backends
 HAS_SDL := $(shell pkg-config --exists sdl2 && echo 1)
@@ -22,9 +26,23 @@ CFLAGS += -DSQSOUND_HAS_ALSA $(shell pkg-config --cflags alsa)
 LDFLAGS += $(shell pkg-config --libs alsa)
 endif
 
+# Native system-audio loopback: WASAPI (Windows) / CoreAudio (+ SCK) (macOS).
+ifneq ($(IS_WIN),)
+CFLAGS += -DSQSOUND_HAS_NATIVE_LOOPBACK
+LDFLAGS += -lole32 -lksuser
+NATIVE_LB_OBJ = $(BUILD)/live_audio_wasapi.o
+endif
+ifneq ($(IS_MAC),)
+CFLAGS += -DSQSOUND_HAS_NATIVE_LOOPBACK
+LDFLAGS += -framework CoreAudio -framework AudioToolbox -framework Foundation \
+	-framework CoreMedia -framework ScreenCaptureKit
+NATIVE_LB_OBJ = $(BUILD)/live_audio_coreaudio.o
+endif
+
 LIB_OBJ = $(BUILD)/wavio.o $(BUILD)/synth.o $(BUILD)/spectrogram.o \
 	$(BUILD)/live_audio.o $(BUILD)/live_engine.o $(BUILD)/live_prefs.o \
-	$(BUILD)/live_view_headless.o $(BUILD)/live_view_sdl.o $(BUILD)/live_gui.o $(BUILD)/live_record.o
+	$(BUILD)/live_view_headless.o $(BUILD)/live_view_sdl.o $(BUILD)/live_gui.o $(BUILD)/live_record.o \
+	$(NATIVE_LB_OBJ)
 
 .PHONY: all test test-jni clean android android-test
 
@@ -66,8 +84,17 @@ $(BUILD)/synth.o: src/synth.c include/synth.h | $(BUILD)
 $(BUILD)/spectrogram.o: src/spectrogram.c include/spectrogram.h $(SQDSP)/include/sqdsp.h | $(BUILD)
 	$(CC) $(CFLAGS) -c src/spectrogram.c -o $@
 
-$(BUILD)/live_audio.o: src/live_audio.c include/live_audio.h | $(BUILD)
+$(BUILD)/live_audio.o: src/live_audio.c include/live_audio.h src/live_audio_native.h | $(BUILD)
 	$(CC) $(CFLAGS) -c src/live_audio.c -o $@
+
+ifneq ($(IS_WIN),)
+$(BUILD)/live_audio_wasapi.o: src/live_audio_wasapi.c src/live_audio_native.h | $(BUILD)
+	$(CC) $(CFLAGS) -c src/live_audio_wasapi.c -o $@
+endif
+ifneq ($(IS_MAC),)
+$(BUILD)/live_audio_coreaudio.o: src/live_audio_coreaudio.m src/live_audio_native.h | $(BUILD)
+	$(CC) $(CFLAGS) -fobjc-arc -c src/live_audio_coreaudio.m -o $@
+endif
 
 $(BUILD)/live_engine.o: src/live_engine.c include/live_engine.h | $(BUILD)
 	$(CC) $(CFLAGS) -c src/live_engine.c -o $@

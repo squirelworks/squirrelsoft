@@ -66,10 +66,10 @@ The same states are labels on the GitHub issues (`status: done`, `status: in pro
 
 ## S3 — Native front-ends, desktop parity (#30, #31)
 - [x] S3.1 Retire the SquirrelQR PWA as a product: moved to `squirrelqr/web-demo/` with a "not a product" README (#66).
-- [ ] S3.2 SquirrelSound desktop: SDL2 GUI with the same split view; mic and system-audio loopback on every OS.
+- [x] S3.2 SquirrelSound desktop: SDL2 GUI with the same split view; mic and system-audio loopback on every OS.
   - [x] Step 1: capture sources: `--source mic` (SDL2 capture), `--device`, `--source loopback` from the PulseAudio/PipeWire monitor source, `squirrelsound devices`; CI with SDL's disk driver and a null sink (#78).
-  - [ ] WASAPI loopback on Windows *(in progress — PR #141)*
-  - [ ] macOS system audio (ScreenCaptureKit or a virtual device) *(in progress — PR #141)*
+  - [x] WASAPI loopback on Windows (`live_audio_wasapi.c`; CI silent default render)
+  - [x] macOS system audio (`live_audio_coreaudio.m`: ScreenCaptureKit when allowed, silent CoreAudio device for CI)
   - [x] Split-view GUI window on `libs/sqgui`: toolbar, spectrum over LOFARgram, `--gui-snapshot` for CI
 - [x] S3.3 SquirrelSuica desktop: PaSoRi RC-S380/RC-S300, same `sqfelica` parsing, GUI with balance + history.
   - [x] Step 1: `squirrelsuica/desktop/`, a C reader on `sqfelica` over a transport interface, balance and history with station names, replays SuicaAnalysis dumps (#71).

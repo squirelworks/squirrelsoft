@@ -13,6 +13,9 @@
 #ifdef SQSOUND_HAS_SDL
 #include <SDL2/SDL.h>
 #endif
+#if defined(SQSOUND_HAS_NATIVE_LOOPBACK)
+#include "live_audio_native.h"
+#endif
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -40,6 +43,9 @@ struct LiveAudio {
 #endif
 #ifdef SQSOUND_HAS_SDL
     SDL_AudioDeviceID cap;
+#endif
+#if defined(SQSOUND_HAS_NATIVE_LOOPBACK)
+    LiveNativeLoopback *native_lb;
 #endif
     char device[256];
 };
@@ -102,7 +108,7 @@ static int sdl_audio_up(void) {
     return 0;
 }
 
-int live_audio_list_devices(FILE *out) {
+static int sdl_list_devices(FILE *out) {
     if (sdl_audio_up()) return -1;
     int n = SDL_GetNumAudioDevices(1);
     for (int i = 0; i < n; i++) {
@@ -113,7 +119,7 @@ int live_audio_list_devices(FILE *out) {
     return n < 0 ? 0 : n;
 }
 
-/* Open the SDL capture device for mic or loopback; mono float at the rate asked. */
+/* Open the SDL capture device for mic or (on Linux) Pulse/PipeWire loopback. */
 static int sdl_capture_open(LiveAudio *la) {
     if (sdl_audio_up()) return -1;
     const char *name = NULL; /* NULL = the system's default input */
@@ -145,7 +151,8 @@ static int sdl_capture_open(LiveAudio *la) {
         SDL_free(sink);
         if (k < 0) {
             fprintf(stderr, "loopback: no %s among the capture devices (audio driver %s); "
-                            "system audio capture needs PulseAudio or PipeWire for now. "
+                            "system audio capture needs PulseAudio or PipeWire on Linux, "
+                            "WASAPI on Windows, or CoreAudio on macOS. "
                             "See: squirrelsound devices\n",
                     la->cfg.device ? "matching device" : "monitor source",
                     SDL_GetCurrentAudioDriver() ? SDL_GetCurrentAudioDriver() : "none");
@@ -177,13 +184,32 @@ static int sdl_capture_open(LiveAudio *la) {
     }
     return 0;
 }
-#else
+#endif
+
 int live_audio_list_devices(FILE *out) {
+#if defined(SQSOUND_HAS_NATIVE_LOOPBACK)
+    int native = live_native_loopback_list(out);
+#endif
+#ifdef SQSOUND_HAS_SDL
+    {
+        int n = sdl_list_devices(out);
+#if defined(SQSOUND_HAS_NATIVE_LOOPBACK)
+        if (n < 0 && native < 0) return -1;
+        if (n < 0) return native;
+        if (native < 0) return n;
+        return n + native;
+#else
+        return n;
+#endif
+    }
+#elif defined(SQSOUND_HAS_NATIVE_LOOPBACK)
+    return native;
+#else
     (void)out;
     fprintf(stderr, "this build has no SDL2 audio; install libsdl2-dev and rebuild\n");
     return -1;
-}
 #endif
+}
 
 const char *live_audio_device_name(const LiveAudio *la) { return la ? la->device : ""; }
 
@@ -234,14 +260,35 @@ LiveAudio *live_audio_open(const LiveAudioConfig *cfg) {
         return NULL;
     }
 #endif
-    if (cfg->kind == LIVE_SRC_MIC || cfg->kind == LIVE_SRC_LOOPBACK) {
+    if (cfg->kind == LIVE_SRC_LOOPBACK) {
+#if defined(SQSOUND_HAS_NATIVE_LOOPBACK)
+        la->native_lb = live_native_loopback_open(la->cfg.sample_rate, la->cfg.device, la->device,
+                                                  sizeof la->device);
+        if (!la->native_lb) {
+            free(la);
+            return NULL;
+        }
+        return la;
+#elif defined(SQSOUND_HAS_SDL)
+        if (sdl_capture_open(la) != 0) {
+            free(la);
+            return NULL;
+        }
+#else
+        fprintf(stderr, "loopback capture needs WASAPI, CoreAudio, or SDL2 Pulse/PipeWire\n");
+        free(la);
+        return NULL;
+#endif
+    }
+    if (cfg->kind == LIVE_SRC_MIC) {
 #ifdef SQSOUND_HAS_SDL
         if (sdl_capture_open(la) != 0) {
             free(la);
             return NULL;
         }
 #else
-        fprintf(stderr, "%s capture needs SDL2 (install libsdl2-dev and rebuild)\n", live_audio_kind_name(cfg->kind));
+        fprintf(stderr, "%s capture needs SDL2 (install libsdl2-dev and rebuild)\n",
+                live_audio_kind_name(cfg->kind));
         free(la);
         return NULL;
 #endif
@@ -260,6 +307,9 @@ void live_audio_close(LiveAudio *la) {
 #ifdef SQSOUND_HAS_SDL
     if (la->cap) SDL_CloseAudioDevice(la->cap);
 #endif
+#if defined(SQSOUND_HAS_NATIVE_LOOPBACK)
+    if (la->native_lb) live_native_loopback_close(la->native_lb);
+#endif
     free(la);
 }
 
@@ -275,6 +325,9 @@ int live_audio_start(LiveAudio *la) {
 #ifdef SQSOUND_HAS_SDL
     if (la->cap) SDL_PauseAudioDevice(la->cap, 0);
 #endif
+#if defined(SQSOUND_HAS_NATIVE_LOOPBACK)
+    if (la->native_lb && live_native_loopback_start(la->native_lb) != 0) return -1;
+#endif
     return 0;
 }
 
@@ -286,6 +339,9 @@ void live_audio_stop(LiveAudio *la) {
 #endif
 #ifdef SQSOUND_HAS_SDL
     if (la->cap) SDL_PauseAudioDevice(la->cap, 1);
+#endif
+#if defined(SQSOUND_HAS_NATIVE_LOOPBACK)
+    if (la->native_lb) live_native_loopback_stop(la->native_lb);
 #endif
 }
 
@@ -376,14 +432,11 @@ int live_audio_poll(LiveAudio *la) {
         return (int)got;
     }
 #endif
-#ifdef SQSOUND_HAS_SDL
-    if (la->cap) {
-        float f[2048];
-        Uint32 bytes = SDL_DequeueAudio(la->cap, f, sizeof f);
-        size_t got = bytes / sizeof(float);
-        for (size_t i = 0; i < got; i++) chunk[i] = f[i];
-        ring_write(la, chunk, got);
-        return (int)got;
+#if defined(SQSOUND_HAS_NATIVE_LOOPBACK)
+    if (la->native_lb) {
+        int got = live_native_loopback_poll(la->native_lb, chunk, sizeof chunk / sizeof chunk[0]);
+        if (got > 0) ring_write(la, chunk, (size_t)got);
+        return got;
     }
 #endif
 #ifdef SQSOUND_HAS_SDL

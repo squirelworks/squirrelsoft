@@ -33,8 +33,8 @@ static void usage(void) {
     puts("  squirrelsound help");
     puts("");
     puts("Live sources: mic is the default input (or --device NAME); loopback is what the");
-    puts("computer is playing, from a PulseAudio/PipeWire monitor source; alsa reads an ALSA");
-    puts("device directly; demo and wav need no hardware.");
+    puts("computer is playing (Pulse/PipeWire monitor, WASAPI, or CoreAudio); alsa reads an");
+    puts("ALSA device directly; demo and wav need no hardware.");
 }
 
 static const char *get_opt(int argc, char **argv, const char *key, const char *def) {

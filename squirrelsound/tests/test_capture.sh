@@ -1,9 +1,12 @@
 #!/bin/sh
 # Live capture without audio hardware.
 #  mic: SDL's disk audio driver feeds a 1 kHz tone file to --source mic.
-#  loopback: a PulseAudio null sink plays a 1.5 kHz tone and --source loopback
-#    must hear it through the sink's monitor. Skipped when pulseaudio/paplay
-#    are missing, unless REQUIRE_LOOPBACK=1 (CI).
+#  loopback (Linux): a PulseAudio null sink plays a 1.5 kHz tone and
+#    --source loopback must hear it through the sink's monitor. Skipped when
+#    pulseaudio/paplay are missing, unless REQUIRE_LOOPBACK=1 (CI).
+#  loopback (Windows/macOS): native WASAPI / CoreAudio lists a monitor and
+#    --source loopback captures against the (typically silent) default
+#    render device. Required when REQUIRE_NATIVE_LOOPBACK=1 (CI).
 # Usage: sh tests/test_capture.sh BUILD
 set -e
 b="${1:?build dir}"
@@ -38,6 +41,20 @@ echo "squirrelsound mic capture ok"
 
 # a bad source name is an error
 if "$q" live --source nope --headless --frames 1 2>/dev/null; then echo "bad source accepted"; exit 1; fi
+
+uname_s=$(uname -s 2>/dev/null || echo unknown)
+case "$uname_s" in
+Darwin*|MINGW*|MSYS*|CYGWIN*)
+    "$q" devices 2>"$tmp/dev.err" | tee "$tmp/devs.txt" | grep -qi '^monitor' \
+        || { echo "loopback: no monitor listed"; cat "$tmp/devs.txt" "$tmp/dev.err"; exit 1; }
+    "$q" live --source loopback --headless --frames 8 > "$tmp/lb.txt" 2> "$tmp/lb.err" \
+        || { echo "loopback: capture failed"; cat "$tmp/lb.err" "$tmp/lb.txt"; exit 1; }
+    grep -qi 'Monitor of ' "$tmp/lb.err" || { echo "loopback: wrong device"; cat "$tmp/lb.err"; exit 1; }
+    grep -q 'src=loopback' "$tmp/lb.txt" || { echo "loopback: no frames"; cat "$tmp/lb.txt"; exit 1; }
+    echo "squirrelsound native loopback capture ok (silent device)"
+    exit 0
+    ;;
+esac
 
 if ! command -v pulseaudio >/dev/null || ! command -v paplay >/dev/null; then
     [ "${REQUIRE_LOOPBACK:-0}" = 1 ] && { echo "loopback test required but pulseaudio/paplay are missing"; exit 1; }

@@ -30,12 +30,11 @@ Used here, in `ROADMAP.md` and on the issues (as labels).
   peak labels), SquirrelQR **0.1.7** (torch / zoom / batch), SquirrelSuica
   **0.0.13** (issuer labels, bus rows, WAON) and **0.0.14** (MIT station tables).
 - **Desktop (C, SDL2 via `libs/sqgui`):** SquirrelStation, SquirrelCAD,
-  SquirrelGNSS, SquirrelSound (mic + PulseAudio/PipeWire loopback, GUI; Win/mac
-  system-audio still open), SquirrelSuica (PC/SC, RC-S380 over libusb, GUI,
-  CSV — S3.3 done), SquirrelQR (files, PNG, X11/portal/Win/mac capture, V4L2
-  webcam, GUI, encoder — S3.4 done via #138 / #142), SquirrelCalc, SquirrelPaint,
-  SquirrelGames, SquirrelDebug. Everything in S5 is done. PKG (S3.5 + S4) is on
-  `main`.
+  SquirrelGNSS, SquirrelSound (mic + Pulse/WASAPI/CoreAudio loopback, GUI),
+  SquirrelSuica (PC/SC, RC-S380 over libusb, GUI, CSV — S3.3 done), SquirrelQR
+  (files, PNG, X11/portal/Win/mac capture, V4L2 webcam, GUI, encoder — S3.4 done
+  via #138 / #142), SquirrelCalc, SquirrelPaint, SquirrelGames, SquirrelDebug.
+  Everything in S5 is done. PKG (S3.5 + S4) is on `main`.
 - **Shared cores:** `libs/sqdsp`, `libs/sqfelica`, `libs/sqqr`, `libs/sqmath`, `libs/sqgui`.
 - **Test gate:** `make test` on ubuntu / windows / macos (every lib and program,
   the Python SuicaAnalysis twin, and host JNI smokes for QR / Sound /
@@ -43,9 +42,6 @@ Used here, in `ROADMAP.md` and on the issues (as labels).
   (`./gradlew :app:assembleDebug :app:testDebugUnitTest` per app), in
   `.github/workflows/ci.yml` on every PR. Desktop packages: see
   `docs/packaging.md` and `.github/workflows/release.yml`.
-- **Open PRs:** [#141](https://github.com/squirelworks/squirrelsoft/pull/141)
-  SND-wasapi/macos (`cursor/impl-snd-wasapi-macos-2eaf`) — finish that; do not
-  claim S3.2 done on `main` until it merges.
 
 ## Rules (Squirrel's; do not break)
 
@@ -88,9 +84,9 @@ and unit-test the Kotlin against stubs.
 4. ~~**SUICA-labels + SUICA-bus + FEL-pasmo-waon**~~ (done: SquirrelSuica 0.0.13).
 5. ~~**SUICA-stations**~~ (done: SquirrelSuica 0.0.14, MIT table).
 6. ~~**PKG** (S3.5 + S4)~~ (done: packages + win/mac/ubuntu `make test` in CI).
-7. ~~**QR-webcam**~~ (done: #138, V4L2 + synthetic CI frame).
-8. ~~**QR-wayland / QR-capture-win-mac**~~ (done: #142, portal / GDI-DXGI / ScreenCaptureKit).
-9. **SND-wasapi** / **SND-macos** *(in progress — PR #141)* — finish and merge; last open S3.2 steps.
+7. ~~**SND-wasapi** / **SND-macos**~~ (done: native loopback + CI silent capture).
+8. ~~**QR-webcam**~~ (done: #138, V4L2 + synthetic CI frame).
+9. ~~**QR-wayland / QR-capture-win-mac**~~ (done: #142, portal / GDI-DXGI / ScreenCaptureKit).
 10. **S6 repo split** with Squirrel (prep inventory on `main`; see S6 card).
 11. **PLAY uploads** *(Squirrel)* — Sound 0.0.14/0.0.15, QR 0.1.7, Suica 0.0.13/0.0.14.
 
@@ -108,15 +104,13 @@ and unit-test the Kotlin against stubs.
 - Done in 0.0.15: `sqdsp_local_peaks` via `SqDsp.peaks` / `nativePeaks`; labelled
   peaks on the live or held trace; `jni-smoke` calls the new JNI entry.
 
-### SND-wasapi / SND-macos — system audio on Windows and macOS  `status: in progress` (PR #141)
-- **PR:** [#141](https://github.com/squirelworks/squirrelsoft/pull/141) on
-  `cursor/impl-snd-wasapi-macos-2eaf` — finish CI / merge; do not re-implement
-  on a new branch. Not on `main` yet (S3.2 parent stays open).
-- **Files:** `squirrelsound/src/live_audio.c`, `live_audio_wasapi.c`,
-  `live_audio_coreaudio.m` behind the same interface; Makefile.
-- **Acceptance:** `squirrelsound devices` lists the loopback source;
-  `--source loopback` captures it; CI on `windows-latest` / `macos-latest`
-  builds it and runs the capture test against a silent device.
+### SND-wasapi / SND-macos — system audio on Windows and macOS  `status: done`
+- `live_audio_wasapi.c` (WASAPI render loopback) and `live_audio_coreaudio.m`
+  (CoreAudio device list + ScreenCaptureKit when allowed, silent fallback for
+  CI) behind the same `live_audio` interface. `squirrelsound devices` lists
+  `monitor Monitor of …`; `--source loopback` captures. CI
+  `windows-latest` / `macos-latest` run `tests/test_capture.sh` against the
+  silent default render device.
 
 ### FEL-jni-smoke — JVM smoke test for `sqfelica_jni.c`  `status: done`
 - On `main` via #133 / #136 (S2 JNI box). Host build of `sqfelica_jni.c`
