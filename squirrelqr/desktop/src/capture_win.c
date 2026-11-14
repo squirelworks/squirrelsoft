@@ -3,6 +3,9 @@
  * topmost window. Original code. */
 #include "qrcapture_priv.h"
 
+/* C-callable COM method macros (IDXGIFactory1_EnumAdapters1, …). */
+#define COBJMACROS
+#define CINTERFACE
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 

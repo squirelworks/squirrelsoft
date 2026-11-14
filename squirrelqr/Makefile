@@ -117,8 +117,11 @@ endif
 $(BUILD)/%.o: desktop/src/%.c $(HDR) | $(BUILD)
 	$(CC) $(CFLAGS) -c $< -o $@
 
+# ObjC + AppKit/ScreenCaptureKit: drop -std=c11 and _POSIX_C_SOURCE so
+# Darwin BSD types (u_int/u_char) remain visible when system headers pull
+# in netinet/ip.h via CUPS/PrintCore.
 $(BUILD)/capture_mac.o: desktop/src/capture_mac.m $(HDR) | $(BUILD)
-	$(CC) $(filter-out -std=c11,$(CFLAGS)) -fobjc-arc -c $< -o $@
+	$(CC) $(filter-out -std=c11 -D_POSIX_C_SOURCE=200809L,$(CFLAGS)) -fobjc-arc -c $< -o $@
 
 $(BUILD)/squirrelqr: desktop/src/main.c $(OBJ) $(GUI_RUN) $(LIBS) | $(BUILD)
 	$(CC) $(CFLAGS) $< $(OBJ) $(GUI_RUN) $(LIBS) -o $@ $(LDLIBS)

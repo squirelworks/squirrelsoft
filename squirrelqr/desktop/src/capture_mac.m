@@ -1,6 +1,6 @@
-/* qrcapture for macOS via ScreenCaptureKit (SCScreenshotManager on 14+,
- * single-frame SCStream on 12.3–13). Rubber-band --select with a borderless
- * Cocoa overlay. Original code. */
+/* qrcapture for macOS via ScreenCaptureKit (SCScreenshotManager, macOS 14+).
+ * Rubber-band --select with a borderless Cocoa overlay. Original code.
+ * No CGDisplayCreateImage — obsolete on macOS 15 SDKs. */
 #import "qrcapture_priv.h"
 
 #import <AppKit/AppKit.h>
@@ -57,7 +57,6 @@ static int cgimage_to_gray(CGImageRef img, QrImage *out, char *err, size_t n) {
     return 0;
 }
 
-#if __MAC_OS_X_VERSION_MAX_ALLOWED >= 140000
 static int capture_sckit_shot(QrRect r, QrImage *out, char *err, size_t n) API_AVAILABLE(macos(14.0)) {
     __block SCShareableContent *content = nil;
     __block NSError *blockErr = nil;
@@ -112,32 +111,13 @@ static int capture_sckit_shot(QrRect r, QrImage *out, char *err, size_t n) API_A
     CGImageRelease(shot);
     return rc;
 }
-#endif
-
-/* Fallback for older SDKs / runtimes: CGDisplayCreateImage of the main display. */
-static int capture_cgdisplay(QrRect r, QrImage *out, char *err, size_t n) {
-    CGDirectDisplayID did = CGMainDisplayID();
-    CGImageRef full = CGDisplayCreateImage(did);
-    if (!full) return fail(err, n, "CGDisplayCreateImage failed");
-    QrImage img;
-    if (cgimage_to_gray(full, &img, err, n) != 0) {
-        CGImageRelease(full);
-        return -1;
-    }
-    CGImageRelease(full);
-    int rc = qr_capture_crop(&img, r, out, err, n);
-    if (rc != 0) qr_image_free(&img);
-    return rc;
-}
 
 int qr_capture(QrRect r, QrImage *out, char *err, size_t n) {
     if (qr_capture_try_synth(r, out, err, n)) return out->gray ? 0 : -1;
     out->w = out->h = 0;
     out->gray = NULL;
-#if __MAC_OS_X_VERSION_MAX_ALLOWED >= 140000
     if (@available(macOS 14.0, *)) return capture_sckit_shot(r, out, err, n);
-#endif
-    return capture_cgdisplay(r, out, err, n);
+    return fail(err, n, "screen capture requires macOS 14+ (ScreenCaptureKit)");
 }
 
 /* ---- rubber-band select ---- */
