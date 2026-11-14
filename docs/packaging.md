@@ -30,15 +30,13 @@ scripts/release/package_desktop.sh squirrelgnss /tmp/dist linux-x86_64
   GitHub Release. Choose app `desktop` to package the whole suite; Android app
   choices still build that app's APK plus its C desktop packages when it has one.
 
-## What this unblocks
+## What this unblocked
 
-Windows and macOS runners (and installable packages) are the gate for:
+Windows and macOS runners (and installable packages) were the gate for:
 
-- **SND-wasapi** / **SND-macos** — system-audio capture backends and their CI
-- **QR-capture-win-mac** — screen capture on Windows and macOS
-- **QR-wayland** — still Linux-only, but benefits from the same package path
-
-Those features are intentionally not implemented in the PKG PR.
+- **SND-wasapi** / **SND-macos** — system-audio capture backends (still open)
+- **QR-capture-win-mac** / **QR-wayland** — done: GDI/DXGI, ScreenCaptureKit,
+  and xdg-desktop-portal; CI decodes via `QR_CAPTURE_FRAME`
 
 ## Versions
 

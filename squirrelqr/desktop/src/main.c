@@ -56,6 +56,7 @@ static void usage(FILE *f) {
             "\n"
             "Screen capture: %s. Webcam: %s. Codes need about 3 pixels per module.\n"
             "CI / no camera: --device @shot.png or QR_WEBCAM_FRAME=shot.png --webcam.\n"
+            "CI / no display: QR_CAPTURE_FRAME=shot.png --screen or --select.\n"
             "Exit status: 0 every input decoded, 1 a code was not found, 2 usage or I/O error.\n",
             QR_VERSION, qr_capture_backend(), qr_webcam_backend());
 }
@@ -211,9 +212,9 @@ static int do_screen(const Opts *o, QrRect r, SqqrResult *res) {
         double elapsed = (double)(t.tv_sec - t0.tv_sec) + (double)(t.tv_nsec - t0.tv_nsec) / 1e9;
         if (elapsed >= o->wait) {
             fprintf(stderr, "screen: %s\n", sqqr_strerror(rc));
-            if (getenv("WAYLAND_DISPLAY"))
-                fprintf(stderr, "note: under Wayland the X11 capture only sees XWayland windows;\n"
-                                "      take a screenshot with the desktop's tool and pass the PNG file\n");
+            if (getenv("WAYLAND_DISPLAY") && strcmp(qr_capture_backend(), "portal") != 0)
+                fprintf(stderr, "note: under Wayland prefer the portal capture back end;\n"
+                                "      or take a screenshot and pass the PNG file\n");
             return 1;
         }
         nap(0.3);

@@ -1,5 +1,6 @@
-/* qrcapture: grab part of the screen as grayscale. X11 on Linux for now;
- * the Wayland portal, Windows and macOS back ends are later steps of S3.4. */
+/* qrcapture: grab part of the screen as grayscale.
+ * Back ends: X11, xdg-desktop-portal (Wayland), GDI/DXGI (Windows),
+ * ScreenCaptureKit (macOS). CI uses QR_CAPTURE_FRAME for a synthetic frame. */
 #ifndef QRCAPTURE_H
 #define QRCAPTURE_H
 
@@ -9,7 +10,7 @@ typedef struct {
     int x, y, w, h;
 } QrRect;
 
-/* Name of the compiled-in back end ("x11" or "none"). */
+/* Name of the active back end ("x11", "portal", "gdi-dxgi", "sckit", or "none"). */
 const char *qr_capture_backend(void);
 
 /* Capture rect r (w or h <= 0 means the whole screen). The rect is clipped to

@@ -9,11 +9,52 @@ BUILD = build
 QR_VERSION := $(shell sed -n 's/^ *versionName *= *"\([^"]*\)".*/\1/p' android/app/build.gradle.kts | head -1)
 CFLAGS += -DQR_VERSION='"$(QR_VERSION)"'
 
-# Screen capture back end: X11 when its headers are there (CAPTURE=none to skip).
-CAPTURE ?= $(shell pkg-config --exists x11 && echo x11 || echo none)
-ifeq ($(CAPTURE),x11)
-CFLAGS += -DQR_TEST_X11 $(shell pkg-config --cflags x11)
+UNAME_S := $(shell uname -s 2>/dev/null || echo unknown)
+
+# Screen capture: win / mac / linux (portal+X11) / portal / x11 / none.
+# Override with CAPTURE=...  Synthetic CI frames: QR_CAPTURE_FRAME=path.
+ifneq ($(findstring MINGW,$(UNAME_S))$(findstring MSYS,$(UNAME_S))$(findstring CYGWIN,$(UNAME_S)),)
+CAPTURE_AUTO := win
+else ifeq ($(UNAME_S),Darwin)
+CAPTURE_AUTO := mac
+else
+HAS_X11 := $(shell pkg-config --exists x11 && echo 1)
+HAS_DBUS := $(shell pkg-config --exists dbus-1 && echo 1)
+ifeq ($(HAS_X11)$(HAS_DBUS),11)
+CAPTURE_AUTO := linux
+else ifeq ($(HAS_DBUS),1)
+CAPTURE_AUTO := portal
+else ifeq ($(HAS_X11),1)
+CAPTURE_AUTO := x11
+else
+CAPTURE_AUTO := none
+endif
+endif
+CAPTURE ?= $(CAPTURE_AUTO)
+
+CAPTURE_SYNTH = $(BUILD)/capture_synth.o
+
+ifeq ($(CAPTURE),win)
+CAPTURE_OBJS = $(BUILD)/capture_win.o $(CAPTURE_SYNTH)
+LDLIBS += -lgdi32 -luser32 -ld3d11 -ldxgi -ldxguid
+else ifeq ($(CAPTURE),mac)
+CAPTURE_OBJS = $(BUILD)/capture_mac.o $(CAPTURE_SYNTH)
+LDLIBS += -framework ScreenCaptureKit -framework CoreGraphics -framework AppKit -framework Foundation
+else ifeq ($(CAPTURE),linux)
+CAPTURE_OBJS = $(BUILD)/capture_linux.o $(BUILD)/capture_x11.o $(BUILD)/capture_portal.o $(CAPTURE_SYNTH)
+CFLAGS += -DQR_CAPTURE_INTERNAL -DQR_HAS_X11 -DQR_TEST_X11 -DQR_HAS_PORTAL
+CFLAGS += $(shell pkg-config --cflags x11 dbus-1)
+LDLIBS += $(shell pkg-config --libs x11 dbus-1)
+else ifeq ($(CAPTURE),portal)
+CAPTURE_OBJS = $(BUILD)/capture_portal.o $(CAPTURE_SYNTH)
+CFLAGS += $(shell pkg-config --cflags dbus-1)
+LDLIBS += $(shell pkg-config --libs dbus-1)
+else ifeq ($(CAPTURE),x11)
+CAPTURE_OBJS = $(BUILD)/capture_x11.o $(CAPTURE_SYNTH)
+CFLAGS += -DQR_TEST_X11 -DQR_HAS_X11 $(shell pkg-config --cflags x11)
 LDLIBS += $(shell pkg-config --libs x11)
+else
+CAPTURE_OBJS = $(BUILD)/capture_none.o $(CAPTURE_SYNTH)
 endif
 
 # Webcam: V4L2 on Linux when videodev2.h is present; stub elsewhere (mf/avf until PKG).
@@ -48,13 +89,13 @@ GUI_RUN = $(BUILD)/qrgui_nosdl.o
 endif
 
 OBJ = $(BUILD)/qrimage.o $(BUILD)/qrpng.o $(BUILD)/qrtext.o $(BUILD)/qrdecode.o $(BUILD)/qrmake.o \
-	$(BUILD)/qrgui.o $(BUILD)/capture_$(CAPTURE).o $(WEBCAM_OBJ)
+	$(BUILD)/qrgui.o $(CAPTURE_OBJS) $(WEBCAM_OBJ)
 HDR = $(wildcard desktop/include/*.h) $(SQQR)/include/sqqr.h $(SQGUI)/include/sqgui.h
 SQQR_LIB = $(SQQR)/build/libsqqr.a
 SQGUI_LIB = $(SQGUI)/build/libsqgui.a
 LIBS = $(SQQR_LIB) $(SQGUI_SDL) $(SQGUI_LIB)
 
-.PHONY: all desktop test test-desktop test-jni test-x11 test-webcam serve clean android android-test $(SQQR_LIB) $(SQGUI_LIB)
+.PHONY: all desktop test test-desktop test-jni test-x11 test-webcam test-capture serve clean android android-test $(SQQR_LIB) $(SQGUI_LIB)
 
 all: desktop
 
@@ -76,6 +117,12 @@ endif
 $(BUILD)/%.o: desktop/src/%.c $(HDR) | $(BUILD)
 	$(CC) $(CFLAGS) -c $< -o $@
 
+# ObjC + AppKit/ScreenCaptureKit: drop -std=c11 and _POSIX_C_SOURCE so
+# Darwin BSD types (u_int/u_char) remain visible when system headers pull
+# in netinet/ip.h via CUPS/PrintCore.
+$(BUILD)/capture_mac.o: desktop/src/capture_mac.m $(HDR) | $(BUILD)
+	$(CC) $(filter-out -std=c11 -D_POSIX_C_SOURCE=200809L,$(CFLAGS)) -fobjc-arc -c $< -o $@
+
 $(BUILD)/squirrelqr: desktop/src/main.c $(OBJ) $(GUI_RUN) $(LIBS) | $(BUILD)
 	$(CC) $(CFLAGS) $< $(OBJ) $(GUI_RUN) $(LIBS) -o $@ $(LDLIBS)
 
@@ -88,27 +135,36 @@ $(BUILD)/test_gui: desktop/tests/test_gui.c $(OBJ) $(LIBS) | $(BUILD)
 $(BUILD)/test_webcam: desktop/tests/test_webcam.c $(OBJ) $(LIBS) | $(BUILD)
 	$(CC) $(CFLAGS) $< $(OBJ) $(LIBS) -o $@ $(LDLIBS)
 
+$(BUILD)/test_capture: desktop/tests/test_capture.c $(OBJ) $(LIBS) | $(BUILD)
+	$(CC) $(CFLAGS) $< $(OBJ) $(LIBS) -o $@ $(LDLIBS)
+
 test: test-desktop test-jni
 	python3 tests/test_web_static.py
 	@echo "squirrelqr tests ok"
 
-test-desktop: $(BUILD)/test_desktop $(BUILD)/test_gui $(BUILD)/test_webcam $(BUILD)/squirrelqr
+test-desktop: $(BUILD)/test_desktop $(BUILD)/test_gui $(BUILD)/test_webcam $(BUILD)/test_capture $(BUILD)/squirrelqr
 	$(BUILD)/test_desktop $(SQQR)/fixtures/symbols.txt $(BUILD)
 	$(BUILD)/test_gui $(BUILD)
 	$(BUILD)/test_webcam $(BUILD)
+	$(BUILD)/test_capture $(BUILD)
 	@if [ "$(HAS_SDL)" = 1 ]; then \
 		SDL_VIDEODRIVER=dummy $(BUILD)/squirrelqr --gui-frames 10 $(BUILD)/fmt_P5.img && echo "squirrelqr window ok"; \
 	else echo "squirrelqr: no SDL2, window not tested"; fi
 	sh desktop/tests/cli_smoke.sh $(BUILD)
 	sh desktop/tests/webcam_smoke.sh $(BUILD)
+	sh desktop/tests/capture_smoke.sh $(BUILD)
 	python3 -I desktop/tests/test_png.py $(BUILD)
-	@if [ "$(CAPTURE)" = x11 ] && command -v xvfb-run >/dev/null; then \
+	@if { [ "$(CAPTURE)" = x11 ] || [ "$(CAPTURE)" = linux ]; } && command -v xvfb-run >/dev/null; then \
 		xvfb-run -a -s "-screen 0 800x600x24" $(BUILD)/test_desktop --x11 $(SQQR)/fixtures/symbols.txt $(BUILD); \
 	else echo "skipping the X11 capture test (no X11 build or no xvfb-run)"; fi
 
 test-webcam: $(BUILD)/test_webcam $(BUILD)/squirrelqr
 	$(BUILD)/test_webcam $(BUILD)
 	sh desktop/tests/webcam_smoke.sh $(BUILD)
+
+test-capture: $(BUILD)/test_capture $(BUILD)/squirrelqr
+	$(BUILD)/test_capture $(BUILD)
+	sh desktop/tests/capture_smoke.sh $(BUILD)
 
 # The Android JNI bridge built for this machine and driven from a JVM
 # (android/jni-smoke): skipped when there is no JDK.

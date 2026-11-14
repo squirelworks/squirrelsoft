@@ -1,8 +1,7 @@
 /* qrcapture for X11: XGetImage on the root window, and a rubber-band rectangle
  * drawn with an XOR GC while the pointer is grabbed. Original code.
- * Under Wayland this only sees XWayland windows; the portal back end is a
- * later step. */
-#include "qrcapture.h"
+ * Under Wayland this only sees XWayland windows; use the portal back end. */
+#include "qrcapture_priv.h"
 
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
@@ -23,7 +22,7 @@ static int fail(char *err, size_t n, const char *fmt, ...) {
     return -1;
 }
 
-const char *qr_capture_backend(void) { return "x11"; }
+const char *qr_capture_backend_x11(void) { return "x11"; }
 
 static Display *open_display(char *err, size_t n) {
     Display *d = XOpenDisplay(NULL);
@@ -57,7 +56,8 @@ static unsigned field_get(unsigned long px, Field f) {
     return (unsigned)((v * 255 + maxv / 2) / maxv);
 }
 
-int qr_capture(QrRect r, QrImage *out, char *err, size_t n) {
+int qr_capture_x11(QrRect r, QrImage *out, char *err, size_t n) {
+    if (qr_capture_try_synth(r, out, err, n)) return out->gray ? 0 : -1;
     out->w = out->h = 0;
     out->gray = NULL;
     Display *d = open_display(err, n);
@@ -153,7 +153,11 @@ static void outline(Display *d, Window root, GC gc, int x0, int y0, int x1, int 
     XDrawRectangle(d, root, gc, x, y, w, h);
 }
 
-int qr_select_rect(QrRect *r, char *err, size_t n) {
+int qr_select_rect_x11(QrRect *r, char *err, size_t n) {
+    {
+        int syn = qr_select_try_synth(r, err, n);
+        if (syn <= 0) return syn;
+    }
     Display *d = open_display(err, n);
     if (!d) return -1;
     Window root = DefaultRootWindow(d);
@@ -225,3 +229,10 @@ int qr_select_rect(QrRect *r, char *err, size_t n) {
     if (r->w < 8 || r->h < 8) return fail(err, n, "the selection is too small");
     return 0;
 }
+
+#if !defined(QR_CAPTURE_INTERNAL)
+const char *qr_capture_backend(void) { return qr_capture_backend_x11(); }
+int qr_capture(QrRect r, QrImage *out, char *err, size_t n) { return qr_capture_x11(r, out, err, n); }
+int qr_select_rect(QrRect *r, char *err, size_t n) { return qr_select_rect_x11(r, err, n); }
+#endif
+
