@@ -1,11 +1,11 @@
 # SquirrelSoft roadmap
 
-State as of `main` at `df81f23` (2026-11-14). Android native apps (Kotlin, Android Views, CameraX/ML Kit, AudioRecord, NfcF):
-**SquirrelSuica 0.0.12**, **SquirrelSuicaAnalysis 0.0.3**, **SquirrelSound 0.0.13**, **SquirrelQR 0.1.7** (torch / zoom / batch on the branch toward Play), all on Play closed testing (QR 0.1.6 until uploaded).
-SquirrelSound **0.0.14** (#81 and the Android parity work since) is on `main` and not yet published *(Squirrel)*.
-SquirrelSound **0.0.15** finishes #28 (landscape, scope) plus Android peak labels.
-Desktop C tools: SquirrelStation, SquirrelCAD, SquirrelGNSS, `sqdsp` + live SDL spectrum, and the new desktop readers
-`squirrelsuica/desktop/` (PC/SC) and `squirrelqr/desktop/`. Shared C cores in `libs/` (`sqdsp`, `sqfelica`, `sqqr`, `sqgui`).
+State as of `main` at `df90602` (2026-11-14). Android native apps (Kotlin, Android Views, CameraX/ML Kit, AudioRecord, NfcF):
+**SquirrelSuica 0.0.12**, **SquirrelSuicaAnalysis 0.0.3**, **SquirrelSound 0.0.13**, **SquirrelQR 0.1.6** on Play closed testing;
+`main` also has SquirrelSound **0.0.14** / **0.0.15**, SquirrelQR **0.1.7**, SquirrelSuica **0.0.13** / **0.0.14** waiting for Play upload *(Squirrel)*.
+Desktop C tools: SquirrelStation, SquirrelCAD, SquirrelGNSS, `sqdsp` + live SDL spectrum, and the desktop readers
+`squirrelsuica/desktop/` (PC/SC, RC-S380, GUI, CSV) and `squirrelqr/desktop/` (files, PNG, X11/portal/Win/mac capture, webcam, GUI).
+Shared C cores in `libs/` (`sqdsp`, `sqfelica`, `sqqr`, `sqmath`, `sqgui`).
 The SquirrelQR PWA is retired (`squirrelqr/web-demo/`, not a product). Play scripts in `scripts/`, CI in `.github/workflows/`.
 
 Principles: original code only; each app = portable core + thin native front-ends; tests on the core; real-device checks are post-merge.
@@ -22,7 +22,8 @@ the plan beyond it for the whole suite (this repo, squirrelbios, squirrel-os2). 
 on `main`; `- [ ]` is **open for Cursor/Codex**; *(in progress)* means a branch exists, finish it rather than
 redo it; *(Squirrel)* means only the owner can do it (Play Console, real cards and readers, creating repos).
 The same states are labels on the GitHub issues (`status: done`, `status: in progress`, `cursor-codex`,
-`needs: squirrel`). Nothing is in progress at hand-off: no open PRs, no unmerged branches.
+`needs: squirrel`). In progress: **SND-wasapi / SND-macos** via open PR [#141](https://github.com/squirelworks/squirrelsoft/pull/141)
+(`cursor/impl-snd-wasapi-macos-2eaf`) — leave those boxes open until it merges.
 
 ## S0 — Fix what users hit today (0.0.9 / 0.1.6)
 - [x] S0.1 Suica history block-list encoding fix + reader mode on a background thread (#33, #36, #38; issue 02).
@@ -67,16 +68,16 @@ The same states are labels on the GitHub issues (`status: done`, `status: in pro
 - [x] S3.1 Retire the SquirrelQR PWA as a product: moved to `squirrelqr/web-demo/` with a "not a product" README (#66).
 - [ ] S3.2 SquirrelSound desktop: SDL2 GUI with the same split view; mic and system-audio loopback on every OS.
   - [x] Step 1: capture sources: `--source mic` (SDL2 capture), `--device`, `--source loopback` from the PulseAudio/PipeWire monitor source, `squirrelsound devices`; CI with SDL's disk driver and a null sink (#78).
-  - [ ] WASAPI loopback on Windows
-  - [ ] macOS system audio (ScreenCaptureKit or a virtual device)
+  - [ ] WASAPI loopback on Windows *(in progress — PR #141)*
+  - [ ] macOS system audio (ScreenCaptureKit or a virtual device) *(in progress — PR #141)*
   - [x] Split-view GUI window on `libs/sqgui`: toolbar, spectrum over LOFARgram, `--gui-snapshot` for CI
-- [ ] S3.3 SquirrelSuica desktop: PaSoRi RC-S380/RC-S300, same `sqfelica` parsing, GUI with balance + history.
+- [x] S3.3 SquirrelSuica desktop: PaSoRi RC-S380/RC-S300, same `sqfelica` parsing, GUI with balance + history.
   - [x] Step 1: `squirrelsuica/desktop/`, a C reader on `sqfelica` over a transport interface, balance and history with station names, replays SuicaAnalysis dumps (#71).
   - [x] Step 2: PC/SC transport (RC-S300 and other CCID readers; pcsc-lite, macOS PCSC, winscard), `--reader`/`--wait`/`--list-readers`, CI through pcscd and a virtual reader (#76).
   - [x] PaSoRi RC-S380 USB driver (original, libusb) — framing + InCommRF unit-tested; live path via `--usb` (#85).
   - [x] GUI window (SDL2 + SDL_ttf): balance + history with station names; `--gui` / `--gui-ms` (#86).
   - [x] CSV export (`--csv` / `--csv-file`, IDm omitted by default; `--include-idm` opt-in) (#87).
-- [ ] S3.4 SquirrelQR desktop: drag a rectangle on screen → capture → `sqqr` decode; also webcam.
+- [x] S3.4 SquirrelQR desktop: drag a rectangle on screen → capture → `sqqr` decode; also webcam (#138 webcam, #142 portal/Win/mac).
   - [x] Step 1: `squirrelqr/desktop/`, files (PGM/PPM/PBM, BMP) and X11 whole screen / rectangle / `--select`, CI under Xvfb (#69).
   - [x] Step 2: PNG input with its own PNG and zlib decoder, and a Wayland note (#77).
   - [x] Wayland portal capture (`capture_portal.c` via xdg-desktop-portal Screenshot)
