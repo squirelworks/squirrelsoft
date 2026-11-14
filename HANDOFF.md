@@ -108,9 +108,11 @@ and unit-test the Kotlin against stubs.
 - `live_audio_wasapi.c` (WASAPI render loopback) and `live_audio_coreaudio.m`
   (CoreAudio device list + ScreenCaptureKit when allowed, silent fallback for
   CI) behind the same `live_audio` interface. `squirrelsound devices` lists
-  `monitor Monitor of …`; `--source loopback` captures. CI
-  `windows-latest` / `macos-latest` run `tests/test_capture.sh` against the
-  silent default render device.
+  `monitor Monitor of …`; `--source loopback` captures. When the host has no
+  render endpoint (typical `windows-latest`), WASAPI lists/opens
+  `Monitor of Silent Output` with timed silence — same CI shape as CoreAudio.
+  `tests/test_capture.sh` exercises that path; soft-skips only if no monitor
+  is listed and `REQUIRE_NATIVE_LOOPBACK` is unset.
 
 ### FEL-jni-smoke — JVM smoke test for `sqfelica_jni.c`  `status: done`
 - On `main` via #133 / #136 (S2 JNI box). Host build of `sqfelica_jni.c`

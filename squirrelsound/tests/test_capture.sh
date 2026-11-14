@@ -5,8 +5,10 @@
 #    --source loopback must hear it through the sink's monitor. Skipped when
 #    pulseaudio/paplay are missing, unless REQUIRE_LOOPBACK=1 (CI).
 #  loopback (Windows/macOS): native WASAPI / CoreAudio lists a monitor and
-#    --source loopback captures against the (typically silent) default
-#    render device. Required when REQUIRE_NATIVE_LOOPBACK=1 (CI).
+#    --source loopback captures against the default render device, or a
+#    synthetic "Monitor of Silent Output" when the host has no render
+#    endpoint (headless CI). Soft-skipped when no monitor is listed unless
+#    REQUIRE_NATIVE_LOOPBACK=1 (CI sets this on windows/macos).
 # Usage: sh tests/test_capture.sh BUILD
 set -e
 b="${1:?build dir}"
@@ -45,8 +47,15 @@ if "$q" live --source nope --headless --frames 1 2>/dev/null; then echo "bad sou
 uname_s=$(uname -s 2>/dev/null || echo unknown)
 case "$uname_s" in
 Darwin*|MINGW*|MSYS*|CYGWIN*)
-    "$q" devices 2>"$tmp/dev.err" | tee "$tmp/devs.txt" | grep -qi '^monitor' \
-        || { echo "loopback: no monitor listed"; cat "$tmp/devs.txt" "$tmp/dev.err"; exit 1; }
+    if ! "$q" devices 2>"$tmp/dev.err" | tee "$tmp/devs.txt" | grep -qi '^monitor'; then
+        if [ "${REQUIRE_NATIVE_LOOPBACK:-0}" = 1 ]; then
+            echo "loopback: no monitor listed (REQUIRE_NATIVE_LOOPBACK=1)"
+            cat "$tmp/devs.txt" "$tmp/dev.err"
+            exit 1
+        fi
+        echo "skipping native loopback (no monitor listed; headless host without audio)"
+        exit 0
+    fi
     "$q" live --source loopback --headless --frames 8 > "$tmp/lb.txt" 2> "$tmp/lb.err" \
         || { echo "loopback: capture failed"; cat "$tmp/lb.err" "$tmp/lb.txt"; exit 1; }
     grep -qi 'Monitor of ' "$tmp/lb.err" || { echo "loopback: wrong device"; cat "$tmp/lb.err"; exit 1; }

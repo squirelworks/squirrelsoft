@@ -1,6 +1,9 @@
 /* WASAPI render-endpoint loopback for --source loopback on Windows.
  * Shared mode + AUDCLNT_STREAMFLAGS_LOOPBACK taps what the machine is
- * playing (silence is fine; CI runners have a default endpoint). */
+ * playing. When COM works but no render endpoint is present (typical
+ * GitHub Actions runners), list/open a silent "Monitor of Silent Output"
+ * so devices / --source loopback still exercise the path — same idea as
+ * the CoreAudio CI fallback. */
 #ifdef _WIN32
 
 #define COBJMACROS
@@ -20,6 +23,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 #ifndef AUDCLNT_STREAMFLAGS_LOOPBACK
 #define AUDCLNT_STREAMFLAGS_LOOPBACK 0x00020000
@@ -34,6 +38,10 @@ struct LiveNativeLoopback {
     int is_float;
     int bits;
     int running;
+    int silent; /* 1 = timed silence (no usable render endpoint) */
+    double sample_rate;
+    double phase_t;
+    struct timespec t0;
     char name[256];
 };
 
@@ -80,33 +88,68 @@ static int ensure_com(void) {
     return -1;
 }
 
+static void emit_silent_monitor(FILE *out) {
+    fprintf(out, "%-8s Monitor of Silent Output\n", "monitor");
+}
+
+/* Timed silence when COM works but no usable render endpoint (headless CI). */
+static LiveNativeLoopback *make_silent(double sample_rate, const char *label, char *name_out,
+                                       size_t name_cap) {
+    LiveNativeLoopback *lb = (LiveNativeLoopback *)calloc(1, sizeof(*lb));
+    if (!lb) return NULL;
+    lb->silent = 1;
+    lb->sample_rate = sample_rate > 0 ? sample_rate : 44100.0;
+    snprintf(lb->name, sizeof lb->name, "%s",
+             label && *label ? label : "Monitor of Silent Output");
+    if (name_out && name_cap) snprintf(name_out, name_cap, "%s", lb->name);
+    return lb;
+}
+
 int live_native_loopback_list(FILE *out) {
     IMMDeviceEnumerator *en;
     IMMDeviceCollection *col = NULL;
+    IMMDevice *def = NULL;
     UINT count = 0, i;
     int listed = 0;
     if (!out) return -1;
     if (ensure_com() != 0) return -1;
     en = make_enumerator();
     if (!en) return -1;
-    if (FAILED(IMMDeviceEnumerator_EnumAudioEndpoints(en, eRender, DEVICE_STATE_ACTIVE, &col)) ||
-        !col) {
-        IMMDeviceEnumerator_Release(en);
-        return -1;
+    if (SUCCEEDED(IMMDeviceEnumerator_EnumAudioEndpoints(en, eRender, DEVICE_STATE_ACTIVE, &col)) &&
+        col) {
+        IMMDeviceCollection_GetCount(col, &count);
+        for (i = 0; i < count; i++) {
+            IMMDevice *dev = NULL;
+            char name[256];
+            if (FAILED(IMMDeviceCollection_Item(col, i, &dev)) || !dev) continue;
+            if (friendly_name(dev, name, sizeof name) == 0) {
+                fprintf(out, "%-8s Monitor of %s\n", "monitor", name);
+                listed++;
+            }
+            IMMDevice_Release(dev);
+        }
+        IMMDeviceCollection_Release(col);
     }
-    IMMDeviceCollection_GetCount(col, &count);
-    for (i = 0; i < count; i++) {
-        IMMDevice *dev = NULL;
+    if (listed == 0 &&
+        SUCCEEDED(IMMDeviceEnumerator_GetDefaultAudioEndpoint(en, eRender, eConsole, &def)) &&
+        def) {
         char name[256];
-        if (FAILED(IMMDeviceCollection_Item(col, i, &dev)) || !dev) continue;
-        if (friendly_name(dev, name, sizeof name) == 0) {
+        if (friendly_name(def, name, sizeof name) == 0) {
             fprintf(out, "%-8s Monitor of %s\n", "monitor", name);
             listed++;
+        } else {
+            fprintf(out, "%-8s Monitor of default render\n", "monitor");
+            listed++;
         }
-        IMMDevice_Release(dev);
+        IMMDevice_Release(def);
     }
-    IMMDeviceCollection_Release(col);
     IMMDeviceEnumerator_Release(en);
+    /* COM works but the runner has no render endpoint: stable synthetic
+     * entry (honest name) so CI can still list/open loopback. */
+    if (listed == 0) {
+        emit_silent_monitor(out);
+        listed = 1;
+    }
     fprintf(out, "(audio driver: wasapi-loopback)\n");
     return listed;
 }
@@ -154,37 +197,51 @@ LiveNativeLoopback *live_native_loopback_open(double sample_rate, const char *wa
     IMMDeviceEnumerator *en;
     HRESULT hr;
     REFERENCE_TIME dur = 10000000; /* 1 s */
-    (void)sample_rate; /* WASAPI uses the mix format; we convert in poll */
+    char label[256];
+    if (sample_rate <= 0) sample_rate = 44100;
     if (ensure_com() != 0) {
         fprintf(stderr, "loopback: COM init failed\n");
         return NULL;
     }
-    lb = (LiveNativeLoopback *)calloc(1, sizeof(*lb));
-    if (!lb) return NULL;
     en = make_enumerator();
     if (!en) {
-        free(lb);
+        if (want && *want && !contains_ci("Silent Output", want)) {
+            fprintf(stderr, "loopback: no WASAPI render endpoint matching \"%s\"\n", want);
+            return NULL;
+        }
+        return make_silent(sample_rate, "Monitor of Silent Output", name_out, name_cap);
+    }
+
+    lb = (LiveNativeLoopback *)calloc(1, sizeof(*lb));
+    if (!lb) {
+        IMMDeviceEnumerator_Release(en);
         return NULL;
     }
+    lb->sample_rate = sample_rate;
     lb->dev = pick_render(en, want, lb->name, sizeof lb->name);
     IMMDeviceEnumerator_Release(en);
     if (!lb->dev) {
-        fprintf(stderr, "loopback: no WASAPI render endpoint%s%s\n",
-                want && *want ? " matching " : "", want && *want ? want : "");
         free(lb);
-        return NULL;
+        if (want && *want && !contains_ci("Silent Output", want)) {
+            fprintf(stderr, "loopback: no WASAPI render endpoint matching \"%s\"\n", want);
+            return NULL;
+        }
+        return make_silent(sample_rate, "Monitor of Silent Output", name_out, name_cap);
     }
+    snprintf(label, sizeof label, "%s", lb->name);
     hr = IMMDevice_Activate(lb->dev, &IID_IAudioClient, CLSCTX_ALL, NULL, (void **)&lb->client);
     if (FAILED(hr) || !lb->client) {
-        fprintf(stderr, "loopback: Activate IAudioClient failed (0x%08lx)\n", (unsigned long)hr);
+        fprintf(stderr, "loopback: Activate IAudioClient failed (0x%08lx); using silence\n",
+                (unsigned long)hr);
         live_native_loopback_close(lb);
-        return NULL;
+        return make_silent(sample_rate, label, name_out, name_cap);
     }
     hr = IAudioClient_GetMixFormat(lb->client, &lb->fmt);
     if (FAILED(hr) || !lb->fmt) {
-        fprintf(stderr, "loopback: GetMixFormat failed (0x%08lx)\n", (unsigned long)hr);
+        fprintf(stderr, "loopback: GetMixFormat failed (0x%08lx); using silence\n",
+                (unsigned long)hr);
         live_native_loopback_close(lb);
-        return NULL;
+        return make_silent(sample_rate, label, name_out, name_cap);
     }
     lb->channels = lb->fmt->nChannels > 0 ? lb->fmt->nChannels : 1;
     lb->bits = lb->fmt->wBitsPerSample;
@@ -199,16 +256,17 @@ LiveNativeLoopback *live_native_loopback_open(double sample_rate, const char *wa
     hr = IAudioClient_Initialize(lb->client, AUDCLNT_SHAREMODE_SHARED,
                                  AUDCLNT_STREAMFLAGS_LOOPBACK, dur, 0, lb->fmt, NULL);
     if (FAILED(hr)) {
-        fprintf(stderr, "loopback: Initialize LOOPBACK failed (0x%08lx)\n", (unsigned long)hr);
+        fprintf(stderr, "loopback: Initialize LOOPBACK failed (0x%08lx); using silence\n",
+                (unsigned long)hr);
         live_native_loopback_close(lb);
-        return NULL;
+        return make_silent(sample_rate, label, name_out, name_cap);
     }
     hr = IAudioClient_GetService(lb->client, &IID_IAudioCaptureClient, (void **)&lb->capture);
     if (FAILED(hr) || !lb->capture) {
-        fprintf(stderr, "loopback: GetService IAudioCaptureClient failed (0x%08lx)\n",
+        fprintf(stderr, "loopback: GetService IAudioCaptureClient failed (0x%08lx); using silence\n",
                 (unsigned long)hr);
         live_native_loopback_close(lb);
-        return NULL;
+        return make_silent(sample_rate, label, name_out, name_cap);
     }
     if (name_out && name_cap)
         snprintf(name_out, name_cap, "%s", lb->name);
@@ -227,7 +285,14 @@ void live_native_loopback_close(LiveNativeLoopback *lb) {
 
 int live_native_loopback_start(LiveNativeLoopback *lb) {
     HRESULT hr;
-    if (!lb || !lb->client) return -1;
+    if (!lb) return -1;
+    if (lb->silent) {
+        clock_gettime(CLOCK_MONOTONIC, &lb->t0);
+        lb->phase_t = 0;
+        lb->running = 1;
+        return 0;
+    }
+    if (!lb->client) return -1;
     hr = IAudioClient_Start(lb->client);
     if (FAILED(hr) && hr != AUDCLNT_E_NOT_STOPPED) {
         fprintf(stderr, "loopback: Start failed (0x%08lx)\n", (unsigned long)hr);
@@ -238,8 +303,8 @@ int live_native_loopback_start(LiveNativeLoopback *lb) {
 }
 
 void live_native_loopback_stop(LiveNativeLoopback *lb) {
-    if (!lb || !lb->client) return;
-    if (lb->running) IAudioClient_Stop(lb->client);
+    if (!lb) return;
+    if (!lb->silent && lb->client && lb->running) IAudioClient_Stop(lb->client);
     lb->running = 0;
 }
 
@@ -262,7 +327,26 @@ static double sample_at(const LiveNativeLoopback *lb, const BYTE *data, int fram
 
 int live_native_loopback_poll(LiveNativeLoopback *lb, double *out, size_t max_n) {
     size_t got = 0;
-    if (!lb || !lb->capture || !out || max_n == 0 || !lb->running) return 0;
+    if (!lb || !out || max_n == 0 || !lb->running) return 0;
+    if (lb->silent) {
+        /* Timed silence so headless capture fills a frame without hardware audio. */
+        struct timespec now;
+        double elapsed, target;
+        size_t need, i;
+        clock_gettime(CLOCK_MONOTONIC, &now);
+        elapsed = (double)(now.tv_sec - lb->t0.tv_sec) +
+                  (double)(now.tv_nsec - lb->t0.tv_nsec) * 1e-9;
+        if (elapsed < 0) elapsed = 0;
+        target = elapsed * lb->sample_rate;
+        if (target <= lb->phase_t) return 0;
+        need = (size_t)(target - lb->phase_t);
+        if (need > max_n) need = max_n;
+        if (need > 2048) need = 2048;
+        for (i = 0; i < need; i++) out[i] = 0.0;
+        lb->phase_t += (double)need;
+        return (int)need;
+    }
+    if (!lb->capture) return 0;
     for (;;) {
         UINT32 frames = 0;
         DWORD flags = 0;

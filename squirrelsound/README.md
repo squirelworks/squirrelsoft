@@ -67,8 +67,11 @@ for this machine and drives each native entry point from a JVM
 `--source loopback` listens to the computer's own output: the monitor
 source of the default PulseAudio/PipeWire sink on Linux, WASAPI render
 loopback on Windows, and CoreAudio (ScreenCaptureKit when allowed, else a
-silent device for CI) on macOS. `--device` picks another endpoint by name.
-`--source alsa` keeps the direct ALSA reader for systems without SDL.
+silent device for CI) on macOS. On headless Windows/macOS hosts with no
+render endpoint, the native backends list `Monitor of Silent Output` and
+feed timed silence so `devices` / `--source loopback` still work in CI.
+`--device` picks another endpoint by name. `--source alsa` keeps the
+direct ALSA reader for systems without SDL.
 
 The live window (drawn with `libs/sqgui`) has the Android Live tab's split
 view: a toolbar with Start/Stop, Hold, Reset and Fountain, then the range
