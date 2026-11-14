@@ -68,6 +68,12 @@ int sqrx_serial_open(const char *path, int baud, int write, char *err, size_t ca
             snprintf(err, cap, "cannot configure a receiver on standard input");
             return -1;
         }
+        /* CRT stdin defaults to text mode: 0x1A is EOF and CR/LF is translated,
+         * which truncates or corrupts a binary UBX stream on Windows. */
+        if (_setmode(0, _O_BINARY) == -1) {
+            snprintf(err, cap, "standard input: %s", strerror(errno));
+            return -1;
+        }
         return 0;
     }
     int fd = open(path, write ? O_RDWR | O_BINARY : O_RDONLY | O_BINARY);
