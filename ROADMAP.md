@@ -1,7 +1,7 @@
 # SquirrelSoft roadmap
 
 State as of `main` at `df81f23` (2026-11-14). Android native apps (Kotlin, Android Views, CameraX/ML Kit, AudioRecord, NfcF):
-**SquirrelSuica 0.0.12**, **SquirrelSuicaAnalysis 0.0.3**, **SquirrelSound 0.0.13**, **SquirrelQR 0.1.6**, all on Play closed testing.
+**SquirrelSuica 0.0.12**, **SquirrelSuicaAnalysis 0.0.3**, **SquirrelSound 0.0.13**, **SquirrelQR 0.1.7** (torch / zoom / batch on the branch toward Play), all on Play closed testing (QR 0.1.6 until uploaded).
 SquirrelSound **0.0.14** (#81 and the Android parity work since) is on `main` and not yet published *(Squirrel)*.
 SquirrelSound **0.0.15** finishes #28 (landscape, scope) plus Android peak labels.
 Desktop C tools: SquirrelStation, SquirrelCAD, SquirrelGNSS, `sqdsp` + live SDL spectrum, and the new desktop readers
@@ -150,8 +150,8 @@ The same states are labels on the GitHub issues (`status: done`, `status: in pro
     - [x] Shared core: `sqqr_content` (Wi-Fi, vCard, MECARD, mailto/MATMSG, tel, SMS, geo, links)
     - [x] Desktop: `--details`, `"type"`/`"fields"` in `--json`, fields in the window
     - [x] Android: fields under the last read
-  - [ ] Batch scan
-  - [ ] Torch / zoom
+  - [x] Batch scan (Android: keep scanning, de-dupe by content, share text/CSV)
+  - [x] Torch / zoom (Android: CameraX `CameraControl` torch + pinch/slider zoom)
 
 ## Desktop CAD/GNSS tools (carried over from the previous roadmap)
 

@@ -44,4 +44,19 @@
     <string name="make_too_long">Too much text for a QR code at this level; try a lower level or shorter text</string>
     <string name="make_failed">Could not make the code (error %1$d)</string>
     <string name="make_unavailable">The QR maker is not available on this device</string>
+    <string name="torch_off">Torch</string>
+    <string name="torch_on">Torch on</string>
+    <string name="torch_unavailable">Torch not available on this camera</string>
+    <string name="zoom_label">Zoom</string>
+    <string name="batch_off">Batch</string>
+    <string name="batch_on">Batch · %1$d</string>
+    <string name="batch_export">Export</string>
+    <string name="batch_added">Added to batch (%1$d)</string>
+    <string name="batch_duplicate">Already in this batch</string>
+    <string name="batch_empty">No codes in this batch yet</string>
+    <string name="batch_share">Share batch</string>
+    <string name="batch_share_text">Share as text</string>
+    <string name="batch_share_csv">Share as CSV</string>
+    <string name="batch_cleared">Batch cleared</string>
+    <string name="batch_hint">Batch on — keep pointing; duplicates are skipped</string>
 </resources>
