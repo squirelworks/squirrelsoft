@@ -82,7 +82,7 @@ The same states are labels on the GitHub issues (`status: done`, `status: in pro
   - [ ] Wayland portal capture
   - [ ] Windows and macOS capture
   - [x] Small GUI window on `libs/sqgui` (`--gui`): select, whole screen, open, preview with outline, copy
-  - [ ] Webcam
+  - [x] Webcam: `--webcam` / `devices` via V4L2 on Linux; mf/avf stubs on Win/mac; CI decodes a synthetic frame (`--device @FILE` or `QR_WEBCAM_FRAME`)
 - [ ] S3.5 (PKG) Windows/macOS/Linux packaging (MSI/zip, .app, AppImage/deb) built in CI.
 
 ## S4 — CI and releases

@@ -39,21 +39,28 @@ skipped when no JDK is installed.
 ## Desktop reader (`desktop/`)
 
 A command-line reader on Squirrel's own decoder (`libs/sqqr`), no ML Kit.
-It decodes image files, or a rectangle of the screen on X11 (Linux and BSD
-desktops; Wayland, Windows and macOS capture come later in roadmap S3.4).
+It decodes image files, a rectangle of the screen on X11 (Linux and BSD
+desktops; Wayland, Windows and macOS screen capture come later in roadmap
+S3.4), or a webcam frame (V4L2 on Linux; Media Foundation / AVFoundation
+stubs on Windows and macOS until PKG).
 
 ```bash
-make desktop                         # build/squirrelqr (X11 capture when libx11-dev is installed)
+make desktop                         # build/squirrelqr (X11 + V4L2 when headers are installed)
 build/squirrelqr shot.png code.pgm   # PNG, PGM/PPM/PBM and BMP files; one line of text per code
 build/squirrelqr --select            # drag a rectangle with the mouse; Esc cancels
 build/squirrelqr --screen --wait 10  # keep looking at the whole screen for up to 10 s
 build/squirrelqr --region 0,0,800,600 --json
+build/squirrelqr --webcam            # one frame from /dev/video0 (or --device PATH)
+build/squirrelqr --webcam --wait 15  # keep grabbing until a code shows up
+build/squirrelqr devices             # list V4L2 capture devices
+build/squirrelqr --webcam --device @shot.png   # synthetic frame (CI; no camera)
+QR_WEBCAM_FRAME=shot.png build/squirrelqr --webcam
 build/squirrelqr --gui [shot.png]    # small window: Select area, Whole screen, open a file, Copy text, Make QR
 build/squirrelqr --details shot.png  # also say what it is (Wi-Fi, contact, link, ...) and list its fields
 build/squirrelqr --encode "https://squirrel.works/"                 # draw a code in the terminal
 build/squirrelqr --encode "hello" --level H --out hello.png         # or write .png / .svg / .pgm
 build/squirrelqr --wifi "Nest" --password "acorns" --out wifi.png   # a Wi-Fi code phones can join from
-make test-desktop                    # unit + CLI tests; the capture test runs under xvfb-run
+make test-desktop                    # unit + CLI + webcam synthetic tests; X11 under xvfb-run
 ```
 
 Codes are made by `libs/sqqr`'s own encoder (one segment in the most compact
