@@ -212,41 +212,9 @@ size_t live_engine_bands(const LiveEngine *e, int fraction, double *centre, doub
 
 size_t live_engine_peaks(const LiveEngine *e, const double *spec, size_t max_n,
                          double min_sep_hz, double *hz, double *db) {
-    size_t n = 0;
-    if (!spec || max_n == 0) return 0;
+    if (!e || !spec || max_n == 0) return 0;
     size_t b0 = live_engine_hz_to_bin(e, e->cfg.f_min_hz);
     size_t b1 = live_engine_hz_to_bin(e, e->cfg.f_max_hz);
-    if (b0 < 1) b0 = 1;
-    double thresh = e->cfg.db_min + 10.0;
-    for (size_t k = b0; k <= b1 && k + 1 < e->bins; k++) {
-        double v = spec[k];
-        if (v < thresh || v < spec[k - 1] || v <= spec[k + 1]) continue;
-        double bin = sqdsp_parabolic_bin(spec, e->bins, k);
-        double f = bin * e->cfg.sample_rate / (double)e->cfg.fft_size;
-        /* keep the loudest of peaks closer than min_sep_hz */
-        size_t j;
-        for (j = 0; j < n; j++)
-            if (fabs(hz[j] - f) < min_sep_hz) break;
-        if (j < n) {
-            if (v <= db[j]) continue;
-            for (size_t m = j; m + 1 < n; m++) {
-                hz[m] = hz[m + 1];
-                db[m] = db[m + 1];
-            }
-            n--;
-        }
-        /* insert sorted by level, loudest first */
-        size_t at = n;
-        while (at > 0 && db[at - 1] < v) at--;
-        if (at >= max_n) continue;
-        size_t end = n < max_n ? n : max_n - 1;
-        for (size_t m = end; m > at; m--) {
-            hz[m] = hz[m - 1];
-            db[m] = db[m - 1];
-        }
-        hz[at] = f;
-        db[at] = v;
-        if (n < max_n) n++;
-    }
-    return n;
+    return sqdsp_local_peaks(spec, e->bins, e->cfg.sample_rate, e->cfg.fft_size, b0, b1,
+                             e->cfg.db_min + 10.0, max_n, min_sep_hz, hz, db);
 }

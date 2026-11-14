@@ -56,6 +56,14 @@ double sqdsp_peak_frequency(const double *mag, const double *freq, size_t nbins)
 /* Parabolic interpolation around discrete peak bin. */
 double sqdsp_parabolic_bin(const double *mag, size_t nbins, size_t k);
 
+/* Up to max_n local maxima of a dB spectrum, loudest first, at least
+ * min_sep_hz apart and above thresh_db. Bins searched are b0..b1 inclusive
+ * (clamped). Frequencies use parabolic interpolation: bin * fs / fft_size.
+ * Returns the count written into hz/db (either may be NULL to only count). */
+size_t sqdsp_local_peaks(const double *spec, size_t nbins, double sample_rate,
+                         size_t fft_size, size_t b0, size_t b1, double thresh_db,
+                         size_t max_n, double min_sep_hz, double *hz, double *db);
+
 /* Autocorr F0 estimate in [fmin,fmax]. */
 double sqdsp_pitch_autocorr(const double *x, size_t n, double fs, double fmin,
                             double fmax, double *scratch);

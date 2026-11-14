@@ -25,17 +25,19 @@ Used here, in `ROADMAP.md` and on the issues (as labels).
 
 - **Android (Play closed testing):** SquirrelSuica 0.0.12, SquirrelSuicaAnalysis
   0.0.3, SquirrelQR 0.1.6, SquirrelSound 0.0.13 on Play; SquirrelSound **0.0.14**
-  is on `main` (full-screen Live tab, Settings tab, Android octave bars,
-  WAV record, calibration) and waits for Squirrel to upload it.
+  (full-screen Live tab, Settings tab, Android octave bars, WAV record,
+  calibration), **0.0.15** (landscape split, scope, peak labels), and
+  SquirrelQR **0.1.7** (torch / zoom / batch) wait for Squirrel to upload.
 - **Desktop (C, SDL2 via `libs/sqgui`):** SquirrelStation, SquirrelCAD,
   SquirrelGNSS, SquirrelSound (mic + PulseAudio/PipeWire loopback, GUI),
   SquirrelSuica (PC/SC, RC-S380 over libusb, GUI, CSV), SquirrelQR (files,
   PNG, X11 capture, GUI, encoder), SquirrelCalc, SquirrelPaint, SquirrelGames,
   SquirrelDebug. Everything in S5 (the apps built here for Squirrel OS/2) is done.
 - **Shared cores:** `libs/sqdsp`, `libs/sqfelica`, `libs/sqqr`, `libs/sqmath`, `libs/sqgui`.
-- **Test gate:** `make test` (every lib and program, plus the Python SuicaAnalysis
-  twin) and the Android job (`./gradlew :app:assembleDebug :app:testDebugUnitTest`
-  per app), both in `.github/workflows/ci.yml` on every PR.
+- **Test gate:** `make test` (every lib and program, the Python SuicaAnalysis
+  twin, and host JNI smokes for QR / Sound / SuicaAnalysis) and the Android job
+  (`./gradlew :app:assembleDebug :app:testDebugUnitTest` per app), both in
+  `.github/workflows/ci.yml` on every PR.
 - **Open PRs at hand-off:** none. No in-progress branches.
 
 ## Rules (Squirrel's; do not break)
@@ -73,9 +75,9 @@ and unit-test the Kotlin against stubs.
 
 ## Suggested order
 
-1. **SND-landscape + SND-scope + SND-peaks** (finishes #28, one PR, SquirrelSound 0.0.15).
-2. **FEL-jni-smoke** (finishes the S2 JNI box).
-3. **QR-torch-zoom + QR-batch** (SquirrelQR 0.1.7).
+1. ~~SND-landscape + SND-scope + SND-peaks~~ (done: SquirrelSound 0.0.15).
+2. ~~FEL-jni-smoke~~ (done: S2 JNI box).
+3. ~~QR-torch-zoom + QR-batch~~ (done: SquirrelQR 0.1.7).
 4. **SUICA-labels + SUICA-bus + FEL-pasmo-waon** (SquirrelSuica 0.0.13).
 5. **PKG** (S3.5 + S4: Windows/macOS/Linux packages in CI), which unblocks
    **SND-wasapi**, **SND-macos**, **QR-capture-win-mac** and **QR-wayland**.
@@ -84,25 +86,17 @@ and unit-test the Kotlin against stubs.
 
 ## Task cards
 
-### SND-landscape — side-by-side layout in landscape  `cursor-codex` (#28)
-- **Files:** `squirrelsound/android/app/src/main/java/works/squirrel/sound/MainActivity.kt`,
-  `SpectrumView.kt`, `WaterfallRows.kt`, `res/layout/` (add `res/layout-land/`).
-- **Acceptance:** in landscape the live spectrum is on the left and the
-  LOFARgram on the right with the same split ratios (50/50, 40/60, 60/40);
-  the waterfall keeps one row per pixel and its time axis; rotating does not
-  restart capture. A JVM unit test covers the split geometry for both orientations.
+### SND-landscape — side-by-side layout in landscape  `status: done` (#28)
+- Done in 0.0.15: landscape spectrum|LOFARgram, same split ratios, one row per
+  pixel, `configChanges` so rotate does not restart capture; `SplitLayoutTest`.
 
-### SND-scope — optional oscilloscope in the top half on Android  `cursor-codex` (#28)
-- Desktop already has it (`squirrelsound/src/live_view_*.c`, "Desktop scope view").
-- **Acceptance:** a Settings switch replaces the top-half spectrum with a
-  triggered time-domain trace (rising-edge trigger, auto timebase); unit test
-  on the trigger search over a synthetic sine.
+### SND-scope — optional oscilloscope in the top half on Android  `status: done` (#28)
+- Done in 0.0.15: Settings scope switch, rising-edge trigger + auto timebase;
+  `ScopeTriggerTest` on a synthetic sine.
 
-### SND-peaks — peak hold markers on Android  `cursor-codex`
-- Reuse the desktop's `live_engine_peaks` logic through `SqDsp.kt` / `sqdsp_jni.c`
-  (expose it in the JNI bridge) rather than re-implementing it in Kotlin.
-- **Acceptance:** labelled peaks on the live or held trace; the
-  `squirrelsound/android/jni-smoke` test calls the new JNI entry.
+### SND-peaks — peak hold markers on Android  `status: done`
+- Done in 0.0.15: `sqdsp_local_peaks` via `SqDsp.peaks` / `nativePeaks`; labelled
+  peaks on the live or held trace; `jni-smoke` calls the new JNI entry.
 
 ### SND-wasapi / SND-macos — system audio on Windows and macOS  `cursor-codex`
 - **Files:** `squirrelsound/src/live_audio.c` (add `live_audio_wasapi.c`,
@@ -111,10 +105,9 @@ and unit-test the Kotlin against stubs.
   `--source loopback` captures it; CI on `windows-latest` / `macos-latest`
   builds it and runs the capture test against a silent device (needs PKG).
 
-### FEL-jni-smoke — JVM smoke test for `sqfelica_jni.c`  `cursor-codex`
-- Copy the pattern of `squirrelqr/android/jni-smoke` and `squirrelsound/android/jni-smoke`:
-  build `squirrelsuica-analysis/android/app/src/main/cpp/sqfelica_jni.c` for the
-  host, drive it from a JVM with a synthetic demo dump, hook it into `make test`.
+### FEL-jni-smoke — JVM smoke test for `sqfelica_jni.c`  `status: done`
+- Host build of `sqfelica_jni.c` driven from `android/jni-smoke`, hooked into
+  `make test` (synthetic parity blocks only).
 
 ### FEL-pasmo-waon — PASMO / WAON history in C  `cursor-codex`
 - **Files:** `libs/sqfelica/src/sqfelica.c`, `include/`, `tests/`,
@@ -129,9 +122,9 @@ and unit-test the Kotlin against stubs.
   from a source whose licence allows redistribution, stated in
   `squirrelsuica/data/README`. Same changes in Python, C (`sqfelica`) and Kotlin.
 
-### QR-torch-zoom / QR-batch — SquirrelQR on Android  `cursor-codex`
+### QR-torch-zoom / QR-batch — SquirrelQR on Android  `status: done` (0.1.7)
 - **Files:** `squirrelqr/android/app/src/main/java/works/squirrel/qr/MainActivity.kt`,
-  `ScanHistoryStore.kt`.
+  `ScanHistoryStore.kt` (`BatchScanSession`), unit tests in `BatchScanSessionTest.kt`.
 - **Acceptance:** a torch toggle and pinch/slider zoom through CameraX
   `CameraControl`; batch mode keeps scanning, de-duplicates by content and
   exports the list (share as text/CSV). Unit tests on the de-duplication.
@@ -164,5 +157,5 @@ and unit-test the Kotlin against stubs.
 
 - #24, #27, #29 (implementation done), #85, #86, #87 (S3.3 steps merged), and
   the probes #83, #84 are closed with this hand-off.
-- #28 stays open for SND-landscape and SND-scope. #30, #31, #32 (epics) and
-  #88 (forward plan) stay open.
+- #28 can close once 0.0.15 lands (landscape + scope done; peaks too). #30, #31,
+  #32 (epics) and #88 (forward plan) stay open.

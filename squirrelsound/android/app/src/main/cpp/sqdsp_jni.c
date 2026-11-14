@@ -15,6 +15,10 @@
  * the power of the bins in each band (bin k is at k * binHz) and divides by
  * the window's ENBW, so a pure tone reads its own level. Bands.kt is the
  * Kotlin twin of both; keep them in step.
+ *
+ * nativePeaks(magDb, sampleRate, fftSize, fMin, fMax, dbMin, maxN, minSepHz,
+ * outHz, outDb) finds the loudest local maxima via sqdsp_local_peaks — the
+ * same routine live_engine_peaks uses on the desktop.
  */
 #include <jni.h>
 #include <math.h>
@@ -124,4 +128,56 @@ done:
     free(h);
     free(out);
     return ok;
+}
+
+JNIEXPORT jint JNICALL
+Java_works_squirrel_sound_SqDsp_nativePeaks(JNIEnv *env, jclass cls, jfloatArray mag_db,
+                                            jdouble sample_rate, jint fft_size, jdouble f_min,
+                                            jdouble f_max, jdouble db_min, jint max_n,
+                                            jdouble min_sep_hz, jdoubleArray out_hz,
+                                            jdoubleArray out_db) {
+    (void)cls;
+    if (!mag_db || !out_hz || !out_db || max_n <= 0 || !(sample_rate > 0) || fft_size <= 0)
+        return 0;
+    jsize nbins = (*env)->GetArrayLength(env, mag_db);
+    if (nbins < 3) return 0;
+    jsize cap = (*env)->GetArrayLength(env, out_hz);
+    if ((*env)->GetArrayLength(env, out_db) < cap) cap = (*env)->GetArrayLength(env, out_db);
+    if (cap <= 0) return 0;
+    size_t want = (size_t)max_n < (size_t)cap ? (size_t)max_n : (size_t)cap;
+    double *mag = malloc(sizeof(double) * (size_t)nbins);
+    double *hz = malloc(sizeof(double) * want);
+    double *db = malloc(sizeof(double) * want);
+    jfloat *m = NULL;
+    jint n = 0;
+    if (!mag || !hz || !db) goto done;
+    m = (*env)->GetFloatArrayElements(env, mag_db, NULL);
+    if (!m) goto done;
+    for (jsize k = 0; k < nbins; k++) mag[k] = m[k];
+    (*env)->ReleaseFloatArrayElements(env, mag_db, m, JNI_ABORT);
+    /* bin k at k * fs / fft_size — same rounding as live_engine_hz_to_bin */
+    size_t b0 = 1, b1 = (size_t)nbins - 1;
+    if (f_min > 0) {
+        double b = f_min * (double)fft_size / sample_rate;
+        if (b < 0) b = 0;
+        if (b > (double)(nbins - 1)) b = (double)(nbins - 1);
+        b0 = (size_t)(b + 0.5);
+    }
+    if (f_max > 0) {
+        double b = f_max * (double)fft_size / sample_rate;
+        if (b < 0) b = 0;
+        if (b > (double)(nbins - 1)) b = (double)(nbins - 1);
+        b1 = (size_t)(b + 0.5);
+    }
+    n = (jint)sqdsp_local_peaks(mag, (size_t)nbins, sample_rate, (size_t)fft_size, b0, b1,
+                                db_min + 10.0, want, min_sep_hz, hz, db);
+    if (n > 0) {
+        (*env)->SetDoubleArrayRegion(env, out_hz, 0, n, hz);
+        (*env)->SetDoubleArrayRegion(env, out_db, 0, n, db);
+    }
+done:
+    free(mag);
+    free(hz);
+    free(db);
+    return n;
 }

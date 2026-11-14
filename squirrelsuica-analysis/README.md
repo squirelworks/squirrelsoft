@@ -39,3 +39,7 @@ cd android && ./gradlew :app:assembleDebug :app:testDebugUnitTest
 ```
 
 The Android build compiles `libs/sqfelica` with the NDK (CMake), so it needs the NDK that Android Studio or the SDK manager installs.
+
+`make test` also builds the Android JNI bridge (`android/app/src/main/cpp/sqfelica_jni.c`)
+for this machine and drives history and balance from a JVM
+(`android/jni-smoke/`) with synthetic demo blocks. It is skipped when there is no JDK.

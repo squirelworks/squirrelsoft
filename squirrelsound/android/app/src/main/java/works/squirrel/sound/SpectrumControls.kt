@@ -77,19 +77,79 @@ object SpectrumControls {
         }
     }
 
-    /** Pixel layout of the split view: spectrum on top, LOFARgram below a gap. */
-    data class SplitLayout(val spectrumHeight: Int, val waterfallTop: Int, val waterfallHeight: Int)
+    /**
+     * Pixel layout of the split view.
+     * Portrait: spectrum on top, LOFARgram below a gap.
+     * Landscape: spectrum on the left, LOFARgram on the right (same ratios).
+     */
+    data class SplitLayout(
+        val spectrumLeft: Int,
+        val spectrumTop: Int,
+        val spectrumWidth: Int,
+        val spectrumHeight: Int,
+        val waterfallLeft: Int,
+        val waterfallTop: Int,
+        val waterfallWidth: Int,
+        val waterfallHeight: Int,
+    )
 
     const val SPLIT_GAP_PX = 8
     /** Bitmap rows are capped so a very tall view cannot exhaust memory. */
     const val MAX_WATERFALL_ROWS = 2048
     const val MIN_WATERFALL_ROWS = 16
 
-    fun splitLayout(heightPx: Int, ratio: SplitRatio, gapPx: Int = SPLIT_GAP_PX): SplitLayout {
+    /** True when the plot should go side-by-side (spectrum | LOFARgram). */
+    fun isLandscape(widthPx: Int, heightPx: Int): Boolean =
+        widthPx > 0 && heightPx > 0 && widthPx > heightPx
+
+    /**
+     * Portrait height-only split (width ignored for the cut). Kept so existing
+     * call sites and tests that pass only the height keep working.
+     */
+    fun splitLayout(heightPx: Int, ratio: SplitRatio, gapPx: Int = SPLIT_GAP_PX): SplitLayout =
+        splitLayout(widthPx = 0, heightPx = heightPx, ratio = ratio, landscape = false, gapPx = gapPx)
+
+    /**
+     * Full split geometry for [widthPx]×[heightPx]. When [landscape] is true the
+     * spectrum fraction applies to the width (left pane); otherwise to the height
+     * (top pane). Ratios stay 50/50, 40/60, 60/40 in both orientations.
+     */
+    fun splitLayout(
+        widthPx: Int,
+        heightPx: Int,
+        ratio: SplitRatio,
+        landscape: Boolean,
+        gapPx: Int = SPLIT_GAP_PX,
+    ): SplitLayout {
+        val w = widthPx.coerceAtLeast(0)
         val h = heightPx.coerceAtLeast(0)
-        val spec = (h * ratio.spectrumFraction).roundToInt()
-        val top = (spec + gapPx).coerceAtMost(h)
-        return SplitLayout(spec, top, (h - top).coerceAtLeast(0))
+        return if (landscape) {
+            val spec = (w * ratio.spectrumFraction).roundToInt()
+            val left = (spec + gapPx).coerceAtMost(w)
+            SplitLayout(
+                spectrumLeft = 0,
+                spectrumTop = 0,
+                spectrumWidth = spec,
+                spectrumHeight = h,
+                waterfallLeft = left,
+                waterfallTop = 0,
+                waterfallWidth = (w - left).coerceAtLeast(0),
+                waterfallHeight = h,
+            )
+        } else {
+            val spec = (h * ratio.spectrumFraction).roundToInt()
+            val top = (spec + gapPx).coerceAtMost(h)
+            SplitLayout(
+                spectrumLeft = 0,
+                spectrumTop = 0,
+                spectrumWidth = w,
+                spectrumHeight = spec,
+                waterfallLeft = 0,
+                waterfallTop = top,
+                waterfallWidth = w,
+                waterfallHeight = (h - top).coerceAtLeast(0),
+            )
+        }
     }
 
     /** One LOFARgram row per screen pixel of the waterfall area, within the caps. */

@@ -71,4 +71,49 @@ object SqDsp {
         Fft.forward(re, im)
         Fft.magnitudeDb(re, im, outDb, windowSum)
     }
+
+    data class Peak(val hz: Double, val db: Double)
+
+    @JvmStatic
+    private external fun nativePeaks(
+        magDb: FloatArray,
+        sampleRate: Double,
+        fftSize: Int,
+        fMin: Double,
+        fMax: Double,
+        dbMin: Double,
+        maxN: Int,
+        minSepHz: Double,
+        outHz: DoubleArray,
+        outDb: DoubleArray,
+    ): Int
+
+    /**
+     * Loudest local maxima of a dB spectrum inside [fMin]..[fMax], via
+     * `sqdsp_local_peaks` (the same logic as desktop `live_engine_peaks`).
+     * Empty when the native core is missing — do not reimplement in Kotlin.
+     */
+    fun peaks(
+        magDb: FloatArray,
+        sampleRate: Double,
+        fftSize: Int,
+        fMin: Double,
+        fMax: Double,
+        dbMin: Double,
+        maxN: Int = MAX_PEAKS,
+        minSepHz: Double = Double.NaN,
+    ): List<Peak> {
+        if (!available || magDb.size < 3 || maxN <= 0 || !(sampleRate > 0) || fftSize <= 0) {
+            return emptyList()
+        }
+        val sep = if (minSepHz.isNaN()) (fMax - fMin) / 40.0 else minSepHz
+        val outHz = DoubleArray(maxN)
+        val outDb = DoubleArray(maxN)
+        val n = nativePeaks(magDb, sampleRate, fftSize, fMin, fMax, dbMin, maxN, sep, outHz, outDb)
+            .coerceIn(0, maxN)
+        if (n <= 0) return emptyList()
+        return List(n) { Peak(outHz[it], outDb[it]) }
+    }
+
+    const val MAX_PEAKS = 8
 }

@@ -3,6 +3,8 @@ package works.squirrel.sound
 /**
  * Averages [SpectrumControls.RowPlan.framesPerRow] FFT frames (dB) into one
  * waterfall row, so long LOFARgram durations keep every frame's energy.
+ * Row count comes from the LOFARgram pane height (portrait or landscape), one
+ * bitmap row per pixel via [SpectrumControls.waterfallRowsFor].
  */
 class WaterfallRowAccumulator {
     private var acc: FloatArray? = null
