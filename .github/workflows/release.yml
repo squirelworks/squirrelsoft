@@ -169,12 +169,14 @@ jobs:
       - uses: msys2/setup-msys2@v2
         if: matrix.host == 'windows'
         with:
-          msystem: MINGW64
+          # UCRT64: mingw64 dropped libusb; MINGW64 itself is deprecated.
+          msystem: UCRT64
           update: true
           install: >-
-            make zip git python mingw-w64-x86_64-gcc
-            mingw-w64-x86_64-SDL2 mingw-w64-x86_64-SDL2_ttf
-            mingw-w64-x86_64-pkgconf mingw-w64-x86_64-libusb
+            make zip git python mingw-w64-ucrt-x86_64-gcc
+            mingw-w64-ucrt-x86_64-SDL2 mingw-w64-ucrt-x86_64-SDL2_ttf
+            mingw-w64-ucrt-x86_64-pkgconf mingw-w64-ucrt-x86_64-libusb
+
       - name: Host dependencies
         if: matrix.host != 'windows'
         run: bash scripts/release/ci_host_deps.sh ${{ matrix.host }}
@@ -283,15 +285,17 @@ jobs:
       - uses: msys2/setup-msys2@v2
         if: matrix.platform == 'windows-x86_64'
         with:
-          msystem: MINGW64
+          # UCRT64: mingw64 dropped libusb; MINGW64 itself is deprecated.
+          msystem: UCRT64
           update: true
           install: >-
             make zip git python
-            mingw-w64-x86_64-gcc
-            mingw-w64-x86_64-SDL2
-            mingw-w64-x86_64-SDL2_ttf
-            mingw-w64-x86_64-pkgconf
-            mingw-w64-x86_64-libusb
+            mingw-w64-ucrt-x86_64-gcc
+            mingw-w64-ucrt-x86_64-SDL2
+            mingw-w64-ucrt-x86_64-SDL2_ttf
+            mingw-w64-ucrt-x86_64-pkgconf
+            mingw-w64-ucrt-x86_64-libusb
+
       - uses: actions/setup-python@v5
         if: matrix.platform == 'windows-x86_64'
         with:
