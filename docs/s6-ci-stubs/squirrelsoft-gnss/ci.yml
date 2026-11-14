@@ -1,0 +1,24 @@
+# Suggested CI for squirrelsoft-gnss (copy to .github/workflows/ci.yml after split).
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  host:
+    name: make test (SquirrelGNSS)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: make test
+        run: make -C squirrelgnss test

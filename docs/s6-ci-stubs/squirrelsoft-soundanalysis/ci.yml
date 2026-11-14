@@ -1,0 +1,52 @@
+# Suggested CI for squirrelsoft-soundanalysis (copy to .github/workflows/ci.yml after split).
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  host:
+    name: make test (sqdsp + SquirrelSound)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install SDL2 / ALSA / PulseAudio / Xvfb
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libsdl2-dev libsdl2-ttf-dev libasound2-dev xvfb xauth pulseaudio pulseaudio-utils
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: make test
+        run: |
+          make -C libs/sqdsp test
+          make -C libs/sqgui test
+          make -C squirrelsound test
+        env:
+          REQUIRE_LOOPBACK: "1"
+
+  android:
+    name: Android squirrelsound
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: squirrelsound/android
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Assemble debug APK and run unit tests
+        run: ./gradlew --no-daemon :app:assembleDebug :app:testDebugUnitTest
