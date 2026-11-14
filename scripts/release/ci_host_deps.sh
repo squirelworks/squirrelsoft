@@ -11,7 +11,7 @@ case "$os" in
     sudo apt-get install -y --no-install-recommends \
       build-essential pkg-config \
       libsdl2-dev libsdl2-ttf-dev fonts-wqy-microhei fonts-droid-fallback \
-      libasound2-dev libx11-dev xvfb xauth \
+      libasound2-dev libx11-dev libdbus-1-dev xvfb xauth \
       libpcsclite-dev pcscd vsmartcard-vpcd libusb-1.0-0-dev \
       pulseaudio pulseaudio-utils \
       qemu-system-x86 nasm \

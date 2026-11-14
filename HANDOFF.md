@@ -33,7 +33,7 @@ Used here, in `ROADMAP.md` and on the issues (as labels).
 - **Desktop (C, SDL2 via `libs/sqgui`):** SquirrelStation, SquirrelCAD,
   SquirrelGNSS, SquirrelSound (mic + PulseAudio/PipeWire loopback, GUI),
   SquirrelSuica (PC/SC, RC-S380 over libusb, GUI, CSV), SquirrelQR (files,
-  PNG, X11 capture, V4L2 webcam, GUI, encoder), SquirrelCalc, SquirrelPaint, SquirrelGames,
+  PNG, X11/portal/Win/mac capture, V4L2 webcam, GUI, encoder), SquirrelCalc, SquirrelPaint, SquirrelGames,
   SquirrelDebug. Everything in S5 (the apps built here for Squirrel OS/2) is done.
 - **Shared cores:** `libs/sqdsp`, `libs/sqfelica`, `libs/sqqr`, `libs/sqmath`, `libs/sqgui`.
 - **Test gate:** `make test` on ubuntu / windows / macos (every lib and program,
@@ -66,7 +66,7 @@ Used here, in `ROADMAP.md` and on the issues (as labels).
 
 ```sh
 sudo apt-get install build-essential libsdl2-dev libsdl2-ttf-dev libasound2-dev \
-  libx11-dev libpcsclite-dev pcscd libusb-1.0-0-dev xvfb pulseaudio python3
+  libx11-dev libdbus-1-dev libpcsclite-dev pcscd libusb-1.0-0-dev xvfb pulseaudio python3
 make            # every desktop program
 make test       # every lib and program (see ci.yml for pcscd/vpcd and Xvfb set-up)
 cd squirrelsound/android && ./gradlew :app:assembleDebug :app:testDebugUnitTest
@@ -85,10 +85,10 @@ and unit-test the Kotlin against stubs.
 4. ~~**SUICA-labels + SUICA-bus + FEL-pasmo-waon**~~ (done: SquirrelSuica 0.0.13).
 5. ~~**SUICA-stations**~~ (done: SquirrelSuica 0.0.14, MIT table).
 6. ~~**PKG** (S3.5 + S4)~~ (done: packages + win/mac/ubuntu `make test` in CI).
-7. **SND-wasapi** / **SND-macos** / **QR-capture-win-mac** / **QR-wayland**
-   (unblocked by PKG).
+7. **SND-wasapi** / **SND-macos** (unblocked by PKG).
 8. ~~**QR-webcam**~~ (done: V4L2 + synthetic CI frame).
-9. **S6 repo split** with Squirrel (prep inventory is ready; see S6 card).
+9. ~~**QR-wayland / QR-capture-win-mac**~~ (done: portal / GDI-DXGI / ScreenCaptureKit).
+10. **S6 repo split** with Squirrel (prep inventory is ready; see S6 card).
 
 ## Task cards
 
@@ -143,12 +143,13 @@ and unit-test the Kotlin against stubs.
   `webcam_smoke.sh` decode a synthetic frame via `--device @FILE` or
   `QR_WEBCAM_FRAME` (no real camera).
 
-### QR-wayland / QR-capture-win-mac — screen capture  `cursor-codex`
-- **Files:** `squirrelqr/desktop/src/capture_*.c` (add `capture_portal.c` via the
-  xdg-desktop-portal Screenshot API over D-Bus, `capture_win.c` with GDI/DXGI,
-  `capture_mac.m` with ScreenCaptureKit).
-- **Acceptance:** `--select` works on GNOME Wayland; Windows and macOS builds
-  capture a region. Needs PKG for Win/mac CI runners.
+### QR-wayland / QR-capture-win-mac — screen capture  `status: done`
+- Linux: `capture_portal.c` (xdg-desktop-portal Screenshot over D-Bus) plus
+  X11; `capture_linux.c` picks portal when `WAYLAND_DISPLAY` is set.
+- Windows: `capture_win.c` (GDI BitBlt, DXGI Desktop Duplication fallback).
+- macOS: `capture_mac.m` (ScreenCaptureKit / `SCScreenshotManager`).
+- CI: `test_capture` + `capture_smoke.sh` decode a synthetic frame via
+  `QR_CAPTURE_FRAME` on every OS (same pattern as the webcam synth path).
 
 ### PKG — Windows/macOS/Linux packages in CI (S3.5, S4)  `status: done`
 - Done: `scripts/release/package_desktop.sh` builds zip/MSI (Windows), `.app`

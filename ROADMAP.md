@@ -79,10 +79,11 @@ The same states are labels on the GitHub issues (`status: done`, `status: in pro
 - [ ] S3.4 SquirrelQR desktop: drag a rectangle on screen → capture → `sqqr` decode; also webcam.
   - [x] Step 1: `squirrelqr/desktop/`, files (PGM/PPM/PBM, BMP) and X11 whole screen / rectangle / `--select`, CI under Xvfb (#69).
   - [x] Step 2: PNG input with its own PNG and zlib decoder, and a Wayland note (#77).
-  - [ ] Wayland portal capture
-  - [ ] Windows and macOS capture
+  - [x] Wayland portal capture (`capture_portal.c` via xdg-desktop-portal Screenshot)
+  - [x] Windows and macOS capture (`capture_win.c` GDI/DXGI, `capture_mac.m` ScreenCaptureKit)
   - [x] Small GUI window on `libs/sqgui` (`--gui`): select, whole screen, open, preview with outline, copy
   - [x] Webcam: `--webcam` / `devices` via V4L2 on Linux; mf/avf stubs on Win/mac; CI decodes a synthetic frame (`--device @FILE` or `QR_WEBCAM_FRAME`)
+  - [x] Screen capture CI: `QR_CAPTURE_FRAME` synthetic decode on linux / windows / macos
 - [x] S3.5 (PKG) Windows/macOS/Linux packaging (MSI/zip, .app, AppImage/deb) built in CI.
 
 ## S4 — CI and releases
