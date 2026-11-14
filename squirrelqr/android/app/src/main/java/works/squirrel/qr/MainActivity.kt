@@ -197,7 +197,7 @@ class MainActivity : AppCompatActivity() {
         binding.zoomSlider.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
                 if (!fromUser || updatingZoomSlider) return
-                setLinearZoom(progress / 100f)
+                setLinearZoom(CameraControls.progressToLinearZoom(progress))
             }
 
             override fun onStartTrackingTouch(seekBar: SeekBar?) {}
@@ -631,17 +631,17 @@ class MainActivity : AppCompatActivity() {
     private fun toggleTorch() {
         val cam = camera
         if (cam == null) return
-        if (!cam.cameraInfo.hasFlashUnit()) {
+        if (!CameraControls.torchAvailable(cam.cameraInfo.hasFlashUnit())) {
             Toast.makeText(this, R.string.torch_unavailable, Toast.LENGTH_SHORT).show()
             return
         }
-        torchOn = !torchOn
+        torchOn = CameraControls.nextTorchOn(hasFlashUnit = true, currentlyOn = torchOn)
         cam.cameraControl.enableTorch(torchOn)
         renderTorchButton()
     }
 
     private fun renderTorchButton() {
-        val hasFlash = camera?.cameraInfo?.hasFlashUnit() == true
+        val hasFlash = CameraControls.torchAvailable(camera?.cameraInfo?.hasFlashUnit() == true)
         binding.btnTorch.isEnabled = hasFlash
         binding.btnTorch.setText(if (torchOn) R.string.torch_on else R.string.torch_off)
     }
@@ -654,14 +654,16 @@ class MainActivity : AppCompatActivity() {
     private fun applyPinchZoom(scaleFactor: Float) {
         val cam = camera ?: return
         val state = cam.cameraInfo.zoomState.value ?: return
-        val next = (state.zoomRatio * scaleFactor).coerceIn(state.minZoomRatio, state.maxZoomRatio)
+        val next = CameraControls.nextZoomRatio(
+            state.zoomRatio, scaleFactor, state.minZoomRatio, state.maxZoomRatio
+        )
         cam.cameraControl.setZoomRatio(next)
     }
 
     private fun syncZoomSliderFromCamera() {
         val state = camera?.cameraInfo?.zoomState?.value ?: return
         updatingZoomSlider = true
-        binding.zoomSlider.progress = (state.linearZoom * 100f).toInt().coerceIn(0, 100)
+        binding.zoomSlider.progress = CameraControls.linearZoomToProgress(state.linearZoom)
         updatingZoomSlider = false
     }
 
@@ -670,7 +672,7 @@ class MainActivity : AppCompatActivity() {
         cam.cameraInfo.zoomState.observe(this) { state ->
             if (state == null) return@observe
             updatingZoomSlider = true
-            binding.zoomSlider.progress = (state.linearZoom * 100f).toInt().coerceIn(0, 100)
+            binding.zoomSlider.progress = CameraControls.linearZoomToProgress(state.linearZoom)
             updatingZoomSlider = false
         }
     }
