@@ -1,27 +1,33 @@
-# Release button: Actions > Release > Run workflow, pick the app.
+# Release button: Actions > Release > Run workflow.
 #
-# Builds the signed APK and the desktop builds for the version in the app's
-# build.gradle.kts, writes SHA256SUMS.txt, and creates a DRAFT GitHub Release.
-# The tag (<app>-v<version>) is only created when the owner presses Publish on
-# the draft. This workflow never publishes, never pushes a tag, and never
-# builds or uploads .aab files (AABs are built locally for Play, see
-# docs/RELEASING.md).
+# Builds signed APK (Android apps), packages every selected desktop program as
+# zip/MSI (Windows), .app in .dmg (macOS), AppImage + .deb (Linux), runs
+# `make test` on windows-latest / macos-latest / ubuntu-latest, and attaches
+# packages to a DRAFT GitHub Release. Unsigned desktop packages are fine.
 #
-# On pull requests that touch the release tooling it does a dry run of every
-# build for every app, unsigned, and uploads nothing.
+# Never publishes, never pushes a tag, never builds or uploads .aab files.
+#
+# On pull requests that touch the release tooling: dry-run make test on all
+# three OSes and package every desktop program, unsigned, upload nothing.
 name: Release
 
 on:
   workflow_dispatch:
     inputs:
       app:
-        description: App to release (version comes from its build.gradle.kts)
+        description: App to release (version from build.gradle.kts or VERSION; "desktop" = all C programs)
         required: true
         type: choice
-        options: [squirrelsound, squirrelsuica, squirrelqr, squirrelsuica-analysis]
+        options:
+          - squirrelsound
+          - squirrelsuica
+          - squirrelqr
+          - squirrelsuica-analysis
+          - desktop
   pull_request:
     paths:
       - .github/workflows/release.yml
+      - .github/workflows/ci.yml
       - scripts/release/**
 
 permissions:
@@ -37,7 +43,14 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       apps: ${{ steps.apps.outputs.apps }}
-      desktop: ${{ steps.apps.outputs.desktop }}
+      android_apps: ${{ steps.apps.outputs.android_apps }}
+      desktop_apps: ${{ steps.apps.outputs.desktop_apps }}
+      desktop_matrix: ${{ steps.apps.outputs.desktop_matrix }}
+      is_desktop_suite: ${{ steps.apps.outputs.is_desktop_suite }}
+      tag: ${{ steps.apps.outputs.tag }}
+      name: ${{ steps.apps.outputs.name }}
+      version: ${{ steps.apps.outputs.version }}
+      notes: ${{ steps.apps.outputs.notes }}
     steps:
       - uses: actions/checkout@v4
       - name: Pick apps and desktop builds
@@ -45,48 +58,158 @@ jobs:
         env:
           APP: ${{ github.event.inputs.app }}
         run: |
+          set -euo pipefail
           if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
-            apps="$APP"
+            selected="$APP"
           else
-            apps="squirrelsound squirrelsuica squirrelqr squirrelsuica-analysis"
+            # Dry run: every Android app + every C desktop program.
+            selected=dry-run
           fi
-          # Only the desktop jobs an app has, so an app without a C build never
-          # waits for a Windows or macOS runner.
+
+          android_apps=()
+          desktop_apps=()
+          is_suite=false
+          case "$selected" in
+            dry-run)
+              is_suite=true
+              android_apps=(squirrelsound squirrelsuica squirrelqr squirrelsuica-analysis)
+              while read -r p; do desktop_apps+=("$p"); done < <(bash scripts/release/desktop_programs.sh)
+              # Dummy meta for outputs (not drafting).
+              name=dry-run; version=0; tag=dry-run; notes=/dev/null
+              ;;
+            desktop)
+              is_suite=true
+              while read -r p; do desktop_apps+=("$p"); done < <(bash scripts/release/desktop_programs.sh)
+              eval "$(scripts/release/app_meta.sh desktop)"
+              ;;
+            squirrelsuica-analysis)
+              android_apps+=("$selected")
+              eval "$(scripts/release/app_meta.sh "$selected")"
+              ;;
+            *)
+              android_apps+=("$selected")
+              desktop="$(scripts/release/app_meta.sh "$selected" | sed -n 's/^desktop=//p')"
+              if [ "$desktop" = c ]; then
+                desktop_apps+=("$selected")
+              fi
+              eval "$(scripts/release/app_meta.sh "$selected")"
+              ;;
+          esac
+
           rows=""
-          for a in $apps; do
-            desktop=$(scripts/release/app_meta.sh "$a" | sed -n 's/^desktop=//p')
-            case "$desktop" in
-              c) for p in linux-x86_64:ubuntu-latest windows-x86_64:windows-latest macos-arm64:macos-latest; do
-                   rows="$rows{\"app\":\"$a\",\"platform\":\"${p%%:*}\",\"os\":\"${p#*:}\"},"
-                 done ;;
-              python) rows="$rows{\"app\":\"$a\",\"platform\":\"any\",\"os\":\"ubuntu-latest\"}," ;;
-            esac
+          for a in "${desktop_apps[@]+"${desktop_apps[@]}"}"; do
+            for p in linux-x86_64:ubuntu-latest windows-x86_64:windows-latest macos-arm64:macos-latest; do
+              rows="$rows{\"app\":\"$a\",\"platform\":\"${p%%:*}\",\"os\":\"${p#*:}\"},"
+            done
           done
-          echo "apps=$(printf '%s\n' $apps | jq -R . | jq -cs .)" >> "$GITHUB_OUTPUT"
-          echo "desktop=[${rows%,}]" >> "$GITHUB_OUTPUT"
-          echo "apps: $apps"; echo "desktop: [${rows%,}]"
+
+          apps_json=$(printf '%s\n' "${android_apps[@]+"${android_apps[@]}"}" | jq -R . | jq -cs .)
+          desktop_json=$(printf '%s\n' "${desktop_apps[@]+"${desktop_apps[@]}"}" | jq -R . | jq -cs .)
+          echo "apps=$apps_json" >> "$GITHUB_OUTPUT"
+          echo "android_apps=$apps_json" >> "$GITHUB_OUTPUT"
+          echo "desktop_apps=$desktop_json" >> "$GITHUB_OUTPUT"
+          echo "desktop_matrix=[${rows%,}]" >> "$GITHUB_OUTPUT"
+          echo "is_desktop_suite=$is_suite" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "notes=$notes" >> "$GITHUB_OUTPUT"
+          echo "selected=$selected android=$apps_json desktop=$desktop_json matrix=[${rows%,}]"
       - name: Check the release can be made
         if: github.event_name == 'workflow_dispatch'
         env:
           APP: ${{ github.event.inputs.app }}
           GH_TOKEN: ${{ github.token }}
         run: |
+          set -euo pipefail
           [ "$GITHUB_REF" = refs/heads/main ] || { echo "::error::Run releases from main"; exit 1; }
           eval "$(scripts/release/app_meta.sh "$APP")"
-          [ -f "$notes" ] || { echo "::error::Missing release notes $notes (merge the release-prep PR first)"; exit 1; }
+          if [ "$APP" = desktop ]; then
+            mkdir -p docs/releases
+            if [ ! -f "$notes" ]; then
+              {
+                echo "# SquirrelSoft desktop packages $version"
+                echo
+                echo "Unsigned CI packages (PKG / S3.5) for every desktop program."
+                echo "Windows zip/MSI, macOS .app in .dmg, Linux AppImage + .deb."
+                echo
+                echo "Unblocks later SND-wasapi, SND-macos, and QR-capture-win-mac CI."
+              } > "$notes"
+            fi
+          else
+            [ -f "$notes" ] || { echo "::error::Missing release notes $notes (merge the release-prep PR first)"; exit 1; }
+          fi
           if gh release view "$tag" >/dev/null 2>&1; then echo "::error::Release $tag already exists"; exit 1; fi
           if git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null; then echo "::error::Tag $tag already exists"; exit 1; fi
-          echo "Releasing $name $version (versionCode $version_code) as $tag"
+          echo "Releasing $name $version as $tag"
+
+  make-test:
+    name: make test (${{ matrix.os }})
+    needs: meta
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            shell: bash
+            host: linux
+          - os: macos-latest
+            shell: bash
+            host: macos
+          - os: windows-latest
+            shell: msys2 {0}
+            host: windows
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+    defaults:
+      run:
+        shell: ${{ matrix.shell }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: msys2/setup-msys2@v2
+        if: matrix.host == 'windows'
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            make zip git python mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-SDL2 mingw-w64-x86_64-SDL2_ttf
+            mingw-w64-x86_64-pkgconf mingw-w64-x86_64-libusb
+      - name: Host dependencies
+        if: matrix.host != 'windows'
+        run: bash scripts/release/ci_host_deps.sh ${{ matrix.host }}
+      - uses: actions/setup-python@v5
+        if: matrix.host != 'windows'
+        with:
+          python-version: "3.12"
+      - name: Start pcscd (Linux)
+        if: matrix.host == 'linux'
+        run: |
+          sudo systemctl stop pcscd.socket pcscd.service || true
+          sudo pcscd --disable-polkit
+      - name: make test
+        env:
+          REQUIRE_LOOPBACK: ${{ matrix.host == 'linux' && '1' || '0' }}
+          PCSC_TEST_FLAGS: ${{ matrix.host == 'linux' && '--require' || '' }}
+        run: |
+          set -euo pipefail
+          if [ "${{ matrix.host }}" = linux ]; then
+            make test PCSC_TEST_FLAGS=--require
+          else
+            # Optional Linux-only bits (vpcd, Pulse loopback, Xvfb) skip cleanly.
+            make test
+          fi
 
   android:
     name: APK ${{ matrix.app }}
     needs: meta
+    if: needs.meta.outputs.android_apps != '[]' && needs.meta.outputs.android_apps != ''
     runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
-        app: ${{ fromJSON(needs.meta.outputs.apps) }}
+        app: ${{ fromJSON(needs.meta.outputs.android_apps) }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -143,42 +266,52 @@ jobs:
           retention-days: 7
 
   desktop:
-    name: Desktop ${{ matrix.app }} ${{ matrix.platform }}
+    name: Package ${{ matrix.app }} ${{ matrix.platform }}
     needs: meta
-    if: needs.meta.outputs.desktop != '[]'
+    if: needs.meta.outputs.desktop_matrix != '[]' && needs.meta.outputs.desktop_matrix != ''
     strategy:
       fail-fast: false
       matrix:
-        include: ${{ fromJSON(needs.meta.outputs.desktop) }}
+        include: ${{ fromJSON(needs.meta.outputs.desktop_matrix) }}
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 20
+    timeout-minutes: 30
     defaults:
       run:
         shell: ${{ matrix.os == 'windows-latest' && 'msys2 {0}' || 'bash' }}
     steps:
       - uses: actions/checkout@v4
-      - name: Install SDL2 / SDL_ttf / ALSA (Linux)
-        if: matrix.platform == 'linux-x86_64'
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libsdl2-dev libsdl2-ttf-dev fonts-wqy-microhei fonts-droid-fallback libasound2-dev
-      - name: Install SDL2 / SDL_ttf (macOS)
-        if: matrix.platform == 'macos-arm64'
-        run: brew install sdl2 sdl2_ttf pkg-config
       - uses: msys2/setup-msys2@v2
         if: matrix.platform == 'windows-x86_64'
         with:
           msystem: MINGW64
+          update: true
           install: >-
-            make zip git
+            make zip git python
             mingw-w64-x86_64-gcc
             mingw-w64-x86_64-SDL2
             mingw-w64-x86_64-SDL2_ttf
             mingw-w64-x86_64-pkgconf
+            mingw-w64-x86_64-libusb
+      - uses: actions/setup-python@v5
+        if: matrix.platform == 'windows-x86_64'
+        with:
+          python-version: "3.12"
+      - name: Install Linux packaging deps
+        if: matrix.platform == 'linux-x86_64'
+        run: bash scripts/release/ci_host_deps.sh linux
+      - name: Install macOS deps
+        if: matrix.platform == 'macos-arm64'
+        run: bash scripts/release/ci_host_deps.sh macos
       - name: Build and package
         env:
           APP: ${{ matrix.app }}
           PLATFORM: ${{ matrix.platform }}
           CC: ${{ matrix.os == 'macos-latest' && 'clang' || 'gcc' }}
-        run: scripts/release/package_desktop.sh "$APP" dist "$PLATFORM"
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          scripts/release/package_desktop.sh "$APP" dist "$PLATFORM"
+          ls -la dist
       - uses: actions/upload-artifact@v4
         if: github.event_name == 'workflow_dispatch'
         with:
@@ -186,15 +319,46 @@ jobs:
           path: dist/*
           if-no-files-found: error
           retention-days: 7
+      - name: Dry-run package inventory
+        if: github.event_name != 'workflow_dispatch'
+        run: |
+          echo "Dry-run packages for ${{ matrix.app }} / ${{ matrix.platform }}:"
+          ls -la dist
+          # Refuse AABs anywhere.
+          if find . -name '*.aab' -not -path './.git/*' | grep -q .; then echo "::error::AAB produced"; exit 1; fi
+
+  python-zip:
+    name: Python zip ${{ matrix.app }}
+    needs: meta
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.app == 'squirrelsuica-analysis'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      matrix:
+        app: [squirrelsuica-analysis]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Package Python sources
+        run: |
+          mkdir -p dist
+          scripts/release/package_desktop.sh "${{ matrix.app }}" dist any
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-${{ matrix.app }}-python
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 7
 
   draft:
     name: Draft release
-    # Desktop is skipped for an app with no desktop build; anything else must succeed.
     if: >-
       always() && github.event_name == 'workflow_dispatch' &&
-      needs.meta.result == 'success' && needs.android.result == 'success' &&
-      (needs.desktop.result == 'success' || needs.desktop.result == 'skipped')
-    needs: [meta, android, desktop]
+      needs.meta.result == 'success' &&
+      needs.make-test.result == 'success' &&
+      (needs.android.result == 'success' || needs.android.result == 'skipped') &&
+      (needs.desktop.result == 'success' || needs.desktop.result == 'skipped') &&
+      (needs.python-zip.result == 'success' || needs.python-zip.result == 'skipped')
+    needs: [meta, make-test, android, desktop, python-zip]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -208,10 +372,29 @@ jobs:
         env:
           APP: ${{ github.event.inputs.app }}
           GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.meta.outputs.tag }}
+          NAME: ${{ needs.meta.outputs.name }}
+          VERSION: ${{ needs.meta.outputs.version }}
+          NOTES: ${{ needs.meta.outputs.notes }}
         run: |
+          set -euo pipefail
           eval "$(scripts/release/app_meta.sh "$APP")"
+          # Suite release notes may have been generated only in the meta job's workspace.
+          if [ "$APP" = desktop ] && [ ! -f "$notes" ]; then
+            mkdir -p docs/releases
+            {
+              echo "# SquirrelSoft desktop packages $version"
+              echo
+              echo "Unsigned CI packages (PKG / S3.5) for every desktop program."
+              echo "Windows zip/MSI, macOS .app in .dmg, Linux AppImage + .deb."
+              echo
+              echo "Unblocks later SND-wasapi, SND-macos, and QR-capture-win-mac CI."
+            } > "$notes"
+          fi
           cd dist
           if ls *.aab >/dev/null 2>&1; then echo "::error::AABs never go to GitHub"; exit 1; fi
+          # Drop helper logs if any leaked into artifacts.
+          rm -f .msi.err 2>/dev/null || true
           sha256sum -- * > SHA256SUMS.txt
           cat SHA256SUMS.txt
           cd ..

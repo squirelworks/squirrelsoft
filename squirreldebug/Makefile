@@ -50,12 +50,17 @@ $(BUILD)/test_debug: tests/test_debug.c $(OBJ) $(SQGUI_LIB) | $(BUILD)
 # The core builds with -ffreestanding and needs nothing from outside it but
 # memcpy, memmove, memset and strlen
 freestanding: | $(BUILD)
-	@for f in $(CORE_NAMES); do \
-		$(CC) -std=c11 -Wall -Wextra -Werror -O2 -ffreestanding -U_FORTIFY_SOURCE -Iinclude -c src/$$f.c -o $(BUILD)/fs_$$f.o || exit 1; \
-	done
-	@ld -r -o $(BUILD)/fs_core.o $(CORE_NAMES:%=$(BUILD)/fs_%.o)
-	@bad=$$(nm -u $(BUILD)/fs_core.o | awk '$$1=="U"{print $$2}' | grep -v -x -E 'memcpy|memmove|memset|strlen' | sort -u); \
-	if [ -n "$$bad" ]; then echo "the core uses: $$bad"; exit 1; fi; echo "squirreldebug core freestanding ok"
+	@if [ "$$(uname -s)" != Linux ]; then \
+		echo "squirreldebug: freestanding ELF check is Linux-only; skipped on $$(uname -s)"; \
+	else \
+		for f in $(CORE_NAMES); do \
+			$(CC) -std=c11 -Wall -Wextra -Werror -O2 -ffreestanding -U_FORTIFY_SOURCE -Iinclude -c src/$$f.c -o $(BUILD)/fs_$$f.o || exit 1; \
+		done && \
+		ld -r -o $(BUILD)/fs_core.o $(CORE_NAMES:%=$(BUILD)/fs_%.o) && \
+		bad=$$(nm -u $(BUILD)/fs_core.o | awk '$$1=="U"{print $$2}' | grep -v -x -E 'memcpy|memmove|memset|strlen' | sort -u); \
+		if [ -n "$$bad" ]; then echo "the core uses: $$bad"; exit 1; fi; \
+		echo "squirreldebug core freestanding ok"; \
+	fi
 
 test: $(BUILD)/test_debug $(BUILD)/squirreldebug freestanding
 	$(BUILD)/test_debug $(BUILD)

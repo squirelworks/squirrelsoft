@@ -36,11 +36,13 @@ Used here, in `ROADMAP.md` and on the issues (as labels).
   PNG, X11 capture, V4L2 webcam, GUI, encoder), SquirrelCalc, SquirrelPaint, SquirrelGames,
   SquirrelDebug. Everything in S5 (the apps built here for Squirrel OS/2) is done.
 - **Shared cores:** `libs/sqdsp`, `libs/sqfelica`, `libs/sqqr`, `libs/sqmath`, `libs/sqgui`.
-- **Test gate:** `make test` (every lib and program, the Python SuicaAnalysis
-  twin, and host JNI smokes for QR / Sound / SuicaAnalysis) and the Android job
-  (`./gradlew :app:assembleDebug :app:testDebugUnitTest` per app), both in
-  `.github/workflows/ci.yml` on every PR.
-- **Open PRs at hand-off:** none. No in-progress branches.
+- **Test gate:** `make test` on ubuntu / windows / macos (every lib and program,
+  the Python SuicaAnalysis twin, and host JNI smokes for QR / Sound /
+  SuicaAnalysis on Linux) and the Android job
+  (`./gradlew :app:assembleDebug :app:testDebugUnitTest` per app), in
+  `.github/workflows/ci.yml` on every PR. Desktop packages: see
+  `docs/packaging.md` and `.github/workflows/release.yml`.
+- **Open PRs at hand-off:** none at the original hand-off; PKG is this branch.
 
 ## Rules (Squirrel's; do not break)
 
@@ -82,10 +84,11 @@ and unit-test the Kotlin against stubs.
 3. ~~QR-torch-zoom + QR-batch~~ (done: SquirrelQR 0.1.7).
 4. ~~**SUICA-labels + SUICA-bus + FEL-pasmo-waon**~~ (done: SquirrelSuica 0.0.13).
 5. ~~**SUICA-stations**~~ (done: SquirrelSuica 0.0.14, MIT table).
-6. **PKG** (S3.5 + S4: Windows/macOS/Linux packages in CI), which unblocks
-   **SND-wasapi**, **SND-macos**, **QR-capture-win-mac** and **QR-wayland**.
-7. ~~**QR-webcam**~~ (done: V4L2 + synthetic CI frame).
-8. **S6 repo split** with Squirrel.
+6. ~~**PKG** (S3.5 + S4)~~ (done: packages + win/mac/ubuntu `make test` in CI).
+7. **SND-wasapi** / **SND-macos** / **QR-capture-win-mac** / **QR-wayland**
+   (unblocked by PKG).
+8. ~~**QR-webcam**~~ (done: V4L2 + synthetic CI frame).
+9. **S6 repo split** with Squirrel.
 
 ## Task cards
 
@@ -147,11 +150,13 @@ and unit-test the Kotlin against stubs.
 - **Acceptance:** `--select` works on GNOME Wayland; Windows and macOS builds
   capture a region. Needs PKG for Win/mac CI runners.
 
-### PKG — Windows/macOS/Linux packages in CI (S3.5, S4)  `cursor-codex`
-- **Acceptance:** `.github/workflows/release.yml` builds a zip (or MSI) for
-  Windows, a `.app` in a `.dmg` for macOS and an AppImage plus `.deb` for
-  Linux for every desktop program, runs `make test` on all three runners and
-  attaches the packages to the drafted Release. Unsigned is fine to start.
+### PKG — Windows/macOS/Linux packages in CI (S3.5, S4)  `status: done`
+- Done: `scripts/release/package_desktop.sh` builds zip/MSI (Windows), `.app`
+  in `.dmg` (macOS), AppImage + `.deb` (Linux) for every desktop program;
+  `.github/workflows/release.yml` and `ci.yml` run `make test` on
+  windows-latest / macos-latest / ubuntu-latest; draft Releases attach the
+  packages (unsigned OK). See `docs/packaging.md`. Unblocks SND-wasapi,
+  SND-macos, QR-capture-win-mac.
 
 ### PLAY-0.0.14 — upload SquirrelSound 0.0.14  `needs: squirrel`
 - Build the AAB locally with the upload key and upload it to closed testing

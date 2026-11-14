@@ -1,69 +1,90 @@
 #!/usr/bin/env bash
-# Build and package one app's desktop counterpart into <outdir>.
+# Build and package one desktop program (or the Python SuicaAnalysis zip) into <outdir>.
 # Usage: scripts/release/package_desktop.sh <app-folder> <outdir> <platform>
 #   platform: linux-x86_64 | windows-x86_64 | macos-arm64 | any
-# C apps are built with the repo Makefiles; Python apps are packaged as source
-# (they run on Linux, Windows and macOS with Python 3.9+).
+#
+# C programs produce:
+#   Windows:  zip + MSI (MSI when msilib is present)
+#   macOS:    .app inside .dmg
+#   Linux:    AppImage + .deb
+# Python apps still ship as a source zip (platform "any").
 set -euo pipefail
-app="${1:?usage}"; out="${2:?usage}"; platform="${3:?usage}"
+app="${1:?usage: package_desktop.sh <app> <outdir> <platform>}"
+out="${2:?usage}"
+platform="${3:?usage}"
 root="$(cd "$(dirname "$0")/../.." && pwd)"
-eval "$("$root/scripts/release/app_meta.sh" "$app" | sed 's/^/meta_/')"
+here="$(cd "$(dirname "$0")" && pwd)"
+eval "$("$here/app_meta.sh" "$app" | sed 's/^/meta_/')"
 stem="$meta_name-$meta_version"
 mkdir -p "$out"
 out="$(cd "$out" && pwd)"
 
 case "$meta_desktop" in
   none)
-    echo "$app has no desktop build yet"; exit 0 ;;
+    echo "$app has no desktop build"; exit 0 ;;
+  suite)
+    echo "package_desktop.sh takes one program; use the release workflow matrix for 'desktop'" >&2
+    exit 2 ;;
   python)
     [ "$platform" = any ] || { echo "Python apps package once, as platform 'any'" >&2; exit 2; }
-    # Tracked files only, without the Android project. SuicaAnalysis's --history
-    # loads SquirrelSuica's parser from ../squirrelsuica, so ship it alongside.
     extra=()
     [ "$app" = squirrelsuica-analysis ] && extra=(squirrelsuica/felica_parse.py squirrelsuica/data)
     (cd "$root" && git archive --format=zip --prefix="$stem/" -o "$out/$stem-python.zip" HEAD \
         "$app" ${extra[@]+"${extra[@]}"} ":(exclude)$app/android")
-    echo "$out/$stem-python.zip" ;;
-  c)
-    make -C "$root/$app" clean >/dev/null 2>&1 || true
-    make -C "$root/libs/sqdsp" clean >/dev/null
-    make -C "$root/$app" CC="${CC:-gcc}" build/squirrelsound
-    stage="$(mktemp -d)/$stem-$platform"
-    mkdir -p "$stage"
-    exe=""; case "$platform" in windows-*) exe=.exe ;; esac
-    cp "$root/$app/build/squirrelsound$exe" "$stage/"
-    cp "$root/$app/README.md" "$stage/"
-    # Smoke test the packaged binary before shipping it.
-    "$stage/squirrelsound$exe" synth "$stage/a440.wav" --freq 440 --seconds 1 --rate 44100
-    "$stage/squirrelsound$exe" pitch "$stage/a440.wav" | grep -E '44[0-9]\.'
-    "$stage/squirrelsound$exe" live --source demo --headless --frames 5 --fft 1024 --freq 440
-    rm -f "$stage/a440.wav"
-    case "$platform" in
-      windows-*)
-        # Ship the MinGW runtime DLLs the binary needs (SDL2 and friends).
-        if command -v ldd >/dev/null; then
-          ldd "$stage/squirrelsound.exe" | awk '/mingw64/ {print $3}' | sort -u | while read -r dll; do
-            cp "$dll" "$stage/"
-          done
-        fi
-        (cd "$(dirname "$stage")" && zip -qr "$out/$stem-$platform.zip" "$(basename "$stage")")
-        echo "$out/$stem-$platform.zip" ;;
-      macos-*)
-        cat > "$stage/RUNTIME.txt" <<'TXT'
-Needs SDL2 for the live view: brew install sdl2
-The analysis commands (synth, spectrum, pitch, thd, spectrogram) work without it.
-macOS may block the unsigned binary the first time: right-click it and choose Open,
-or run: xattr -d com.apple.quarantine squirrelsound
-TXT
-        (cd "$(dirname "$stage")" && zip -qr "$out/$stem-$platform.zip" "$(basename "$stage")")
-        echo "$out/$stem-$platform.zip" ;;
-      *)
-        cat > "$stage/RUNTIME.txt" <<'TXT'
-Needs SDL2 and ALSA for the live view, e.g. on Debian/Ubuntu:
-  sudo apt install libsdl2-2.0-0 libasound2
-The analysis commands (synth, spectrum, pitch, thd, spectrogram) work without them.
-TXT
-        tar -C "$(dirname "$stage")" -czf "$out/$stem-$platform.tar.gz" "$(basename "$stage")"
-        echo "$out/$stem-$platform.tar.gz" ;;
-    esac ;;
+    echo "$out/$stem-python.zip"
+    exit 0
+    ;;
+  c) ;;
+  *) echo "unknown desktop kind $meta_desktop" >&2; exit 2 ;;
 esac
+
+binary="${meta_binary:?}"
+exe=""
+case "$platform" in windows-*) exe=.exe ;; esac
+
+# Build the program (and clean only this app's build dir so parallel matrix jobs
+# that share libs/ still work when serialized per runner).
+make -C "$root/$app" clean >/dev/null 2>&1 || true
+make -C "$root/$app" CC="${CC:-gcc}" "build/$binary"
+
+bin_path="$root/$app/build/$binary$exe"
+[ -f "$bin_path" ] || { echo "build failed: missing $bin_path" >&2; exit 1; }
+
+stage_root="$(mktemp -d)"
+stage="$stage_root/$stem-$platform"
+mkdir -p "$stage"
+cp "$bin_path" "$stage/$binary$exe"
+[ -f "$root/$app/README.md" ] && cp "$root/$app/README.md" "$stage/"
+# Suica ships its station table next to the binary when present.
+if [ "$app" = squirrelsuica ] && [ -d "$root/$app/data" ]; then
+  cp -a "$root/$app/data" "$stage/"
+fi
+
+# Windows: ship MinGW runtime / SDL DLLs the binary needs.
+if [[ "$platform" == windows-* ]] && command -v ldd >/dev/null; then
+  ldd "$stage/$binary$exe" | awk '/mingw64|ucrt64|clang64/ {print $3}' | sort -u | while read -r dll; do
+    [ -n "$dll" ] && [ -f "$dll" ] && cp "$dll" "$stage/"
+  done
+fi
+
+# Smoke the staged binary (cwd = stage so relative data/ works).
+(
+  cd "$stage"
+  "$here/smoke_desktop.sh" "$app" "./$binary$exe"
+)
+
+case "$platform" in
+  windows-*)
+    "$here/pkg_windows.sh" "$stage" "$meta_name" "$binary$exe" "$meta_version" "$out"
+    ;;
+  macos-*)
+    # Stage uses the bare binary name inside the .app.
+    mv "$stage/$binary$exe" "$stage/$binary" 2>/dev/null || true
+    "$here/pkg_macos.sh" "$stage" "$meta_name" "$binary" "$meta_version" "$out"
+    ;;
+  linux-*|*)
+    "$here/pkg_linux.sh" "$stage" "$meta_name" "$binary" "$meta_version" "$out"
+    ;;
+esac
+
+rm -rf "$stage_root"
