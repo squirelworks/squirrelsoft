@@ -19,7 +19,7 @@
 
 #ifdef _WIN32
 
-static int configure_comm(int fd, int baud, const char *path, char *err, size_t cap) {
+static int configure_comm(int fd, int baud, int write, const char *path, char *err, size_t cap) {
     HANDLE h = (HANDLE)_get_osfhandle(fd);
     if (h == INVALID_HANDLE_VALUE) {
         snprintf(err, cap, "%s: not a serial port", path);
@@ -29,7 +29,11 @@ static int configure_comm(int fd, int baud, const char *path, char *err, size_t 
     memset(&dcb, 0, sizeof dcb);
     dcb.DCBlength = sizeof dcb;
     if (!GetCommState(h, &dcb)) {
-        /* a recording (pipe or ordinary file): leave it as it is */
+        /* a recording (pipe or ordinary file): same rule as POSIX !isatty */
+        if (write) {
+            snprintf(err, cap, "%s is not a serial port", path);
+            return -1;
+        }
         return 0;
     }
     dcb.BaudRate = (DWORD)baud;
@@ -81,7 +85,7 @@ int sqrx_serial_open(const char *path, int baud, int write, char *err, size_t ca
         snprintf(err, cap, "%s: %s", path, strerror(errno));
         return -1;
     }
-    if (configure_comm(fd, baud, path, err, cap)) {
+    if (configure_comm(fd, baud, write, path, err, cap)) {
         close(fd);
         return -1;
     }
