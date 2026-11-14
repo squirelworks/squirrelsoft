@@ -189,11 +189,65 @@ static void test_multires(void) {
     expect(fabs(level_near(db, n, fs, 10031.25) + 24.08) < 0.1, "one long FFT: 24 dB down");
 }
 
+static void expect_peaks_separated(const double *hz, size_t n, double min_sep, const char *msg) {
+    for (size_t i = 0; i < n; i++) {
+        for (size_t j = i + 1; j < n; j++) {
+            if (!(fabs(hz[i] - hz[j]) >= min_sep)) {
+                expect(0, msg);
+                return;
+            }
+        }
+    }
+    expect(1, msg);
+}
+
+/* Three local maxima: outer pair far enough for min_sep, middle between both.
+ * A candidate must lose to every neighbour within min_sep (or replace all of
+ * them) so the kept set never violates min_sep_hz. */
+static void test_local_peaks_min_sep(void) {
+    const size_t nbins = 64;
+    const double fs = 6400.0; /* 100 Hz per bin with fft_size == nbins */
+    const size_t fft = 64;
+    const double sep = 700.0;
+    double spec[64];
+    double hz[8], db[8];
+    for (size_t i = 0; i < nbins; i++) spec[i] = -80.0;
+    /* peaks at bins 10, 16, 22 → 1000, 1600, 2200 Hz */
+    spec[9] = -20.0;
+    spec[10] = -10.0;
+    spec[11] = -20.0;
+    spec[15] = -15.0;
+    spec[16] = 0.0; /* loudest, between the outer two */
+    spec[17] = -15.0;
+    spec[21] = -25.0;
+    spec[22] = -5.0;
+    spec[23] = -25.0;
+
+    size_t n = sqdsp_local_peaks(spec, nbins, fs, fft, 1, nbins - 2, -60.0, 8, sep, hz, db);
+    expect(n == 1, "middle peak replaces every outer neighbour within min_sep");
+    expect(n >= 1 && fabs(hz[0] - 1600.0) < 1.0 && fabs(db[0]) < 1e-9, "kept peak is the middle one");
+    expect_peaks_separated(hz, n, sep, "loud middle: kept peaks respect min_sep");
+
+    /* outer pair kept when middle is quieter than a neighbour within sep */
+    spec[16] = -12.0;
+    n = sqdsp_local_peaks(spec, nbins, fs, fft, 1, nbins - 2, -60.0, 8, sep, hz, db);
+    expect(n == 2, "quieter middle dropped; outer pair survives");
+    expect(n >= 2 && fabs(hz[0] - 2200.0) < 1.0 && fabs(hz[1] - 1000.0) < 1.0,
+           "outer peaks loudest-first at 2200 then 1000");
+    expect_peaks_separated(hz, n, sep, "quiet middle: kept peaks respect min_sep");
+
+    /* min_sep small enough that all three fit */
+    n = sqdsp_local_peaks(spec, nbins, fs, fft, 1, nbins - 2, -60.0, 8, 100.0, hz, db);
+    expect(n == 3, "three peaks when min_sep is tight");
+    expect_peaks_separated(hz, n, 100.0, "tight min_sep: all pairs still separated");
+}
+
 int main(void) {
     test_fft_vs_naive_dft();
     test_fft_impulse();
     test_octave_bands();
     test_multires();
+    test_local_peaks_min_sep();
     if (failures) {
         fprintf(stderr, "%d sqdsp core failure(s)\n", failures);
         return 1;

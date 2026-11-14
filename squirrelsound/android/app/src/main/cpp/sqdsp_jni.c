@@ -18,7 +18,9 @@
  *
  * nativePeaks(magDb, sampleRate, fftSize, fMin, fMax, dbMin, maxN, minSepHz,
  * outHz, outDb) finds the loudest local maxima via sqdsp_local_peaks — the
- * same routine live_engine_peaks uses on the desktop.
+ * same routine live_engine_peaks uses on the desktop. Pass the display /
+ * config floor as dbMin; this JNI entry adds +10 dB (matching
+ * live_engine_peaks' cfg.db_min + 10) before the threshold check.
  */
 #include <jni.h>
 #include <math.h>

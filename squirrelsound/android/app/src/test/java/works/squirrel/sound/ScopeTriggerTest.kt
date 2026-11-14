@@ -44,4 +44,14 @@ class ScopeTriggerTest {
         assertEquals(0f, ScopeTrigger.spanMs(10, 0), 0f)
         assertTrue(abs(ScopeTrigger.spanMs(480, 48_000) - 10f) < 1e-3f)
     }
+
+    @Test
+    fun risingEdgeAtMaxStartIsAccepted() {
+        // span leaves room for a start at index 4; that is the only rising edge.
+        val samples = floatArrayOf(-1f, -1f, -1f, -1f, 1f, 1f, 1f, 1f)
+        val span = 4
+        val maxStart = samples.size - span
+        assertEquals(4, maxStart)
+        assertEquals(4, ScopeTrigger.risingEdgeStart(samples, span))
+    }
 }

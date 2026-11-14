@@ -367,17 +367,25 @@ size_t sqdsp_local_peaks(const double *spec, size_t nbins, double sample_rate,
         if (v < thresh_db || v < spec[k - 1] || v <= spec[k + 1]) continue;
         double bin = sqdsp_parabolic_bin(spec, nbins, k);
         double f = bin * sample_rate / (double)fft_size;
-        /* keep the loudest of peaks closer than min_sep_hz */
-        size_t j;
-        for (j = 0; j < n; j++)
-            if (fabs(hz[j] - f) < min_sep_hz) break;
-        if (j < n) {
-            if (v <= db[j]) continue;
-            for (size_t m = j; m + 1 < n; m++) {
-                hz[m] = hz[m + 1];
-                db[m] = db[m + 1];
+        /* keep the loudest of peaks closer than min_sep_hz — every kept
+         * neighbour within min_sep must be quieter, or the candidate loses */
+        int blocked = 0;
+        for (size_t j = 0; j < n; j++) {
+            if (fabs(hz[j] - f) < min_sep_hz && v <= db[j]) {
+                blocked = 1;
+                break;
             }
-            n--;
+        }
+        if (blocked) continue;
+        {
+            size_t w = 0;
+            for (size_t j = 0; j < n; j++) {
+                if (fabs(hz[j] - f) < min_sep_hz) continue;
+                hz[w] = hz[j];
+                db[w] = db[j];
+                w++;
+            }
+            n = w;
         }
         /* insert sorted by level, loudest first */
         size_t at = n;

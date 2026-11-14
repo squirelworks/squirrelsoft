@@ -57,9 +57,11 @@ double sqdsp_peak_frequency(const double *mag, const double *freq, size_t nbins)
 double sqdsp_parabolic_bin(const double *mag, size_t nbins, size_t k);
 
 /* Up to max_n local maxima of a dB spectrum, loudest first, at least
- * min_sep_hz apart and above thresh_db. Bins searched are b0..b1 inclusive
- * (clamped). Frequencies use parabolic interpolation: bin * fs / fft_size.
- * Returns the count written into hz/db (either may be NULL to only count). */
+ * min_sep_hz apart and above thresh_db. A candidate that falls inside
+ * min_sep_hz of several kept peaks replaces all of them only when it is
+ * louder than every one; otherwise it is dropped. Bins searched are
+ * b0..b1 inclusive (clamped). Frequencies use parabolic interpolation:
+ * bin * fs / fft_size. Returns the count written into hz/db. */
 size_t sqdsp_local_peaks(const double *spec, size_t nbins, double sample_rate,
                          size_t fft_size, size_t b0, size_t b1, double thresh_db,
                          size_t max_n, double min_sep_hz, double *hz, double *db);
