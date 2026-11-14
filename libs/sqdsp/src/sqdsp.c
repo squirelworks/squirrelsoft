@@ -353,6 +353,48 @@ double sqdsp_parabolic_bin(const double *mag, size_t nbins, size_t k) {
     return (double)k + 0.5 * (alpha - gamma) / denom;
 }
 
+size_t sqdsp_local_peaks(const double *spec, size_t nbins, double sample_rate,
+                         size_t fft_size, size_t b0, size_t b1, double thresh_db,
+                         size_t max_n, double min_sep_hz, double *hz, double *db) {
+    size_t n = 0;
+    if (!spec || !hz || !db || max_n == 0 || nbins < 3 || !(sample_rate > 0) || fft_size == 0)
+        return 0;
+    if (b0 < 1) b0 = 1;
+    if (b1 >= nbins) b1 = nbins - 1;
+    if (b0 > b1) return 0;
+    for (size_t k = b0; k <= b1 && k + 1 < nbins; k++) {
+        double v = spec[k];
+        if (v < thresh_db || v < spec[k - 1] || v <= spec[k + 1]) continue;
+        double bin = sqdsp_parabolic_bin(spec, nbins, k);
+        double f = bin * sample_rate / (double)fft_size;
+        /* keep the loudest of peaks closer than min_sep_hz */
+        size_t j;
+        for (j = 0; j < n; j++)
+            if (fabs(hz[j] - f) < min_sep_hz) break;
+        if (j < n) {
+            if (v <= db[j]) continue;
+            for (size_t m = j; m + 1 < n; m++) {
+                hz[m] = hz[m + 1];
+                db[m] = db[m + 1];
+            }
+            n--;
+        }
+        /* insert sorted by level, loudest first */
+        size_t at = n;
+        while (at > 0 && db[at - 1] < v) at--;
+        if (at >= max_n) continue;
+        size_t end = n < max_n ? n : max_n - 1;
+        for (size_t m = end; m > at; m--) {
+            hz[m] = hz[m - 1];
+            db[m] = db[m - 1];
+        }
+        hz[at] = f;
+        db[at] = v;
+        if (n < max_n) n++;
+    }
+    return n;
+}
+
 double sqdsp_peak_frequency(const double *mag, const double *freq, size_t nbins) {
     if (nbins < 3) return 0.0;
     size_t kmax = 1;
