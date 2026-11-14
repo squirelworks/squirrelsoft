@@ -29,6 +29,8 @@ endif
 # Native system-audio loopback: WASAPI (Windows) / CoreAudio (+ SCK) (macOS).
 ifneq ($(IS_WIN),)
 CFLAGS += -DSQSOUND_HAS_NATIVE_LOOPBACK
+# ole32: CoCreateInstance / COM; ksuser: KSDATAFORMAT helpers. CLSID/IID/PKEY
+# definitions come from #include <initguid.h> in live_audio_wasapi.c (MinGW).
 LDFLAGS += -lole32 -lksuser
 NATIVE_LB_OBJ = $(BUILD)/live_audio_wasapi.o
 endif

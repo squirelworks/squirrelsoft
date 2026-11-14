@@ -6,6 +6,9 @@
 #define COBJMACROS
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+/* MinGW-w64 does not export these CLSID/IID/PKEY symbols from -luuid;
+ * DEFINE_GUID/DEFINE_PROPERTYKEY only emit definitions when INITGUID is set. */
+#include <initguid.h>
 #include <mmdeviceapi.h>
 #include <audioclient.h>
 #include <functiondiscoverykeys_devpkey.h>
@@ -124,7 +127,7 @@ static IMMDevice *pick_render(IMMDeviceEnumerator *en, const char *want, char *n
             if (FAILED(IMMDeviceCollection_Item(col, i, &dev)) || !dev) continue;
             if (friendly_name(dev, name, sizeof name) == 0 && contains_ci(name, want)) {
                 picked = dev;
-                snprintf(name_out, name_cap, "Monitor of %s", name);
+                snprintf(name_out, name_cap, "Monitor of %.240s", name);
                 break;
             }
             IMMDevice_Release(dev);
@@ -138,7 +141,7 @@ static IMMDevice *pick_render(IMMDeviceEnumerator *en, const char *want, char *n
     {
         char name[256];
         if (friendly_name(picked, name, sizeof name) == 0)
-            snprintf(name_out, name_cap, "Monitor of %s", name);
+            snprintf(name_out, name_cap, "Monitor of %.240s", name);
         else
             snprintf(name_out, name_cap, "Monitor of default render");
     }
