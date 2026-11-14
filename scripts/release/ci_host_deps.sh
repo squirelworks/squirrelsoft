@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Install host dependencies for `make test` / desktop packaging on CI runners.
 # Usage: ci_host_deps.sh <linux|macos|windows>
-# windows = run from an msys2 bash shell (MINGW64).
+# windows = run from an msys2 bash shell (UCRT64).
 set -euo pipefail
 os="${1:?usage: ci_host_deps.sh <linux|macos|windows>}"
 
@@ -24,16 +24,18 @@ case "$os" in
       brew install sdl2 sdl2_ttf pkg-config libusb
     ;;
   windows)
-    # Caller has already set up MSYS2; install mingw packages with pacman.
+    # Caller has already set up MSYS2 UCRT64; install ucrt packages with pacman.
+    # mingw64 no longer ships libusb; UCRT64 is the supported environment.
     pacman -S --noconfirm --needed \
       make zip git python \
-      mingw-w64-x86_64-gcc \
-      mingw-w64-x86_64-SDL2 \
-      mingw-w64-x86_64-SDL2_ttf \
-      mingw-w64-x86_64-pkgconf \
-      mingw-w64-x86_64-libusb \
-      mingw-w64-x86_64-libsystre
+      mingw-w64-ucrt-x86_64-gcc \
+      mingw-w64-ucrt-x86_64-SDL2 \
+      mingw-w64-ucrt-x86_64-SDL2_ttf \
+      mingw-w64-ucrt-x86_64-pkgconf \
+      mingw-w64-ucrt-x86_64-libusb \
+      mingw-w64-ucrt-x86_64-libsystre
     ;;
+
   *)
     echo "unknown os: $os" >&2
     exit 2

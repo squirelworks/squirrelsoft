@@ -1,8 +1,10 @@
 CC ?= gcc
 SQDSP = ../libs/sqdsp
 SQGUI = ../libs/sqgui
-CFLAGS ?= -std=c11 -Wall -Wextra -O2 -D_POSIX_C_SOURCE=200809L
+# _DARWIN_C_SOURCE: mkdtemp and friends stay visible on macOS with POSIX_C_SOURCE.
+CFLAGS ?= -std=c11 -Wall -Wextra -O2 -D_POSIX_C_SOURCE=200809L -D_DARWIN_C_SOURCE
 CFLAGS += -Iinclude -I$(SQDSP)/include -I$(SQGUI)/include
+
 LDFLAGS ?= -lm
 BUILD = build
 

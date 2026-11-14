@@ -1,3 +1,8 @@
+/* mkdtemp needs Darwin extensions when -D_POSIX_C_SOURCE=200809L is set. */
+#ifdef __APPLE__
+#define _DARWIN_C_SOURCE
+#endif
+
 #include "live_audio.h"
 #include "live_engine.h"
 #include "live_prefs.h"
