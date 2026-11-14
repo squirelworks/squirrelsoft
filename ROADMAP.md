@@ -122,7 +122,7 @@ The same states are labels on the GitHub issues (`status: done`, `status: in pro
 ## Ongoing per app
 - SquirrelSuica
   - [x] PASMO/ICOCA labels
-  - [ ] Richer station tables (with source + license stated)
+  - [x] Richer station tables (with source + license stated)
   - [x] Product-sale rows (terminal `CA`, #73)
   - [x] Bus rows
   - [x] Export CSV (desktop `--csv` / `--csv-file`, #87)

@@ -27,8 +27,9 @@ Used here, in `ROADMAP.md` and on the issues (as labels).
   0.0.3, SquirrelQR 0.1.6, SquirrelSound 0.0.13 on Play; SquirrelSound **0.0.14**
   (full-screen Live tab, Settings tab, Android octave bars, WAV record,
   calibration), **0.0.15** (landscape split, scope, peak labels),
-  SquirrelQR **0.1.7** (torch / zoom / batch), and SquirrelSuica **0.0.13**
-  (issuer labels, bus rows, WAON history) wait for Squirrel to upload.
+  SquirrelQR **0.1.7** (torch / zoom / batch), SquirrelSuica **0.0.13**
+  (issuer labels, bus rows, WAON history), and SquirrelSuica **0.0.14**
+  (richer MIT station tables) wait for Squirrel to upload.
 - **Desktop (C, SDL2 via `libs/sqgui`):** SquirrelStation, SquirrelCAD,
   SquirrelGNSS, SquirrelSound (mic + PulseAudio/PipeWire loopback, GUI),
   SquirrelSuica (PC/SC, RC-S380 over libusb, GUI, CSV), SquirrelQR (files,
@@ -80,10 +81,11 @@ and unit-test the Kotlin against stubs.
 2. ~~FEL-jni-smoke~~ (done: S2 JNI box).
 3. ~~QR-torch-zoom + QR-batch~~ (done: SquirrelQR 0.1.7).
 4. ~~**SUICA-labels + SUICA-bus + FEL-pasmo-waon**~~ (done: SquirrelSuica 0.0.13).
-5. **PKG** (S3.5 + S4: Windows/macOS/Linux packages in CI), which unblocks
+5. ~~**SUICA-stations**~~ (done: SquirrelSuica 0.0.14, MIT table).
+6. **PKG** (S3.5 + S4: Windows/macOS/Linux packages in CI), which unblocks
    **SND-wasapi**, **SND-macos**, **QR-capture-win-mac** and **QR-wayland**.
-6. ~~**QR-webcam**~~ (done: V4L2 + synthetic CI frame).
-7. **S6 repo split** with Squirrel.
+7. ~~**QR-webcam**~~ (done: V4L2 + synthetic CI frame).
+8. **S6 repo split** with Squirrel.
 
 ## Task cards
 
@@ -118,11 +120,12 @@ and unit-test the Kotlin against stubs.
 ### SUICA-labels / SUICA-bus  `status: done` (SquirrelSuica 0.0.13)
 - Issuer labels from attributes `0x008B` byte 8 (+ history settlement) in
   Python, C and Kotlin; bus rows show operator/stop codes and never hit the
-  station table. **SUICA-stations** (richer tables) remains open.
+  station table. **SUICA-stations** (richer MIT tables) done in 0.0.14.
 
-### SUICA-stations  `cursor-codex`
-- Richer station tables only from a source whose licence allows redistribution,
-  stated in `squirrelsuica/data/README`. Same changes in Python, C and Kotlin.
+### SUICA-stations  `status: done` (SquirrelSuica 0.0.14)
+- Richer station tables from soltia48/suica-viewer `station_codes.csv` (MIT),
+  stated in `squirrelsuica/data/README`. Same schema + optional `note` in
+  Python, C (`sqfelica`) and Kotlin; SFCardFan dump removed (no redistribution).
 
 ### QR-torch-zoom / QR-batch — SquirrelQR on Android  `status: done` (0.1.7)
 - **Files:** `squirrelqr/android/app/src/main/java/works/squirrel/qr/MainActivity.kt`,

@@ -2,7 +2,8 @@
 
 Read-only **FeliCa card reader**: **Suica/PASMO family**, **nanaco**,
 **楽天Edy**, and **WAON**. Journey history shows **station names**
-(enter → exit) from the public Saibane station-code table. No writes, no cloning.
+(enter → exit) from the MIT-licensed Saibane station-code table
+(`data/StationCode.csv`; see `data/README.md`). No writes, no cloning.
 
 On Android the launcher label is **SquirrelSuica** (package `works.squirrel.suica`)
 so it is easy to find next to SquirrelQR / SquirrelSound.
@@ -14,7 +15,7 @@ Parsers are covered by **fixture unit tests** (no physical card required).
 | Path | When to use |
 |------|-------------|
 | **`android/`** | Phone app (NFC-F), the preferred reader |
-| `data/StationCode.csv` | Saibane region/line/station → name table |
+| `data/StationCode.csv` | Saibane region/line/station → name (+ note) table |
 | `suica_read.py` | USB PaSoRi via `nfcpy`, or `--demo suica\|nanaco\|edy\|waon` |
 | `felica_parse.py` | Shared parsers + synthetic fixtures |
 
@@ -122,7 +123,7 @@ The reader polled Suica's system `0x0003` first; a nanaco card (system
 The reader now asks the card for its system codes (Request System Code, or
 the system 0 code from a wildcard poll) and only polls systems it has.
 
-Station names come from the community SFCardFan サイバネ表 (see `data/README.md`).
+Station names come from the MIT-licensed Saibane table (see `data/README.md`).
 Clean-room parsers — study open FeliCa history layouts; do not copy proprietary apps.
 
 ## Tests

@@ -61,7 +61,7 @@ LISTINGS = {
             "• No writes, no cloning, no network card upload\n\n"
             "Hold your card still on the NFC spot with the app in the foreground. "
             "History uses publicly documented FeliCa layouts; station names come "
-            "from the community Saibane station-code table.\n\n"
+            "from the MIT-licensed Saibane station-code table.\n\n"
             "Requires an NFC-F capable phone."
         ),
         "releaseNotes": (
