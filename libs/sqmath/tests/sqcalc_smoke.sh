@@ -10,6 +10,9 @@ expect() { # expect WANT ARGS...: stdout must equal WANT and the exit code be 0
     shift
     got=$("$C" "$@" 2>/dev/null)
     rc=$?
+    # Windows text-mode stdout is CRLF; strip CR so multi-line compares match LF wants.
+    got=$(printf '%s' "$got" | tr -d '\r')
+    want=$(printf '%s' "$want" | tr -d '\r')
     if [ "$rc" != 0 ] || [ "$got" != "$want" ]; then
         echo "FAIL: sqcalc $* -> [$got] rc=$rc, want [$want]"
         fail=1
@@ -71,9 +74,9 @@ status 2 --solve-for x
 "$C" "2 * (3" 2>&1 | grep -q '^        \^$' || { echo "FAIL: caret under the error"; fail=1; }
 "$C" --solve x 2 3 "x^2 - 2" 2>&1 | grep -q 'no sign change' || { echo "FAIL: no-root message"; fail=1; }
 
-[ "$("$C" --units "3 ft + 2 in to cm")" = "96.52 cm" ] || { echo "FAIL: --units"; fail=1; }
-[ "$("$C" --digits 4 --units "100 km/h to mph")" = "62.14 mph" ] || { echo "FAIL: --units digits"; fail=1; }
-[ "$("$C" --units "5 kg * 9.81 m/s^2")" = "49.05 N" ] || { echo "FAIL: --units SI"; fail=1; }
+[ "$(printf '%s' "$("$C" --units "3 ft + 2 in to cm")" | tr -d '\r')" = "96.52 cm" ] || { echo "FAIL: --units"; fail=1; }
+[ "$(printf '%s' "$("$C" --digits 4 --units "100 km/h to mph")" | tr -d '\r')" = "62.14 mph" ] || { echo "FAIL: --units digits"; fail=1; }
+[ "$(printf '%s' "$("$C" --units "5 kg * 9.81 m/s^2")" | tr -d '\r')" = "49.05 N" ] || { echo "FAIL: --units SI"; fail=1; }
 status 1 --units "5 m to kg"
 status 2 --units
 "$C" --units "3 m + 2 s" 2>&1 | grep -q '^      \^$' || { echo "FAIL: --units caret"; fail=1; }
