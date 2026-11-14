@@ -19,7 +19,9 @@
 #endif
 
 #ifdef _WIN32
+#include <io.h>
 #include <windows.h>
+#define close _close
 static void sleep_ms(int ms) { Sleep((DWORD)ms); }
 #else
 #include <time.h>
@@ -94,6 +96,8 @@ static void test_dbfs_and_colour(void) {
            "yellow stop");
 }
 
+#ifndef _WIN32
+/* Prefs path and mkdtemp/setenv are POSIX; skipped under MinGW (see main). */
 static void test_prefs(void) {
     char dir[] = "/tmp/sqsound_prefs_XXXXXX";
     if (!mkdtemp(dir)) { expect(0, "mkdtemp"); return; }
@@ -163,6 +167,7 @@ static void test_prefs(void) {
            "XDG path");
     expect(live_prefs_path(buf, 8) == -1, "small buffer rejected");
 }
+#endif
 
 static void expect(int c, const char *m) {
     if (!c) {

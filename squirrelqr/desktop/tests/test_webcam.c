@@ -9,7 +9,17 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+#ifdef _WIN32
+/* MinGW UCRT with -std=c11 does not declare POSIX setenv/unsetenv. */
+static int setenv(const char *name, const char *value, int overwrite) {
+    if (!overwrite && getenv(name)) return 0;
+    return _putenv_s(name, value);
+}
+static int unsetenv(const char *name) { return _putenv_s(name, ""); }
+#else
 #include <unistd.h>
+#endif
 
 static int failures = 0;
 #define CHECK(cond, ...)                                                                           \
