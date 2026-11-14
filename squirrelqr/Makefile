@@ -17,7 +17,9 @@ LDLIBS += $(shell pkg-config --libs x11)
 endif
 
 # Webcam: V4L2 on Linux when videodev2.h is present; stub elsewhere (mf/avf until PKG).
-WEBCAM ?= $(shell printf '#include <linux/videodev2.h>\nint main(void){return 0;}\n' | $(CC) -x c - -o /dev/null 2>/dev/null && echo v4l2 || echo stub)
+# \043 = '#' so Make does not treat the probe as a comment (same as ICONV_PROBE).
+WEBCAM_PROBE = printf '\043include <linux/videodev2.h>\nint main(void){return 0;}\n' | $(CC) -x c - -o /dev/null
+WEBCAM ?= $(shell $(WEBCAM_PROBE) 2>/dev/null && echo v4l2 || echo stub)
 ifeq ($(WEBCAM),v4l2)
 WEBCAM_OBJ = $(BUILD)/webcam_v4l2.o
 else
