@@ -14,6 +14,10 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#ifdef _WIN32
+#include <fcntl.h>
+#include <io.h>
+#endif
 
 #ifndef QR_VERSION
 #define QR_VERSION "dev"
@@ -251,6 +255,12 @@ int main(int argc, char **argv) {
     int screen = 0, select = 0, webcam = 0, nfiles = 0, gui = 0, gui_frames = 0;
     QrRect r = {0, 0, 0, 0};
     char **files = argv + 1; /* file names are compacted in place; the write index never passes the read one */
+#ifdef _WIN32
+    /* CRT stdout defaults to text mode: LF becomes CRLF, so --raw payloads and
+     * trailing newlines no longer match exact byte compares under MinGW/UCRT. */
+    _setmode(_fileno(stdout), _O_BINARY);
+    _setmode(_fileno(stderr), _O_BINARY);
+#endif
     for (int i = 1; i < argc; i++) {
         const char *a = argv[i];
         if (!strcmp(a, "--help") || !strcmp(a, "-h")) {
