@@ -70,12 +70,12 @@ test: $(BUILD)/test_sqstation $(BUILD)/test_dxf $(BUILD)/test_elements $(BUILD)/
 	$(BUILD)/test_gui $(BUILD)
 	sh tests/cli_smoke.sh $(BUILD)
 	cd $(CURDIR) && $(BUILD)/test_dxf
-	@tmp=$$(mktemp /tmp/sqsXXXXXX.sqdgn); dxf=samples/microstation_bridge.dxf; \
+	@tmp=$(BUILD)/sqs_cli_smoke.sqdgn; out=$(BUILD)/sqs_cli.dxf; dxf=samples/microstation_bridge.dxf; \
 	$(BUILD)/squirrelstation import-dxf $$tmp $$dxf && \
 	$(BUILD)/squirrelstation list $$tmp | grep -q LINE && \
-	$(BUILD)/squirrelstation export-dxf $$tmp /tmp/sqs_cli.dxf && \
+	$(BUILD)/squirrelstation export-dxf $$tmp $$out && \
 	$(BUILD)/squirrelstation probe $$dxf | grep -q dxf && \
-	rm -f $$tmp && echo "squirrelstation cli+dxf smoke ok"
+	rm -f $$tmp $$out && echo "squirrelstation cli+dxf smoke ok"
 	@if [ "$(HAS_SDL)" = 1 ]; then \
 		SDL_VIDEODRIVER=dummy $(BUILD)/squirrelstation gui samples/microstation_bridge.dxf --view iso --frames 10 && echo "squirrelstation window ok"; \
 	else echo "squirrelstation: no SDL2, window not tested"; fi

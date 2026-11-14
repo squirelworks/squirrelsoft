@@ -13,7 +13,16 @@ if ! "$q" devices >/dev/null 2>&1 && ! SDL_AUDIODRIVER=disk "$q" devices >/dev/n
     exit 0
 fi
 tmp=$(mktemp -d)
-trap 'kill $play_pid $pa_pid 2>/dev/null || true; rm -rf "$tmp"' EXIT
+# PulseAudio may still be writing under $tmp/run when EXIT fires; wait then
+# force-remove so a leftover socket/dir does not fail the job under set -e.
+cleanup() {
+    kill $play_pid $pa_pid 2>/dev/null || true
+    [ -n "$play_pid" ] && wait $play_pid 2>/dev/null || true
+    [ -n "$pa_pid" ] && wait $pa_pid 2>/dev/null || true
+    play_pid=; pa_pid=
+    rm -rf "$tmp" 2>/dev/null || true
+}
+trap cleanup EXIT
 pa_pid=
 play_pid=
 
