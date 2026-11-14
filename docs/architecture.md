@@ -56,7 +56,9 @@ An app is ready to move to its own repository when all of these hold:
 - [ ] The cores it uses are listed, and get vendored or submoduled at split time.
 - [ ] Its Play listing, applicationId and versionCode history are noted, because the applicationId never changes.
 
-The owner creates the new repositories and runs `git filter-repo` to keep history. Claude only prepares the tree.
+The owner creates the new repositories and runs `git filter-repo` to keep history.
+Agents prepare the tree only: see [s6-repo-split.md](s6-repo-split.md),
+`scripts/s6_repo_split_prep.sh`, and [s6-ci-stubs/](s6-ci-stubs/).
 
 ## Next steps
 
