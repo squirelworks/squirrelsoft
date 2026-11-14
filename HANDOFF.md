@@ -24,17 +24,18 @@ Used here, in `ROADMAP.md` and on the issues (as labels).
 ## Where things are
 
 - **Android (Play closed testing):** SquirrelSuica 0.0.12, SquirrelSuicaAnalysis
-  0.0.3, SquirrelQR 0.1.6, SquirrelSound 0.0.13 on Play; SquirrelSound **0.0.14**
-  (full-screen Live tab, Settings tab, Android octave bars, WAV record,
-  calibration), **0.0.15** (landscape split, scope, peak labels),
-  SquirrelQR **0.1.7** (torch / zoom / batch), SquirrelSuica **0.0.13**
-  (issuer labels, bus rows, WAON history), and SquirrelSuica **0.0.14**
-  (richer MIT station tables) wait for Squirrel to upload.
+  0.0.3, SquirrelQR 0.1.6, SquirrelSound 0.0.13 on Play; on `main` and waiting
+  for Squirrel to upload: SquirrelSound **0.0.14** (full-screen Live tab,
+  Settings, octave bars, WAV, calibration) and **0.0.15** (landscape, scope,
+  peak labels), SquirrelQR **0.1.7** (torch / zoom / batch), SquirrelSuica
+  **0.0.13** (issuer labels, bus rows, WAON) and **0.0.14** (MIT station tables).
 - **Desktop (C, SDL2 via `libs/sqgui`):** SquirrelStation, SquirrelCAD,
-  SquirrelGNSS, SquirrelSound (mic + PulseAudio/PipeWire loopback, GUI),
-  SquirrelSuica (PC/SC, RC-S380 over libusb, GUI, CSV), SquirrelQR (files,
-  PNG, X11/portal/Win/mac capture, V4L2 webcam, GUI, encoder), SquirrelCalc, SquirrelPaint, SquirrelGames,
-  SquirrelDebug. Everything in S5 (the apps built here for Squirrel OS/2) is done.
+  SquirrelGNSS, SquirrelSound (mic + PulseAudio/PipeWire loopback, GUI; Win/mac
+  system-audio still open), SquirrelSuica (PC/SC, RC-S380 over libusb, GUI,
+  CSV — S3.3 done), SquirrelQR (files, PNG, X11/portal/Win/mac capture, V4L2
+  webcam, GUI, encoder — S3.4 done via #138 / #142), SquirrelCalc, SquirrelPaint,
+  SquirrelGames, SquirrelDebug. Everything in S5 is done. PKG (S3.5 + S4) is on
+  `main`.
 - **Shared cores:** `libs/sqdsp`, `libs/sqfelica`, `libs/sqqr`, `libs/sqmath`, `libs/sqgui`.
 - **Test gate:** `make test` on ubuntu / windows / macos (every lib and program,
   the Python SuicaAnalysis twin, and host JNI smokes for QR / Sound /
@@ -42,7 +43,9 @@ Used here, in `ROADMAP.md` and on the issues (as labels).
   (`./gradlew :app:assembleDebug :app:testDebugUnitTest` per app), in
   `.github/workflows/ci.yml` on every PR. Desktop packages: see
   `docs/packaging.md` and `.github/workflows/release.yml`.
-- **Open PRs at hand-off:** none at the original hand-off; PKG is this branch.
+- **Open PRs:** [#141](https://github.com/squirelworks/squirrelsoft/pull/141)
+  SND-wasapi/macos (`cursor/impl-snd-wasapi-macos-2eaf`) — finish that; do not
+  claim S3.2 done on `main` until it merges.
 
 ## Rules (Squirrel's; do not break)
 
@@ -79,16 +82,17 @@ and unit-test the Kotlin against stubs.
 
 ## Suggested order
 
-1. ~~SND-landscape + SND-scope + SND-peaks~~ (done: SquirrelSound 0.0.15).
+1. ~~SND-landscape + SND-scope + SND-peaks~~ (done on `main`: SquirrelSound 0.0.15).
 2. ~~FEL-jni-smoke~~ (done: S2 JNI box).
 3. ~~QR-torch-zoom + QR-batch~~ (done: SquirrelQR 0.1.7).
 4. ~~**SUICA-labels + SUICA-bus + FEL-pasmo-waon**~~ (done: SquirrelSuica 0.0.13).
 5. ~~**SUICA-stations**~~ (done: SquirrelSuica 0.0.14, MIT table).
 6. ~~**PKG** (S3.5 + S4)~~ (done: packages + win/mac/ubuntu `make test` in CI).
-7. **SND-wasapi** / **SND-macos** (unblocked by PKG).
-8. ~~**QR-webcam**~~ (done: V4L2 + synthetic CI frame).
-9. ~~**QR-wayland / QR-capture-win-mac**~~ (done: portal / GDI-DXGI / ScreenCaptureKit).
-10. **S6 repo split** with Squirrel (prep inventory is ready; see S6 card).
+7. ~~**QR-webcam**~~ (done: #138, V4L2 + synthetic CI frame).
+8. ~~**QR-wayland / QR-capture-win-mac**~~ (done: #142, portal / GDI-DXGI / ScreenCaptureKit).
+9. **SND-wasapi** / **SND-macos** *(in progress — PR #141)* — finish and merge; last open S3.2 steps.
+10. **S6 repo split** with Squirrel (prep inventory on `main`; see S6 card).
+11. **PLAY uploads** *(Squirrel)* — Sound 0.0.14/0.0.15, QR 0.1.7, Suica 0.0.13/0.0.14.
 
 ## Task cards
 
@@ -104,12 +108,15 @@ and unit-test the Kotlin against stubs.
 - Done in 0.0.15: `sqdsp_local_peaks` via `SqDsp.peaks` / `nativePeaks`; labelled
   peaks on the live or held trace; `jni-smoke` calls the new JNI entry.
 
-### SND-wasapi / SND-macos — system audio on Windows and macOS  `cursor-codex`
-- **Files:** `squirrelsound/src/live_audio.c` (add `live_audio_wasapi.c`,
-  `live_audio_coreaudio.m` behind the same interface), Makefile.
+### SND-wasapi / SND-macos — system audio on Windows and macOS  `status: in progress` (PR #141)
+- **PR:** [#141](https://github.com/squirelworks/squirrelsoft/pull/141) on
+  `cursor/impl-snd-wasapi-macos-2eaf` — finish CI / merge; do not re-implement
+  on a new branch. Not on `main` yet (S3.2 parent stays open).
+- **Files:** `squirrelsound/src/live_audio.c`, `live_audio_wasapi.c`,
+  `live_audio_coreaudio.m` behind the same interface; Makefile.
 - **Acceptance:** `squirrelsound devices` lists the loopback source;
   `--source loopback` captures it; CI on `windows-latest` / `macos-latest`
-  builds it and runs the capture test against a silent device (needs PKG).
+  builds it and runs the capture test against a silent device.
 
 ### FEL-jni-smoke — JVM smoke test for `sqfelica_jni.c`  `status: done`
 - On `main` via #133 / #136 (S2 JNI box). Host build of `sqfelica_jni.c`
@@ -137,13 +144,13 @@ and unit-test the Kotlin against stubs.
   `CameraControl`; batch mode keeps scanning, de-duplicates by content and
   exports the list (share as text/CSV). Unit tests on the de-duplication.
 
-### QR-webcam — desktop camera capture  `status: done`
+### QR-webcam — desktop camera capture  `status: done` (#138)
 - `--webcam` / `squirrelqr devices` on V4L2 (`webcam_v4l2.c`); Win/mac link
-  `webcam_stub.c` (`mf-stub` / `avf-stub`) until PKG. CI: `test_webcam` and
+  `webcam_stub.c` (`mf-stub` / `avf-stub`). CI: `test_webcam` and
   `webcam_smoke.sh` decode a synthetic frame via `--device @FILE` or
   `QR_WEBCAM_FRAME` (no real camera).
 
-### QR-wayland / QR-capture-win-mac — screen capture  `status: done`
+### QR-wayland / QR-capture-win-mac — screen capture  `status: done` (#142)
 - Linux: `capture_portal.c` (xdg-desktop-portal Screenshot over D-Bus) plus
   X11; `capture_linux.c` picks portal when `WAYLAND_DISPLAY` is set.
 - Windows: `capture_win.c` (GDI BitBlt, DXGI Desktop Duplication fallback).
@@ -152,19 +159,19 @@ and unit-test the Kotlin against stubs.
   `QR_CAPTURE_FRAME` on every OS (same pattern as the webcam synth path).
 
 ### PKG — Windows/macOS/Linux packages in CI (S3.5, S4)  `status: done`
-- Done: `scripts/release/package_desktop.sh` builds zip/MSI (Windows), `.app`
-  in `.dmg` (macOS), AppImage + `.deb` (Linux) for every desktop program;
-  `.github/workflows/release.yml` and `ci.yml` run `make test` on
-  windows-latest / macos-latest / ubuntu-latest; draft Releases attach the
-  packages (unsigned OK). See `docs/packaging.md`. Unblocks SND-wasapi,
-  SND-macos, QR-capture-win-mac.
+- Done on `main` (#137): `scripts/release/package_desktop.sh` builds zip/MSI
+  (Windows), `.app` in `.dmg` (macOS), AppImage + `.deb` (Linux) for every
+  desktop program; `.github/workflows/release.yml` and `ci.yml` run `make test`
+  on windows-latest / macos-latest / ubuntu-latest; draft Releases attach the
+  packages (unsigned OK). See `docs/packaging.md`. Unblocked QR-capture-win-mac
+  (#142) and the open SND-wasapi/macos work (#141).
 
 ### PLAY-0.0.14 — upload SquirrelSound 0.0.14  `needs: squirrel`
 - Build the AAB locally with the upload key and upload it to closed testing
   (`scripts/` has the Play helpers). Do not commit or attach the AAB anywhere.
 
-### S6 — per-app repos  `needs: squirrel` (prep done)
-- **Prep on branch / to merge:** `scripts/s6_repo_split_prep.sh` (path lists and
+### S6 — per-app repos  `needs: squirrel` (prep done on `main`)
+- **Prep on `main` (#139):** `scripts/s6_repo_split_prep.sh` (path lists and
   dry-run `filter-repo` lines), `docs/s6-repo-split.md` (inventory, owner
   checklist, umbrella README link draft), `docs/s6-ci-stubs/` (per-future-repo
   CI). No remotes are created or deleted by agents.
@@ -176,5 +183,6 @@ and unit-test the Kotlin against stubs.
 
 - #24, #27, #29 (implementation done), #85, #86, #87 (S3.3 steps merged), and
   the probes #83, #84 are closed with this hand-off.
-- #28 can close once 0.0.15 lands (landscape + scope done; peaks too). #30, #31,
-  #32 (epics) and #88 (forward plan) stay open.
+- #28 can close (0.0.15 landscape + scope + peaks are on `main`). #30 / #31 stay
+  open until S3.2 (WASAPI/macOS via #141) is done; #32 (S6 epic) and #88
+  (forward plan) stay open.
