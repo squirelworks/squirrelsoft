@@ -21,7 +21,9 @@ test: test-jni
 	@echo "squirrelsuica-analysis tests ok"
 
 test-jni: | $(BUILD)
-	@if [ -n "$(JDK)" ] && [ -f "$(JDK)/include/jni.h" ] && [ -x "$(JDK)/bin/javac" ]; then \
+	@if [ "$$(uname -s)" != Linux ]; then \
+		echo "squirrelsuica-analysis: JNI smoke is Linux-only (shared .so); skipped on $$(uname -s)"; \
+	elif [ -n "$(JDK)" ] && [ -f "$(JDK)/include/jni.h" ] && [ -x "$(JDK)/bin/javac" ]; then \
 		set -e; plat=$$(ls -d "$(JDK)"/include/*/ | head -1); \
 		$(CC) -std=c11 -O2 -Wall -Wextra -Werror -shared -fPIC \
 			-I"$(JDK)/include" -I"$$plat" -I$(SQFELICA)/include \

@@ -75,14 +75,16 @@ static void test_wav_roundtrip(void) {
     size_t n = 1000;
     double *x = (double *)malloc(n * sizeof(double));
     synth_tone(x, n, fs, 1000.0, 1, 0.25);
-    const char *path = "/tmp/sqdsp_wav_test.wav";
+    /* Relative build/ path: MinGW fopen does not map /tmp to MSYS temp. */
+    const char *path = "build/sqdsp_wav_test.wav";
     expect(wav_write_pcm16(path, x, n, (uint32_t)fs) == 0, "wav write");
     WavBuffer w;
     expect(wav_read(path, &w) == 0, "wav read");
     expect(w.n_samples == n, "wav n");
     expect(w.sample_rate == 44100, "wav rate");
-    expect(fabs(w.samples[10] - x[10]) < 1e-3, "wav sample approx");
+    expect(w.samples && fabs(w.samples[10] - x[10]) < 1e-3, "wav sample approx");
     wav_free(&w);
+    remove(path);
     free(x);
 }
 

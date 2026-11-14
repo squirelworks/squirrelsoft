@@ -17,7 +17,9 @@ LDLIBS += $(shell pkg-config --libs x11)
 endif
 
 # Webcam: V4L2 on Linux when videodev2.h is present; stub elsewhere (mf/avf until PKG).
-WEBCAM ?= $(shell printf '#include <linux/videodev2.h>\nint main(void){return 0;}\n' | $(CC) -x c - -o /dev/null 2>/dev/null && echo v4l2 || echo stub)
+# \043 = '#' so Make does not treat the probe as a comment (same as ICONV_PROBE).
+WEBCAM_PROBE = printf '\043include <linux/videodev2.h>\nint main(void){return 0;}\n' | $(CC) -x c - -o /dev/null
+WEBCAM ?= $(shell $(WEBCAM_PROBE) 2>/dev/null && echo v4l2 || echo stub)
 ifeq ($(WEBCAM),v4l2)
 WEBCAM_OBJ = $(BUILD)/webcam_v4l2.o
 else
@@ -116,7 +118,9 @@ JNI_SRC = android/app/src/main/cpp/sqqr_jni.c $(SQQR)/src/sqqr.c $(SQQR)/src/sqq
 	$(SQQR)/src/sqqr_encode.c $(SQQR)/src/sqqr_content.c
 
 test-jni: | $(BUILD)
-	@if [ -n "$(JDK)" ] && [ -f "$(JDK)/include/jni.h" ] && [ -x "$(JDK)/bin/javac" ]; then \
+	@if [ "$$(uname -s)" != Linux ]; then \
+		echo "squirrelqr: JNI smoke is Linux-only (shared .so); skipped on $$(uname -s)"; \
+	elif [ -n "$(JDK)" ] && [ -f "$(JDK)/include/jni.h" ] && [ -x "$(JDK)/bin/javac" ]; then \
 		set -e; plat=$$(ls -d "$(JDK)"/include/*/ | head -1); \
 		$(CC) -std=c11 -O2 -Wall -Wextra -Werror -shared -fPIC -I"$(JDK)/include" -I"$$plat" \
 			-I$(SQQR)/include $(JNI_SRC) -lm -o $(BUILD)/libsqqr_jni.so; \

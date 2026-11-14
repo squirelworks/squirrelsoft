@@ -1,6 +1,7 @@
 /* link: TCP, serial and launched-QEMU links for SquirrelDebug (POSIX).
  * Original code. */
 #define _DEFAULT_SOURCE
+#define _DARWIN_C_SOURCE /* B57600/B115200 and INADDR_LOOPBACK on macOS */
 #define _POSIX_C_SOURCE 200809L
 #include "link.h"
 

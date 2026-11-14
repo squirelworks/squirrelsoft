@@ -83,12 +83,12 @@ The same states are labels on the GitHub issues (`status: done`, `status: in pro
   - [ ] Windows and macOS capture
   - [x] Small GUI window on `libs/sqgui` (`--gui`): select, whole screen, open, preview with outline, copy
   - [x] Webcam: `--webcam` / `devices` via V4L2 on Linux; mf/avf stubs on Win/mac; CI decodes a synthetic frame (`--device @FILE` or `QR_WEBCAM_FRAME`)
-- [ ] S3.5 (PKG) Windows/macOS/Linux packaging (MSI/zip, .app, AppImage/deb) built in CI.
+- [x] S3.5 (PKG) Windows/macOS/Linux packaging (MSI/zip, .app, AppImage/deb) built in CI.
 
 ## S4 — CI and releases
 - [x] `.github/workflows/ci.yml`: `make test`, and build plus unit tests for every Android app (debug) on ubuntu (#47).
 - [x] Release workflow: a Release button that drafts a GitHub Release per app (#54); only starts the desktop jobs an app has (#64).
-- [ ] Desktop builds on windows and macos runners (comes with S3.5).
+- [x] Desktop builds on windows and macos runners (comes with S3.5).
 
 ## S5 — Squirrel OS/2 apps built here first
 - [x] S5.1 SquirrelCalc (Desmos/TI-Nspire class: graphing, CAS, geometry, stats, spreadsheet, notebooks) on `sqmath` + `sqgui`.

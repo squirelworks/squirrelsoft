@@ -1,8 +1,10 @@
 CC ?= gcc
 SQDSP = ../libs/sqdsp
 SQGUI = ../libs/sqgui
-CFLAGS ?= -std=c11 -Wall -Wextra -O2 -D_POSIX_C_SOURCE=200809L
+# _DARWIN_C_SOURCE: mkdtemp and friends stay visible on macOS with POSIX_C_SOURCE.
+CFLAGS ?= -std=c11 -Wall -Wextra -O2 -D_POSIX_C_SOURCE=200809L -D_DARWIN_C_SOURCE
 CFLAGS += -Iinclude -I$(SQDSP)/include -I$(SQGUI)/include
+
 LDFLAGS ?= -lm
 BUILD = build
 
@@ -125,7 +127,9 @@ JDK ?= $(shell if [ -n "$$JAVA_HOME" ]; then echo "$$JAVA_HOME"; \
 	elif command -v javac >/dev/null; then dirname "$$(dirname "$$(readlink -f "$$(command -v javac)")")"; fi)
 
 test-jni: | $(BUILD)
-	@if [ -n "$(JDK)" ] && [ -f "$(JDK)/include/jni.h" ] && [ -x "$(JDK)/bin/javac" ]; then \
+	@if [ "$$(uname -s)" != Linux ]; then \
+		echo "squirrelsound: JNI smoke is Linux-only (shared .so); skipped on $$(uname -s)"; \
+	elif [ -n "$(JDK)" ] && [ -f "$(JDK)/include/jni.h" ] && [ -x "$(JDK)/bin/javac" ]; then \
 		set -e; plat=$$(ls -d "$(JDK)"/include/*/ | head -1); \
 		$(CC) -std=c11 -O2 -Wall -Wextra -Werror -D_POSIX_C_SOURCE=200809L -shared -fPIC \
 			-I"$(JDK)/include" -I"$$plat" -I$(SQDSP)/include \

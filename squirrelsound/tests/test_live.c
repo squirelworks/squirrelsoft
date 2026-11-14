@@ -1,3 +1,8 @@
+/* mkdtemp needs Darwin extensions when -D_POSIX_C_SOURCE=200809L is set. */
+#ifdef __APPLE__
+#define _DARWIN_C_SOURCE
+#endif
+
 #include "live_audio.h"
 #include "live_engine.h"
 #include "live_prefs.h"
@@ -89,6 +94,8 @@ static void test_dbfs_and_colour(void) {
            "yellow stop");
 }
 
+#ifndef _WIN32
+/* Prefs path and mkdtemp/setenv are POSIX; skipped under MinGW (see main). */
 static void test_prefs(void) {
     char dir[] = "/tmp/sqsound_prefs_XXXXXX";
     if (!mkdtemp(dir)) { expect(0, "mkdtemp"); return; }
@@ -158,6 +165,7 @@ static void test_prefs(void) {
            "XDG path");
     expect(live_prefs_path(buf, 8) == -1, "small buffer rejected");
 }
+#endif
 
 static void expect(int c, const char *m) {
     if (!c) {
@@ -255,9 +263,8 @@ static void test_record(void) {
     live_audio_take_reset(la);
     expect(live_audio_take(la, tmp, 8192, &dropped) == 0, "reset starts at now");
 
-    char path[] = "/tmp/sqsound_rec_XXXXXX";
-    int fd = mkstemp(path);
-    if (fd >= 0) close(fd);
+    /* Relative build/ path: MinGW fopen does not map /tmp to MSYS temp. */
+    const char *path = "build/sqsound_rec_test.wav";
     LiveRecorder r;
     expect(live_record_start(&r, la, path) == 0 && live_record_active(&r), "record start");
     for (int i = 0; i < 10; i++) {
@@ -266,7 +273,7 @@ static void test_record(void) {
     }
     char info[200];
     live_record_info(&r, info, sizeof info);
-    expect(strncmp(info, "REC 0:00 sqsound_rec_", 21) == 0, "status text");
+    expect(strcmp(info, "REC 0:00 sqsound_rec_test.wav") == 0, "status text");
     expect(fabs(live_record_seconds(&r) - 10240.0 / 48000) < 1e-9, "seconds so far");
     live_audio_poll(la);
     double ring_tail[1024];
