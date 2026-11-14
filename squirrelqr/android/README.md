@@ -7,6 +7,8 @@
   (`libs/sqqr`, C, through JNI in `app/src/main/cpp`), which reads light-on-dark
   codes too. The build compiles it with the NDK (CMake).
 - Always-on viewfinder crosshair + bounding box when a QR is detected
+- Torch toggle and pinch / slider zoom through CameraX `CameraControl`
+- Batch mode: keep scanning, de-duplicate by content, export as text or CSV
 - Bottom half: last result, scan history, open URL / copy, clear history
 - WindowInsets padding so controls clear the system nav / home gesture area
 - No spectrum (see **SquirrelSound**)
@@ -23,7 +25,7 @@ echo "sdk.dir=$ANDROID_HOME" > local.properties
 ```
 
 APK: `app/build/outputs/apk/debug/app-debug.apk`  
-Package: `works.squirrel.qr` — version `0.1.6`
+Package: `works.squirrel.qr` — version `0.1.7`
 
 ## Play Console
 

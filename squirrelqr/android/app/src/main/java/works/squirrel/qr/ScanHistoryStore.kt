@@ -58,3 +58,68 @@ class ScanHistoryStore(context: Context) {
         const val MAX = 40
     }
 }
+
+/**
+ * In-memory batch of unique scans (de-duplicated by content text).
+ * Pure Kotlin so JVM unit tests cover acceptance without CameraX.
+ */
+class BatchScanSession {
+    private val seen = LinkedHashSet<String>()
+    private val items = ArrayList<ScanEntry>()
+
+    val size: Int get() = items.size
+    val isEmpty: Boolean get() = items.isEmpty()
+
+    fun entries(): List<ScanEntry> = items.toList()
+
+    /** Adds [entry] if its text is new; returns true when accepted. */
+    fun tryAdd(entry: ScanEntry): Boolean {
+        val key = entry.text
+        if (key.isBlank() || !seen.add(key)) return false
+        items.add(entry)
+        return true
+    }
+
+    fun clear() {
+        seen.clear()
+        items.clear()
+    }
+
+    /** One scan per line: `format\\ttext`. */
+    fun exportText(): String = buildString {
+        for (e in items) {
+            append(e.format)
+            append('\t')
+            append(e.text)
+            append('\n')
+        }
+    }
+
+    /** CSV with header `format,timestamp_ms,text` (text fields quoted). */
+    fun exportCsv(): String = buildString {
+        append("format,timestamp_ms,text\n")
+        for (e in items) {
+            append(csvField(e.format))
+            append(',')
+            append(e.timestampMs)
+            append(',')
+            append(csvField(e.text))
+            append('\n')
+        }
+    }
+
+    companion object {
+        fun csvField(value: String): String {
+            val needsQuotes = value.indexOfAny(charArrayOf(',', '"', '\n', '\r')) >= 0
+            if (!needsQuotes) return value
+            return buildString {
+                append('"')
+                for (c in value) {
+                    if (c == '"') append('"')
+                    append(c)
+                }
+                append('"')
+            }
+        }
+    }
+}

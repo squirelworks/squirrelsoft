@@ -13,6 +13,7 @@ import android.media.Image
 import android.net.Uri
 import android.os.Bundle
 import android.view.LayoutInflater
+import android.view.ScaleGestureDetector
 import android.view.View
 import android.widget.ArrayAdapter
 import android.widget.CheckBox
@@ -20,12 +21,14 @@ import android.widget.EditText
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.RadioGroup
+import android.widget.SeekBar
 import android.widget.Spinner
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.camera.core.Camera
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.Preview
@@ -67,7 +70,13 @@ class MainActivity : AppCompatActivity() {
     private val sqqrFrames = AtomicLong(0L)
     private var history: MutableList<ScanEntry> = mutableListOf()
     private var cameraBound = false
+    private var camera: Camera? = null
+    private var torchOn = false
+    private var updatingZoomSlider = false
     @Volatile private var scanMode = ScanMode.DEFAULT
+    @Volatile private var batchMode = false
+    private val batchSession = BatchScanSession()
+    private lateinit var scaleDetector: ScaleGestureDetector
 
     private val timeFmt = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
 
@@ -105,10 +114,22 @@ class MainActivity : AppCompatActivity() {
         )
         binding.overlay.mode = scanMode
 
+        scaleDetector = ScaleGestureDetector(
+            this,
+            object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
+                override fun onScale(detector: ScaleGestureDetector): Boolean {
+                    applyPinchZoom(detector.scaleFactor)
+                    return true
+                }
+            }
+        )
+
         applySystemInsets()
         wireActions()
         renderLast(null)
         renderHistory()
+        renderBatchControls()
+        renderTorchButton()
     }
 
     private fun applySystemInsets() {
@@ -157,6 +178,36 @@ class MainActivity : AppCompatActivity() {
             historyStore.clear()
             renderHistory()
             Toast.makeText(this, R.string.history_cleared, Toast.LENGTH_SHORT).show()
+        }
+
+        binding.btnTorch.setOnClickListener { toggleTorch() }
+        binding.btnBatch.setOnClickListener { toggleBatchMode() }
+        binding.btnBatchExport.setOnClickListener { showBatchExportDialog() }
+        binding.btnBatch.setOnLongClickListener {
+            if (batchSession.isEmpty) {
+                Toast.makeText(this, R.string.batch_empty, Toast.LENGTH_SHORT).show()
+            } else {
+                batchSession.clear()
+                renderBatchControls()
+                Toast.makeText(this, R.string.batch_cleared, Toast.LENGTH_SHORT).show()
+            }
+            true
+        }
+
+        binding.zoomSlider.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
+                if (!fromUser || updatingZoomSlider) return
+                setLinearZoom(progress / 100f)
+            }
+
+            override fun onStartTrackingTouch(seekBar: SeekBar?) {}
+            override fun onStopTrackingTouch(seekBar: SeekBar?) {}
+        })
+
+        // Pinch-to-zoom on the viewfinder; do not steal single-finger taps from the top bar.
+        binding.preview.setOnTouchListener { _, event ->
+            scaleDetector.onTouchEvent(event)
+            true
         }
     }
 
@@ -256,10 +307,15 @@ class MainActivity : AppCompatActivity() {
                     .addUseCase(previewUseCase)
                     .addUseCase(analysis)
                     .build()
-                provider.bindToLifecycle(this, CameraSelector.DEFAULT_BACK_CAMERA, group)
+                camera = provider.bindToLifecycle(this, CameraSelector.DEFAULT_BACK_CAMERA, group)
                 cameraBound = true
-                binding.qrHint.setText(hintFor(scanMode))
+                torchOn = false
+                renderTorchButton()
+                syncZoomSliderFromCamera()
+                observeZoomState()
+                binding.qrHint.setText(if (batchMode) R.string.batch_hint else hintFor(scanMode))
             } catch (e: Exception) {
+                camera = null
                 Toast.makeText(this, "Camera bind failed: ${e.message}", Toast.LENGTH_LONG).show()
             }
         }, ContextCompat.getMainExecutor(this))
@@ -288,9 +344,26 @@ class MainActivity : AppCompatActivity() {
         } else if (mapped != null) {
             binding.overlay.setTarget(RectF(mapped.left, mapped.top, mapped.right, mapped.bottom))
         }
+        val entry = ScanEntry(text, "QR", System.currentTimeMillis())
+        if (batchMode) {
+            val added = batchSession.tryAdd(entry)
+            renderBatchControls()
+            if (added) {
+                lastPublished.set(text)
+                publishScan(entry)
+                Toast.makeText(this, getString(R.string.batch_added, batchSession.size), Toast.LENGTH_SHORT).show()
+                binding.qrHint.setText(R.string.batch_hint)
+            } else if (text != lastPublished.get()) {
+                // Same content already in the batch; still show it as last read once.
+                lastPublished.set(text)
+                renderLast(entry)
+                Toast.makeText(this, R.string.batch_duplicate, Toast.LENGTH_SHORT).show()
+            }
+            return
+        }
         if (text == lastPublished.get()) return
         lastPublished.set(text)
-        publishScan(ScanEntry(text, "QR", System.currentTimeMillis()))
+        publishScan(entry)
     }
 
     /** The Y (luminance) plane as a tightly packed width×height array. */
@@ -541,11 +614,131 @@ class MainActivity : AppCompatActivity() {
 
     private fun stopCamera() {
         cameraBound = false
+        torchOn = false
+        try {
+            camera?.cameraControl?.enableTorch(false)
+        } catch (_: Exception) {
+        }
+        camera = null
         try {
             ProcessCameraProvider.getInstance(this).get().unbindAll()
         } catch (_: Exception) {
         }
         binding.overlay.clear()
+        renderTorchButton()
+    }
+
+    private fun toggleTorch() {
+        val cam = camera
+        if (cam == null) return
+        if (!cam.cameraInfo.hasFlashUnit()) {
+            Toast.makeText(this, R.string.torch_unavailable, Toast.LENGTH_SHORT).show()
+            return
+        }
+        torchOn = !torchOn
+        cam.cameraControl.enableTorch(torchOn)
+        renderTorchButton()
+    }
+
+    private fun renderTorchButton() {
+        val hasFlash = camera?.cameraInfo?.hasFlashUnit() == true
+        binding.btnTorch.isEnabled = hasFlash
+        binding.btnTorch.setText(if (torchOn) R.string.torch_on else R.string.torch_off)
+    }
+
+    private fun setLinearZoom(linear: Float) {
+        val cam = camera ?: return
+        cam.cameraControl.setLinearZoom(linear.coerceIn(0f, 1f))
+    }
+
+    private fun applyPinchZoom(scaleFactor: Float) {
+        val cam = camera ?: return
+        val state = cam.cameraInfo.zoomState.value ?: return
+        val next = (state.zoomRatio * scaleFactor).coerceIn(state.minZoomRatio, state.maxZoomRatio)
+        cam.cameraControl.setZoomRatio(next)
+    }
+
+    private fun syncZoomSliderFromCamera() {
+        val state = camera?.cameraInfo?.zoomState?.value ?: return
+        updatingZoomSlider = true
+        binding.zoomSlider.progress = (state.linearZoom * 100f).toInt().coerceIn(0, 100)
+        updatingZoomSlider = false
+    }
+
+    private fun observeZoomState() {
+        val cam = camera ?: return
+        cam.cameraInfo.zoomState.observe(this) { state ->
+            if (state == null) return@observe
+            updatingZoomSlider = true
+            binding.zoomSlider.progress = (state.linearZoom * 100f).toInt().coerceIn(0, 100)
+            updatingZoomSlider = false
+        }
+    }
+
+    private fun toggleBatchMode() {
+        batchMode = !batchMode
+        // Leaving batch keeps the collected list until Export or long-press Clear on Batch.
+        binding.qrHint.setText(if (batchMode) R.string.batch_hint else hintFor(scanMode))
+        renderBatchControls()
+    }
+
+    private fun renderBatchControls() {
+        binding.btnBatch.setText(
+            if (batchMode) getString(R.string.batch_on, batchSession.size)
+            else getString(R.string.batch_off)
+        )
+        binding.btnBatchExport.isEnabled = !batchSession.isEmpty
+    }
+
+    private fun showBatchExportDialog() {
+        if (batchSession.isEmpty) {
+            Toast.makeText(this, R.string.batch_empty, Toast.LENGTH_SHORT).show()
+            return
+        }
+        val choices = arrayOf(
+            getString(R.string.batch_share_text),
+            getString(R.string.batch_share_csv)
+        )
+        AlertDialog.Builder(this)
+            .setTitle(R.string.batch_share)
+            .setItems(choices) { _, which ->
+                val (body, mime, name) = if (which == 0) {
+                    Triple(batchSession.exportText(), "text/plain", "squirrelqr-batch.txt")
+                } else {
+                    Triple(batchSession.exportCsv(), "text/csv", "squirrelqr-batch.csv")
+                }
+                shareBatch(body, mime, name)
+            }
+            .setNegativeButton(R.string.cancel, null)
+            .show()
+    }
+
+    private fun shareBatch(body: String, mime: String, fileName: String) {
+        try {
+            val dir = File(cacheDir, "shared").apply { mkdirs() }
+            val file = File(dir, fileName)
+            file.writeText(body)
+            val uri = FileProvider.getUriForFile(this, "$packageName.files", file)
+            val send = Intent(Intent.ACTION_SEND).apply {
+                type = mime
+                putExtra(Intent.EXTRA_STREAM, uri)
+                putExtra(Intent.EXTRA_TEXT, body)
+                clipData = ClipData.newRawUri("batch", uri)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            startActivity(Intent.createChooser(send, getString(R.string.batch_share)))
+        } catch (_: Exception) {
+            // Fall back to plain text share without a file.
+            try {
+                val send = Intent(Intent.ACTION_SEND).apply {
+                    type = "text/plain"
+                    putExtra(Intent.EXTRA_TEXT, body)
+                }
+                startActivity(Intent.createChooser(send, getString(R.string.batch_share)))
+            } catch (_: Exception) {
+                Toast.makeText(this, R.string.share_failed, Toast.LENGTH_SHORT).show()
+            }
+        }
     }
 
     override fun onDestroy() {
