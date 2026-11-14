@@ -199,7 +199,7 @@ static void test_snaps_keyins(void) {
 }
 
 static void test_references(void) {
-    const char *rp = "/tmp/sqs_ref_test.sqdgn";
+    const char *rp = "build/sqs_ref_test.sqdgn";
     sqs_design_init(&r0, "survey");
     int rl = sqs_add_level(&r0, "control", 0x00ff00);
     sqs_add_line(&r0, rl, P(0, 0, 0), P(10, 0, 0));
@@ -274,7 +274,9 @@ static int designs_equal(const SqsDesign *a, const SqsDesign *b) {
 
 static void test_files(void) {
     build_full(&d);
-    const char *tp = "/tmp/sqs_full.sqdgn", *bp = "/tmp/sqs_full.sqdgnb";
+    const char *tp = "build/sqs_full.sqdgn", *bp = "build/sqs_full.sqdgnb";
+    const char *cutp = "build/sqs_cut.sqdgnb", *badp = "build/sqs_bad.sqdgn";
+    const char *v1p = "build/sqs_v1.sqdgn", *dxfp = "build/sqs_full.dxf";
     CHECK(sqs_write_sqdgn(&d, tp) == 0 && sqs_read_sqdgn(&d2, tp) == 0);
     CHECK(designs_equal(&d, &d2));
     CHECK(sqs_write_sqdgnb(&d, bp) == 0 && sqs_read_sqdgnb(&d2, bp) == 0);
@@ -298,10 +300,10 @@ static void test_files(void) {
     fclose(f);
     int all_refused = 1;
     for (size_t cut = 8; cut < n; cut += 7) {
-        f = fopen("/tmp/sqs_cut.sqdgnb", "wb");
+        f = fopen(cutp, "wb");
         fwrite(buf, 1, cut, f);
         fclose(f);
-        all_refused &= sqs_read_sqdgnb(&d2, "/tmp/sqs_cut.sqdgnb") == -2;
+        all_refused &= sqs_read_sqdgnb(&d2, cutp) == -2;
     }
     CHECK(all_refused);
     /* a flipped byte in a length or a count is caught */
@@ -310,38 +312,38 @@ static void test_files(void) {
         memcpy(buf + (1 << 15), buf, n);
         unsigned char *b = buf + (1 << 15);
         b[i] ^= 0xff;
-        f = fopen("/tmp/sqs_cut.sqdgnb", "wb");
+        f = fopen(cutp, "wb");
         fwrite(b, 1, n, f);
         fclose(f);
-        int rc = sqs_read_sqdgnb(&d2, "/tmp/sqs_cut.sqdgnb");
+        int rc = sqs_read_sqdgnb(&d2, cutp);
         tried++;
         caught += rc == -2 || rc == 0;
     }
     CHECK(caught == tried); /* either refused or read, never a crash */
     CHECK(sqs_read_sqdgnb(&d2, tp) == -1);
     /* a damaged text file */
-    f = fopen("/tmp/sqs_bad.sqdgn", "w");
+    f = fopen(badp, "w");
     fprintf(f, "SQDGN 2\nPLINE 5 1 99 0 0 0\nEND\n");
     fclose(f);
-    CHECK(sqs_read_sqdgn(&d2, "/tmp/sqs_bad.sqdgn") == -2);
-    f = fopen("/tmp/sqs_bad.sqdgn", "w");
+    CHECK(sqs_read_sqdgn(&d2, badp) == -2);
+    f = fopen(badp, "w");
     fprintf(f, "SQDGN 2\nLINE 2147483647 1 0 0 0 1 1 0\nEND\n");
     fclose(f);
-    CHECK(sqs_read_sqdgn(&d2, "/tmp/sqs_bad.sqdgn") == -2); /* an id that would run next_id over */
-    f = fopen("/tmp/sqs_bad.sqdgn", "w");
+    CHECK(sqs_read_sqdgn(&d2, badp) == -2); /* an id that would run next_id over */
+    f = fopen(badp, "w");
     fprintf(f, "SQDGN 2\nMESH 5 1 3 0 0 0 1 0 0 0 1 0 1 0 1 7 7\nEND\n");
     fclose(f);
-    CHECK(sqs_read_sqdgn(&d2, "/tmp/sqs_bad.sqdgn") == -2);
+    CHECK(sqs_read_sqdgn(&d2, badp) == -2);
     /* a version 1 file still reads */
-    f = fopen("/tmp/sqs_v1.sqdgn", "w");
+    f = fopen(v1p, "w");
     fprintf(f, "SQDGN 1\nTITLE old\nNEXTID 5\nLEVEL 1 Default 1 0 16777215\nLINE 2 1 0 0 0 1 0 0\n"
                "ARC 3 1 0 0 0 1 0 90\nTEXT 4 1 0 0 0 hello\nCELL 9 c 0 0 0 1 2\nEND\n");
     fclose(f);
-    CHECK(sqs_read_sqdgn(&d2, "/tmp/sqs_v1.sqdgn") == 0 && d2.element_count == 3 && d2.cell_count == 1 &&
+    CHECK(sqs_read_sqdgn(&d2, v1p) == 0 && d2.element_count == 3 && d2.cell_count == 1 &&
           d2.next_id == 10);
     /* DXF of everything */
-    CHECK(sqs_export_dxf(&d, "/tmp/sqs_full.dxf") == 0);
-    f = fopen("/tmp/sqs_full.dxf", "rb");
+    CHECK(sqs_export_dxf(&d, dxfp) == 0);
+    f = fopen(dxfp, "rb");
     static char dx[1 << 20];
     size_t dn = fread(dx, 1, sizeof dx - 1, f);
     dx[dn] = 0;
@@ -360,7 +362,7 @@ static void test_files(void) {
     static SqsDesign back;
     sqs_design_init(&back, "back");
     SqsDxfStats st;
-    CHECK(sqs_import_dxf(&back, "/tmp/sqs_full.dxf", &st) == 0);
+    CHECK(sqs_import_dxf(&back, dxfp, &st) == 0);
     CHECK(st.lines == 1 && st.arcs == 1 && st.texts == 1 && st.shapes == 1 && st.skipped == 0);
     CHECK(st.plines == 3); /* the polyline, and the 25-point curve in two */
     CHECK(st.cells == 1 && st.placements == 1 && st.meshes >= 3);
@@ -388,9 +390,12 @@ static void test_files(void) {
         want += tri_area(cp[q[0]], cp[q[1]], cp[q[2]]) + tri_area(cp[q[0]], cp[q[2]], cp[q[3]]);
     }
     CHECK(cnp == 26 && cnf == 36 && near(area, want, 1e-9));
-    remove("/tmp/sqs_full.dxf");
+    remove(dxfp);
     remove(tp);
     remove(bp);
+    remove(cutp);
+    remove(badp);
+    remove(v1p);
 }
 
 int main(void) {

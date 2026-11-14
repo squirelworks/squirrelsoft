@@ -44,12 +44,12 @@ python3 squirrelsuica/suica_read.py --demo
 
 `.github/workflows/ci.yml` runs on every push to `main` and every pull request:
 
-- `make test` on Ubuntu, covering the C tools (with SDL2 and ALSA) and the Python smoke tests.
+- `make test` on Ubuntu, Windows and macOS (S4), covering the C tools and Python smokes.
 - `./gradlew :app:assembleDebug :app:testDebugUnitTest` for each Android app, each in its own job.
 
 It builds debug only. It needs no signing secrets and never builds or uploads release bundles (`.aab`).
 
-`.github/workflows/release.yml` is the release button: run it from the Actions tab for one app, and it builds the signed APK and the desktop builds into a **draft** Release. Squirrel publishes the draft, which creates the tag. See [docs/RELEASING.md](docs/RELEASING.md).
+`.github/workflows/release.yml` is the release button: run it from the Actions tab for one app (or `desktop` for the suite), and it runs `make test` on all three OSes, builds the signed APK when relevant, packages every selected desktop program (Windows zip/MSI, macOS `.app` in `.dmg`, Linux AppImage + `.deb`) into a **draft** Release. See [docs/RELEASING.md](docs/RELEASING.md) and [docs/packaging.md](docs/packaging.md).
 
 ## Layout
 

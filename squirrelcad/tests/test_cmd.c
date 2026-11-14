@@ -153,7 +153,7 @@ static void test_blocks(void) {
 }
 
 static void test_files(void) {
-    const char *path = "/tmp/sqc_test_cmd.sqdwg";
+    const char *path = "build/sqc_test_cmd.sqdwg";
     sqc_session_init(&S, path);
     ok("TITLE Lot_12");
     ok("LAYER NEW fence 4");
@@ -170,28 +170,28 @@ static void test_files(void) {
     for (int i = 0; i < back.ent_count; i++) found |= strcmp(back.ents[i].text, "Lot 12 (DP 1234)") == 0;
     CHECK(found); /* text with spaces survives */
     CHECK(sqc_line(&back, (SqcPoint){0, 0, 0}, (SqcPoint){1, 0, 0}) > S.dwg.next_id - 1); /* no reused ids */
-    CHECK(ok("OPEN /tmp/sqc_test_cmd.sqdwg") && strstr(out, "4 entities"));
-    CHECK(err("OPEN /tmp/no/such.sqdwg", "can't read"));
+    CHECK(ok("OPEN build/sqc_test_cmd.sqdwg") && strstr(out, "4 entities"));
+    CHECK(err("OPEN build/no/such.sqdwg", "can't read"));
 
     /* a damaged file is refused, not overrun */
-    FILE *f = fopen("/tmp/sqc_bad.sqdwg", "w");
+    FILE *f = fopen("build/sqc_bad.sqdwg", "w");
     fprintf(f, "SQDWG 1\nPLINE 5 1 99 0 0 0\nEND\n");
     fclose(f);
-    CHECK(sqc_read_sqdwg(&back, "/tmp/sqc_bad.sqdwg") == -2);
-    f = fopen("/tmp/sqc_bad.sqdwg", "w");
+    CHECK(sqc_read_sqdwg(&back, "build/sqc_bad.sqdwg") == -2);
+    f = fopen("build/sqc_bad.sqdwg", "w");
     fprintf(f, "SQDWG 1\n");
     for (int i = 0; i < SQC_MAX_ENTS + 5; i++) fprintf(f, "LINE %d 1 0 0 0 1 1 0\n", i + 10);
     fprintf(f, "END\n");
     fclose(f);
-    CHECK(sqc_read_sqdwg(&back, "/tmp/sqc_bad.sqdwg") == -2);
-    f = fopen("/tmp/sqc_bad.sqdwg", "w");
+    CHECK(sqc_read_sqdwg(&back, "build/sqc_bad.sqdwg") == -2);
+    f = fopen("build/sqc_bad.sqdwg", "w");
     fprintf(f, "SQDWG 1\nLINE 7 1 0 0 0 1 1 0\nEND\n");
     fclose(f);
-    CHECK(sqc_read_sqdwg(&back, "/tmp/sqc_bad.sqdwg") == 0 && back.layer_count == 1 && back.next_id > 7);
+    CHECK(sqc_read_sqdwg(&back, "build/sqc_bad.sqdwg") == 0 && back.layer_count == 1 && back.next_id > 7);
 
     /* DXF: layers with colours, the block, the insert */
-    CHECK(ok("LAYER OFF fence") && ok("EXPORT-DXF /tmp/sqc_test_cmd.dxf"));
-    const char *dxf = slurp("/tmp/sqc_test_cmd.dxf");
+    CHECK(ok("LAYER OFF fence") && ok("EXPORT-DXF build/sqc_test_cmd.dxf"));
+    const char *dxf = slurp("build/sqc_test_cmd.dxf");
     CHECK(dxf && strstr(dxf, "0\nLAYER\n2\nfence\n70\n0\n62\n-4\n"));
     CHECK(dxf && strstr(dxf, "2\nBLOCKS\n0\nBLOCK\n8\n0\n2\npeg\n"));
     CHECK(dxf && strstr(dxf, "0\nENDBLK\n"));
@@ -204,7 +204,7 @@ static void test_files(void) {
     static SqcDrawing imp;
     memset(&imp, 0, sizeof imp);
     SqcDxfStats st;
-    CHECK(sqc_import_dxf(&imp, "/tmp/sqc_test_cmd.dxf", &st) == 0);
+    CHECK(sqc_import_dxf(&imp, "build/sqc_test_cmd.dxf", &st) == 0);
     int fence_off = 0;
     for (int i = 0; i < imp.layer_count; i++)
         fence_off |= strcmp(imp.layers[i].name, "fence") == 0 && imp.layers[i].color == 4 && !imp.layers[i].on;
@@ -235,8 +235,8 @@ static void test_plot(void) {
     CHECK(sqc_sheet("a3", 1, &sh) == 0 && sh.width_mm == 420 && sh.height_mm == 297);
     CHECK(sqc_sheet("A4", 0, &sh) == 0 && sh.width_mm == 210);
     CHECK(sqc_sheet("B5", 1, &sh) == -1);
-    CHECK(ok("PLOT /tmp/sqc_plot.svg A3 1:500") && strstr(out, "on A3"));
-    const char *svg = slurp("/tmp/sqc_plot.svg");
+    CHECK(ok("PLOT build/sqc_plot.svg A3 1:500") && strstr(out, "on A3"));
+    const char *svg = slurp("build/sqc_plot.svg");
     CHECK(svg && strstr(svg, "width=\"420mm\" height=\"297mm\""));
     CHECK(svg && strstr(svg, ">Site_plan</text>"));
     CHECK(svg && strstr(svg, "Scale 1:500  Sheet A3"));
@@ -245,15 +245,15 @@ static void test_plot(void) {
     /* 1:500 with metres: 2 paper mm per unit, so the 40 m side is 80 mm and the circle r 10 mm */
     CHECK(svg && strstr(svg, "r=\"10.000\""));
     CHECK(svg && strstr(svg, "<path d=\"M "));
-    CHECK(ok("PLOT /tmp/sqc_plot.svg A4 PORTRAIT"));
-    svg = slurp("/tmp/sqc_plot.svg");
+    CHECK(ok("PLOT build/sqc_plot.svg A4 PORTRAIT"));
+    svg = slurp("build/sqc_plot.svg");
     CHECK(svg && strstr(svg, "width=\"210mm\"") && strstr(svg, "Scale fit (1:"));
-    CHECK(err("PLOT /tmp/sqc_plot.svg B5", "unknown sheet B5"));
-    CHECK(err("PLOT /tmp/no/such/dir/x.svg", "can't write"));
+    CHECK(err("PLOT build/sqc_plot.svg B5", "unknown sheet B5"));
+    CHECK(err("PLOT build/no/such/dir/x.svg", "can't write"));
     /* an empty drawing still plots its sheet */
     sqc_session_init(&S, NULL);
-    CHECK(ok("PLOT /tmp/sqc_plot.svg"));
-    remove("/tmp/sqc_plot.svg");
+    CHECK(ok("PLOT build/sqc_plot.svg"));
+    remove("build/sqc_plot.svg");
 }
 
 static void count_visit(const SqcEntity *e, const SqcLayer *L, void *ctx) {
@@ -266,15 +266,15 @@ static void count_visit(const SqcEntity *e, const SqcLayer *L, void *ctx) {
 static void test_limits(void) {
     static SqcDrawing back;
     /* an id at the top of int would overflow next_id: refused */
-    FILE *f = fopen("/tmp/sqc_bad.sqdwg", "w");
+    FILE *f = fopen("build/sqc_bad.sqdwg", "w");
     fprintf(f, "SQDWG 1\nLINE 2147483647 1 0 0 0 1 1 0\nEND\n");
     fclose(f);
-    CHECK(sqc_read_sqdwg(&back, "/tmp/sqc_bad.sqdwg") == -2);
-    f = fopen("/tmp/sqc_bad.sqdwg", "w");
+    CHECK(sqc_read_sqdwg(&back, "build/sqc_bad.sqdwg") == -2);
+    f = fopen("build/sqc_bad.sqdwg", "w");
     fprintf(f, "SQDWG 1\nLINE -3 1 0 0 0 1 1 0\nEND\n");
     fclose(f);
-    CHECK(sqc_read_sqdwg(&back, "/tmp/sqc_bad.sqdwg") == -2);
-    remove("/tmp/sqc_bad.sqdwg");
+    CHECK(sqc_read_sqdwg(&back, "build/sqc_bad.sqdwg") == -2);
+    remove("build/sqc_bad.sqdwg");
 
     /* sixteen inserts of sixteen inserts ... six deep is 16^6 lines: the
        visit stops at its budget instead of running for minutes */

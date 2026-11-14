@@ -2,6 +2,8 @@
 # Debug builds only: no signing secrets and no release bundles. This workflow
 # must never build or upload .aab files or publish anything. AABs never go to
 # GitHub, and Play uploads are done by the owner by hand.
+#
+# Host `make test` runs on ubuntu-latest, windows-latest and macos-latest (S4).
 name: CI
 
 on:
@@ -18,24 +20,63 @@ concurrency:
 
 jobs:
   host:
-    name: make test (C tools + Python)
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
+    name: make test (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            shell: bash
+            host: linux
+          - os: macos-latest
+            shell: bash
+            host: macos
+          - os: windows-latest
+            shell: msys2 {0}
+            host: windows
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+    defaults:
+      run:
+        shell: ${{ matrix.shell }}
     steps:
       - uses: actions/checkout@v4
-      - name: Install SDL2 / SDL_ttf / ALSA / X11 / PC/SC / libusb headers, Xvfb, PulseAudio, the vpcd virtual reader, and QEMU with NASM for SquirrelDebug (optional backends and their tests)
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libsdl2-dev libsdl2-ttf-dev fonts-wqy-microhei fonts-droid-fallback libasound2-dev libx11-dev xvfb xauth libpcsclite-dev pcscd vsmartcard-vpcd libusb-1.0-0-dev pulseaudio pulseaudio-utils qemu-system-x86 nasm
-      - name: Start pcscd with the virtual reader
+      - uses: msys2/setup-msys2@v2
+        if: matrix.host == 'windows'
+        with:
+          # UCRT64: mingw64 dropped libusb; MINGW64 itself is deprecated.
+          msystem: UCRT64
+          update: true
+          install: >-
+            make zip git python diffutils
+            mingw-w64-ucrt-x86_64-gcc
+            mingw-w64-ucrt-x86_64-SDL2
+            mingw-w64-ucrt-x86_64-SDL2_ttf
+            mingw-w64-ucrt-x86_64-pkgconf
+            mingw-w64-ucrt-x86_64-libusb
+
+      - name: Host dependencies (Linux / macOS)
+        if: matrix.host != 'windows'
+        run: bash scripts/release/ci_host_deps.sh ${{ matrix.host }}
+      - uses: actions/setup-python@v5
+        if: matrix.host != 'windows'
+        with:
+          python-version: "3.12"
+      - name: Start pcscd with the virtual reader (Linux)
+        if: matrix.host == 'linux'
         run: |
           sudo systemctl stop pcscd.socket pcscd.service || true
           sudo pcscd --disable-polkit
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
       - name: make test
-        run: make test PCSC_TEST_FLAGS=--require
         env:
-          REQUIRE_LOOPBACK: "1"
+          REQUIRE_LOOPBACK: ${{ matrix.host == 'linux' && '1' || '0' }}
+        run: |
+          set -euo pipefail
+          if [ "${{ matrix.host }}" = linux ]; then
+            make test PCSC_TEST_FLAGS=--require
+          else
+            make test
+          fi
 
   android:
     name: Android ${{ matrix.app }}

@@ -34,12 +34,14 @@ int main(void) {
     int members[] = {l1, l2};
     expect(sqs_define_cell(&d, "cross", a, members, 2) > 0, "cell");
 
-    const char *path = "/tmp/sqstation_test.sqdgn";
+    /* Relative build/ path: MinGW fopen does not map /tmp to MSYS temp. */
+    const char *path = "build/sqstation_test.sqdgn";
     expect(sqs_write_sqdgn(&d, path) == 0, "write");
     static SqsDesign d2;
     expect(sqs_read_sqdgn(&d2, path) == 0, "read");
     expect(d2.element_count == d.element_count, "roundtrip count");
     expect(strcmp(d2.title, "test") == 0, "title");
+    remove(path);
 
     if (failures) {
         fprintf(stderr, "%d failure(s)\n", failures);

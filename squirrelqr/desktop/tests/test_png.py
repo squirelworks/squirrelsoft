@@ -206,9 +206,18 @@ def variants(grid, scale):
     return out
 
 
+def exe(path):
+    """Resolve build/<name> to build/<name>.exe when that is what MinGW wrote."""
+    path = Path(path)
+    if path.exists():
+        return path
+    win = path.with_suffix(".exe")
+    return win if win.exists() else path
+
+
 def main():
     syms = symbols()
-    test_desktop, cli = BUILD / "test_desktop", BUILD / "squirrelqr"
+    test_desktop, cli = exe(BUILD / "test_desktop"), exe(BUILD / "squirrelqr")
     with tempfile.TemporaryDirectory() as td:
         td = Path(td)
         count = 0
@@ -222,7 +231,11 @@ def main():
                 check(p.returncode == 0, f"{k}-{name}: {p.stderr.decode().strip()}")
                 if k < 2 or name in ("rgba8-transparent", "palette1", "gray8-interlaced"):
                     p = subprocess.run([cli, "--raw", pp], capture_output=True)
-                    check(p.returncode == 0 and p.stdout == want + b"\n", f"{k}-{name}: decode {p.returncode} {p.stderr!r}")
+                    # Accept CRLF if a text-mode CRT still leaks through (MSYS pipes
+                    # often translate; native Python capture does not).
+                    got = p.stdout.replace(b"\r\n", b"\n")
+                    check(p.returncode == 0 and got == want + b"\n",
+                          f"{k}-{name}: decode {p.returncode} stderr={p.stderr!r} stdout={p.stdout!r}")
                 count += 1
         # Damaged or unsupported files fail cleanly with exit 2.
         grid, _ = syms[0]

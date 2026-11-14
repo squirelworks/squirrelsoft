@@ -33,7 +33,7 @@ static const char *find_sample(void) {
  * MTEXT in pieces, *Model_Space, a nested block, an insert of a block that
  * isn't there, a bad number and an overlong line. */
 static void test_other_writers(void) {
-    const char *path = "/tmp/sqc_other.dxf";
+    const char *path = "build/sqc_other.dxf";
     FILE *f = fopen(path, "w");
     fprintf(f, "0\nSECTION\n2\nTABLES\n0\nTABLE\n2\nLAYER\n0\nLAYER\n2\nroad\n70\n0\n62\n3\n0\nENDTAB\n0\nENDSEC\n");
     fprintf(f, "0\nSECTION\n2\nBLOCKS\n");
@@ -125,7 +125,7 @@ int main(void) {
         if (strcmp(d->layers[i].name, "Walls") == 0) walls = 1;
     expect(walls, "Walls layer");
 
-    const char *out = "/tmp/sqc_roundtrip.dxf";
+    const char *out = "build/sqc_roundtrip.dxf";
     expect(sqc_export_dxf(d, out) == 0, "export");
 
     SqcDrawing *d2 = (SqcDrawing *)calloc(1, sizeof(SqcDrawing));
@@ -136,7 +136,7 @@ int main(void) {
     expect(st2.circles >= 1, "roundtrip circles");
 
     /* Fake DWG header */
-    const char *fake = "/tmp/fake.dwg";
+    const char *fake = "build/fake.dwg";
     FILE *f = fopen(fake, "wb");
     fwrite("AC1015", 1, 6, f);
     unsigned char bin[32];

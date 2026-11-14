@@ -49,14 +49,19 @@ $(BUILD)/test_games: tests/test_games.c $(OBJ) $(SQGUI_LIB) | $(BUILD)
 # The core builds with -ffreestanding and needs nothing from outside it but
 # memcpy, memmove, memset and strlen
 freestanding: | $(BUILD)
-	$(CC) -std=c11 -Wall -Wextra -Werror -O2 -ffreestanding -Iinclude -c src/cards.c -o $(BUILD)/fs_cards.o
-	$(CC) -std=c11 -Wall -Wextra -Werror -O2 -ffreestanding -Iinclude -c src/mines.c -o $(BUILD)/fs_mines.o
-	$(CC) -std=c11 -Wall -Wextra -Werror -O2 -ffreestanding -Iinclude -c src/hearts.c -o $(BUILD)/fs_hearts.o
-	$(CC) -std=c11 -Wall -Wextra -Werror -O2 -ffreestanding -Iinclude -c src/chess.c -o $(BUILD)/fs_chess.o
-	$(CC) -std=c11 -Wall -Wextra -Werror -O2 -ffreestanding -Iinclude -c src/tiles.c -o $(BUILD)/fs_tiles.o
-	$(CC) -std=c11 -Wall -Wextra -Werror -O2 -ffreestanding -Iinclude -c src/bridge.c -o $(BUILD)/fs_bridge.o
-	@bad=$$(nm -u $(BUILD)/fs_cards.o $(BUILD)/fs_mines.o $(BUILD)/fs_hearts.o $(BUILD)/fs_chess.o $(BUILD)/fs_tiles.o $(BUILD)/fs_bridge.o | awk '$$1=="U"{print $$2}' | grep -v -x -E 'memcpy|memmove|memset|strlen' | sort -u); \
-	if [ -n "$$bad" ]; then echo "the core uses: $$bad"; exit 1; fi; echo "squirrelgames core freestanding ok"
+	@if [ "$$(uname -s)" != Linux ]; then \
+		echo "squirrelgames: freestanding ELF check is Linux-only; skipped on $$(uname -s)"; \
+	else \
+		$(CC) -std=c11 -Wall -Wextra -Werror -O2 -ffreestanding -Iinclude -c src/cards.c -o $(BUILD)/fs_cards.o && \
+		$(CC) -std=c11 -Wall -Wextra -Werror -O2 -ffreestanding -Iinclude -c src/mines.c -o $(BUILD)/fs_mines.o && \
+		$(CC) -std=c11 -Wall -Wextra -Werror -O2 -ffreestanding -Iinclude -c src/hearts.c -o $(BUILD)/fs_hearts.o && \
+		$(CC) -std=c11 -Wall -Wextra -Werror -O2 -ffreestanding -Iinclude -c src/chess.c -o $(BUILD)/fs_chess.o && \
+		$(CC) -std=c11 -Wall -Wextra -Werror -O2 -ffreestanding -Iinclude -c src/tiles.c -o $(BUILD)/fs_tiles.o && \
+		$(CC) -std=c11 -Wall -Wextra -Werror -O2 -ffreestanding -Iinclude -c src/bridge.c -o $(BUILD)/fs_bridge.o && \
+		bad=$$(nm -u $(BUILD)/fs_cards.o $(BUILD)/fs_mines.o $(BUILD)/fs_hearts.o $(BUILD)/fs_chess.o $(BUILD)/fs_tiles.o $(BUILD)/fs_bridge.o | awk '$$1=="U"{print $$2}' | grep -v -x -E 'memcpy|memmove|memset|strlen' | sort -u); \
+		if [ -n "$$bad" ]; then echo "the core uses: $$bad"; exit 1; fi; \
+		echo "squirrelgames core freestanding ok"; \
+	fi
 
 test: $(BUILD)/test_games $(BUILD)/squirrelgames freestanding
 	$(BUILD)/test_games $(BUILD)

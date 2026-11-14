@@ -47,7 +47,10 @@ echo "$out" | grep -q "^nmea .* fix=1 sats=" || fail "receiver nmea: $out"
 echo "$out" | tail -1 | grep -q "ubx [0-9]* (4 bad).* 4 epochs, 4 fixed, 30 ephemerides" || fail "receiver summary: $out"
 out=$($G solve "$B/rx.26o" "$B/rx.26n" --iono-free --truth 35.681236,139.767125,40) || fail "solve the receiver log"
 echo "$out" | tail -1 | grep -q "# 4 epochs, 4 fixed" || fail "receiver log: $out"
-$G receiver - --epochs 2 < "$B/demo.ubx" | grep -c "used=" | grep -q "^2$" || fail "receiver on stdin"
+# Capture then count (avoid piping a bare count into grep -q "^N$", which
+# breaks when a Windows grep emits CR). Binary stdin is exercised here.
+out=$($G receiver - --epochs 2 < "$B/demo.ubx") || fail "receiver on stdin exit: $out"
+[ "$(echo "$out" | grep -c 'used=')" = 2 ] || fail "receiver on stdin: $out"
 $G receiver "$B/missing.ubx" >/dev/null 2>&1; [ $? -eq 1 ] || fail "receiver on a missing file should exit 1"
 $G receiver "$B/demo.ubx" --configure >/dev/null 2>&1; [ $? -eq 1 ] || fail "--configure on a file should exit 1"
 $G >/dev/null 2>&1; [ $? -eq 2 ] || fail "no args should exit 2"

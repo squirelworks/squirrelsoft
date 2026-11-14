@@ -15,6 +15,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#ifdef _WIN32
+#include <fcntl.h>
+#include <io.h>
+#endif
 
 #ifndef SQS_VERSION
 #define SQS_VERSION "dev"
@@ -280,6 +284,12 @@ static int read_dump(const char *path, SqsCard *card) {
 int main(int argc, char **argv) {
     const char *dump_path = NULL, *stations_path = NULL, *reader = NULL, *csv_path = NULL;
     int json = 0, csv = 0, include_idm = 0, list = 0, wait_s = 10, force_usb = 0, gui = 0, gui_ms = 0;
+#ifdef _WIN32
+    /* CRT stdout defaults to text mode: LF becomes CRLF under MinGW/UCRT, so
+     * CSV / JSON / text captures get \r that Linux/macOS do not. Keep binary. */
+    _setmode(_fileno(stdout), _O_BINARY);
+    _setmode(_fileno(stderr), _O_BINARY);
+#endif
     for (int i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "--help") || !strcmp(argv[i], "-h")) {
             usage(stdout);

@@ -57,6 +57,8 @@ printf 'regs\nfly\n' > "$B/bad.txt"
 err=$($P --script "$B/bad.txt" 2>&1); [ $? -eq 1 ] || fail "a bad script should exit 1"
 echo "$err" | grep -q "bad.txt:2: fly: not a command: fly" || fail "bad script line: $err"
 $P --script "$B/no-such.txt" >/dev/null 2>&1; [ $? -eq 1 ] || fail "a missing script should exit 1"
+# POSIX: connection refused naming the host:port. Windows: same target in
+# the stub message ("…: links are not built for Windows yet") — no real stack.
 err=$($P --tcp 127.0.0.1:1 --do regs 2>&1); [ $? -eq 1 ] || fail "no stub there should exit 1"
 echo "$err" | grep -q "127.0.0.1:1" || fail "the refused connection: $err"
 err=$($P --tcp nonsense --do regs 2>&1); [ $? -eq 1 ] || fail "a bad TCP address should exit 1"
