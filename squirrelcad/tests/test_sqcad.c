@@ -26,7 +26,7 @@ int main(void) {
     expect(sqc_block_def(d, "stick", a, ids, 1) > 0, "block");
     expect(sqc_insert(d, "stick", b, 1.0, 0.0) > 0, "insert");
 
-    const char *path = "/tmp/sqcad_test.sqdwg";
+    const char *path = "build/sqcad_test.sqdwg";
     expect(sqc_write_sqdwg(d, path) == 0, "write");
     SqcDrawing *d2 = (SqcDrawing *)calloc(1, sizeof(SqcDrawing));
     expect(d2 != NULL, "alloc d2");

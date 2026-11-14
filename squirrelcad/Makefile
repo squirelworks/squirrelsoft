@@ -75,15 +75,15 @@ test: $(BUILD)/test_sqcad $(BUILD)/test_dxf $(BUILD)/test_cmd $(BUILD)/test_gui 
 	$(BUILD)/test_gui $(BUILD)
 	sh tests/cli_smoke.sh $(BUILD)
 	cd $(CURDIR) && $(BUILD)/test_dxf
-	@tmp=$$(mktemp /tmp/sqcXXXXXX.sqdwg); \
+	@tmp=$(BUILD)/sqc_cli_smoke.sqdwg; from=$(BUILD)/sqc_from_dxf.sqdwg; out=$(BUILD)/sqc_out.dxf; \
 	$(BUILD)/squirrelcad new $$tmp && \
 	$(BUILD)/squirrelcad LINE $$tmp 0,0 3,4 && \
 	$(BUILD)/squirrelcad LEN $$tmp 2 | grep -q 5 && \
-	$(BUILD)/squirrelcad IMPORT-DXF /tmp/sqc_from_dxf.sqdwg samples/autocad_bridge.dxf && \
-	$(BUILD)/squirrelcad LIST /tmp/sqc_from_dxf.sqdwg | grep -q ents= && \
-	$(BUILD)/squirrelcad EXPORT-DXF /tmp/sqc_from_dxf.sqdwg /tmp/sqc_out.dxf && \
+	$(BUILD)/squirrelcad IMPORT-DXF $$from samples/autocad_bridge.dxf && \
+	$(BUILD)/squirrelcad LIST $$from | grep -q ents= && \
+	$(BUILD)/squirrelcad EXPORT-DXF $$from $$out && \
 	$(BUILD)/squirrelcad PROBE samples/autocad_bridge.dxf | grep -q dxf && \
-	rm -f $$tmp && echo "squirrelcad cli+dxf smoke ok"
+	rm -f $$tmp $$from $$out && echo "squirrelcad cli+dxf smoke ok"
 	@if [ "$(HAS_SDL)" = 1 ]; then \
 		SDL_VIDEODRIVER=dummy $(BUILD)/squirrelcad gui samples/autocad_bridge.dxf --frames 10 && echo "squirrelcad window ok"; \
 	else echo "squirrelcad: no SDL2, window not tested"; fi
