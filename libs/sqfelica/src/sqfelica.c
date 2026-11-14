@@ -399,17 +399,23 @@ int sqf_parse_suica_block(const uint8_t *b, size_t len, SqfHistory *h) {
     static const uint8_t train_proc[] = {0x01, 0x03, 0x04, 0x05, 0x06, 0x08,
                                          0x13, 0x14, 0x15, 0x84, 0x85};
     /* Shop sales carry a time and terminal ID in bytes 6-9, not stations: terminal
-      * types C7/C8, and any non-bus sale process (real dumps show CA with process 46). */
+      * types C7/C8, and any non-bus sale process (real dumps show CA with process 46).
+      * Bus (terminal 0x05 or bus process): bytes 6-9 are operator + stop, never rail. */
     int bus = b[0] == 0x05 || in_list(b[1], bus_proc, sizeof bus_proc);
     int product = b[0] == 0xC7 || b[0] == 0xC8 || (in_list(b[1], sale_proc, sizeof sale_proc) && !bus);
     int charge = b[1] == 0x02 || b[1] == 0x48;
+    h->settlement = b[2];
     if (charge) h->kind = SQF_KIND_CHARGE;
     else if (bus) h->kind = SQF_KIND_BUS;
     else if (product) h->kind = SQF_KIND_SALE;
     else if (in_list(b[1], train_proc, sizeof train_proc)) h->kind = SQF_KIND_TRAIN;
     else h->kind = SQF_KIND_OTHER;
 
-    if (!product && !bus) {
+    if (bus) {
+        h->bus_operator = (uint16_t)(((unsigned)b[6] << 8) | b[7]);
+        h->bus_stop = (uint16_t)(((unsigned)b[8] << 8) | b[9]);
+        /* has_enter/has_exit stay 0 — no station lookup for bus rows. */
+    } else if (!product) {
         h->region = b[15];
         if (b[6] || b[7]) {
             h->has_enter = 1;
@@ -529,6 +535,68 @@ size_t sqf_parse_edy_history(const uint8_t *blocks, size_t n,
     return parse_each(sqf_parse_edy_block, blocks, n, out, cap);
 }
 
+/* Pack bits MSB-first from record[18..], matching felica_parse.parse_waon_history_block. */
+static int waon_take(const uint8_t *rec, int *bit, int nbits) {
+    int v = 0;
+    for (int i = 0; i < nbits; i++) {
+        int byte_index = 18 + (*bit / 8);
+        int bit_index = 7 - (*bit % 8);
+        v = (v << 1) | ((rec[byte_index] >> bit_index) & 1);
+        (*bit)++;
+    }
+    return v;
+}
+
+int sqf_parse_waon_block(const uint8_t *b, size_t len, SqfHistory *h) {
+    if (!b || !h || len < 32 || all_zero(b, 32) || b[17] == 0) return -1;
+    history_init(h);
+    uint8_t typ = b[17];
+    h->terminal = h->process = typ;
+    int bit = 0;
+    int y = 2005 + waon_take(b, &bit, 5);
+    int m = waon_take(b, &bit, 4);
+    int d = waon_take(b, &bit, 5);
+    int hh = waon_take(b, &bit, 5);
+    int mm = waon_take(b, &bit, 6);
+    int32_t bal = clamp_yen((uint32_t)waon_take(b, &bit, 18));
+    int usage = waon_take(b, &bit, 18);
+    int charge = waon_take(b, &bit, 17);
+    if (m >= 1 && m <= 12 && d >= 1 && d <= 31 && y >= 2005 && y <= 2099) {
+        h->year = y;
+        h->month = m;
+        h->day = d;
+    }
+    if (hh <= 23 && mm <= 59) {
+        h->hour = hh;
+        h->minute = mm;
+    }
+    h->balance_yen = bal;
+    if (typ == 0x04) {
+        h->kind = SQF_KIND_SALE;
+        h->amount_yen = usage;
+        if (usage >= 1 && usage <= 100000) h->fare_yen = usage;
+    } else if (typ == 0x0C || typ == 0x10) {
+        h->kind = SQF_KIND_CHARGE;
+        h->amount_yen = charge;
+    } else {
+        h->kind = SQF_KIND_OTHER;
+        h->amount_yen = usage;
+    }
+    return 0;
+}
+
+size_t sqf_parse_waon_history(const uint8_t *blocks, size_t n,
+                              SqfHistory *out, size_t cap) {
+    size_t k = 0;
+    for (size_t i = 0; i + 1 < n && k < cap; i += 2) {
+        uint8_t rec[32];
+        memcpy(rec, blocks + SQF_BLOCK_LEN * i, SQF_BLOCK_LEN);
+        memcpy(rec + SQF_BLOCK_LEN, blocks + SQF_BLOCK_LEN * (i + 1), SQF_BLOCK_LEN);
+        if (sqf_parse_waon_block(rec, 32, &out[k]) == 0) k++;
+    }
+    return k;
+}
+
 /* --------------------------------------------------------------- balances */
 
 int32_t sqf_suica_balance(const uint8_t *b090f, size_t l090f, const uint8_t *b008b,
@@ -570,8 +638,29 @@ const char *sqf_suica_process_label(uint8_t p) {
         case 0x13: return "新幹線";
         case 0x14: return "入A";
         case 0x15: return "出A";
+        case 0x1F: return "バスチャージ";
+        case 0x23: return "バス券購";
         case 0x46: return "物販";
         case 0x48: return "特典チャージ";
         default: return NULL;
     }
+}
+
+const char *sqf_suica_family_label(const uint8_t *block_008b, size_t len, int settlement) {
+    int card_type = -1, region = -1;
+    if (block_008b && len > 8) {
+        card_type = (block_008b[8] >> 4) & 0xF;
+        region = block_008b[8] & 0xF;
+    }
+    if (card_type == 3) return "ICOCA";
+    if (card_type == 0) return "IruCa";
+    if (settlement >= 0 && settlement <= 0xFF) {
+        if (settlement == 0x0D) return "PASMO";
+        if (settlement == 0x3F) return "モバイルSuica";
+        if (settlement == 0x0B) return "PiTaPa";
+        if (settlement == 0x02) return "Suica";
+    }
+    if (card_type == 2 && region == 2) return "PiTaPa";
+    if (card_type == 2) return "Suica / PASMO";
+    return "Suica / PASMO";
 }

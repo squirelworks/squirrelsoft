@@ -13,10 +13,14 @@ object HistoryFormat {
 
     fun formatEntry(index: Int, h: HistoryEntry): String {
         val title = processTitle(h)
-        val route = h.stationSummary()
+        val route = when (h.kind) {
+            "bus" -> h.busSummary().ifBlank { h.stationSummary() }
+            else -> h.stationSummary()
+        }
         val fare = when {
             h.kind == "charge" && h.fareYen <= 0 -> "チャージ"
             h.fareYen > 0 && h.kind == "charge" -> "+¥%,d".format(h.fareYen)
+            h.kind == "bus" && h.fareYen > 0 -> "運賃 ¥%,d".format(h.fareYen)
             h.fareYen > 0 -> "運賃 ¥%,d".format(h.fareYen)
             else -> "運賃 —"
         }

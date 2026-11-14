@@ -89,9 +89,19 @@ public final class SqFelica {
             check(at(hist, 1, 0) == 3 && at(hist, 1, 7) == 5680, "edy charge");
         }
 
-        /* WAON has no history parser in the bridge; empty result. */
-        hist = nativeHistory(BRAND_WAON, suica);
-        check(hist != null && hist.length == 0, "waon history empty");
+        /* WAON 0x680b: synthetic 32-byte record (sale ¥620, bal ¥4584, 2026-10-28 19:10). */
+        byte[] waon = concat(
+                "00000000000000000000000000000000",
+                "0004ad7265023d001360000000000000");
+        hist = nativeHistory(BRAND_WAON, waon);
+        check(hist != null && hist.length == FIELDS, "waon history length");
+        if (hist != null && hist.length >= FIELDS) {
+            check(at(hist, 0, 0) == 2 && at(hist, 0, 6) == 620 && at(hist, 0, 7) == 4584, "waon sale");
+            check(at(hist, 0, 1) == 2026 && at(hist, 0, 2) == 10 && at(hist, 0, 3) == 28, "waon date");
+            check(at(hist, 0, 4) == 19 && at(hist, 0, 5) == 10, "waon time");
+        }
+        hist = nativeHistory(BRAND_WAON, new byte[32]);
+        check(hist != null && hist.length == 0, "waon zero record skipped");
         hist = nativeHistory(99, suica);
         check(hist != null && hist.length == 0, "unknown brand history empty");
         hist = nativeHistory(BRAND_SUICA, null);

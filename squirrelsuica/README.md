@@ -99,7 +99,7 @@ python3 suica_read.py
 
 | Brand | System (typical) | Balance | History | Notes |
 |-------|------------------|---------|---------|-------|
-| Suica/PASMO/… | `0x0003` | `0x090f` bytes 10–11 LE (+ `0x008b` check) | **`0x090f`** (≤20 blocks) | Stations at bytes 6–9; region at 15 |
+| Suica/PASMO/ICOCA/… | `0x0003` | `0x090f` bytes 10–11 LE (+ `0x008b` check) | **`0x090f`** (≤20 blocks) | Rail stations at bytes 6–9; bus uses operator/stop there; issuer label from `0x008b` byte 8 |
 | nanaco | `0xFE00` / `0x04C7` | `0x5597` LE u32 | `0x564f` (5 blocks) | Amount/balance BE in history |
 | 楽天Edy | `0xFE00` | `0x1317` LE u32 | `0x170f` (6 blocks) | Timestamp days+seconds since 2000 |
 | WAON | `0xFE00` | `0x6817` LE u16 | `0x680b` (3×32-byte records) | Bit-packed date/amount |

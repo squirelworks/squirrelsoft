@@ -191,7 +191,7 @@ object FelicaReader {
 
         return FelicaCard(
             brand = FelicaBrand.SUICA_FAMILY,
-            brandLabel = FelicaParse.brandLabel(FelicaBrand.SUICA_FAMILY),
+            brandLabel = FelicaParse.suicaFamilyLabel(b008b, entries.firstOrNull()?.settlement),
             idm = idm.joinToString("") { "%02x".format(it) },
             pmm = pmm.joinToString("") { "%02x".format(it) },
             systemCode = "%04x".format(SYS_TRANSIT),

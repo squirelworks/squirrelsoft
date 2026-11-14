@@ -440,8 +440,8 @@ def history_text(dump: Dict, fp=None) -> str:
             lambda b: fp.nanaco_balance(b) if b else None, fp.parse_nanaco_history_blocks)
     section("Edy (svc 170f)", blocks_of(dump, SVC_EDY_HIST), (first(SVC_EDY_BAL),),
             lambda b: fp.edy_balance(b) if b else None, fp.parse_edy_history_blocks)
-    section("WAON (svc 6817)", None, (first(SVC_WAON_BAL),),
-            lambda b: fp.waon_balance(b) if b else None, None)
+    section("WAON (svc 680b)", blocks_of(dump, 0x680B), (first(SVC_WAON_BAL),),
+            lambda b: fp.waon_balance(b) if b else None, fp.parse_waon_history_blocks)
     if not out:
         out.append("No Suica, nanaco, Edy or WAON services were readable on this card.")
     return "\n".join(out).rstrip("\n") + "\n"

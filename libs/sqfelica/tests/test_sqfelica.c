@@ -143,7 +143,20 @@ static void test_attributes(void) {
     /* EE=01 BBB=010 AAA=011, n=2: T*(3 + 2*4)*4 */
     CHECK(fabs(sqf_response_time_ms(0x53, 2) - 44 * t) < 1e-12);
     CHECK(strcmp(sqf_suica_process_label(0x02), "チャージ") == 0);
+    CHECK(strcmp(sqf_suica_process_label(0x1F), "バスチャージ") == 0);
     CHECK(sqf_suica_process_label(0x99) == NULL);
+    {
+        uint8_t icoca[16] = {0};
+        icoca[8] = 0x30;
+        CHECK(strcmp(sqf_suica_family_label(icoca, 16, -1), "ICOCA") == 0);
+        uint8_t iruca[16] = {0};
+        CHECK(strcmp(sqf_suica_family_label(iruca, 16, -1), "IruCa") == 0);
+        uint8_t type2[16] = {0};
+        type2[8] = 0x20;
+        CHECK(strcmp(sqf_suica_family_label(type2, 16, 0x0D), "PASMO") == 0);
+        CHECK(strcmp(sqf_suica_family_label(type2, 16, 0x3F), "モバイルSuica") == 0);
+        CHECK(strcmp(sqf_suica_family_label(type2, 16, -1), "Suica / PASMO") == 0);
+    }
     CHECK(sqf_station_area(0xD0, 0x7F, 0) == 0);
     CHECK(sqf_station_area(0xD0, 0x90, 0) == 3 && sqf_station_area(0xD0, 0x90, 1) == 1);
 }
@@ -274,6 +287,7 @@ static int run_fixture(const char *path) {
             size_t k;
             if (!strcmp(brand, "suica")) k = sqf_parse_suica_history(&blocks[0][0], nb, h, 32);
             else if (!strcmp(brand, "nanaco")) k = sqf_parse_nanaco_history(&blocks[0][0], nb, h, 32);
+            else if (!strcmp(brand, "waon")) k = sqf_parse_waon_history(&blocks[0][0], nb, h, 32);
             else k = sqf_parse_edy_history(&blocks[0][0], nb, h, 32);
             if (k != ne) {
                 fprintf(stderr, "%s group %zu: %zu entries, want %zu\n", brand, groups, k, ne);

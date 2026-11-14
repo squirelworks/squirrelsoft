@@ -26,8 +26,9 @@ Used here, in `ROADMAP.md` and on the issues (as labels).
 - **Android (Play closed testing):** SquirrelSuica 0.0.12, SquirrelSuicaAnalysis
   0.0.3, SquirrelQR 0.1.6, SquirrelSound 0.0.13 on Play; SquirrelSound **0.0.14**
   (full-screen Live tab, Settings tab, Android octave bars, WAV record,
-  calibration), **0.0.15** (landscape split, scope, peak labels), and
-  SquirrelQR **0.1.7** (torch / zoom / batch) wait for Squirrel to upload.
+  calibration), **0.0.15** (landscape split, scope, peak labels),
+  SquirrelQR **0.1.7** (torch / zoom / batch), and SquirrelSuica **0.0.13**
+  (issuer labels, bus rows, WAON history) wait for Squirrel to upload.
 - **Desktop (C, SDL2 via `libs/sqgui`):** SquirrelStation, SquirrelCAD,
   SquirrelGNSS, SquirrelSound (mic + PulseAudio/PipeWire loopback, GUI),
   SquirrelSuica (PC/SC, RC-S380 over libusb, GUI, CSV), SquirrelQR (files,
@@ -78,7 +79,7 @@ and unit-test the Kotlin against stubs.
 1. ~~SND-landscape + SND-scope + SND-peaks~~ (done: SquirrelSound 0.0.15).
 2. ~~FEL-jni-smoke~~ (done: S2 JNI box).
 3. ~~QR-torch-zoom + QR-batch~~ (done: SquirrelQR 0.1.7).
-4. **SUICA-labels + SUICA-bus + FEL-pasmo-waon** (SquirrelSuica 0.0.13).
+4. ~~**SUICA-labels + SUICA-bus + FEL-pasmo-waon**~~ (done: SquirrelSuica 0.0.13).
 5. **PKG** (S3.5 + S4: Windows/macOS/Linux packages in CI), which unblocks
    **SND-wasapi**, **SND-macos**, **QR-capture-win-mac** and **QR-wayland**.
 6. **QR-webcam**.
@@ -109,18 +110,18 @@ and unit-test the Kotlin against stubs.
 - Host build of `sqfelica_jni.c` driven from `android/jni-smoke`, hooked into
   `make test` (synthetic parity blocks only).
 
-### FEL-pasmo-waon — PASMO / WAON history in C  `cursor-codex`
-- **Files:** `libs/sqfelica/src/sqfelica.c`, `include/`, `tests/`,
-  `tools/gen_fixture.py`, `squirrelsuica/felica_parse.py` (the Python reference).
-- **Acceptance:** history parsing for WAON (and any PASMO-specific rows that
-  differ from Suica) with parity fixtures generated from the Python parser;
-  synthetic data only.
+### FEL-pasmo-waon — PASMO / WAON history in C  `status: done` (with SUICA-labels/bus)
+- WAON 0x680b 32-byte history in Python, C (`sqf_parse_waon_*`) and the JNI
+  bridge; PASMO uses the same Suica history layout (issuer label distinguishes it).
 
-### SUICA-labels / SUICA-bus / SUICA-stations  `cursor-codex`
-- PASMO / ICOCA / other transit-IC labels from the issuer fields; bus rows
-  (terminal types for buses, no station lookup); richer station tables only
-  from a source whose licence allows redistribution, stated in
-  `squirrelsuica/data/README`. Same changes in Python, C (`sqfelica`) and Kotlin.
+### SUICA-labels / SUICA-bus  `status: done` (SquirrelSuica 0.0.13)
+- Issuer labels from attributes `0x008B` byte 8 (+ history settlement) in
+  Python, C and Kotlin; bus rows show operator/stop codes and never hit the
+  station table. **SUICA-stations** (richer tables) remains open.
+
+### SUICA-stations  `cursor-codex`
+- Richer station tables only from a source whose licence allows redistribution,
+  stated in `squirrelsuica/data/README`. Same changes in Python, C and Kotlin.
 
 ### QR-torch-zoom / QR-batch — SquirrelQR on Android  `status: done` (0.1.7)
 - **Files:** `squirrelqr/android/app/src/main/java/works/squirrel/qr/MainActivity.kt`,

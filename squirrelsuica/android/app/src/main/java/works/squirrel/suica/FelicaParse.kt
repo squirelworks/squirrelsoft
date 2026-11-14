@@ -15,6 +15,7 @@ package works.squirrel.suica
  */
 object FelicaParse {
     private val SALE_PROCESSES = setOf(0x46, 0x49, 0x4a, 0x4b, 0xc6, 0xcb)
+    private val BUS_PROCESSES = setOf(0x0d, 0x0f, 0x1f, 0x23)
 
     /**
      * Suica/PASMO family: service 0x090f history block balance at bytes 10–11 LE.
@@ -76,6 +77,7 @@ object FelicaParse {
 
         val terminal = block[0].toInt() and 0xff
         val process = block[1].toInt() and 0xff
+        val settlement = block[2].toInt() and 0xff
 
         val dateWord = ((block[4].toInt() and 0xff) shl 8) or (block[5].toInt() and 0xff)
         var year = 2000 + (dateWord shr 9)
@@ -94,7 +96,8 @@ object FelicaParse {
 
         // Shop sales carry a time and terminal ID in bytes 6-9, not stations: terminal
         // types C7/C8, and any non-bus sale process (real dumps show CA with process 46).
-        val isBus = terminal == 0x05 || process in setOf(0x0d, 0x0f, 0x1f, 0x23)
+        // Bus (terminal 0x05 or bus process): bytes 6-9 are operator + stop, never rail.
+        val isBus = terminal == 0x05 || process in BUS_PROCESSES
         val isProduct = terminal == 0xc7 || terminal == 0xc8 || (process in SALE_PROCESSES && !isBus)
         val isCharge = process == 0x02 || process == 0x48
 
@@ -111,9 +114,15 @@ object FelicaParse {
         var exitName: String? = null
         var enterCode: String? = null
         var exitCode: String? = null
+        var busOperator: Int? = null
+        var busStop: Int? = null
         var note = baseNote
 
-        if (!isProduct && !isBus) {
+        if (isBus) {
+            busOperator = ((block[6].toInt() and 0xff) shl 8) or (block[7].toInt() and 0xff)
+            busStop = ((block[8].toInt() and 0xff) shl 8) or (block[9].toInt() and 0xff)
+            note = "%s · 事業者 %04X · 停留所 %04X".format(baseNote, busOperator, busStop)
+        } else if (!isProduct) {
             val region = block[15].toInt() and 0xff
             val inLine = block[6].toInt() and 0xff
             val inSta = block[7].toInt() and 0xff
@@ -162,7 +171,10 @@ object FelicaParse {
             enterCode = enterCode,
             exitCode = exitCode,
             terminal = terminal,
-            process = process
+            process = process,
+            settlement = settlement,
+            busOperator = busOperator,
+            busStop = busStop
         )
     }
 
@@ -356,59 +368,99 @@ object FelicaParse {
         FelicaBrand.UNKNOWN -> "Unknown FeliCa"
     }
 
+    /**
+     * Transit-IC display name from attributes 0x008B issuer byte and optional history settlement.
+     * Public layout: byte 8 = card-type (high nibble) | region (low nibble).
+     */
+    fun suicaFamilyLabel(attrs008b: ByteArray?, settlement: Int? = null): String {
+        val cardType: Int?
+        val region: Int?
+        if (attrs008b != null && attrs008b.size > 8) {
+            val b = attrs008b[8].toInt() and 0xff
+            cardType = (b shr 4) and 0xf
+            region = b and 0xf
+        } else {
+            cardType = null
+            region = null
+        }
+        when (cardType) {
+            3 -> return "ICOCA"
+            0 -> return "IruCa"
+        }
+        when (settlement) {
+            0x0d -> return "PASMO"
+            0x3f -> return "モバイルSuica"
+            0x0b -> return "PiTaPa"
+            0x02 -> return "Suica"
+        }
+        if (cardType == 2 && region == 2) return "PiTaPa"
+        return brandLabel(FelicaBrand.SUICA_FAMILY)
+    }
+
+    /** Synthetic attributes 0x008B block for fixtures. */
+    fun demoSuicaAttrs(cardType: Int = 2, region: Int = 0, bal: Int = 2480): ByteArray {
+        val out = ByteArray(16)
+        out[8] = (((cardType and 0xf) shl 4) or (region and 0xf)).toByte()
+        out[11] = (bal and 0xff).toByte()
+        out[12] = ((bal shr 8) and 0xff).toByte()
+        return out
+    }
+
     /** Fixture helpers for unit tests (not exposed in the UI). */
     fun demoSuica(): FelicaCard {
+        val hist = historyEntries(
+            listOf(
+                // 乃木坂 → 代々木上原 (Tokyo Metro Chiyoda), bal ¥2480
+                histRail(
+                    terminal = 0x16,
+                    process = 0x01,
+                    y = 2026, m = 10, d = 28,
+                    inLine = 0xe3, inSta = 0x59,
+                    outLine = 0xe3, outSta = 0x5e,
+                    bal = 2480,
+                    region = 0x00
+                ),
+                // 渋谷 → 新宿 (Yamanote), bal ¥2648
+                histRail(
+                    terminal = 0x16,
+                    process = 0x01,
+                    y = 2026, m = 10, d = 27,
+                    inLine = 0x25, inSta = 0x07,
+                    outLine = 0x25, outSta = 0x0a,
+                    bal = 2648,
+                    region = 0x00
+                ),
+                // Charge at 東京 (Tokaido), bal ¥2858
+                histRail(
+                    terminal = 0x16,
+                    process = 0x02,
+                    y = 2026, m = 10, d = 26,
+                    inLine = 0x01, inSta = 0x01,
+                    outLine = 0, outSta = 0,
+                    bal = 2858,
+                    region = 0x00
+                ),
+                // Prior balance before charge (for charge amount delta)
+                histRail(
+                    terminal = 0x16,
+                    process = 0x01,
+                    y = 2026, m = 10, d = 25,
+                    inLine = 0x25, inSta = 0x01,
+                    outLine = 0x25, outSta = 0x02,
+                    bal = 858,
+                    region = 0x00
+                )
+            )
+        )
+        val attrs = demoSuicaAttrs(2, 0, 2480)
         return FelicaCard(
             brand = FelicaBrand.SUICA_FAMILY,
-            brandLabel = brandLabel(FelicaBrand.SUICA_FAMILY),
+            brandLabel = suicaFamilyLabel(attrs, hist.firstOrNull()?.settlement),
             idm = "0101020304050607",
             pmm = "0000000000000000",
             systemCode = "0003",
             balanceYen = 2480,
-            history = historyEntries(
-                listOf(
-                    // 乃木坂 → 代々木上原 (Tokyo Metro Chiyoda), bal ¥2480
-                    histRail(
-                        terminal = 0x16,
-                        process = 0x01,
-                        y = 2026, m = 10, d = 28,
-                        inLine = 0xe3, inSta = 0x59,
-                        outLine = 0xe3, outSta = 0x5e,
-                        bal = 2480,
-                        region = 0x00
-                    ),
-                    // 渋谷 → 新宿 (Yamanote), bal ¥2648
-                    histRail(
-                        terminal = 0x16,
-                        process = 0x01,
-                        y = 2026, m = 10, d = 27,
-                        inLine = 0x25, inSta = 0x07,
-                        outLine = 0x25, outSta = 0x0a,
-                        bal = 2648,
-                        region = 0x00
-                    ),
-                    // Charge at 東京 (Tokaido), bal ¥2858
-                    histRail(
-                        terminal = 0x16,
-                        process = 0x02,
-                        y = 2026, m = 10, d = 26,
-                        inLine = 0x01, inSta = 0x01,
-                        outLine = 0, outSta = 0,
-                        bal = 2858,
-                        region = 0x00
-                    ),
-                    // Prior balance before charge (for charge amount delta)
-                    histRail(
-                        terminal = 0x16,
-                        process = 0x01,
-                        y = 2026, m = 10, d = 25,
-                        inLine = 0x25, inSta = 0x01,
-                        outLine = 0x25, outSta = 0x02,
-                        bal = 858,
-                        region = 0x00
-                    )
-                )
-            ),
+            history = hist,
             note = "Fixture Suica (synthetic)",
             historyStatus = HistoryStatus.OK
         )
@@ -596,6 +648,8 @@ object FelicaParse {
         0x13 -> "新幹線"
         0x14 -> "入A"
         0x15 -> "出A"
+        0x1f -> "バスチャージ"
+        0x23 -> "バス券購"
         0x46 -> "物販"
         0x48 -> "特典チャージ"
         else -> "proc=0x%02x".format(process)

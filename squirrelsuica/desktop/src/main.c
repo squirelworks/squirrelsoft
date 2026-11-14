@@ -167,7 +167,7 @@ static void print_json(const SqsCard *c, const Stations *st) {
     hex(c->idm, 8, idm);
     hex(c->pmm, 8, pmm);
     printf("{\"brand\":\"%s\",\"brand_label\":", sqs_brand_id(c->brand));
-    json_str(sqs_brand_label(c->brand));
+    json_str(sqs_card_label(c));
     printf(",\"idm\":\"%s\",\"pmm\":\"%s\",\"system_code\":\"%04x\",\"balance_yen\":", idm, pmm, c->system_code);
     if (c->balance_yen >= 0) printf("%d", (int)c->balance_yen);
     else fputs("null", stdout);

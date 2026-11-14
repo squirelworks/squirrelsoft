@@ -19,7 +19,9 @@ from felica_parse import (
     edy_balance,
     nanaco_balance,
     parse_history_blocks,
+    parse_waon_history_blocks,
     suica_balance,
+    suica_family_label,
     waon_balance,
 )
 
@@ -134,14 +136,16 @@ def read_with_nfcpy(device: Optional[str] = None) -> FelicaCard:
                 pass
             bal = suica_balance(hist[0] if hist else None, b008b)
             if bal is not None or hist:
+                entries = parse_history_blocks(hist)
+                settle = entries[0].settlement if entries else None
                 card_holder[0] = FelicaCard(
                     brand=FelicaBrand.SUICA_FAMILY.value,
-                    brand_label=brand_label(FelicaBrand.SUICA_FAMILY),
+                    brand_label=suica_family_label(b008b, settle),
                     idm=idm,
                     pmm=pmm,
                     system_code=f"{SYS_TRANSIT:04x}",
                     balance_yen=bal,
-                    history=parse_history_blocks(hist),
+                    history=entries,
                     note="Live transit IC",
                 )
                 return False
@@ -157,6 +161,18 @@ def read_with_nfcpy(device: Optional[str] = None) -> FelicaCard:
             try:
                 block = _read_block(tag, svc)
                 if block:
+                    whist: List[bytes] = []
+                    if brand == FelicaBrand.WAON:
+                        try:
+                            wsc = tt3.ServiceCode(SVC_WAON_HIST >> 6, SVC_WAON_HIST & 0x3F)
+
+                            def wread(idx, _sc=wsc):
+                                bcs = [tt3.BlockCode(i, service=0) for i in idx]
+                                return tag.read_without_encryption([_sc], bcs)
+
+                            whist = read_blocks_chunked(wread, 6)
+                        except Exception:
+                            whist = []
                     card_holder[0] = FelicaCard(
                         brand=brand.value,
                         brand_label=brand_label(brand),
@@ -164,7 +180,7 @@ def read_with_nfcpy(device: Optional[str] = None) -> FelicaCard:
                         pmm=pmm,
                         system_code=f"{SYS_COMMON:04x}",
                         balance_yen=parser(block),
-                        history=[],
+                        history=parse_waon_history_blocks(whist) if brand == FelicaBrand.WAON else [],
                         note=label_note,
                     )
                     return False

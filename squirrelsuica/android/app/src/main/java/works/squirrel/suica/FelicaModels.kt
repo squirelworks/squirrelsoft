@@ -32,7 +32,10 @@ data class HistoryEntry(
     val enterCode: String? = null,
     val exitCode: String? = null,
     val terminal: Int = 0,
-    val process: Int = 0
+    val process: Int = 0,
+    val settlement: Int = 0,
+    val busOperator: Int? = null,
+    val busStop: Int? = null
 ) {
     /** One-line station summary for UI lists. */
     fun stationSummary(): String {
@@ -45,6 +48,14 @@ data class HistoryEntry(
             !exit.isNullOrBlank() -> exit
             else -> ""
         }
+    }
+
+    /** Bus operator/stop codes (never looked up as rail stations). */
+    fun busSummary(): String {
+        if (busOperator == null && busStop == null) return ""
+        val op = busOperator?.let { "%04X".format(it) } ?: "----"
+        val st = busStop?.let { "%04X".format(it) } ?: "----"
+        return "事業者 $op · 停留所 $st"
     }
 }
 
