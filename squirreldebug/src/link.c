@@ -9,14 +9,32 @@
 #include <string.h>
 
 #ifdef _WIN32
+/* Stub only: name the requested target so smoke can check it, without a
+ * real TCP/serial/QEMU stack. Bad baud is rejected here like the POSIX path. */
+static int baud_ok(long b) {
+    switch (b) {
+    case 9600:
+    case 19200:
+    case 38400:
+    case 57600:
+    case 115200:
+    case 230400:
+    case 460800:
+    case 921600:
+        return 1;
+    }
+    return 0;
+}
 int link_tcp(Link *l, const char *where, char *err, size_t cap) {
     (void)l;
-    (void)where;
-    snprintf(err, cap, "links are not built for Windows yet");
+    snprintf(err, cap, "%s: links are not built for Windows yet", where);
     return -1;
 }
 int link_serial(Link *l, const char *dev, long baud, char *err, size_t cap) {
-    (void)baud;
+    if (baud && !baud_ok(baud)) {
+        snprintf(err, cap, "%ld: not a baud rate (9600 to 921600)", baud);
+        return -1;
+    }
     return link_tcp(l, dev, err, cap);
 }
 int link_launch(Link *l, const char *cmd, char *err, size_t cap) { return link_tcp(l, cmd, err, cap); }
