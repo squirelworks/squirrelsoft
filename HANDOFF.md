@@ -34,9 +34,10 @@ Used here, in `ROADMAP.md` and on the issues (as labels).
   PNG, X11 capture, GUI, encoder), SquirrelCalc, SquirrelPaint, SquirrelGames,
   SquirrelDebug. Everything in S5 (the apps built here for Squirrel OS/2) is done.
 - **Shared cores:** `libs/sqdsp`, `libs/sqfelica`, `libs/sqqr`, `libs/sqmath`, `libs/sqgui`.
-- **Test gate:** `make test` (every lib and program, plus the Python SuicaAnalysis
-  twin) and the Android job (`./gradlew :app:assembleDebug :app:testDebugUnitTest`
-  per app), both in `.github/workflows/ci.yml` on every PR.
+- **Test gate:** `make test` (every lib and program, the Python SuicaAnalysis
+  twin, and host JNI smokes for QR / Sound / SuicaAnalysis) and the Android job
+  (`./gradlew :app:assembleDebug :app:testDebugUnitTest` per app), both in
+  `.github/workflows/ci.yml` on every PR.
 - **Open PRs at hand-off:** none. No in-progress branches.
 
 ## Rules (Squirrel's; do not break)
@@ -74,8 +75,8 @@ and unit-test the Kotlin against stubs.
 
 ## Suggested order
 
-1. **FEL-jni-smoke** (finishes the S2 JNI box).
-2. ~~SND-landscape + SND-scope + SND-peaks~~ (done: SquirrelSound 0.0.15).
+1. ~~SND-landscape + SND-scope + SND-peaks~~ (done: SquirrelSound 0.0.15).
+2. ~~FEL-jni-smoke~~ (done: S2 JNI box).
 3. **QR-torch-zoom + QR-batch** (SquirrelQR 0.1.7).
 4. **SUICA-labels + SUICA-bus + FEL-pasmo-waon** (SquirrelSuica 0.0.13).
 5. **PKG** (S3.5 + S4: Windows/macOS/Linux packages in CI), which unblocks
@@ -104,10 +105,9 @@ and unit-test the Kotlin against stubs.
   `--source loopback` captures it; CI on `windows-latest` / `macos-latest`
   builds it and runs the capture test against a silent device (needs PKG).
 
-### FEL-jni-smoke — JVM smoke test for `sqfelica_jni.c`  `cursor-codex`
-- Copy the pattern of `squirrelqr/android/jni-smoke` and `squirrelsound/android/jni-smoke`:
-  build `squirrelsuica-analysis/android/app/src/main/cpp/sqfelica_jni.c` for the
-  host, drive it from a JVM with a synthetic demo dump, hook it into `make test`.
+### FEL-jni-smoke — JVM smoke test for `sqfelica_jni.c`  `status: done`
+- Host build of `sqfelica_jni.c` driven from `android/jni-smoke`, hooked into
+  `make test` (synthetic parity blocks only).
 
 ### FEL-pasmo-waon — PASMO / WAON history in C  `cursor-codex`
 - **Files:** `libs/sqfelica/src/sqfelica.c`, `include/`, `tests/`,
