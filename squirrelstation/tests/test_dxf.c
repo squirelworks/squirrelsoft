@@ -18,7 +18,7 @@ static void expect(int c, const char *m) {
  * nested block, an insert of a block that isn't there, a bad number and an
  * overlong line. */
 static void test_other_writers(void) {
-    const char *path = "/tmp/sqs_other.dxf";
+    const char *path = "build/sqs_other.dxf";
     FILE *f = fopen(path, "w");
     fprintf(f, "0\nSECTION\n2\nTABLES\n0\nTABLE\n2\nLAYER\n0\nLAYER\n2\nroad\n70\n1\n62\n-3\n0\nENDTAB\n0\nENDSEC\n");
     fprintf(f, "0\nSECTION\n2\nBLOCKS\n");
@@ -110,8 +110,8 @@ int main(void) {
         if (strcmp(d.levels[i].name, "Survey") == 0) found_survey = 1;
     expect(found_survey, "Survey level");
 
-    const char *out_dxf = "/tmp/sqs_roundtrip.dxf";
-    const char *out_sq = "/tmp/sqs_from_dxf.sqdgn";
+    const char *out_dxf = "build/sqs_roundtrip.dxf";
+    const char *out_sq = "build/sqs_from_dxf.sqdgn";
     expect(sqs_export_dxf(&d, out_dxf) == 0, "export");
     expect(sqs_write_sqdgn(&d, out_sq) == 0, "write sqdgn");
 
@@ -123,13 +123,16 @@ int main(void) {
     expect(st2.lines == st.lines && st2.plines + st2.shapes == st.plines + st.shapes, "roundtrip lines and polylines");
 
     /* Fake DGN-ish binary */
-    const char *fake = "/tmp/fake.dgn";
+    const char *fake = "build/fake.dgn";
     FILE *f = fopen(fake, "wb");
     unsigned char ole[8] = {0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1};
     fwrite(ole, 1, 8, f);
     fclose(f);
     expect(sqs_file_looks_like_dgn(fake), "ole dgn detect");
     expect(sqs_import_dxf(&d, fake, &st) == -2, "dgn import refused");
+    remove(out_dxf);
+    remove(out_sq);
+    remove(fake);
 
     test_other_writers();
     if (failures) {
