@@ -16,6 +16,10 @@ are merged and CI is green on main. Claude then opens a **release-prep PR**:
 After that PR is merged, Claude asks Squirrel for the go-ahead with the exact
 steps below, and keeps working on the next roadmap item meanwhile.
 
+Desktop-only programs (Station, CAD, GNSS, Calc, Paint, Games, Debug) take
+their version from `<app>/VERSION`. Bump that file in the same PR that ships
+behaviour changes you want in the next desktop suite draft.
+
 ## The button (Squirrel)
 
 One-time setup: add four repository secrets under Settings > Secrets and
@@ -32,9 +36,12 @@ Each release:
 
 1. Actions > **Release** > Run workflow (branch `main`) > pick the app > Run.
    Or: `gh workflow run release.yml -f app=<app>`
-2. The run checks that the release notes exist and the tag is free, builds and
-   verifies the signed APK, builds the desktop versions, writes
-   `SHA256SUMS.txt`, and creates a **draft** Release named `<AppName> <version>`.
+   Use app `desktop` to draft a suite Release with every C desktop program's
+   packages (no APK).
+2. The run checks that the release notes exist and the tag is free, runs
+   `make test` on Ubuntu / Windows / macOS, builds and verifies the signed APK
+   (Android apps), builds the desktop packages, writes `SHA256SUMS.txt`, and
+   creates a **draft** Release named `<AppName> <version>`.
 3. Open the draft (Releases page, or the link in the run summary), check it, and
    press **Publish release**. Publishing creates the tag `<app>-v<version>` on
    the commit the workflow built.
@@ -55,22 +62,23 @@ Each release:
 
 | App | Tag | Android | Desktop |
 |---|---|---|---|
-| SquirrelSound | `squirrelsound-v<ver>` | `SquirrelSound-<ver>-android.apk` | `-linux-x86_64.tar.gz`, `-windows-x86_64.zip`, `-macos-arm64.zip` (C, built and smoke-tested on each OS) |
-| SquirrelSuica | `squirrelsuica-v<ver>` | `SquirrelSuica-<ver>-android.apk` | `-python.zip` (Python 3.9+, runs on Linux, Windows and macOS) |
+| SquirrelSound | `squirrelsound-v<ver>` | `SquirrelSound-<ver>-android.apk` | Windows zip/MSI, macOS `.dmg` (`.app`), Linux AppImage + `.deb` |
+| SquirrelSuica | `squirrelsuica-v<ver>` | `SquirrelSuica-<ver>-android.apk` | same C packages (PC/SC / PaSoRi / GUI) |
 | SquirrelSuicaAnalysis | `squirrelsuica-analysis-v<ver>` | `SquirrelSuicaAnalysis-<ver>-android.apk` | `-python.zip` |
-| SquirrelQR | `squirrelqr-v<ver>` | `SquirrelQR-<ver>-android.apk` | none yet (desktop QR is roadmap S3.4) |
+| SquirrelQR | `squirrelqr-v<ver>` | `SquirrelQR-<ver>-android.apk` | Windows zip/MSI, macOS `.dmg`, Linux AppImage + `.deb` |
+| Desktop suite | `desktop-vYYYY.MM.DD` | none | packages for every C desktop program |
 
-Every release also has `SHA256SUMS.txt` covering its files. Native installers
-(AppImage, MSI, .app/.dmg) and native builds of the Python tools come with
-roadmap S3.5.
+Every release also has `SHA256SUMS.txt` covering its files. Packages are
+unsigned to start; see [docs/packaging.md](packaging.md).
 
 ## Dry runs
 
-Pull requests that change `release.yml` or `scripts/release/` run every build
-for every app, unsigned, and upload nothing. Locally:
+Pull requests that change `release.yml`, `ci.yml` or `scripts/release/` run
+`make test` on all three OSes and every desktop package build, unsigned, and
+upload nothing. Locally:
 
 ```bash
 scripts/release/app_meta.sh squirrelsound
 scripts/release/package_desktop.sh squirrelsound /tmp/dist linux-x86_64
-scripts/release/package_desktop.sh squirrelsuica /tmp/dist any
+scripts/release/package_desktop.sh squirrelgnss /tmp/dist linux-x86_64
 ```

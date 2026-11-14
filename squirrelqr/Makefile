@@ -116,7 +116,9 @@ JNI_SRC = android/app/src/main/cpp/sqqr_jni.c $(SQQR)/src/sqqr.c $(SQQR)/src/sqq
 	$(SQQR)/src/sqqr_encode.c $(SQQR)/src/sqqr_content.c
 
 test-jni: | $(BUILD)
-	@if [ -n "$(JDK)" ] && [ -f "$(JDK)/include/jni.h" ] && [ -x "$(JDK)/bin/javac" ]; then \
+	@if [ "$$(uname -s)" != Linux ]; then \
+		echo "squirrelqr: JNI smoke is Linux-only (shared .so); skipped on $$(uname -s)"; \
+	elif [ -n "$(JDK)" ] && [ -f "$(JDK)/include/jni.h" ] && [ -x "$(JDK)/bin/javac" ]; then \
 		set -e; plat=$$(ls -d "$(JDK)"/include/*/ | head -1); \
 		$(CC) -std=c11 -O2 -Wall -Wextra -Werror -shared -fPIC -I"$(JDK)/include" -I"$$plat" \
 			-I$(SQQR)/include $(JNI_SRC) -lm -o $(BUILD)/libsqqr_jni.so; \
