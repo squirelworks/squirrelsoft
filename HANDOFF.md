@@ -83,7 +83,7 @@ and unit-test the Kotlin against stubs.
 5. **PKG** (S3.5 + S4: Windows/macOS/Linux packages in CI), which unblocks
    **SND-wasapi**, **SND-macos**, **QR-capture-win-mac** and **QR-wayland**.
 6. ~~**QR-webcam**~~ (done: V4L2 + synthetic CI frame).
-7. **S6 repo split** with Squirrel.
+7. **S6 repo split** with Squirrel (prep inventory is ready; see S6 card).
 
 ## Task cards
 
@@ -154,10 +154,14 @@ and unit-test the Kotlin against stubs.
 - Build the AAB locally with the upload key and upload it to closed testing
   (`scripts/` has the Play helpers). Do not commit or attach the AAB anywhere.
 
-### S6 — per-app repos  `needs: squirrel` (prep `cursor-codex`)
-- Squirrel creates the repos and runs `git filter-repo`. Cursor/Codex can
-  prepare: a script that lists the paths per app, CI files per future repo,
-  and the umbrella's README links.
+### S6 — per-app repos  `needs: squirrel` (prep done)
+- **Prep on branch / to merge:** `scripts/s6_repo_split_prep.sh` (path lists and
+  dry-run `filter-repo` lines), `docs/s6-repo-split.md` (inventory, owner
+  checklist, umbrella README link draft), `docs/s6-ci-stubs/` (per-future-repo
+  CI). No remotes are created or deleted by agents.
+- **Squirrel still does:** create the GitHub repos, run `git filter-repo` on
+  mirror clones, wire CI from the stubs, resolve the SuicaAnalysis →
+  `felica_parse.py` cross-import, then update the umbrella README links.
 
 ## Issues to close or keep
 
