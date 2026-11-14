@@ -32,7 +32,7 @@ Used here, in `ROADMAP.md` and on the issues (as labels).
 - **Desktop (C, SDL2 via `libs/sqgui`):** SquirrelStation, SquirrelCAD,
   SquirrelGNSS, SquirrelSound (mic + PulseAudio/PipeWire loopback, GUI),
   SquirrelSuica (PC/SC, RC-S380 over libusb, GUI, CSV), SquirrelQR (files,
-  PNG, X11 capture, GUI, encoder), SquirrelCalc, SquirrelPaint, SquirrelGames,
+  PNG, X11 capture, V4L2 webcam, GUI, encoder), SquirrelCalc, SquirrelPaint, SquirrelGames,
   SquirrelDebug. Everything in S5 (the apps built here for Squirrel OS/2) is done.
 - **Shared cores:** `libs/sqdsp`, `libs/sqfelica`, `libs/sqqr`, `libs/sqmath`, `libs/sqgui`.
 - **Test gate:** `make test` (every lib and program, the Python SuicaAnalysis
@@ -82,7 +82,7 @@ and unit-test the Kotlin against stubs.
 4. ~~**SUICA-labels + SUICA-bus + FEL-pasmo-waon**~~ (done: SquirrelSuica 0.0.13).
 5. **PKG** (S3.5 + S4: Windows/macOS/Linux packages in CI), which unblocks
    **SND-wasapi**, **SND-macos**, **QR-capture-win-mac** and **QR-wayland**.
-6. **QR-webcam**.
+6. ~~**QR-webcam**~~ (done: V4L2 + synthetic CI frame).
 7. **S6 repo split** with Squirrel.
 
 ## Task cards
@@ -107,8 +107,9 @@ and unit-test the Kotlin against stubs.
   builds it and runs the capture test against a silent device (needs PKG).
 
 ### FEL-jni-smoke — JVM smoke test for `sqfelica_jni.c`  `status: done`
-- Host build of `sqfelica_jni.c` driven from `android/jni-smoke`, hooked into
-  `make test` (synthetic parity blocks only).
+- On `main` via #133 / #136 (S2 JNI box). Host build of `sqfelica_jni.c`
+  driven from `android/jni-smoke`, hooked into `make test` (synthetic parity
+  blocks only).
 
 ### FEL-pasmo-waon — PASMO / WAON history in C  `status: done` (with SUICA-labels/bus)
 - WAON 0x680b 32-byte history in Python, C (`sqf_parse_waon_*`) and the JNI
@@ -130,14 +131,18 @@ and unit-test the Kotlin against stubs.
   `CameraControl`; batch mode keeps scanning, de-duplicates by content and
   exports the list (share as text/CSV). Unit tests on the de-duplication.
 
-### QR-wayland / QR-capture-win-mac / QR-webcam — desktop capture  `cursor-codex`
+### QR-webcam — desktop camera capture  `status: done`
+- `--webcam` / `squirrelqr devices` on V4L2 (`webcam_v4l2.c`); Win/mac link
+  `webcam_stub.c` (`mf-stub` / `avf-stub`) until PKG. CI: `test_webcam` and
+  `webcam_smoke.sh` decode a synthetic frame via `--device @FILE` or
+  `QR_WEBCAM_FRAME` (no real camera).
+
+### QR-wayland / QR-capture-win-mac — screen capture  `cursor-codex`
 - **Files:** `squirrelqr/desktop/src/capture_*.c` (add `capture_portal.c` via the
   xdg-desktop-portal Screenshot API over D-Bus, `capture_win.c` with GDI/DXGI,
-  `capture_mac.m` with ScreenCaptureKit; webcam via V4L2 / Media Foundation /
-  AVFoundation).
+  `capture_mac.m` with ScreenCaptureKit).
 - **Acceptance:** `--select` works on GNOME Wayland; Windows and macOS builds
-  capture a region; `--webcam` decodes a QR shown to the camera. CI covers
-  the build on each OS and a decode from a synthetic frame.
+  capture a region. Needs PKG for Win/mac CI runners.
 
 ### PKG — Windows/macOS/Linux packages in CI (S3.5, S4)  `cursor-codex`
 - **Acceptance:** `.github/workflows/release.yml` builds a zip (or MSI) for

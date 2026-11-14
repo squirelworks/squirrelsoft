@@ -5,6 +5,7 @@ b="${1:?build dir}"
 q="$b/squirrelqr"
 "$q" --version | grep -q squirrelqr
 "$q" --help | grep -q -- --select
+"$q" --help | grep -q -- --webcam
 out=$("$q" "$b/fmt_P5.img")
 [ -n "$out" ]
 "$q" --json "$b/fmt_bmp24.img" | grep -q '"corners":\['

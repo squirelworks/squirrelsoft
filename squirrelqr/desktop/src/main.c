@@ -1,11 +1,12 @@
-/* SquirrelQR desktop: decode QR codes from image files or from a rectangle of
- * the screen, with Squirrel's own decoder (libs/sqqr). */
+/* SquirrelQR desktop: decode QR codes from image files, a rectangle of the
+ * screen, or a webcam frame, with Squirrel's own decoder (libs/sqqr). */
 #include "qrcapture.h"
 #include "qrdecode.h"
 #include "qrgui_run.h"
 #include "qrmake.h"
 #include "qrimage.h"
 #include "qrtext.h"
+#include "qrwebcam.h"
 #include "sqqr.h"
 #include "sqqr_content.h"
 
@@ -26,6 +27,8 @@ static void usage(FILE *f) {
             "       squirrelqr [options] --select      drag a rectangle on the screen, then decode it\n"
             "       squirrelqr [options] --screen      decode the whole screen\n"
             "       squirrelqr [options] --region X,Y,W,H\n"
+            "       squirrelqr [options] --webcam      decode a frame from the camera (V4L2 on Linux)\n"
+            "       squirrelqr devices                 list webcam devices\n"
             "       squirrelqr --gui [IMAGE]           a small window: select, screen, open, copy, make\n"
             "       squirrelqr --encode TEXT [--out FILE.png|.svg|.pgm]   make a QR code (- reads stdin)\n"
             "       squirrelqr --wifi SSID [--password P] [--security WPA|WEP|SAE|nopass] [--hidden] [--out ...]\n"
@@ -33,8 +36,9 @@ static void usage(FILE *f) {
             "options:\n"
             "  --json        print one JSON object per result (text, charset, version, corners)\n"
             "  --raw         write the payload bytes unchanged instead of UTF-8 text\n"
-            "  --wait SECS   keep capturing the screen rectangle until a code shows up\n"
-            "  --save FILE   also save each screen capture as a PGM image\n"
+            "  --wait SECS   keep capturing the screen or webcam until a code shows up\n"
+            "  --device PATH camera for --webcam (/dev/video0, or @FILE for a synthetic frame)\n"
+            "  --save FILE   also save each screen/webcam capture as a PGM image\n"
             "  --gui-frames N  close the window after N frames (for CI)\n"
             "  -v            print the symbol version and error correction to stderr\n"
             "  --details     after the text, what it is (Wi-Fi, contact, link, ...) and its fields\n"
@@ -46,9 +50,10 @@ static void usage(FILE *f) {
             "  --border N    quiet zone in modules (default 4)\n"
             "  --invert      terminal drawing for a light background\n"
             "\n"
-            "Screen capture back end: %s. Codes on screen need about 3 pixels per module.\n"
+            "Screen capture: %s. Webcam: %s. Codes need about 3 pixels per module.\n"
+            "CI / no camera: --device @shot.png or QR_WEBCAM_FRAME=shot.png --webcam.\n"
             "Exit status: 0 every input decoded, 1 a code was not found, 2 usage or I/O error.\n",
-            QR_VERSION, qr_capture_backend());
+            QR_VERSION, qr_capture_backend(), qr_webcam_backend());
 }
 
 typedef struct {
@@ -211,11 +216,39 @@ static int do_screen(const Opts *o, QrRect r, SqqrResult *res) {
     }
 }
 
+static int do_webcam(const Opts *o, const char *device, SqqrResult *res) {
+    char err[200];
+    struct timespec t0, t;
+    clock_gettime(CLOCK_MONOTONIC, &t0);
+    for (;;) {
+        QrImage img;
+        if (qr_webcam_grab(device, &img, err, sizeof err)) {
+            fprintf(stderr, "webcam: %s\n", err);
+            return 2;
+        }
+        if (o->save && qr_image_save_pgm(o->save, &img)) fprintf(stderr, "%s: cannot write\n", o->save);
+        int rc = qr_decode_gray(&img, res);
+        qr_image_free(&img);
+        if (rc == SQQR_OK) {
+            report(o, "webcam", res, 0, 0);
+            return 0;
+        }
+        clock_gettime(CLOCK_MONOTONIC, &t);
+        double elapsed = (double)(t.tv_sec - t0.tv_sec) + (double)(t.tv_nsec - t0.tv_nsec) / 1e9;
+        if (elapsed >= o->wait) {
+            fprintf(stderr, "webcam: %s\n", sqqr_strerror(rc));
+            return 1;
+        }
+        nap(0.3);
+    }
+}
+
 int main(int argc, char **argv) {
     Opts o = {0, 0, 0, 0, 0.0, NULL};
     const char *encode = NULL, *wifi = NULL, *password = NULL, *security = NULL, *out = NULL;
+    const char *device = NULL;
     int hidden = 0, level = SQQR_EC_M, scale = 8, border = 4, invert = 0;
-    int screen = 0, select = 0, nfiles = 0, gui = 0, gui_frames = 0;
+    int screen = 0, select = 0, webcam = 0, nfiles = 0, gui = 0, gui_frames = 0;
     QrRect r = {0, 0, 0, 0};
     char **files = argv + 1; /* file names are compacted in place; the write index never passes the read one */
     for (int i = 1; i < argc; i++) {
@@ -224,8 +257,11 @@ int main(int argc, char **argv) {
             usage(stdout);
             return 0;
         } else if (!strcmp(a, "--version")) {
-            printf("squirrelqr %s (capture: %s)\n", QR_VERSION, qr_capture_backend());
+            printf("squirrelqr %s (capture: %s, webcam: %s)\n", QR_VERSION, qr_capture_backend(),
+                   qr_webcam_backend());
             return 0;
+        } else if (!strcmp(a, "devices")) {
+            return qr_webcam_list(stdout) < 0 ? 2 : 0;
         } else if (!strcmp(a, "--json")) {
             o.json = 1;
         } else if (!strcmp(a, "--raw")) {
@@ -236,6 +272,10 @@ int main(int argc, char **argv) {
             screen = 1;
         } else if (!strcmp(a, "--select")) {
             select = 1;
+        } else if (!strcmp(a, "--webcam")) {
+            webcam = 1;
+        } else if (!strcmp(a, "--device") && i + 1 < argc) {
+            device = argv[++i];
         } else if (!strcmp(a, "--region") && i + 1 < argc) {
             char tail;
             if (sscanf(argv[++i], "%d,%d,%d,%d%c", &r.x, &r.y, &r.w, &r.h, &tail) != 4 || r.w < 1 || r.h < 1) {
@@ -287,7 +327,7 @@ int main(int argc, char **argv) {
         }
     }
     if (encode || wifi) {
-        if ((encode && wifi) || screen || select || gui || nfiles) {
+        if ((encode && wifi) || screen || select || webcam || gui || nfiles) {
             usage(stderr);
             return 2;
         }
@@ -298,7 +338,7 @@ int main(int argc, char **argv) {
         return do_encode(encode, wifi, password, security, hidden, level, out, scale, border, invert);
     }
     if (gui) {
-        if (screen || select || nfiles > 1) {
+        if (screen || select || webcam || nfiles > 1) {
             usage(stderr);
             return 2;
         }
@@ -308,7 +348,12 @@ int main(int argc, char **argv) {
         fprintf(stderr, "--json and --raw don't mix\n");
         return 2;
     }
-    if ((screen || select) == (nfiles > 0) || (screen && select)) {
+    if (device && !webcam) {
+        fprintf(stderr, "--device is for --webcam\n");
+        return 2;
+    }
+    int sources = (screen || select) + webcam + (nfiles > 0);
+    if (sources != 1 || (screen && select)) {
         usage(stderr);
         return 2;
     }
@@ -329,6 +374,8 @@ int main(int argc, char **argv) {
         }
     } else if (screen) {
         status = do_screen(&o, r, res);
+    } else if (webcam) {
+        status = do_webcam(&o, device, res);
     } else {
         for (int i = 0; i < nfiles; i++) {
             int s = do_file(&o, files[i], res);
