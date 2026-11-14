@@ -519,6 +519,17 @@ class SplitLayoutTest {
     }
 
     @Test
+    fun landscapeScopePaneKeepsFullHeightForTriggeredWaveform() {
+        // Scope draws in the spectrum pane; in landscape that pane is full
+        // height (side-by-side), so auto timebase still uses half the FFT.
+        val land = SpectrumControls.splitLayout(1920, 1080, SpectrumControls.SplitRatio.EVEN, landscape = true)
+        assertEquals(1080, land.spectrumHeight)
+        assertTrue(land.spectrumWidth < 1920)
+        assertEquals(1024, ScopeTrigger.autoSpan(2048))
+        assertTrue(ScopeTrigger.spanMs(1024, 48_000) in 20f..25f)
+    }
+
+    @Test
     fun oneRowPerPixelWithinCaps() {
         assertEquals(492, SpectrumControls.waterfallRowsFor(492))
         assertEquals(SpectrumControls.MIN_WATERFALL_ROWS, SpectrumControls.waterfallRowsFor(3))

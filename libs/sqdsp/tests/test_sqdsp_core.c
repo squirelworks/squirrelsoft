@@ -189,11 +189,64 @@ static void test_multires(void) {
     expect(fabs(level_near(db, n, fs, 10031.25) + 24.08) < 0.1, "one long FFT: 24 dB down");
 }
 
+/* Synthetic dB grid: bin k is at k Hz when fs == fft_size == nbins. */
+static void test_local_peaks(void) {
+    enum { N = 512 };
+    double spec[N];
+    double hz[8], db[8];
+    for (size_t i = 0; i < N; i++) spec[i] = -120.0;
+
+    /* Three local maxima. A@100 (-10), B@250 (-8, louder than A and ≥100 Hz
+     * away), C@175 (-5, loudest, between A and B). min_sep=100 Hz so C is
+     * within the window of both A and B. The kept list is loudest-first, so
+     * replacing only the first close neighbour used to leave C and A 75 Hz
+     * apart. */
+    spec[99] = -20.0;
+    spec[100] = -10.0;
+    spec[101] = -20.0;
+    spec[174] = -15.0;
+    spec[175] = -5.0;
+    spec[176] = -15.0;
+    spec[249] = -25.0;
+    spec[250] = -8.0;
+    spec[251] = -25.0;
+
+    size_t n = sqdsp_local_peaks(spec, N, (double)N, N, 1, N - 1, -100.0, 8, 100.0, hz, db);
+    expect(n == 1, "mid peak drops every close neighbour");
+    expect(n == 1 && fabs(hz[0] - 175.0) < 0.5 && fabs(db[0] + 5.0) < 1e-9,
+           "keeps the loudest mid peak");
+
+    /* Quieter mid peak must not displace either neighbour. */
+    spec[175] = -11.0;
+    n = sqdsp_local_peaks(spec, N, (double)N, N, 1, N - 1, -100.0, 8, 100.0, hz, db);
+    expect(n == 2, "quiet mid peak is skipped");
+    expect(n == 2 && fabs(hz[0] - 250.0) < 0.5 && fabs(hz[1] - 100.0) < 0.5,
+           "keeps the two outer peaks loudest-first");
+
+    /* Far peaks stay together. */
+    for (size_t i = 0; i < N; i++) spec[i] = -120.0;
+    spec[99] = -20.0;
+    spec[100] = -10.0;
+    spec[101] = -20.0;
+    spec[399] = -25.0;
+    spec[400] = -12.0;
+    spec[401] = -25.0;
+    n = sqdsp_local_peaks(spec, N, (double)N, N, 1, N - 1, -100.0, 8, 100.0, hz, db);
+    expect(n == 2 && fabs(hz[0] - 100.0) < 0.5 && fabs(hz[1] - 400.0) < 0.5,
+           "peaks farther than min_sep both kept");
+
+    expect(sqdsp_local_peaks(NULL, N, (double)N, N, 1, N - 1, -100.0, 8, 100.0, hz, db) == 0,
+           "NULL spectrum");
+    expect(sqdsp_local_peaks(spec, N, (double)N, N, 1, N - 1, -100.0, 0, 100.0, hz, db) == 0,
+           "max_n 0");
+}
+
 int main(void) {
     test_fft_vs_naive_dft();
     test_fft_impulse();
     test_octave_bands();
     test_multires();
+    test_local_peaks();
     if (failures) {
         fprintf(stderr, "%d sqdsp core failure(s)\n", failures);
         return 1;

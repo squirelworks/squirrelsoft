@@ -92,6 +92,11 @@ object SqDsp {
      * Loudest local maxima of a dB spectrum inside [fMin]..[fMax], via
      * `sqdsp_local_peaks` (the same logic as desktop `live_engine_peaks`).
      * Empty when the native core is missing — do not reimplement in Kotlin.
+     *
+     * Pass the display floor as [dbMin] (e.g. [SpectrumView.dbMin]). The JNI
+     * bridge raises the peak threshold by +10 dB internally (`dbMin + 10`),
+     * matching desktop `live_engine_peaks` — do **not** add +10 on the Kotlin
+     * side or peaks will be over-thresholded.
      */
     fun peaks(
         magDb: FloatArray,

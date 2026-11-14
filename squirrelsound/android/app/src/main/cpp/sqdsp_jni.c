@@ -18,7 +18,8 @@
  *
  * nativePeaks(magDb, sampleRate, fftSize, fMin, fMax, dbMin, maxN, minSepHz,
  * outHz, outDb) finds the loudest local maxima via sqdsp_local_peaks — the
- * same routine live_engine_peaks uses on the desktop.
+ * same routine live_engine_peaks uses on the desktop. The peak threshold is
+ * dbMin + 10 dB here; Kotlin callers must pass the raw display floor.
  */
 #include <jni.h>
 #include <math.h>
