@@ -4,8 +4,8 @@
 Real card data never goes into this repo, in any form. These dumps are
 invented from scratch: the IDm, PMm, dates, fares, balances, stations, shops,
 terminal IDs and every other byte come from the rules below and a fixed random
-seed. Station codes are taken from the public table in data/StationCode.csv so
-that names resolve.
+seed. Station codes are taken from the MIT-licensed table in
+data/StationCode.csv so that names resolve.
 
 Each card is a simulated FeliCa card (the same command set a phone or PaSoRi
 sends), walked by SquirrelSuicaAnalysis's own Analyzer, so the files have
@@ -229,10 +229,12 @@ def nanaco_card(rnd):
 
 
 def main():
-    rnd = random.Random(20240304)
+    # Separate streams so expanding the station table does not reshuffle nanaco.
+    rnd_suica = random.Random(20240304)
+    rnd_nanaco = random.Random(20240304 ^ 0x5EED)
     files = {
-        "demo-suica.json": dump(suica_card(rnd), "make_demo_dumps.py (made-up Suica)"),
-        "demo-nanaco.json": dump(nanaco_card(rnd), "make_demo_dumps.py (made-up nanaco)"),
+        "demo-suica.json": dump(suica_card(rnd_suica), "make_demo_dumps.py (made-up Suica)"),
+        "demo-nanaco.json": dump(nanaco_card(rnd_nanaco), "make_demo_dumps.py (made-up nanaco)"),
     }
     stale = []
     for name, d in files.items():

@@ -320,8 +320,8 @@ static void test_view(void) {
 
     /* Tiny station table (two named stops). */
     SqfStation rows[2] = {
-        {0, 0xE3, 0x59, "Co", "Line", "EnterStop"},
-        {0, 0xE3, 0x5E, "Co", "Line", "ExitStop"},
+        {0, 0xE3, 0x59, "Co", "Line", "EnterStop", ""},
+        {0, 0xE3, 0x5E, "Co", "Line", "ExitStop", ""},
     };
     SqsView v;
     sqs_view_build(&v, &card, rows, 2);
@@ -388,8 +388,8 @@ static void test_csv(void) {
     card.history[0].hour = -1;
     card.history[0].process = 0x01;
     SqfStation rows[2] = {
-        {0, 0xE3, 0x59, "Co", "Line", "EnterStop"},
-        {0, 0xE3, 0x5E, "Co", "Line", "ExitStop"},
+        {0, 0xE3, 0x59, "Co", "Line", "EnterStop", ""},
+        {0, 0xE3, 0x5E, "Co", "Line", "ExitStop", ""},
     };
 
     const char *path = "build/test_csv_out.csv";

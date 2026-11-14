@@ -176,12 +176,16 @@ def _area_code(region_byte: int, line: int, for_exit: bool) -> int:
     return (region_byte >> shift) & 0x3
 
 
+# company, line_name, station_name, note (note may be "")
+StationRow = Tuple[str, str, str, str]
+
+
 @lru_cache(maxsize=1)
-def _station_table() -> Dict[Tuple[int, int, int], Tuple[str, str, str]]:
-    """Load SFCardFan-style CSV shipped under squirrelsuica/data/."""
+def _station_table() -> Dict[Tuple[int, int, int], StationRow]:
+    """Load the shipped Saibane CSV under squirrelsuica/data/ (see data/README)."""
     here = Path(__file__).resolve().parent
     path = here / "data" / "StationCode.csv"
-    out: Dict[Tuple[int, int, int], Tuple[str, str, str]] = {}
+    out: Dict[Tuple[int, int, int], StationRow] = {}
     if not path.is_file():
         return out
     with path.open(encoding="utf-8") as f:
@@ -200,27 +204,54 @@ def _station_table() -> Dict[Tuple[int, int, int], Tuple[str, str, str]]:
                 (row.get("company") or "").strip(),
                 (row.get("line_name") or "").strip(),
                 (row.get("station_name") or "").strip(),
+                (row.get("note") or "").strip(),
             )
     return out
 
 
-def lookup_station(area: int, line: int, station: int) -> Optional[str]:
+def lookup_station_row(area: int, line: int, station: int) -> Optional[StationRow]:
     if line == 0 and station == 0:
         return None
-    row = _station_table().get((area & 0xFF, line & 0xFF, station & 0xFF))
+    return _station_table().get((area & 0xFF, line & 0xFF, station & 0xFF))
+
+
+def lookup_station(area: int, line: int, station: int) -> Optional[str]:
+    row = lookup_station_row(area, line, station)
     return row[2] if row else None
 
 
-def resolve_rail(region_byte: int, line: int, station: int, for_exit: bool) -> Optional[str]:
+def resolve_rail_row(
+    region_byte: int, line: int, station: int, for_exit: bool
+) -> Optional[StationRow]:
     if line == 0 and station == 0:
         return None
     area = _area_code(region_byte, line, for_exit)
-    name = lookup_station(area, line, station)
-    if name:
-        return name
+    row = lookup_station_row(area, line, station)
+    if row and row[2]:
+        return row
     if area != 0:
-        return lookup_station(0, line, station)
+        row = lookup_station_row(0, line, station)
+        if row and row[2]:
+            return row
     return None
+
+
+def resolve_rail(region_byte: int, line: int, station: int, for_exit: bool) -> Optional[str]:
+    row = resolve_rail_row(region_byte, line, station, for_exit)
+    return row[2] if row else None
+
+
+def format_station_label(row: StationRow, *, with_line: bool = True, with_note: bool = False) -> str:
+    """Richer display label: station, optional line, optional note."""
+    _company, line_name, station_name, note = row
+    if not station_name:
+        return ""
+    label = station_name
+    if with_line and line_name:
+        label = f"{station_name}（{line_name}）"
+    if with_note and note:
+        label = f"{label} [{note}]"
+    return label
 
 
 def _process_label(process: int) -> str:

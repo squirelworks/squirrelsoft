@@ -248,6 +248,7 @@ int sqf_station_area(uint8_t region, uint8_t line, int for_exit) {
 
 enum { COL_AREA, COL_LINE, COL_STATION, COL_COMPANY, COL_LINE_NAME, COL_STATION_NAME, NCOLS };
 static const char *const station_cols[NCOLS] = {"area", "line", "station", "company", "line_name", "station_name"};
+static const char *const station_note_col = "note";
 
 static int is_space(char c) { return c == ' ' || c == '\t' || c == '\r'; }
 
@@ -298,7 +299,7 @@ static int cmp_station(const void *a, const void *b) {
 long sqf_station_index(char *csv, size_t len, SqfStation *rows, size_t cap) {
     char *p = csv, *end = csv + len;
     if (len >= 3 && (uint8_t)p[0] == 0xEF && (uint8_t)p[1] == 0xBB && (uint8_t)p[2] == 0xBF) p += 3;
-    int col[NCOLS], header = 1, ncol = 0;
+    int col[NCOLS], col_note = -1, header = 1, ncol = 0;
     size_t n = 0;
     while (p < end) {
         char *nl = p;
@@ -316,6 +317,13 @@ long sqf_station_index(char *csv, size_t len, SqfStation *rows, size_t cap) {
                 if (col[c] < 0) return -1;
                 if (col[c] + 1 > ncol) ncol = col[c] + 1;
             }
+            col_note = -1;
+            for (int i = 0; i < nf; i++)
+                if (strcmp(f[i], station_note_col) == 0) {
+                    col_note = i;
+                    if (col_note + 1 > ncol) ncol = col_note + 1;
+                    break;
+                }
             header = 0;
         } else if (nf >= ncol) {
             int a = hex_byte(f[col[COL_AREA]]), l = hex_byte(f[col[COL_LINE]]), s = hex_byte(f[col[COL_STATION]]);
@@ -327,6 +335,7 @@ long sqf_station_index(char *csv, size_t len, SqfStation *rows, size_t cap) {
                 rows[n].company = f[col[COL_COMPANY]];
                 rows[n].line_name = f[col[COL_LINE_NAME]];
                 rows[n].station_name = f[col[COL_STATION_NAME]];
+                rows[n].note = (col_note >= 0 && col_note < nf) ? f[col_note] : "";
                 n++;
             }
         }
