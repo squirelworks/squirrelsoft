@@ -1,13 +1,113 @@
-/* sqserial: a receiver's serial port, raw, or a recorded stream (POSIX). Original code. */
+/* sqserial: a receiver's serial port, raw, or a recorded stream. Original code. */
+#ifndef _WIN32
 #define _DEFAULT_SOURCE /* the faster baud rates and CRTSCTS beside POSIX termios */
+#endif
 #include "sqrecv.h"
 
 #include <errno.h>
 #include <fcntl.h>
 #include <stdio.h>
 #include <string.h>
+
+#ifdef _WIN32
+#include <io.h>
+#include <windows.h>
+#else
 #include <termios.h>
 #include <unistd.h>
+#endif
+
+#ifdef _WIN32
+
+static int configure_comm(int fd, int baud, const char *path, char *err, size_t cap) {
+    HANDLE h = (HANDLE)_get_osfhandle(fd);
+    if (h == INVALID_HANDLE_VALUE) {
+        snprintf(err, cap, "%s: not a serial port", path);
+        return -1;
+    }
+    DCB dcb;
+    memset(&dcb, 0, sizeof dcb);
+    dcb.DCBlength = sizeof dcb;
+    if (!GetCommState(h, &dcb)) {
+        /* a recording (pipe or ordinary file): leave it as it is */
+        return 0;
+    }
+    dcb.BaudRate = (DWORD)baud;
+    dcb.ByteSize = 8;
+    dcb.Parity = NOPARITY;
+    dcb.StopBits = ONESTOPBIT;
+    dcb.fBinary = TRUE;
+    dcb.fParity = FALSE;
+    dcb.fOutxCtsFlow = FALSE;
+    dcb.fOutxDsrFlow = FALSE;
+    dcb.fDtrControl = DTR_CONTROL_ENABLE;
+    dcb.fRtsControl = RTS_CONTROL_ENABLE;
+    dcb.fOutX = FALSE;
+    dcb.fInX = FALSE;
+    dcb.fNull = FALSE;
+    dcb.fAbortOnError = FALSE;
+    if (!SetCommState(h, &dcb)) {
+        snprintf(err, cap, "%s: cannot set baud %d", path, baud);
+        return -1;
+    }
+    COMMTIMEOUTS to;
+    memset(&to, 0, sizeof to);
+    to.ReadIntervalTimeout = 0;
+    to.ReadTotalTimeoutMultiplier = 0;
+    to.ReadTotalTimeoutConstant = 0;
+    to.WriteTotalTimeoutMultiplier = 0;
+    to.WriteTotalTimeoutConstant = 0;
+    SetCommTimeouts(h, &to);
+    PurgeComm(h, PURGE_RXCLEAR | PURGE_TXCLEAR);
+    return 0;
+}
+
+int sqrx_serial_open(const char *path, int baud, int write, char *err, size_t cap) {
+    if (!strcmp(path, "-")) {
+        if (write) {
+            snprintf(err, cap, "cannot configure a receiver on standard input");
+            return -1;
+        }
+        return 0;
+    }
+    int fd = open(path, write ? O_RDWR | O_BINARY : O_RDONLY | O_BINARY);
+    if (fd < 0) {
+        snprintf(err, cap, "%s: %s", path, strerror(errno));
+        return -1;
+    }
+    if (configure_comm(fd, baud, path, err, cap)) {
+        close(fd);
+        return -1;
+    }
+    return fd;
+}
+
+long sqrx_serial_read(int fd, unsigned char *buf, size_t cap) {
+    for (;;) {
+        int n = read(fd, buf, (unsigned)cap);
+        if (n < 0 && errno == EINTR) continue;
+        return (long)n;
+    }
+}
+
+int sqrx_serial_write(int fd, const unsigned char *buf, size_t n) {
+    while (n > 0) {
+        int w = write(fd, buf, (unsigned)n);
+        if (w < 0 && errno == EINTR) continue;
+        if (w <= 0) return -1;
+        buf += w;
+        n -= (size_t)w;
+    }
+    HANDLE h = (HANDLE)_get_osfhandle(fd);
+    if (h != INVALID_HANDLE_VALUE) FlushFileBuffers(h);
+    return 0;
+}
+
+void sqrx_serial_close(int fd) {
+    if (fd > 0) close(fd);
+}
+
+#else /* POSIX */
 
 static int speed_of(int baud, speed_t *out) {
     static const struct {
@@ -105,3 +205,5 @@ int sqrx_serial_write(int fd, const unsigned char *buf, size_t n) {
 void sqrx_serial_close(int fd) {
     if (fd > 0) close(fd);
 }
+
+#endif

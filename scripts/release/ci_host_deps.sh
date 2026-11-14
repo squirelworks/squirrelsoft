@@ -27,7 +27,7 @@ case "$os" in
     # Caller has already set up MSYS2 UCRT64; install ucrt packages with pacman.
     # mingw64 no longer ships libusb; UCRT64 is the supported environment.
     pacman -S --noconfirm --needed \
-      make zip git python \
+      make zip git python diffutils \
       mingw-w64-ucrt-x86_64-gcc \
       mingw-w64-ucrt-x86_64-SDL2 \
       mingw-w64-ucrt-x86_64-SDL2_ttf \
