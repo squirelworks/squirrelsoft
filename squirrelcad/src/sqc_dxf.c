@@ -414,7 +414,8 @@ static void write_ent(FILE *f, const SqcDrawing *dwg, const SqcEntity *e) {
 /* Layers with their colours (negative when off), block definitions, then
  * the model-space entities, in R12 (AC1009) ASCII DXF. */
 int sqc_export_dxf(const SqcDrawing *dwg, const char *path) {
-    FILE *f = fopen(path, "w");
+    /* binary so MinGW/Windows keep canonical LF (text mode would emit CRLF) */
+    FILE *f = fopen(path, "wb");
     if (!f) return -1;
 
     fprintf(f, "0\nSECTION\n2\nHEADER\n");
