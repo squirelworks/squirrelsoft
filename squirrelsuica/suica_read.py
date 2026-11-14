@@ -230,7 +230,28 @@ def format_text(card: FelicaCard) -> str:
     return "\n".join(lines)
 
 
+def _configure_stdio_utf8() -> None:
+    """Force UTF-8 on stdout/stderr.
+
+    On Windows the default is often cp1252. Demo and live text include Japanese
+    station names (and ¥ / notes); without UTF-8, ``print(format_text(...))``
+    raises UnicodeEncodeError and ``make test`` pipes fail.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        reconf = getattr(stream, "reconfigure", None)
+        if reconf is None:
+            continue
+        enc = (getattr(stream, "encoding", None) or "").lower().replace("-", "")
+        if enc == "utf8":
+            continue
+        try:
+            reconf(encoding="utf-8")
+        except (OSError, ValueError, AttributeError):
+            pass
+
+
 def main(argv: Optional[List[str]] = None) -> int:
+    _configure_stdio_utf8()
     ap = argparse.ArgumentParser(description="SquirrelSuica multi-brand FeliCa reader")
     ap.add_argument(
         "--demo",

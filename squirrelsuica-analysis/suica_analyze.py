@@ -447,7 +447,27 @@ def history_text(dump: Dict, fp=None) -> str:
     return "\n".join(out).rstrip("\n") + "\n"
 
 
+def _configure_stdio_utf8() -> None:
+    """Force UTF-8 on stdout/stderr.
+
+    Windows often defaults to cp1252; history text and ensure_ascii=False JSON
+    can include Japanese, which must stay intact for pipes and make test.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        reconf = getattr(stream, "reconfigure", None)
+        if reconf is None:
+            continue
+        enc = (getattr(stream, "encoding", None) or "").lower().replace("-", "")
+        if enc == "utf8":
+            continue
+        try:
+            reconf(encoding="utf-8")
+        except (OSError, ValueError, AttributeError):
+            pass
+
+
 def main(argv: Optional[List[str]] = None) -> int:
+    _configure_stdio_utf8()
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--demo", action="store_true", help="analyse the built-in fake card")
     ap.add_argument("--device", default="usb", help="nfcpy device path (default: usb)")
