@@ -1,8 +1,8 @@
 # SquirrelSoft roadmap
 
-State as of `main` at `0449284` (2026-11-05). Android native apps (Kotlin, Android Views, CameraX/ML Kit, AudioRecord, NfcF):
+State as of `main` at `df81f23` (2026-11-14). Android native apps (Kotlin, Android Views, CameraX/ML Kit, AudioRecord, NfcF):
 **SquirrelSuica 0.0.12**, **SquirrelSuicaAnalysis 0.0.3**, **SquirrelSound 0.0.13**, **SquirrelQR 0.1.6**, all on Play closed testing.
-SquirrelSound **0.0.14** (#81) is on `main` and not yet published.
+SquirrelSound **0.0.14** (#81 and the Android parity work since) is on `main` and not yet published *(Squirrel)*.
 Desktop C tools: SquirrelStation, SquirrelCAD, SquirrelGNSS, `sqdsp` + live SDL spectrum, and the new desktop readers
 `squirrelsuica/desktop/` (PC/SC) and `squirrelqr/desktop/`. Shared C cores in `libs/` (`sqdsp`, `sqfelica`, `sqqr`, `sqgui`).
 The SquirrelQR PWA is retired (`squirrelqr/web-demo/`, not a product). Play scripts in `scripts/`, CI in `.github/workflows/`.
@@ -12,6 +12,16 @@ Principles: original code only; each app = portable core + thin native front-end
 every committed dump is synthetic (`squirrelsuica/tests/fixtures/demo-*.json`, #75).
 
 Every item is a checkbox. Tick it in the PR that merges its last piece. Nested boxes are PR-sized steps.
+
+## Hand-off status (2026-11-14)
+
+The remaining work is left for Cursor / Codex. **[HANDOFF.md](HANDOFF.md)** has a card for every open item
+(files, acceptance, how to test) and the suggested order; **[docs/CONTINUANCE.md](docs/CONTINUANCE.md)** is
+the plan beyond it for the whole suite (this repo, squirrelbios, squirrel-os2). In this file: `- [x]` is done
+on `main`; `- [ ]` is **open for Cursor/Codex**; *(in progress)* means a branch exists, finish it rather than
+redo it; *(Squirrel)* means only the owner can do it (Play Console, real cards and readers, creating repos).
+The same states are labels on the GitHub issues (`status: done`, `status: in progress`, `cursor-codex`,
+`needs: squirrel`). Nothing is in progress at hand-off: no open PRs, no unmerged branches.
 
 ## S0 — Fix what users hit today (0.0.9 / 0.1.6)
 - [x] S0.1 Suica history block-list encoding fix + reader mode on a background thread (#33, #36, #38; issue 02).
@@ -72,7 +82,7 @@ Every item is a checkbox. Tick it in the PR that merges its last piece. Nested b
   - [ ] Windows and macOS capture
   - [x] Small GUI window on `libs/sqgui` (`--gui`): select, whole screen, open, preview with outline, copy
   - [ ] Webcam
-- [ ] S3.5 Windows/macOS/Linux packaging (MSI/zip, .app, AppImage/deb) built in CI.
+- [ ] S3.5 (PKG) Windows/macOS/Linux packaging (MSI/zip, .app, AppImage/deb) built in CI.
 
 ## S4 — CI and releases
 - [x] `.github/workflows/ci.yml`: `make test`, and build plus unit tests for every Android app (debug) on ubuntu (#47).
@@ -106,7 +116,7 @@ Every item is a checkbox. Tick it in the PR that merges its last piece. Nested b
 - Each designed so its core compiles for Squirrel OS/2 (freestanding C, no libc beyond a small shim).
 
 ## S6 — Repo split (#32)
-- [ ] When an app has its own core lib, desktop + Android front-ends and CI: move to `squirrelsoft-suica`, `squirrelsoft-soundanalysis`, `squirrelsoft-qr`, `squirrelsoft-cad` (Station+CAD), `squirrelsoft-gnss`, `squirrelsoft-calc`, `squirrelsoft-games`, keeping history (`git filter-repo` by the human). `squirrelsoft` stays as the umbrella with shared libs and Play scripts. The human performs the actual repo creation.
+- [ ] *(Squirrel creates the repos; Cursor/Codex prepares the tree)* When an app has its own core lib, desktop + Android front-ends and CI: move to `squirrelsoft-suica`, `squirrelsoft-soundanalysis`, `squirrelsoft-qr`, `squirrelsoft-cad` (Station+CAD), `squirrelsoft-gnss`, `squirrelsoft-calc`, `squirrelsoft-games`, keeping history (`git filter-repo` by the human). `squirrelsoft` stays as the umbrella with shared libs and Play scripts. The human performs the actual repo creation.
 
 ## Ongoing per app
 - SquirrelSuica
