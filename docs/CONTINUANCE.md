@@ -168,7 +168,7 @@ and `grapher-flake` branches show this has already bitten).
 
 1. Releases for what is already on `main` (M1), including the compatibility matrix.
 2. Short open cards that finish milestones: OS/2 2.3-bevel-default and
-   2.7-diskutil; BIOS F3-DNS and F2-CXL; Sound landscape/scope/peaks; FEL-jni-smoke.
+   2.7-diskutil; BIOS F3-DNS and F2-CXL; Sound landscape/scope/peaks.
 3. Decide 3a and 3b, then add `docs_lint.py` (3c) and sharded CI (3d).
 4. OS/2 Generation 2 (2.5, 2.6, W.2–W.6) with the `sqgui` back end for the OS.
 5. OS/2 64-bit (2.8-pae, 2.9) together with the signed UEFI boot on SquirrelBIOS (M3).

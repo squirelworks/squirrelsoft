@@ -57,10 +57,10 @@ The same states are labels on the GitHub issues (`status: done`, `status: in pro
   - [x] Step 3: factoring over the rationals, partial fractions, symbolic integrals; `sqcalc --factor/--apart/--antideriv`, SquirrelCalc `factor`, `apart`, `integrate EXPR`
   - [x] Step 4: units: dimensioned arithmetic and conversion (`5 ft to m`, `5 kg * 9.81 m/s^2` = 49.05 N, `deg to dms`); `sqcalc --units`, SquirrelCalc `units`/`convert` lines and any `... to UNIT` line
 - [x] `libs/sqgui` (C): tiny immediate-mode widget layer over SDL2 for desktop, designed to port to Squirrel OS/2's wm/gfx: a 32-bit canvas core with no OS calls, Warp-grey widgets, the OS/2 5x7 font, and an SDL2 window back end.
-- [ ] JNI smoke tests for every Android app that uses a core (each lib already has `make test` unit tests).
+- [x] JNI smoke tests for every Android app that uses a core (each lib already has `make test` unit tests).
   - [x] SquirrelQR: `make test` builds `sqqr_jni.c` for the host and drives it from a JVM (`squirrelqr/android/jni-smoke`)
   - [x] SquirrelSound: the same for `sqdsp_jni.c` (`squirrelsound/android/jni-smoke`)
-  - [ ] SquirrelSuica analysis (`sqfelica_jni.c`)
+  - [x] SquirrelSuica analysis (`sqfelica_jni.c`) (`squirrelsuica-analysis/android/jni-smoke`)
 
 ## S3 — Native front-ends, desktop parity (#30, #31)
 - [x] S3.1 Retire the SquirrelQR PWA as a product: moved to `squirrelqr/web-demo/` with a "not a product" README (#66).
