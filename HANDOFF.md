@@ -26,7 +26,8 @@ Used here, in `ROADMAP.md` and on the issues (as labels).
 - **Android (Play closed testing):** SquirrelSuica 0.0.12, SquirrelSuicaAnalysis
   0.0.3, SquirrelQR 0.1.6, SquirrelSound 0.0.13 on Play; SquirrelSound **0.0.14**
   is on `main` (full-screen Live tab, Settings tab, Android octave bars,
-  WAV record, calibration) and waits for Squirrel to upload it.
+  WAV record, calibration) and waits for Squirrel to upload it. SquirrelSound
+  **0.0.15** (landscape split, scope, peak labels) is the next upload after 0.0.14.
 - **Desktop (C, SDL2 via `libs/sqgui`):** SquirrelStation, SquirrelCAD,
   SquirrelGNSS, SquirrelSound (mic + PulseAudio/PipeWire loopback, GUI),
   SquirrelSuica (PC/SC, RC-S380 over libusb, GUI, CSV), SquirrelQR (files,
@@ -73,8 +74,8 @@ and unit-test the Kotlin against stubs.
 
 ## Suggested order
 
-1. **SND-landscape + SND-scope + SND-peaks** (finishes #28, one PR, SquirrelSound 0.0.15).
-2. **FEL-jni-smoke** (finishes the S2 JNI box).
+1. **FEL-jni-smoke** (finishes the S2 JNI box).
+2. ~~SND-landscape + SND-scope + SND-peaks~~ (done: SquirrelSound 0.0.15).
 3. **QR-torch-zoom + QR-batch** (SquirrelQR 0.1.7).
 4. **SUICA-labels + SUICA-bus + FEL-pasmo-waon** (SquirrelSuica 0.0.13).
 5. **PKG** (S3.5 + S4: Windows/macOS/Linux packages in CI), which unblocks
@@ -84,25 +85,17 @@ and unit-test the Kotlin against stubs.
 
 ## Task cards
 
-### SND-landscape — side-by-side layout in landscape  `cursor-codex` (#28)
-- **Files:** `squirrelsound/android/app/src/main/java/works/squirrel/sound/MainActivity.kt`,
-  `SpectrumView.kt`, `WaterfallRows.kt`, `res/layout/` (add `res/layout-land/`).
-- **Acceptance:** in landscape the live spectrum is on the left and the
-  LOFARgram on the right with the same split ratios (50/50, 40/60, 60/40);
-  the waterfall keeps one row per pixel and its time axis; rotating does not
-  restart capture. A JVM unit test covers the split geometry for both orientations.
+### SND-landscape — side-by-side layout in landscape  `status: done` (#28)
+- Done in 0.0.15: landscape spectrum|LOFARgram, same split ratios, one row per
+  pixel, `configChanges` so rotate does not restart capture; `SplitLayoutTest`.
 
-### SND-scope — optional oscilloscope in the top half on Android  `cursor-codex` (#28)
-- Desktop already has it (`squirrelsound/src/live_view_*.c`, "Desktop scope view").
-- **Acceptance:** a Settings switch replaces the top-half spectrum with a
-  triggered time-domain trace (rising-edge trigger, auto timebase); unit test
-  on the trigger search over a synthetic sine.
+### SND-scope — optional oscilloscope in the top half on Android  `status: done` (#28)
+- Done in 0.0.15: Settings scope switch, rising-edge trigger + auto timebase;
+  `ScopeTriggerTest` on a synthetic sine.
 
-### SND-peaks — peak hold markers on Android  `cursor-codex`
-- Reuse the desktop's `live_engine_peaks` logic through `SqDsp.kt` / `sqdsp_jni.c`
-  (expose it in the JNI bridge) rather than re-implementing it in Kotlin.
-- **Acceptance:** labelled peaks on the live or held trace; the
-  `squirrelsound/android/jni-smoke` test calls the new JNI entry.
+### SND-peaks — peak hold markers on Android  `status: done`
+- Done in 0.0.15: `sqdsp_local_peaks` via `SqDsp.peaks` / `nativePeaks`; labelled
+  peaks on the live or held trace; `jni-smoke` calls the new JNI entry.
 
 ### SND-wasapi / SND-macos — system audio on Windows and macOS  `cursor-codex`
 - **Files:** `squirrelsound/src/live_audio.c` (add `live_audio_wasapi.c`,
@@ -164,5 +157,5 @@ and unit-test the Kotlin against stubs.
 
 - #24, #27, #29 (implementation done), #85, #86, #87 (S3.3 steps merged), and
   the probes #83, #84 are closed with this hand-off.
-- #28 stays open for SND-landscape and SND-scope. #30, #31, #32 (epics) and
-  #88 (forward plan) stay open.
+- #28 can close once 0.0.15 lands (landscape + scope done; peaks too). #30, #31,
+  #32 (epics) and #88 (forward plan) stay open.

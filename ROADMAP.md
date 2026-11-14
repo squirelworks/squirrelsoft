@@ -3,6 +3,7 @@
 State as of `main` at `df81f23` (2026-11-14). Android native apps (Kotlin, Android Views, CameraX/ML Kit, AudioRecord, NfcF):
 **SquirrelSuica 0.0.12**, **SquirrelSuicaAnalysis 0.0.3**, **SquirrelSound 0.0.13**, **SquirrelQR 0.1.6**, all on Play closed testing.
 SquirrelSound **0.0.14** (#81 and the Android parity work since) is on `main` and not yet published *(Squirrel)*.
+SquirrelSound **0.0.15** finishes #28 (landscape, scope) plus Android peak labels.
 Desktop C tools: SquirrelStation, SquirrelCAD, SquirrelGNSS, `sqdsp` + live SDL spectrum, and the new desktop readers
 `squirrelsuica/desktop/` (PC/SC) and `squirrelqr/desktop/`. Shared C cores in `libs/` (`sqdsp`, `sqfelica`, `sqqr`, `sqgui`).
 The SquirrelQR PWA is retired (`squirrelqr/web-demo/`, not a product). Play scripts in `scripts/`, CI in `.github/workflows/`.
@@ -28,8 +29,8 @@ The same states are labels on the GitHub issues (`status: done`, `status: in pro
 - [x] S0.2 SquirrelSound LOFARgram span actually sets the scroll rate (#35, closes #29).
 - [x] S0.3 SquirrelSound levels and colour: true dBFS, black-floor colour map, −120…−20 dB with Auto, mic source picker and gain (#43, #44, #45; #27).
 - [x] S0.4 SquirrelSound split layout: 50/50 default, 40/60 and 60/40, one waterfall row per pixel, time axis (#46; #28). The Live tab gives the plot the whole screen and the controls move to a Settings tab (#81, 0.0.14).
-  - [ ] Landscape side-by-side layout (#28)
-  - [ ] Optional oscilloscope view in the top half (#28)
+  - [x] Landscape side-by-side layout (#28)
+  - [x] Optional oscilloscope view in the top half (#28)
 - [x] S0.5 SquirrelQR overlay mapping + fixed framing guide default, tracking optional (#37).
 - [x] Waterfall / Fountain direction option, Android and desktop (#42).
 
@@ -127,9 +128,9 @@ The same states are labels on the GitHub issues (`status: done`, `status: in pro
   - [x] Export CSV (desktop `--csv` / `--csv-file`, #87)
 - SquirrelSound
   - [x] Multi-resolution FFT (desktop: `sqdsp_multires_*`, MR / `--multires`)
-  - [ ] Peak hold markers
+  - [x] Peak hold markers
     - [x] Desktop: labelled peaks on the live or held trace (`live_engine_peaks`)
-    - [ ] Android
+    - [x] Android: labelled peaks via `SqDsp.peaks` / `sqdsp_local_peaks` JNI (0.0.15)
   - [x] Octave / 1-3 octave bars
     - [x] Shared core: `sqdsp_octave_bands` / `sqdsp_band_levels_db` (IEC 61260 base 10, ENBW-corrected); desktop Octave and 1/3 Oct views
     - [x] Android: Octave and 1/3 octave views through the JNI bridge, with band hold
