@@ -583,7 +583,8 @@ static void write_el(FILE *f, const SqsDesign *d, const SqsElement *e) {
  * text, 3D polylines for polylines, shapes and curves, polyface meshes for
  * meshes and solids, and INSERTs for placed cells. R12 (AC1009) ASCII DXF. */
 int sqs_export_dxf(const SqsDesign *d, const char *path) {
-    FILE *f = fopen(path, "w");
+    /* binary so MinGW/Windows keep canonical LF (text mode would emit CRLF) */
+    FILE *f = fopen(path, "wb");
     if (!f) return -1;
 
     fprintf(f, "0\nSECTION\n2\nHEADER\n");

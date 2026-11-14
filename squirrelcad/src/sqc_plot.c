@@ -119,7 +119,8 @@ static void plot_ent(const SqcEntity *e, const SqcLayer *L, void *ctx) {
 }
 
 int sqc_plot_svg(const SqcDrawing *dwg, const SqcSheet *sheet, const char *path) {
-    FILE *f = fopen(path, "w");
+    /* binary so MinGW/Windows keep canonical LF */
+    FILE *f = fopen(path, "wb");
     if (!f) return -1;
     double W = sheet->width_mm, H = sheet->height_mm;
     /* the viewport: inside the border, above the title block's band */
