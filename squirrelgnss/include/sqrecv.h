@@ -14,7 +14,7 @@
  *
  * Writers build the same messages, for configuring a receiver (CFG-MSG)
  * and for synthetic test streams. C11, no allocation; the serial port is
- * POSIX (termios).
+ * POSIX (termios) or Win32 (CreateFile / DCB) on Windows.
  */
 #ifndef SQRECV_H
 #define SQRECV_H

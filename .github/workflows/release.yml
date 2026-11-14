@@ -173,7 +173,7 @@ jobs:
           msystem: UCRT64
           update: true
           install: >-
-            make zip git python mingw-w64-ucrt-x86_64-gcc
+            make zip git python diffutils mingw-w64-ucrt-x86_64-gcc
             mingw-w64-ucrt-x86_64-SDL2 mingw-w64-ucrt-x86_64-SDL2_ttf
             mingw-w64-ucrt-x86_64-pkgconf mingw-w64-ucrt-x86_64-libusb
 
@@ -289,7 +289,7 @@ jobs:
           msystem: UCRT64
           update: true
           install: >-
-            make zip git python
+            make zip git python diffutils
             mingw-w64-ucrt-x86_64-gcc
             mingw-w64-ucrt-x86_64-SDL2
             mingw-w64-ucrt-x86_64-SDL2_ttf

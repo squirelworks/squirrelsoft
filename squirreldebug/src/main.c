@@ -119,7 +119,10 @@ static int load_symbols(const char *path) {
 int main(int argc, char **argv) {
     const char *tcp = NULL, *serial = NULL, *qemu = NULL, *snapshot = NULL;
     int frames = 0, batch = 0, mode = 0;
+#ifndef _WIN32
     signal(SIGPIPE, SIG_IGN);
+#endif
+
     for (int i = 1; i < argc; i++) {
         const char *a = argv[i];
         int more = i + 1 < argc;
