@@ -5,12 +5,15 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from felica_parse import (
+    _station_table,
     demo_nanaco,
     demo_suica,
     demo_suica_attrs,
     demo_waon,
+    format_station_label,
     hist_waon,
     lookup_station,
+    lookup_station_row,
     nanaco_balance,
     parse_history_block,
     parse_history_blocks,
@@ -60,6 +63,15 @@ def main() -> int:
 
     expect(lookup_station(0, 0xE3, 0x59) == "乃木坂", "station 乃木坂")
     expect(lookup_station(0, 0xE3, 0x5E) == "代々木上原", "station 代々木上原")
+    expect(len(_station_table()) > 6000, "richer MIT station table")
+    tokyo = lookup_station_row(0, 0x01, 0x01)
+    expect(tokyo is not None and tokyo[2] == "東京", "tokyo row")
+    expect(tokyo is not None and "連絡" in tokyo[3], f"tokyo note {tokyo[3] if tokyo else None}")
+    expect(
+        format_station_label(tokyo, with_line=True, with_note=True).startswith("東京"),
+        "tokyo richer label",
+    )
+    expect(lookup_station(0, 0x01, 0x06) == "高輪ゲートウェイ", "takanawa gateway")
 
     # Qiita public fixture
     hex_s = "160100042499e359e35e710b001b0800"
@@ -148,7 +160,7 @@ def main() -> int:
     attrs = service_blocks("demo-suica.json", "0x0003", "0x008b")
     entries = parse_history_blocks(hist)
     expect(len(entries) == 20, f"demo suica: {len(entries)} entries")
-    expect(suica_balance(hist[0], attrs[0]) == entries[0].balance_yen == 5456, "demo suica balance")
+    expect(suica_balance(hist[0], attrs[0]) == entries[0].balance_yen == 5986, "demo suica balance")
     kinds = [e.kind for e in entries]
     expect((kinds.count("train"), kinds.count("sale"), kinds.count("bus"), kinds.count("charge")) == (9, 6, 2, 3),
            f"demo suica kinds {kinds}")
@@ -194,7 +206,7 @@ def main() -> int:
     nh = service_blocks("demo-nanaco.json", "0xfe00", "0x564f")
     nb = service_blocks("demo-nanaco.json", "0xfe00", "0x5597")
     ne = parse_nanaco_history_blocks(nh)
-    expect(nanaco_balance(nb[0]) == ne[0].balance_yen == 3030, f"demo nanaco balance {nanaco_balance(nb[0])}")
+    expect(nanaco_balance(nb[0]) == ne[0].balance_yen == 4208, f"demo nanaco balance {nanaco_balance(nb[0])}")
     expect([e.kind for e in ne] == ["sale", "other", "sale", "sale", "charge"], f"demo nanaco kinds {[e.kind for e in ne]}")
 
     if fails:

@@ -161,17 +161,19 @@ int sqf_station_area(uint8_t region, uint8_t line, int for_exit);
 typedef struct {
     uint8_t area, line, station;
     const char *company, *line_name, *station_name; /* UTF-8, inside the CSV buffer */
+    const char *note; /* optional; "" when the CSV has no note column or an empty field */
 } SqfStation;
 
 /* Index a StationCode.csv held in a caller-owned writable buffer of len + 1
  * bytes (csv[len] is scratch). Field separators and line ends are overwritten
- * with NULs, so the buffer must outlive rows. Columns are found by the header names area, line, station,
- * company, line_name, station_name (any order; a UTF-8 BOM is skipped). Codes
- * are hex 00..FF; rows with a bad code are skipped, and for a repeated code the
- * first row wins, as in felica_parse.py. Fields are trimmed; quoting is not
- * supported (the shipped table has none). rows ends up sorted by code.
- * Returns the number of rows, or -1 if the header lacks a column or the table
- * has more than cap rows. */
+ * with NULs, so the buffer must outlive rows. Columns are found by the header
+ * names area, line, station, company, line_name, station_name (any order; a
+ * UTF-8 BOM is skipped). An optional note column is accepted when present.
+ * Codes are hex 00..FF; rows with a bad code are skipped, and for a repeated
+ * code the first row wins, as in felica_parse.py. Fields are trimmed; quoting
+ * is not supported (the shipped table has none). rows ends up sorted by code.
+ * Returns the number of rows, or -1 if the header lacks a required column or
+ * the table has more than cap rows. */
 long sqf_station_index(char *csv, size_t len, SqfStation *rows, size_t cap);
 
 /* Exact lookup in an indexed table; NULL if absent. */

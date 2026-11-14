@@ -3,24 +3,25 @@ package works.squirrel.suica
 /**
  * Saibane station-code → name lookup for Suica/PASMO-class history blocks.
  *
- * Table format matches the public SFCardFan community dump (see
- * `squirrelsuica/data/README.md`). Loaded once from the classpath resource
- * `works/squirrel/suica/StationCode.csv`.
+ * Table format matches `squirrelsuica/data/StationCode.csv` (MIT-licensed
+ * soltia48/suica-viewer adaptation; see that README). Loaded once from the
+ * classpath resource `works/squirrel/suica/StationCode.csv`.
  */
 object StationDb {
     data class Station(
         val company: String,
         val lineName: String,
-        val stationName: String
+        val stationName: String,
+        val note: String = ""
     ) {
         /** Short label for history rows, e.g. "乃木坂". */
         fun shortLabel(): String = stationName.ifBlank { "？" }
 
-        /** Longer label with line when useful. */
-        fun displayLabel(): String = when {
-            stationName.isBlank() -> "？"
-            lineName.isBlank() -> stationName
-            else -> "$stationName（$lineName）"
+        /** Longer label with line (and optional note) when useful. */
+        fun displayLabel(withNote: Boolean = false): String {
+            if (stationName.isBlank()) return "？"
+            val base = if (lineName.isBlank()) stationName else "$stationName（$lineName）"
+            return if (withNote && note.isNotBlank()) "$base [$note]" else base
         }
     }
 
@@ -77,9 +78,10 @@ object StationDb {
                 val company = parts[3].trim()
                 val lineName = parts[4].trim()
                 val stationName = parts[5].trim()
+                val note = if (parts.size > 6) parts[6].trim() else ""
                 out.putIfAbsent(
                     pack(area, lineCode, station),
-                    Station(company, lineName, stationName)
+                    Station(company, lineName, stationName, note)
                 )
             }
         }

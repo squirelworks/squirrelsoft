@@ -210,23 +210,25 @@ static SqfStation stations[8192];
 static long nstations = -1;
 
 static void test_station_index(void) {
-    char csv[] = "\xEF\xBB\xBFline,area,station,company,line_name,station_name,extra\r\n"
-                 "e1, 0 ,01,JR東日本,山手線, 東京 ,x\r\n"
-                 "e1,0,01,dup,dup,later row loses,x\n"
-                 "zz,0,02,bad,bad,bad hex,x\n"
-                 "100,0,02,bad,bad,too big,x\n"
+    char csv[] = "\xEF\xBB\xBFline,area,station,company,line_name,station_name,note,extra\r\n"
+                 "e1, 0 ,01,JR東日本,山手線, 東京 ,連絡駅127-001,x\r\n"
+                 "e1,0,01,dup,dup,later row loses,n,x\n"
+                 "zz,0,02,bad,bad,bad hex,,x\n"
+                 "100,0,02,bad,bad,too big,,x\n"
                  "short,row\n"
                  "\n"
-                 "e1,1,02,名鉄,名古屋本線,名鉄名古屋,x\n"
-                 "e1,0,03,c,l,,x\n"
-                 "e1,0,02,c,l,last line has no newline,x";
+                 "e1,1,02,名鉄,名古屋本線,名鉄名古屋,,x\n"
+                 "e1,0,03,c,l,,,x\n"
+                 "e1,0,02,c,l,last line has no newline,,x";
     SqfStation rows[8];
     long n = sqf_station_index(csv, sizeof csv - 1, rows, 8);
     CHECK(n == 4);
     const SqfStation *t = sqf_station_lookup(rows, (size_t)n, 0, 0xE1, 0x01);
     CHECK(t && !strcmp(t->station_name, "東京") && !strcmp(t->company, "JR東日本"));
+    CHECK(t && t->note && !strcmp(t->note, "連絡駅127-001"));
     t = sqf_station_lookup(rows, (size_t)n, 0, 0xE1, 0x02);
     CHECK(t && !strcmp(t->station_name, "last line has no newline"));
+    CHECK(t && t->note && t->note[0] == 0);
     CHECK(sqf_station_lookup(rows, (size_t)n, 0, 0xE1, 0x04) == NULL);
     /* region bits 7-6 = enter area 1; bits 5-4 = exit area 1 */
     CHECK(!strcmp(sqf_station_resolve(rows, (size_t)n, 0x40, 0xE1, 0x02, 0), "名鉄名古屋"));
@@ -235,6 +237,11 @@ static void test_station_index(void) {
     CHECK(!strcmp(sqf_station_resolve(rows, (size_t)n, 0x40, 0xE1, 0x01, 0), "東京"));
     CHECK(sqf_station_resolve(rows, (size_t)n, 0, 0, 0, 0) == NULL);
     CHECK(sqf_station_resolve(rows, (size_t)n, 0, 0xE1, 0x03, 0) == NULL); /* empty name */
+
+    /* Tables without a note column still load; note is "". */
+    char no_note[] = "area,line,station,company,line_name,station_name\n0,e1,1,a,b,c\n";
+    CHECK(sqf_station_index(no_note, sizeof no_note - 1, rows, 8) == 1);
+    CHECK(rows[0].note && rows[0].note[0] == 0);
 
     char no_header[] = "area,line,station,company,line_name\n0,1,1,a,b\n";
     CHECK(sqf_station_index(no_header, sizeof no_header - 1, rows, 8) == -1);

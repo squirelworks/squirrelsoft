@@ -105,15 +105,20 @@ class FelicaParseTest {
     }
 
     @Test
-    fun stationDbLoadsCommunityTable() {
-        assertTrue(StationDb.size() > 1000)
+    fun stationDbLoadsMitLicensedTable() {
+        assertTrue(StationDb.size() > 6000)
         val nogi = StationDb.lookup(0, 0xe3, 0x59)
         assertNotNull(nogi)
         assertEquals("乃木坂", nogi!!.stationName)
+        assertEquals("千代田線", nogi.lineName)
         val yoyogi = StationDb.lookup(0, 0xe3, 0x5e)
         assertEquals("代々木上原", yoyogi!!.stationName)
         val tokyo = StationDb.lookup(0, 0x01, 0x01)
         assertEquals("東京", tokyo!!.stationName)
+        assertTrue(tokyo.note.isNotBlank())
+        assertTrue(tokyo.displayLabel().contains("東京"))
+        val takanawa = StationDb.lookup(0, 0x01, 0x06)
+        assertEquals("高輪ゲートウェイ", takanawa!!.stationName)
     }
 
     @Test
