@@ -489,6 +489,36 @@ class SplitLayoutTest {
     }
 
     @Test
+    fun landscapePutsSpectrumLeftAndLofargramRightWithSameRatios() {
+        assertTrue(SpectrumControls.isLandscape(1920, 1080))
+        assertFalse(SpectrumControls.isLandscape(1080, 1920))
+        assertFalse(SpectrumControls.isLandscape(0, 100))
+
+        val even = SpectrumControls.splitLayout(1920, 1080, SpectrumControls.SplitRatio.EVEN, landscape = true)
+        assertEquals(960, even.spectrumWidth)
+        assertEquals(1080, even.spectrumHeight)
+        assertEquals(0, even.spectrumLeft)
+        assertEquals(960 + SpectrumControls.SPLIT_GAP_PX, even.waterfallLeft)
+        assertEquals(1920 - even.waterfallLeft, even.waterfallWidth)
+        assertEquals(1080, even.waterfallHeight)
+        assertEquals(0, even.waterfallTop)
+
+        val small = SpectrumControls.splitLayout(1000, 600, SpectrumControls.SplitRatio.SPECTRUM_SMALL, true)
+        assertEquals(400, small.spectrumWidth)
+        assertEquals(600, small.waterfallHeight)
+        val large = SpectrumControls.splitLayout(1000, 600, SpectrumControls.SplitRatio.SPECTRUM_LARGE, true)
+        assertEquals(600, large.spectrumWidth)
+
+        // Portrait full geometry still stacks vertically with the same ratios.
+        val port = SpectrumControls.splitLayout(1080, 1920, SpectrumControls.SplitRatio.EVEN, landscape = false)
+        assertEquals(960, port.spectrumHeight)
+        assertEquals(1080, port.spectrumWidth)
+        assertEquals(0, port.waterfallLeft)
+        assertEquals(952, port.waterfallHeight)
+        assertEquals(952, SpectrumControls.waterfallRowsFor(port.waterfallHeight))
+    }
+
+    @Test
     fun oneRowPerPixelWithinCaps() {
         assertEquals(492, SpectrumControls.waterfallRowsFor(492))
         assertEquals(SpectrumControls.MIN_WATERFALL_ROWS, SpectrumControls.waterfallRowsFor(3))

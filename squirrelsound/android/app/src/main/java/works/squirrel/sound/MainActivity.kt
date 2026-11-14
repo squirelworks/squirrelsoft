@@ -70,8 +70,10 @@ class MainActivity : AppCompatActivity() {
 
     /**
      * Live (default) shows only the status line and the plot, which SpectrumView
-     * splits into the spectrum on the top half and the LOFARgram on the bottom
-     * half. Settings and Advanced open their control panels above the plot.
+     * splits into the spectrum and the LOFARgram (top/bottom in portrait,
+     * left/right in landscape). Settings and Advanced open their control panels
+     * above the plot. Orientation is handled via configChanges so rotate does
+     * not restart capture.
      */
     private fun setupTabs() {
         binding.tabs.addTab(binding.tabs.newTab().setText(R.string.tab_live))
@@ -133,6 +135,19 @@ class MainActivity : AppCompatActivity() {
             val m = modes.getOrNull(binding.viewMode.selectedItemPosition) ?: SpectrumControls.ViewMode.DEFAULT
             binding.spectrum.viewMode = m
             prefs.edit().putString(KEY_VIEW_MODE, m.id).apply()
+        }
+
+        binding.spectrum.scopeEnabled = prefs.getBoolean(KEY_SCOPE, false)
+        binding.scopeSwitch.isChecked = binding.spectrum.scopeEnabled
+        binding.scopeSwitch.setOnCheckedChangeListener { _, on ->
+            binding.spectrum.scopeEnabled = on
+            prefs.edit().putBoolean(KEY_SCOPE, on).apply()
+        }
+        binding.spectrum.peaksEnabled = prefs.getBoolean(KEY_PEAKS, true)
+        binding.peaksSwitch.isChecked = binding.spectrum.peaksEnabled
+        binding.peaksSwitch.setOnCheckedChangeListener { _, on ->
+            binding.spectrum.peaksEnabled = on
+            prefs.edit().putBoolean(KEY_PEAKS, on).apply()
         }
 
         binding.btnRecord.setOnClickListener { toggleRecording() }
@@ -763,6 +778,8 @@ class MainActivity : AppCompatActivity() {
         const val KEY_MIC_SOURCE = "mic_source"
         const val KEY_GAIN_DB = "gain_db"
         const val KEY_SPLIT = "split_ratio"
+        const val KEY_SCOPE = "scope_enabled"
+        const val KEY_PEAKS = "peaks_enabled"
         const val KEY_VIEW_MODE = "view_mode"
         const val TAB_LIVE = 0
         const val TAB_SETTINGS = 1

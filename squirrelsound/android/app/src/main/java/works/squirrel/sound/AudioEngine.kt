@@ -597,9 +597,11 @@ class AudioEngine(
                 while (stillActive(session) && ring.available >= size) {
                     if (!ring.takeWindow(re, size, hop)) break
                     try {
+                        val time = FloatArray(size)
                         var sumSq = 0.0
                         for (i in 0 until size) {
                             val s = re[i]
+                            time[i] = s
                             sumSq += (s * s).toDouble()
                             re[i] = s * window[i]
                             im[i] = 0f
@@ -642,7 +644,8 @@ class AudioEngine(
                             peakDb = peakDb + cal,
                             rmsDb = rmsDb + cal,
                             sourceLabel = activeLabel,
-                            waterfallRow = row
+                            waterfallRow = row,
+                            time = time,
                         )
                         postFrame(session, frame)
                     } catch (e: Exception) {

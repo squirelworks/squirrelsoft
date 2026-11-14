@@ -12,6 +12,8 @@ public final class SqDsp {
     static native int nativeOctaveBands(int fraction, double fmin, double fmax, double[] centre, double[] lo, double[] hi);
     static native boolean nativeBandLevels(float[] magDb, double binHz, double[] lo, double[] hi, int nbands,
                                            double enbw, double floorDb, float[] outDb);
+    static native int nativePeaks(float[] magDb, double sampleRate, int fftSize, double fMin, double fMax,
+                                  double dbMin, int maxN, double minSepHz, double[] outHz, double[] outDb);
 
     static int checks, failures;
 
@@ -85,6 +87,30 @@ public final class SqDsp {
         check(!nativeBandLevels(s, (double) sr / fft, lo, hi, n, 1.5, -140, small), "output too short");
         check(!nativeBandLevels(s, 0, lo, hi, n, 1.5, -140, out), "zero bin width");
         check(nativeBandLevels(s, (double) sr / fft, lo, hi, 0, 1.5, -140, out), "no bands is fine");
+
+        /* peaks: two tones → two labelled local maxima (sqdsp_local_peaks) */
+        float[] two = new float[fft];
+        float[] w = hann(fft);
+        float sum = 0;
+        for (int i = 0; i < fft; i++) {
+            double t = Math.sin(2 * Math.PI * 1000.0 * i / sr) * 0.5
+                    + Math.sin(2 * Math.PI * 5000.0 * i / sr) * 0.05;
+            two[i] = (float) (t * w[i]);
+            sum += w[i];
+        }
+        float[] mag = new float[fft / 2 + 1];
+        check(nativeSpectrumDb(two, sum, -140f, mag), "two-tone spectrum");
+        double[] phz = new double[5], pdb = new double[5];
+        int pn = nativePeaks(mag, sr, fft, 20, 20000, -120, 5, 100, phz, pdb);
+        check(pn == 2, "two peaks: " + pn);
+        check(pn >= 2 && near(phz[0], 1000, 2) && near(phz[1], 5000, 2) && pdb[0] > pdb[1],
+                "peaks loudest first near 1 kHz then 5 kHz");
+        check(nativePeaks(mag, sr, fft, 20, 20000, -120, 1, 100, phz, pdb) == 1
+                && near(phz[0], 1000, 2), "maxN 1 keeps the loudest");
+        check(nativePeaks(mag, sr, fft, 2000, 20000, -120, 5, 100, phz, pdb) == 1
+                && near(phz[0], 5000, 2), "peaks only inside the range");
+        check(nativePeaks(null, sr, fft, 20, 20000, -120, 5, 100, phz, pdb) == 0, "null spectrum");
+        check(nativePeaks(mag, 0, fft, 20, 20000, -120, 5, 100, phz, pdb) == 0, "zero sample rate");
 
         System.out.println("jni smoke: " + checks + " checks, " + failures + " failed");
         System.exit(failures == 0 ? 0 : 1);

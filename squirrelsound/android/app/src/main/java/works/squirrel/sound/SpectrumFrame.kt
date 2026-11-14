@@ -11,4 +11,6 @@ data class SpectrumFrame(
     val sourceLabel: String,
     /** A finished LOFARgram row (dB) when this frame completes one, else null. */
     val waterfallRow: FloatArray? = null,
+    /** Unwindowed mono samples for the scope view (length [fftSize]), else null. */
+    val time: FloatArray? = null,
 )

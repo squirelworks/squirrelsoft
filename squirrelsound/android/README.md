@@ -33,6 +33,8 @@ Package: `works.squirrel.sound` — version `0.0.8`
 Capture stays alive through transient `onPause` (notification shade); the mic is
 released in `onStop` when leaving the app. AudioRecord read errors restart the
 session; a partial wake lock + media audio focus reduce OEM mic kill while the
-spectrum screen is visible. Capture sessions are generation-scoped so stop/restart
+spectrum screen is visible. In landscape the spectrum is on the left and the
+LOFARgram on the right (same split ratios); Settings has a scope switch and peak
+labels. Capture sessions are generation-scoped so stop/restart
 cannot leave a stuck READ_BLOCKING thread double-writing the UI, and permission /
 mic-busy failures surface as status text instead of crashing.
