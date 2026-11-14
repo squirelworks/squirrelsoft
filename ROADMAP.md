@@ -46,7 +46,7 @@ The same states are labels on the GitHub issues (`status: done`, `status: in pro
 - [x] `docs/architecture.md`; `sqdsp` moved to `libs/sqdsp` with its own tests and a Kotlin/C FFT parity fixture (#48).
 - [x] `libs/sqfelica` (C): FeliCa command builders and response parsers, Suica/nanaco/Edy history and balances, parity fixture from `felica_parse.py` (#49).
   - [x] Station table loader (`sqf_station_index` / `sqf_station_resolve` over `squirrelsuica/data/StationCode.csv`), checked against `resolve_rail` on 806 codes (#70).
-  - [ ] PASMO / WAON history parsing in C
+  - [x] PASMO / WAON history parsing in C
 - [x] `libs/sqdsp` is the SquirrelSound core: Android spectrum frames go through it via JNI, `Fft.kt` as fallback (#67).
 - [x] `libs/sqqr` (C): original QR decoder so desktop and Squirrel OS/2 don't depend on ML Kit; now also the encoder and payload parsing.
   - [x] Step 1: decode a sampled module grid (format/version, unmasking, de-interleaving, Reed–Solomon, all data modes) (#59).
@@ -121,10 +121,10 @@ The same states are labels on the GitHub issues (`status: done`, `status: in pro
 
 ## Ongoing per app
 - SquirrelSuica
-  - [ ] PASMO/ICOCA labels
+  - [x] PASMO/ICOCA labels
   - [ ] Richer station tables (with source + license stated)
   - [x] Product-sale rows (terminal `CA`, #73)
-  - [ ] Bus rows
+  - [x] Bus rows
   - [x] Export CSV (desktop `--csv` / `--csv-file`, #87)
 - SquirrelSound
   - [x] Multi-resolution FFT (desktop: `sqdsp_multires_*`, MR / `--multires`)

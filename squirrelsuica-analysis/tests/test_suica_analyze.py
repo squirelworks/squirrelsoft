@@ -121,7 +121,7 @@ def main() -> int:
     expect(len(lines) == 5 and "nanaco" not in text, "unreadable nanaco skipped: %r" % lines)
     expect(sa.history_text({"systems": []}, fp).startswith("No Suica"), "empty dump")
     waon = {"systems": [{"services": [svc(0x6817, [bytes([0x10, 0x27]) + bytes(14)])]}]}
-    expect(sa.history_text(waon, fp) == "== WAON (svc 6817)\n   Balance ¥10,000\n", "waon balance")
+    expect(sa.history_text(waon, fp) == "== WAON (svc 680b)\n   Balance ¥10,000\n", "waon balance")
     demo_hist = sa.history_text(dump, fp)
     expect(demo_hist.startswith("== Suica / PASMO (svc 090f)"), "demo history")
 

@@ -52,6 +52,7 @@ def group(out, brand, blocks):
         "suica": fp.parse_history_blocks,
         "nanaco": fp.parse_nanaco_history_blocks,
         "edy": fp.parse_edy_history_blocks,
+        "waon": fp.parse_waon_history_blocks,
     }[brand]
     out.append(f"G {brand}")
     out.extend(f"B {b.hex()}" for b in blocks)
@@ -152,6 +153,16 @@ def main():
         edy_block(0x04, 59, 0, 1000, 2680),
         edy_block(0x77, 32767, 0x1FFFF, 5, 600000),
     ])
+    # WAON 0x680b: each record is two 16-byte FeliCa blocks.
+    def waon_pair(typ, y, m, d, hh, mm, bal, usage, charge):
+        rec = fp.hist_waon(typ, y, m, d, hh, mm, bal, usage, charge)
+        return [rec[:16], rec[16:]]
+    group(out, "waon",
+          waon_pair(0x04, 2026, 10, 28, 19, 10, 4584, 620, 0) +
+          waon_pair(0x0C, 2026, 10, 27, 12, 5, 5204, 0, 2000) +
+          waon_pair(0x10, 2026, 10, 26, 9, 0, 3204, 0, 1000) +
+          [bytes(16), bytes(16)] +
+          waon_pair(0x77, 2026, 1, 1, 0, 0, 100, 50, 0))
 
     r = random.Random(20261104)
     for _ in range(12):

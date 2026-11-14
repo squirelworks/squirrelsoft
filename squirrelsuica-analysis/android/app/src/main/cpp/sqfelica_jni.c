@@ -54,6 +54,7 @@ Java_works_squirrel_suicaanalysis_SqFelica_nativeHistory(JNIEnv *env, jclass cls
         case BRAND_SUICA: k = sqf_parse_suica_history(buf, n, h, SQF_JNI_MAX); break;
         case BRAND_NANACO: k = sqf_parse_nanaco_history(buf, n, h, SQF_JNI_MAX); break;
         case BRAND_EDY: k = sqf_parse_edy_history(buf, n, h, SQF_JNI_MAX); break;
+        case BRAND_WAON: k = sqf_parse_waon_history(buf, n, h, SQF_JNI_MAX); break;
         default: k = 0; break;
     }
     for (size_t i = 0; i < k; i++) flatten(&h[i], flat + i * SQF_JNI_FIELDS);

@@ -32,12 +32,22 @@ class HistoryEntry:
     exit_code: Optional[str] = None
     terminal: int = 0
     process: int = 0
+    settlement: int = 0
+    bus_operator: Optional[int] = None
+    bus_stop: Optional[int] = None
 
     def station_summary(self) -> str:
         enter, exit_ = self.enter_station, self.exit_station
         if enter and exit_ and enter != exit_:
             return f"{enter} → {exit_}"
         return enter or exit_ or ""
+
+    def bus_summary(self) -> str:
+        if self.bus_operator is None and self.bus_stop is None:
+            return ""
+        op = f"{self.bus_operator:04X}" if self.bus_operator is not None else "----"
+        st = f"{self.bus_stop:04X}" if self.bus_stop is not None else "----"
+        return f"事業者 {op} · 停留所 {st}"
 
 
 @dataclass
@@ -112,6 +122,43 @@ def brand_label(brand: FelicaBrand) -> str:
         FelicaBrand.WAON: "WAON",
         FelicaBrand.UNKNOWN: "Unknown FeliCa",
     }[brand]
+
+
+def suica_family_label(
+    attrs_008b: Optional[bytes] = None,
+    settlement: Optional[int] = None,
+) -> str:
+    """Transit-IC display name from attributes 0x008B issuer byte and optional history settlement.
+
+    Public layout (jennychan / WDIC notes): attributes byte 8 is
+    card-type (high nibble) | region (low nibble). Type 3 is ICOCA, type 0 is
+    IruCa/せたまる, type 2 covers Suica/PASMO/TOICA/PiTaPa. Settlement byte 2 of
+    a history block can refine type-2 cards (0x0D PASMO, 0x3F モバイルSuica,
+    0x0B PiTaPa, 0x02 VIEW/Suica). Synthetic fixtures only — never real dumps.
+    """
+    card_type = region = None
+    if attrs_008b and len(attrs_008b) > 8:
+        b = attrs_008b[8]
+        card_type = (b >> 4) & 0xF
+        region = b & 0xF
+    if card_type == 3:
+        return "ICOCA"
+    if card_type == 0:
+        return "IruCa"
+    settle = settlement if settlement is not None else None
+    if settle == 0x0D:
+        return "PASMO"
+    if settle == 0x3F:
+        return "モバイルSuica"
+    if settle == 0x0B:
+        return "PiTaPa"
+    if settle == 0x02:
+        return "Suica"
+    if card_type == 2 and region == 2:
+        return "PiTaPa"
+    if card_type == 2:
+        return "Suica / PASMO"
+    return brand_label(FelicaBrand.SUICA_FAMILY)
 
 
 def _bcd_byte(v: int) -> int:
@@ -189,12 +236,15 @@ def _process_label(process: int) -> str:
         0x13: "新幹線",
         0x14: "入A",
         0x15: "出A",
+        0x1F: "バスチャージ",
+        0x23: "バス券購",
         0x46: "物販",
         0x48: "特典チャージ",
     }.get(process, f"proc=0x{process:02x}")
 
 
 _SALE_PROCESSES = (0x46, 0x49, 0x4A, 0x4B, 0xC6, 0xCB)
+_BUS_PROCESSES = (0x0D, 0x0F, 0x1F, 0x23)
 
 
 def parse_history_block(block: bytes) -> Optional[HistoryEntry]:
@@ -202,6 +252,7 @@ def parse_history_block(block: bytes) -> Optional[HistoryEntry]:
         return None
     terminal = block[0]
     process = block[1]
+    settlement = block[2]
     date_word = (block[4] << 8) | block[5]
     year = 2000 + (date_word >> 9)
     month = (date_word >> 5) & 0xF
@@ -217,7 +268,8 @@ def parse_history_block(block: bytes) -> Optional[HistoryEntry]:
 
     # Shop sales carry a time and a terminal ID in bytes 6-9, not stations. Seen
     # on terminal types C7/C8 and, in real Suica dumps, CA with process 46 (S1.3).
-    is_bus = terminal == 0x05 or process in (0x0D, 0x0F, 0x1F, 0x23)
+    # Bus (terminal 0x05 or bus process): bytes 6-9 are operator + stop codes, never rail.
+    is_bus = terminal == 0x05 or process in _BUS_PROCESSES
     is_product = terminal in (0xC7, 0xC8) or (process in _SALE_PROCESSES and not is_bus)
     is_charge = process in (0x02, 0x48)
 
@@ -233,8 +285,14 @@ def parse_history_block(block: bytes) -> Optional[HistoryEntry]:
         kind, base_note = "other", f"proc=0x{process:02x}"
 
     enter_name = exit_name = enter_code = exit_code = None
+    bus_operator = bus_stop = None
     note = base_note
-    if not is_product and not is_bus:
+    if is_bus:
+        # Public layout: bytes 6-7 bus operator (BE), 8-9 stop (BE). No station table.
+        bus_operator = (block[6] << 8) | block[7]
+        bus_stop = (block[8] << 8) | block[9]
+        note = f"{base_note} · 事業者 {bus_operator:04X} · 停留所 {bus_stop:04X}"
+    elif not is_product:
         region = block[15]
         in_line, in_sta = block[6], block[7]
         out_line, out_sta = block[8], block[9]
@@ -276,6 +334,9 @@ def parse_history_block(block: bytes) -> Optional[HistoryEntry]:
         exit_code,
         terminal,
         process,
+        settlement,
+        bus_operator,
+        bus_stop,
     )
 
 
@@ -305,6 +366,9 @@ def parse_history_blocks(blocks: List[bytes]) -> List[HistoryEntry]:
                 e.exit_code,
                 e.terminal,
                 e.process,
+                e.settlement,
+                e.bus_operator,
+                e.bus_stop,
             )
         )
     return out
@@ -384,6 +448,109 @@ def parse_edy_history_blocks(blocks: List[bytes]) -> List[HistoryEntry]:
     return [e for b in blocks if (e := parse_edy_history_block(b))]
 
 
+def parse_waon_history_block(record32: bytes) -> Optional[HistoryEntry]:
+    """WAON history service 0x680b — one 32-byte record (two 16-byte FeliCa blocks).
+
+    Public bit-pack from byte 18: year5(+2005) month4 day5 hour5 minute6
+    balance18 usage18 charge17; type at byte 17.
+    """
+    if len(record32) < 32 or all(x == 0 for x in record32):
+        return None
+    typ = record32[17]
+    if typ == 0:
+        return None
+    bit = 0
+
+    def take(n: int) -> int:
+        nonlocal bit
+        v = 0
+        for _ in range(n):
+            byte_index = 18 + (bit // 8)
+            bit_index = 7 - (bit % 8)
+            b = record32[byte_index]
+            v = (v << 1) | ((b >> bit_index) & 1)
+            bit += 1
+        return v
+
+    year = 2005 + take(5)
+    month = take(4)
+    day = take(5)
+    hour = take(5)
+    minute = take(6)
+    bal = max(0, min(500_000, take(18)))
+    usage = take(18)
+    charge = take(17)
+    date = (
+        f"{year:04d}-{month:02d}-{day:02d}"
+        if 2005 <= year <= 2099 and 1 <= month <= 12 and 1 <= day <= 31
+        else "????-??-??"
+    )
+    if typ == 0x04:
+        kind, base, fare = "sale", "支払", usage
+    elif typ in (0x0C, 0x10):
+        kind, base, fare = "charge", "チャージ", charge
+    else:
+        kind, base, fare = "other", f"type=0x{typ:02x}", usage
+    note = f"{base} · {min(hour, 23):02d}:{min(minute, 59):02d} · ¥{fare}"
+    return HistoryEntry(
+        date,
+        kind,
+        fare if kind == "sale" and 1 <= fare <= 100_000 else 0,
+        bal,
+        note,
+        record32.hex(),
+        terminal=typ,
+        process=typ,
+    )
+
+
+def parse_waon_history_blocks(blocks: List[bytes]) -> List[HistoryEntry]:
+    """Parse paired 16-byte FeliCa blocks from WAON service 0x680b into entries."""
+    out: List[HistoryEntry] = []
+    i = 0
+    while i + 1 < len(blocks):
+        rec = bytes(blocks[i]) + bytes(blocks[i + 1])
+        if e := parse_waon_history_block(rec):
+            out.append(e)
+        i += 2
+    return out
+
+
+def hist_waon(
+    typ: int,
+    y: int,
+    m: int,
+    d: int,
+    hh: int,
+    mm: int,
+    bal: int,
+    usage: int,
+    charge: int,
+) -> bytes:
+    """Build a synthetic 32-byte WAON history record (fixture helper)."""
+    out = bytearray(32)
+    out[17] = typ & 0xFF
+    fields = [
+        ((y - 2005) & 0x1F, 5),
+        (m & 0xF, 4),
+        (d & 0x1F, 5),
+        (hh & 0x1F, 5),
+        (mm & 0x3F, 6),
+        (bal & 0x3FFFF, 18),
+        (usage & 0x3FFFF, 18),
+        (charge & 0x1FFFF, 17),
+    ]
+    bit = 0
+    for value, width in fields:
+        for b in range(width - 1, -1, -1):
+            byte_index = 18 + (bit // 8)
+            bit_index = 7 - (bit % 8)
+            if (value >> b) & 1:
+                out[byte_index] |= 1 << bit_index
+            bit += 1
+    return bytes(out)
+
+
 def hist_rail(
     terminal: int,
     process: int,
@@ -420,22 +587,34 @@ def hist_rail(
     )
 
 
+def demo_suica_attrs(card_type: int = 2, region: int = 0, bal: int = 2480) -> bytes:
+    """Synthetic attributes 0x008B block (issuer nibble + balance)."""
+    out = bytearray(16)
+    out[8] = ((card_type & 0xF) << 4) | (region & 0xF)
+    out[11] = bal & 0xFF
+    out[12] = (bal >> 8) & 0xFF
+    return bytes(out)
+
+
 def demo_suica() -> FelicaCard:
+    hist = parse_history_blocks(
+        [
+            hist_rail(0x16, 0x01, 2026, 10, 28, 0xE3, 0x59, 0xE3, 0x5E, 2480),
+            hist_rail(0x16, 0x01, 2026, 10, 27, 0x25, 0x07, 0x25, 0x0A, 2648),
+            hist_rail(0x16, 0x02, 2026, 10, 26, 0x01, 0x01, 0, 0, 2858),
+            hist_rail(0x16, 0x01, 2026, 10, 25, 0x25, 0x01, 0x25, 0x02, 858),
+        ]
+    )
+    attrs = demo_suica_attrs(2, 0, 2480)
+    settle = hist[0].settlement if hist else None
     return FelicaCard(
         brand=FelicaBrand.SUICA_FAMILY.value,
-        brand_label=brand_label(FelicaBrand.SUICA_FAMILY),
+        brand_label=suica_family_label(attrs, settle),
         idm="0101020304050607",
         pmm="0000000000000000",
         system_code="0003",
         balance_yen=2480,
-        history=parse_history_blocks(
-            [
-                hist_rail(0x16, 0x01, 2026, 10, 28, 0xE3, 0x59, 0xE3, 0x5E, 2480),
-                hist_rail(0x16, 0x01, 2026, 10, 27, 0x25, 0x07, 0x25, 0x0A, 2648),
-                hist_rail(0x16, 0x02, 2026, 10, 26, 0x01, 0x01, 0, 0, 2858),
-                hist_rail(0x16, 0x01, 2026, 10, 25, 0x25, 0x01, 0x25, 0x02, 858),
-            ]
-        ),
+        history=hist,
         note="Demo Suica (synthetic)",
     )
 
@@ -481,6 +660,7 @@ def demo_edy() -> FelicaCard:
 
 
 def demo_waon() -> FelicaCard:
+    rec = hist_waon(0x04, 2026, 10, 28, 19, 10, 4584, 620, 0)
     return FelicaCard(
         brand=FelicaBrand.WAON.value,
         brand_label=brand_label(FelicaBrand.WAON),
@@ -488,6 +668,6 @@ def demo_waon() -> FelicaCard:
         pmm="0000000000000000",
         system_code="fe00",
         balance_yen=waon_balance(bytes([0xE8, 0x11]) + bytes(14)),
-        history=[],
+        history=parse_waon_history_blocks([rec[:16], rec[16:]]),
         note="Demo WAON (synthetic)",
     )

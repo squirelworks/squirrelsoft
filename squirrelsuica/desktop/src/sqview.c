@@ -26,7 +26,7 @@ static const char *station_name(const SqfStation *stations, size_t n, const SqfH
 
 void sqs_view_build(SqsView *out, const SqsCard *card, const SqfStation *stations, size_t n_stations) {
     memset(out, 0, sizeof *out);
-    snprintf(out->brand, sizeof out->brand, "%s", sqs_brand_label(card->brand));
+    snprintf(out->brand, sizeof out->brand, "%s", sqs_card_label(card));
     snprintf(out->brand_id, sizeof out->brand_id, "%s", sqs_brand_id(card->brand));
     hex8(card->idm, out->idm);
     hex8(card->pmm, out->pmm);
@@ -48,19 +48,24 @@ void sqs_view_build(SqsView *out, const SqsCard *card, const SqfStation *station
         else snprintf(r->fare, sizeof r->fare, "fare —");
         snprintf(r->balance, sizeof r->balance, "bal ¥%d", (int)h->balance_yen);
 
-        const char *en = station_name(stations, n_stations, h, 0);
-        const char *ex = station_name(stations, n_stations, h, 1);
-        char enc[8], exc[8];
-        code_of(h->has_enter, h->enter_line, h->enter_station, enc, sizeof enc);
-        code_of(h->has_exit, h->exit_line, h->exit_station, exc, sizeof exc);
-        const char *a = en ? en : (enc[0] ? enc : NULL);
-        const char *b = ex ? ex : (exc[0] ? exc : NULL);
-        if (a && b && strcmp(a, b))
-            snprintf(r->route, sizeof r->route, "%s → %s", a, b);
-        else if (a || b)
-            snprintf(r->route, sizeof r->route, "%s", a ? a : b);
-        else
-            r->route[0] = 0;
+        if (h->kind == SQF_KIND_BUS) {
+            snprintf(r->route, sizeof r->route, "事業者 %04X · 停留所 %04X",
+                     (unsigned)h->bus_operator, (unsigned)h->bus_stop);
+        } else {
+            const char *en = station_name(stations, n_stations, h, 0);
+            const char *ex = station_name(stations, n_stations, h, 1);
+            char enc[8], exc[8];
+            code_of(h->has_enter, h->enter_line, h->enter_station, enc, sizeof enc);
+            code_of(h->has_exit, h->exit_line, h->exit_station, exc, sizeof exc);
+            const char *a = en ? en : (enc[0] ? enc : NULL);
+            const char *b = ex ? ex : (exc[0] ? exc : NULL);
+            if (a && b && strcmp(a, b))
+                snprintf(r->route, sizeof r->route, "%s → %s", a, b);
+            else if (a || b)
+                snprintf(r->route, sizeof r->route, "%s", a ? a : b);
+            else
+                r->route[0] = 0;
+        }
 
         const char *label = card->brand == SQS_SUICA ? sqf_suica_process_label(h->process) : NULL;
         r->detail[0] = 0;

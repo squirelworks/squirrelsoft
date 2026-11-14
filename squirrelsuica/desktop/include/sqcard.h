@@ -30,10 +30,14 @@ typedef struct {
     int32_t balance_yen; /* -1 unknown */
     size_t n_history;
     SqfHistory history[SQS_MAX_HISTORY];
+    int has_issuer;              /* 1 when issuer_008b was read */
+    uint8_t issuer_008b[SQF_BLOCK_LEN]; /* Suica attributes for family label */
 } SqsCard;
 
 const char *sqs_brand_id(SqsBrand b);    /* "suica_family", "nanaco", ... as felica_parse */
 const char *sqs_brand_label(SqsBrand b); /* "Suica / PASMO", ... */
+/* Issuer-aware label for transit cards (ICOCA, PASMO, …); else sqs_brand_label. */
+const char *sqs_card_label(const SqsCard *card);
 
 /* Returns 0 with *card filled, 1 if no card answered, -1 on a transport error. */
 int sqs_read_card(const SqsTransport *t, SqsCard *card);

@@ -387,6 +387,39 @@ class FelicaParseTest {
     }
 
     @Test
+    fun suicaFamilyLabelsFromIssuerByte() {
+        assertEquals("ICOCA", FelicaParse.suicaFamilyLabel(FelicaParse.demoSuicaAttrs(3, 0)))
+        assertEquals("IruCa", FelicaParse.suicaFamilyLabel(FelicaParse.demoSuicaAttrs(0, 0)))
+        assertEquals("PASMO", FelicaParse.suicaFamilyLabel(FelicaParse.demoSuicaAttrs(2, 0), 0x0d))
+        assertEquals("モバイルSuica", FelicaParse.suicaFamilyLabel(FelicaParse.demoSuicaAttrs(2, 0), 0x3f))
+        assertEquals("PiTaPa", FelicaParse.suicaFamilyLabel(FelicaParse.demoSuicaAttrs(2, 2)))
+        assertEquals("Suica / PASMO", FelicaParse.suicaFamilyLabel(FelicaParse.demoSuicaAttrs(2, 0)))
+    }
+
+    @Test
+    fun busRowsCarryOperatorStopNotStations() {
+        val block = FelicaParse.histRail(
+            terminal = 0x05,
+            process = 0x0d,
+            y = 2026, m = 10, d = 2,
+            inLine = 0x0c, inSta = 0x4a,
+            outLine = 0x00, outSta = 0x12,
+            bal = 1000,
+            region = 0
+        )
+        val e = FelicaParse.historyEntry(block)!!
+        assertEquals("bus", e.kind)
+        assertNull(e.enterCode)
+        assertNull(e.exitCode)
+        assertNull(e.enterStation)
+        assertEquals(0x0c4a, e.busOperator)
+        assertEquals(0x0012, e.busStop)
+        assertTrue(e.note.contains("事業者 0C4A"))
+        assertTrue(e.note.contains("停留所 0012"))
+        assertTrue(e.busSummary().contains("0C4A"))
+    }
+
+    @Test
     fun suicaHistoryServiceCodeIs090fNot010f() {
         // Regression: FelicaReader must read history from 0x090f.
         // Command builder is public — ensure wire encoding for 0x090f.

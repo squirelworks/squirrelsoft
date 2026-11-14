@@ -91,7 +91,7 @@ text = compare("suica", d, "suica_family", fp.suica_balance(suica_blocks[0], inf
                fp.parse_history_blocks(suica_blocks))
 check(text and "→" in text, "suica: text shows a route")
 
-# nanaco and Edy with history, WAON balance only, on the common system.
+# nanaco, Edy and WAON with history on the common system.
 nanaco_hist = [fp._hist_nanaco(0x47, 480, 5200, 2026, 10, 28, 18, 42),
                fp._hist_nanaco(0x6F, 3000, 5680, 2026, 10, 27, 12, 5)]
 nanaco_bal = bytes([0x50, 0x14, 0x00, 0x00]) + bytes(12)
@@ -107,8 +107,11 @@ compare("edy", dump([system(0xFE00, "02fe001317000001",
         "edy", fp.edy_balance(edy_bal), fp.parse_edy_history_blocks(edy_hist))
 
 waon_bal = bytes([0xE8, 0x11]) + bytes(14)
-compare("waon", dump([system(0xFE00, "02fe006817000001", [service(0x6817, [waon_bal])])]),
-        "waon", fp.waon_balance(waon_bal), [])
+waon_rec = fp.hist_waon(0x04, 2026, 10, 28, 19, 10, 4584, 620, 0)
+waon_hist = [waon_rec[:16], waon_rec[16:]]
+compare("waon", dump([system(0xFE00, "02fe006817000001",
+                             [service(0x6817, [waon_bal]), service(0x680B, waon_hist)])]),
+        "waon", fp.waon_balance(waon_bal), fp.parse_waon_history_blocks(waon_hist))
 
 # A card with both systems (different IDm per system): transit wins.
 compare("two systems", dump([system(0x0003, "0101020304050607", [service(0x090F, suica_blocks[:2])]),

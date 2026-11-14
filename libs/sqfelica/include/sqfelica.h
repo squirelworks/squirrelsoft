@@ -121,11 +121,14 @@ typedef struct {
     int hour, minute;            /* -1 when the record has no time */
     int32_t fare_yen;            /* filled by sqf_parse_*_history from neighbours */
     int32_t balance_yen;
-    int32_t amount_yen;          /* nanaco/Edy amount field, 0 for Suica */
-    uint8_t terminal, process;   /* Suica: terminal/process; nanaco/Edy: type in both */
-    int has_enter, has_exit;     /* Suica rail line/station codes */
+    int32_t amount_yen;          /* nanaco/Edy/WAON amount field, 0 for Suica rail */
+    uint8_t terminal, process;   /* Suica: terminal/process; nanaco/Edy/WAON: type in both */
+    uint8_t settlement;          /* Suica byte 2 (payment/settlement type); 0 otherwise */
+    int has_enter, has_exit;     /* Suica rail line/station codes (never for bus) */
     uint8_t enter_line, enter_station, exit_line, exit_station;
     uint8_t region;              /* Suica byte 15 (area bits for the station table) */
+    uint16_t bus_operator;       /* Suica bus: bytes 6-7 BE; 0 when not bus */
+    uint16_t bus_stop;           /* Suica bus: bytes 8-9 BE; 0 when not bus */
 } SqfHistory;
 
 /* Suica family (Suica, PASMO, ICOCA, ...): one 16-byte block of service 0x090F.
@@ -133,10 +136,13 @@ typedef struct {
 int sqf_parse_suica_block(const uint8_t *block, size_t len, SqfHistory *out);
 int sqf_parse_nanaco_block(const uint8_t *block, size_t len, SqfHistory *out);
 int sqf_parse_edy_block(const uint8_t *block, size_t len, SqfHistory *out);
+/* WAON: one 32-byte record (two 16-byte FeliCa blocks of service 0x680B). */
+int sqf_parse_waon_block(const uint8_t *record32, size_t len, SqfHistory *out);
 
 /* Parse n contiguous 16-byte blocks (n * SQF_BLOCK_LEN bytes, newest first)
  * into out (cap entries); empty blocks are skipped.
  * For Suica, fares are derived from the balance change to the next older entry.
+ * For WAON, blocks are paired (0+1, 2+3, …) into 32-byte records.
  * Returns the number of entries written. */
 size_t sqf_parse_suica_history(const uint8_t *blocks, size_t n,
                                SqfHistory *out, size_t cap);
@@ -144,6 +150,8 @@ size_t sqf_parse_nanaco_history(const uint8_t *blocks, size_t n,
                                 SqfHistory *out, size_t cap);
 size_t sqf_parse_edy_history(const uint8_t *blocks, size_t n,
                              SqfHistory *out, size_t cap);
+size_t sqf_parse_waon_history(const uint8_t *blocks, size_t n,
+                              SqfHistory *out, size_t cap);
 
 /* Station-table area (0..3) for a rail code, from the region byte. */
 int sqf_station_area(uint8_t region, uint8_t line, int for_exit);
@@ -187,5 +195,11 @@ int32_t sqf_waon_balance(const uint8_t *block, size_t len);
 
 /* Japanese UTF-8 label for a Suica process code, or NULL if none is known. */
 const char *sqf_suica_process_label(uint8_t process);
+
+/* Transit-IC display name from attributes 0x008B issuer byte (byte 8) and an
+ * optional history settlement byte (pass 0xFF when unknown). Matches
+ * felica_parse.suica_family_label: ICOCA, IruCa, PASMO, モバイルSuica, PiTaPa,
+ * Suica, or "Suica / PASMO". */
+const char *sqf_suica_family_label(const uint8_t *block_008b, size_t len, int settlement);
 
 #endif

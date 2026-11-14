@@ -7,13 +7,19 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from felica_parse import (
     demo_nanaco,
     demo_suica,
+    demo_suica_attrs,
+    demo_waon,
+    hist_waon,
     lookup_station,
     nanaco_balance,
     parse_history_block,
     parse_history_blocks,
     parse_nanaco_history_blocks,
+    parse_waon_history_block,
+    parse_waon_history_blocks,
     suica_balance,
     suica_balance_090f,
+    suica_family_label,
 )
 
 
@@ -153,6 +159,37 @@ def main() -> int:
         if newer.fare_yen:
             expect(abs(older.balance_yen - newer.balance_yen) == newer.fare_yen, f"demo suica chain at {newer.date}")
     expect(all(e.enter_code is None for e in entries if e.kind == "bus"), "demo suica: buses carry no rail codes")
+    buses = [e for e in entries if e.kind == "bus"]
+    expect(len(buses) == 2, f"demo suica bus count {len(buses)}")
+    expect(all(e.bus_operator is not None and e.bus_stop is not None for e in buses),
+           "demo suica: buses carry operator/stop codes")
+    expect(all("事業者" in e.note and "停留所" in e.note for e in buses),
+           "demo suica: bus notes name operator/stop")
+
+    # Issuer labels from synthetic attributes 0x008B (public type/region nibbles).
+    expect(suica_family_label(demo_suica_attrs(3, 0)) == "ICOCA", "ICOCA label")
+    expect(suica_family_label(demo_suica_attrs(0, 0)) == "IruCa", "IruCa label")
+    expect(suica_family_label(demo_suica_attrs(2, 0), 0x0D) == "PASMO", "PASMO from settlement")
+    expect(suica_family_label(demo_suica_attrs(2, 0), 0x3F) == "モバイルSuica", "mobile Suica")
+    expect(suica_family_label(demo_suica_attrs(2, 2)) == "PiTaPa", "PiTaPa from region")
+    expect(demo_suica().brand_label == "Suica / PASMO", "demo suica label")
+
+    # Explicit bus block: terminal 0x05, process 0x0D, operator/stop BE, no rail codes.
+    bus = bytes.fromhex("050d00003542" "0c4a" "0012" "e803" "000000" "00")
+    be = parse_history_block(bus)
+    expect(be is not None and be.kind == "bus", f"bus kind {be.kind if be else None}")
+    expect(be.enter_code is None and be.exit_code is None, "bus has no rail codes")
+    expect(be.bus_operator == 0x0C4A and be.bus_stop == 0x0012, f"bus codes {be.bus_operator} {be.bus_stop}")
+    expect("事業者 0C4A" in be.note and "停留所 0012" in be.note, f"bus note {be.note}")
+
+    # WAON history parity with Kotlin layout (synthetic 32-byte record).
+    wr = hist_waon(0x04, 2026, 10, 28, 19, 10, 4584, 620, 0)
+    we = parse_waon_history_block(wr)
+    expect(we is not None and we.kind == "sale", "waon sale")
+    expect(we.fare_yen == 620 and we.balance_yen == 4584, f"waon amounts {we.fare_yen} {we.balance_yen}")
+    expect(we.date == "2026-10-28" and "19:10" in we.note, f"waon date/note {we.date} {we.note}")
+    expect(len(parse_waon_history_blocks([wr[:16], wr[16:]])) == 1, "waon paired blocks")
+    expect(demo_waon().history and demo_waon().history[0].fare_yen == 620, "demo waon history")
 
     nh = service_blocks("demo-nanaco.json", "0xfe00", "0x564f")
     nb = service_blocks("demo-nanaco.json", "0xfe00", "0x5597")

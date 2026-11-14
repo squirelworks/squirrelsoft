@@ -13,7 +13,9 @@
 #define SVC_EDY_HIST 0x170F
 #define SVC_EDY_BAL 0x1317
 #define SVC_WAON_BAL 0x6817
+#define SVC_WAON_HIST 0x680B
 #define HISTORY_BLOCKS 20
+#define WAON_HIST_BLOCKS 6
 #define READ_CHUNK 4 /* many cards refuse more blocks per command; fall back to 1 */
 #define TIMEOUT_MS 100
 
@@ -25,6 +27,14 @@ const char *sqs_brand_id(SqsBrand b) {
 const char *sqs_brand_label(SqsBrand b) {
     static const char *labels[] = {"Suica / PASMO", "nanaco", "楽天Edy", "WAON", "Unknown FeliCa"};
     return labels[b <= SQS_UNKNOWN ? b : SQS_UNKNOWN];
+}
+
+const char *sqs_card_label(const SqsCard *card) {
+    if (!card) return sqs_brand_label(SQS_UNKNOWN);
+    if (card->brand == SQS_SUICA && card->has_issuer)
+        return sqf_suica_family_label(card->issuer_008b, SQF_BLOCK_LEN,
+                                      card->n_history ? (int)card->history[0].settlement : -1);
+    return sqs_brand_label(card->brand);
 }
 
 typedef struct {
@@ -89,6 +99,10 @@ int sqs_read_card(const SqsTransport *t, SqsCard *card) {
             memcpy(card->pmm, p.pmm, 8);
             card->balance_yen = bal;
             card->n_history = sqf_parse_suica_history(blocks, nh, card->history, SQS_MAX_HISTORY);
+            if (ni) {
+                memcpy(card->issuer_008b, info, SQF_BLOCK_LEN);
+                card->has_issuer = 1;
+            }
             return 0;
         }
     }
@@ -97,9 +111,10 @@ int sqs_read_card(const SqsTransport *t, SqsCard *card) {
         static const struct {
             SqsBrand brand;
             uint16_t balance, history;
-        } purses[] = {{SQS_NANACO, SVC_NANACO_BAL, SVC_NANACO_HIST},
-                      {SQS_EDY, SVC_EDY_BAL, SVC_EDY_HIST},
-                      {SQS_WAON, SVC_WAON_BAL, 0}};
+            size_t hist_blocks;
+        } purses[] = {{SQS_NANACO, SVC_NANACO_BAL, SVC_NANACO_HIST, HISTORY_BLOCKS},
+                      {SQS_EDY, SVC_EDY_BAL, SVC_EDY_HIST, HISTORY_BLOCKS},
+                      {SQS_WAON, SVC_WAON_BAL, SVC_WAON_HIST, WAON_HIST_BLOCKS}};
         for (size_t i = 0; i < sizeof purses / sizeof purses[0] && !s.error; i++) {
             if (read_blocks(&s, purses[i].balance, 0, 1, info, 1) != 1) continue;
             card->brand = purses[i].brand;
@@ -110,10 +125,13 @@ int sqs_read_card(const SqsTransport *t, SqsCard *card) {
                               : purses[i].brand == SQS_EDY    ? sqf_edy_balance(info, SQF_BLOCK_LEN)
                                                               : sqf_waon_balance(info, SQF_BLOCK_LEN);
             if (purses[i].history) {
-                size_t nh = read_blocks(&s, purses[i].history, 0, HISTORY_BLOCKS, blocks, READ_CHUNK);
-                card->n_history = purses[i].brand == SQS_NANACO
-                                      ? sqf_parse_nanaco_history(blocks, nh, card->history, SQS_MAX_HISTORY)
-                                      : sqf_parse_edy_history(blocks, nh, card->history, SQS_MAX_HISTORY);
+                size_t nh = read_blocks(&s, purses[i].history, 0, purses[i].hist_blocks, blocks, READ_CHUNK);
+                if (purses[i].brand == SQS_NANACO)
+                    card->n_history = sqf_parse_nanaco_history(blocks, nh, card->history, SQS_MAX_HISTORY);
+                else if (purses[i].brand == SQS_EDY)
+                    card->n_history = sqf_parse_edy_history(blocks, nh, card->history, SQS_MAX_HISTORY);
+                else
+                    card->n_history = sqf_parse_waon_history(blocks, nh, card->history, SQS_MAX_HISTORY);
             }
             return 0;
         }

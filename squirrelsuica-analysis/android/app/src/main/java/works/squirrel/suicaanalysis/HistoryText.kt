@@ -13,6 +13,7 @@ object HistoryText {
     const val SVC_EDY_BAL = 0x1317
     const val SVC_EDY_HIST = 0x170f
     const val SVC_WAON_BAL = 0x6817
+    const val SVC_WAON_HIST = 0x680b
 
     fun interface Parser {
         fun history(brand: SqFelica.Brand, blocks: List<ByteArray>): List<SqFelica.Entry>?
@@ -62,7 +63,10 @@ object HistoryText {
         )
         section("nanaco (svc 564f)", SqFelica.Brand.NANACO, SVC_NANACO_HIST, blocksOf(d, SVC_NANACO_BAL)?.firstOrNull(), null)
         section("Edy (svc 170f)", SqFelica.Brand.EDY, SVC_EDY_HIST, blocksOf(d, SVC_EDY_BAL)?.firstOrNull(), null)
-        section("WAON (svc 6817)", SqFelica.Brand.WAON, null, blocksOf(d, SVC_WAON_BAL)?.firstOrNull(), null)
+        section(
+            "WAON (svc 680b)", SqFelica.Brand.WAON, SVC_WAON_HIST,
+            blocksOf(d, SVC_WAON_BAL)?.firstOrNull(), null
+        )
         if (!any) appendLine("No Suica, nanaco, Edy or WAON services were readable on this card.")
     }
 
