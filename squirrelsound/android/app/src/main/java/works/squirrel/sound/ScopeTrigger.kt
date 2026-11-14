@@ -18,7 +18,8 @@ object ScopeTrigger {
         val n = samples.size
         if (n < 2 || span <= 0) return 0
         val maxStart = (n - span).coerceAtLeast(0)
-        for (i in 1 until maxStart) {
+        // Inclusive: a crossing at exactly maxStart still leaves [span] samples.
+        for (i in 1..maxStart) {
             if (samples[i - 1] < 0f && samples[i] >= 0f) return i
         }
         return 0

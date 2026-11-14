@@ -44,4 +44,15 @@ class ScopeTriggerTest {
         assertEquals(0f, ScopeTrigger.spanMs(10, 0), 0f)
         assertTrue(abs(ScopeTrigger.spanMs(480, 48_000) - 10f) < 1e-3f)
     }
+
+    @Test
+    fun risingEdgeAtExactlyMaxStartIsAccepted() {
+        // n=8, span=4 → maxStart = 4. A crossing only at i=4 must still count
+        // (was skipped by `1 until maxStart`).
+        val samples = floatArrayOf(-1f, -1f, -1f, -1f, 0.5f, 1f, 1f, 1f)
+        assertEquals(4, ScopeTrigger.risingEdgeStart(samples, 4))
+        // Crossing past maxStart cannot leave a full span.
+        val late = floatArrayOf(-1f, -1f, -1f, -1f, -1f, 0.5f, 1f, 1f)
+        assertEquals(0, ScopeTrigger.risingEdgeStart(late, 4))
+    }
 }
