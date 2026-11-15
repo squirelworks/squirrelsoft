@@ -140,7 +140,9 @@ and `grapher-flake` branches show this has already bitten).
 - **SquirrelGNSS on the phone**: Android exposes raw GNSS measurements
   (`GnssMeasurement`); feed them to the existing `sqgnss` core over JNI and add
   an NTRIP client for corrections: RTK-grade positioning in an app, reusing
-  code that is already tested on desktop.
+  code that is already tested on desktop. First portable step: `sqntrip`
+  (request/response + sourcetable parse, synthetic caster tests, no network);
+  next is a live transport and the phone measurement feed.
 - **SquirrelCalc on Android**: `sqmath` + a native front-end gives a Desmos /
   TI-Nspire-class calculator on the phone from the same core.
 - **SquirrelQR beyond QR**: original decoders for Micro QR / rMQR, Data Matrix,

@@ -210,6 +210,7 @@ static void test_pvt(void) {
 void test_rinex(int *checks, int *failures);
 void test_rtk_all(int *checks, int *failures);
 void test_recv_all(int *checks, int *failures);
+void test_ntrip_all(int *checks, int *failures);
 
 int main(void) {
     test_geodesy();
@@ -218,6 +219,7 @@ int main(void) {
     test_rinex(&checks, &failures);
     test_rtk_all(&checks, &failures);
     test_recv_all(&checks, &failures);
+    test_ntrip_all(&checks, &failures);
     printf("test_sqgnss: %d checks, %d failed\n", checks, failures);
     return failures != 0;
 }
