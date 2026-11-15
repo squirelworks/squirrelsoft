@@ -32,6 +32,15 @@ Two Cursor agents run in parallel. Branch suffix is the claim tag:
 Checklist and open-PR map: [docs/AGENT_LANES.md](AGENT_LANES.md). Do not
 take a box the other lane has tagged in `TODO.md` / `HANDOFF.md`.
 
+## 1c. Path to suite / OS 3.0.0 (fine-grained tags)
+
+Durable walkthrough (near-term finish+release, version ladders for OS/2 /
+BIOS / Soft, resume instructions when credits reset):
+**[docs/PATH_TO_3.0.0.md](PATH_TO_3.0.0.md)**. CONTINUANCE M3 ("64-bit Warp")
+is the **3.0.0** destination; M1–M2 are the rungs before it. Lane handshake
+and the resolved OS/2 [#205](https://github.com/squirelworks/squirrel-os2/pull/205)
+historical-tag plan live in that file.
+
 ## 2. Next milestones
 
 ### M1 — Ship what `main` already has (first)

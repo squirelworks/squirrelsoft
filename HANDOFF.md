@@ -45,13 +45,16 @@ Used here, in `ROADMAP.md` and on the issues (as labels).
   `.github/workflows/ci.yml` on every PR. Desktop packages: see
   `docs/packaging.md` and `.github/workflows/release.yml`.
 - **Open Cursor/Codex coding items *(lane `-2eaf`)*:** Soft GNSS NTRIP/RTCM/
-  Android caster wiring is done on this lane; remaining Soft work is hygiene.
-  Next Squirrel-owned work remains **S6** repo split and **PLAY** uploads
-  (`needs: squirrel`). Phone meas (#148), `sqntrip` (#147), live NTRIP
-  (#150), RTCM skeleton (#151/#152/#153/#157), MSM observation fields
-  (#160) and Android NTRIP caster wiring are on this lane.
+  Android caster wiring is done on this lane (#147–#162); remaining Soft work
+  is hygiene. Next Squirrel-owned work remains **S6** repo split and **PLAY**
+  uploads (`needs: squirrel`): Sound 0.0.14/0.0.15, QR 0.1.7, Suica 0.0.13/0.0.14.
 - **Agent lanes:** suite split is in [docs/AGENT_LANES.md](docs/AGENT_LANES.md)
   (`-2eaf` = this Soft/Gen2/BIOS lane; `-b55f` = OS/2 2.9 only).
+- **Path to suite/OS 3.0.0:** [docs/PATH_TO_3.0.0.md](docs/PATH_TO_3.0.0.md)
+  (near-term finish list, fine-grained tag ladders, resume instructions).
+  Go/no-go: Soft [#161](https://github.com/squirelworks/squirrelsoft/issues/161).
+  Soft **#162** is on `main`; leave PLAY/S6 to Squirrel; suite tags are
+  OS/2/BIOS only (owner publishes).
 
 ## Rules (Squirrel's; do not break)
 
@@ -102,11 +105,13 @@ Android SDK 35). Without an SDK, the Gradle harnesses in the project's
 6. ~~**RTCM MSM observation fields**~~ — on `main` (#160): full DF394–DF396
    masks + MSM1–7 observation decode in `sqrtcm`; synthetic
    `tests/test_rtcm.c` only.
-7. ~~**Android NTRIP caster wiring**~~ — this PR (lane `-2eaf`): Android UI
-   + JNI feed `sqntrip`/`sqrtcm` (memio/loopback CI; operator dial).
+7. ~~**Android NTRIP caster wiring**~~ — on `main` (#162, lane `-2eaf`):
+   Android UI + JNI feed `sqntrip`/`sqrtcm` (memio/loopback CI; operator dial).
 8. **S6 repo split** *(Squirrel)* — prep inventory on `main`; see S6 card.
 9. **PLAY uploads** *(Squirrel)* — Sound 0.0.14/0.0.15, QR 0.1.7, Suica
    0.0.13/0.0.14 (already on `main`; do not invent uploads).
+10. **Suite path to 3.0.0** — docs in [docs/PATH_TO_3.0.0.md](docs/PATH_TO_3.0.0.md)
+    (PR #165); Soft coding is hygiene; OS/2/BIOS ladders are cross-repo.
 
 Done earlier (kept for history):
 
@@ -223,7 +228,7 @@ Done earlier (kept for history):
   `tests/test_rtcm.c` (synthetic frames only). Design note:
   `squirrelgnss/docs/rtcm-decode.md`.
 
-### GNSS-rtcm-msm — MSM observation fields (CONTINUANCE)  `status: done` *(this PR, lane `-2eaf`)*
+### GNSS-rtcm-msm — MSM observation fields (CONTINUANCE)  `status: done` (#160 on `main`)
 - Full MSM1–7 observation decode in `sqrtcm`: DF394–DF396 masks, DF397–DF399
   satellite rough ranges/rates, per-cell DF400–DF408 / DF420 fields;
   `sqrtcm_pack_msm` / `sqrtcm_parse_msm` + metre helpers; 73-bit MSM header
@@ -231,7 +236,7 @@ Done earlier (kept for history):
   (MSM4 / MSM7, invalid sentinels, framer glue). Design note cites
   RTCM 10403.x §3.5.12–3.5.13.
 
-### GNSS-android-caster — Android NTRIP caster wiring  `status: done` *(lane `-2eaf`)*
+### GNSS-android-caster — Android NTRIP caster wiring  `status: done` (#162 on `main`, lane `-2eaf`)
 - Wire `sqntrip` + `sqrtcm` into the SquirrelGNSS Android UI so a mount can
   be dialled and MSM corrections framed/parsed. JNI links the same C cores;
   CI uses memio + `127.0.0.1` loopback only (host `make test-jni`, unit +
