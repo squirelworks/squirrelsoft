@@ -35,7 +35,7 @@ Used here, in `ROADMAP.md` and on the issues (as labels).
   S3.2 done via #141), SquirrelSuica (PC/SC, RC-S380 over libusb, GUI, CSV —
   S3.3 done), SquirrelQR (files, PNG, X11/portal/Win/mac capture, V4L2 webcam,
   GUI, encoder — S3.4 done via #138 / #142), SquirrelCalc, SquirrelPaint,
-  SquirrelGames, SquirrelDebug. S3, S4 and S5 are complete on `main`. PKG
+  SquirrelGames, SquirrelDebug, SquirrelFlightLab (scaffold). S3, S4 and S5 are complete on `main`. PKG
   (S3.5 + S4) is on `main`.
 - **Shared cores:** `libs/sqdsp`, `libs/sqfelica`, `libs/sqqr`, `libs/sqmath`, `libs/sqgui`.
 - **Test gate:** `make test` on ubuntu / windows / macos (every lib and program,
@@ -253,6 +253,15 @@ Done earlier (kept for history):
   `sqrtcm_msg_payload` / `sqrtcm_msg_assign`. Post-#153 notes on `main`
   (#157): inq head/tail ring (O(1) take), prepend-overflow whole-tail drop
   test, `framer_feed` drain only when `n==0`.
+
+
+### FLIGHTLAB-scaffold — ISM Fighter Jet Flight Lab  `status: done` (this PR)
+- New desktop app `squirrelflightlab/`: project workspace, parametric aero AoA
+  sweep, 6-DOF flight-history stub, avionics channel co-check, trim/pull-up/roll
+  scenarios, planned CFD/tunnel/HIL stubs. Happy path:
+  `make -C squirrelflightlab demo` / `scripts/demo_happy_path.sh`. Design note
+  `squirrelflightlab/docs/overview.md`. Open decisions (scale, livery, aero
+  fidelity, shared bombers/rockets lab) listed there. Follow-ups are S7.2+.
 
 ### PLAY-0.0.14 — upload SquirrelSound 0.0.14  `needs: squirrel`
 - Build the AAB locally with the upload key and upload it to closed testing

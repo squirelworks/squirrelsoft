@@ -19,6 +19,11 @@ libs/
   src/ ...   desktop front-end and glue
 ```
 
+SquirrelFlightLab (`squirrelflightlab/`) is a desktop scaffold for the ISM
+fighter-jet lab: portable aero / dynamics / avionics cores live in the app
+folder (GNSS-style) with a CLI front-end. A future `libs/sqflight` split is an
+open decision if the ISM hardware repo needs the same types.
+
 The app folders stay where they are for now. Moving them under `apps/` is churn with no benefit until a split happens.
 
 ## Rules for a core library

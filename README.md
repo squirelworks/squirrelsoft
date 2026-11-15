@@ -19,6 +19,7 @@ libraries.
 | `squirrelpaint/` | **SquirrelPaint** | Paint program on `libs/sqgui` (desktop; freestanding core) |
 | `squirrelgames/` | **SquirrelGames** | Patience, Mines, Hearts, Bridge, Chess and Tiles on `libs/sqgui` (desktop; freestanding core) |
 | `squirreldebug/` | **SquirrelDebug** | Debugger for Squirrel OS/2 over QEMU's gdbstub or a serial line, on `libs/sqgui` (desktop; freestanding core) |
+| `squirrelflightlab/` | **Fighter Jet Flight Lab** (SquirrelFlightLab) | ISM fighter-jet aero / flight-dynamics / avionics lab (desktop scaffold) |
 
 ## Build
 

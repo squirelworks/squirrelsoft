@@ -1,0 +1,20 @@
+# ISM fighter-jet avionics bay — scaffold device-doc channel map
+# Source of truth (when published): ISM hardware repo KiCad avionics bay.
+# Pins below are the expected header map used by `avionics-check`.
+#
+# pin  role
+1  imu_ax
+2  imu_ay
+3  imu_az
+4  imu_gx
+5  imu_gy
+6  imu_gz
+7  radio_throttle
+8  radio_aileron
+9  radio_elevator
+10 radio_rudder
+11 act_elevator
+12 act_aileron_l
+13 act_aileron_r
+14 act_rudder
+15 act_throttle
