@@ -22,9 +22,18 @@ Lane `-2eaf`. Builds on the buffer-fed `sqntrip` skeleton (#147).
 Public NTRIP 1.0 (RTCM Paper 200-2004/SC104-STD) and NTRIP 2.0 HTTP headers.
 Correction bodies are framed by `sqrtcm` (see `docs/rtcm-decode.md`).
 
+## Android
+
+The same `SqntIo` / `SqntClient` / `SqntTcp` path is linked into
+`libsqgnss_jni.so` for the SquirrelGNSS app. Memio synth and `127.0.0.1`
+loopback cover CI; live dial is an operator UI action. See
+`docs/android-ntrip.md`.
+
 ## CI / safety
 
 - `tests/test_ntrip.c` uses memory I/O and `127.0.0.1` loopback only.
 - No remote caster, no credentials in the tree.
 - CLI: `ntrip-synth` is CI-safe; `ntrip HOST:PORT …` is for operators and is
   not invoked from `cli_smoke.sh` against a real host.
+- Android host smoke (`make test-jni`) and instrumented tests follow the same
+  rule.

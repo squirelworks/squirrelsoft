@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Bundle
 import android.widget.Button
+import android.widget.EditText
 import android.widget.TextView
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
@@ -12,16 +13,23 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.updatePadding
+import kotlin.concurrent.thread
 
 /**
  * SquirrelGNSS on Android: synthetic measurement feed through JNI by default
- * (CI / no hardware). Optionally listens for phone GnssMeasurement / Location
- * when the user grants location permission and a GPS provider exists.
+ * (CI / no hardware). NTRIP synth / loopback proves `sqntrip` + `sqrtcm` MSM
+ * parse; optional operator dial uses TCP. Optionally listens for phone
+ * GnssMeasurement / Location when the user grants location permission and a
+ * GPS provider exists.
  */
 class MainActivity : AppCompatActivity(), PhoneGnssFeed.Listener {
     private lateinit var status: TextView
+    private lateinit var ntripHost: EditText
+    private lateinit var ntripPort: EditText
+    private lateinit var ntripMount: EditText
     private var phoneFeed: PhoneGnssFeed? = null
     private var lastPhoneLine: String = ""
+    private var lastNtripLine: String = ""
 
     private val permissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -41,11 +49,15 @@ class MainActivity : AppCompatActivity(), PhoneGnssFeed.Listener {
         }
 
         status = findViewById(R.id.status)
-        val runSynthetic = findViewById<Button>(R.id.run_demo)
-        val runPhone = findViewById<Button>(R.id.run_phone)
+        ntripHost = findViewById(R.id.ntrip_host)
+        ntripPort = findViewById(R.id.ntrip_port)
+        ntripMount = findViewById(R.id.ntrip_mount)
+        lastNtripLine = getString(R.string.status_ntrip_idle)
 
-        runSynthetic.setOnClickListener { refreshSynthetic() }
-        runPhone.setOnClickListener { requestPhoneOrStart() }
+        findViewById<Button>(R.id.run_demo).setOnClickListener { refreshSynthetic() }
+        findViewById<Button>(R.id.run_phone).setOnClickListener { requestPhoneOrStart() }
+        findViewById<Button>(R.id.run_ntrip_synth).setOnClickListener { runNtripSynth() }
+        findViewById<Button>(R.id.run_ntrip_dial).setOnClickListener { runNtripDial() }
         refreshSynthetic()
     }
 
@@ -81,6 +93,62 @@ class MainActivity : AppCompatActivity(), PhoneGnssFeed.Listener {
             fix.errM,
             delta?.n ?: Double.NaN,
             lastPhoneLine.ifEmpty { getString(R.string.status_phone_idle) },
+            lastNtripLine.ifEmpty { getString(R.string.status_ntrip_idle) },
+        )
+    }
+
+    private fun runNtripSynth() {
+        if (!SqGnss.available) {
+            status.text = getString(R.string.status_no_core)
+            return
+        }
+        // Prefer memio; fall back to loopback if memio somehow fails.
+        val result = NtripCasterFeed.runSynth() ?: NtripCasterFeed.runLoopback()
+        lastNtripLine = formatNtrip("synth", result)
+        refreshSynthetic()
+    }
+
+    private fun runNtripDial() {
+        if (!SqGnss.available) {
+            status.text = getString(R.string.status_no_core)
+            return
+        }
+        val host = ntripHost.text?.toString()?.trim().orEmpty()
+        val port = ntripPort.text?.toString()?.trim().orEmpty()
+        val mount = ntripMount.text?.toString()?.trim().orEmpty()
+        if (host.isEmpty() || port.isEmpty() || mount.isEmpty()) {
+            lastNtripLine = getString(R.string.status_ntrip_need_fields)
+            refreshSynthetic()
+            return
+        }
+        lastNtripLine = "NTRIP dial $host:$port/$mount …"
+        refreshSynthetic()
+        // Off the UI thread: live TCP can block.
+        thread(name = "ntrip-dial") {
+            val result = NtripCasterFeed.dial(host, port, mount)
+            runOnUiThread {
+                lastNtripLine = formatNtrip("dial", result)
+                refreshSynthetic()
+            }
+        }
+    }
+
+    private fun formatNtrip(label: String, result: SqGnss.NtripMsmResult?): String {
+        if (result == null || !result.isMsmStream) {
+            return getString(R.string.status_ntrip_failed)
+        }
+        return getString(
+            R.string.status_ntrip_ok,
+            label,
+            result.msmType,
+            result.msgType,
+            result.stationId,
+            result.epochMs,
+            result.nSat,
+            result.nSig,
+            result.nCell,
+            result.bodyLen,
+            result.nFrames,
         )
     }
 

@@ -39,10 +39,12 @@ test: $(BUILD)/test_sqgnss $(BUILD)/squirrelgnss test-jni
 
 # The Android JNI bridge built for this machine and driven from a JVM
 # (android/jni-smoke): skipped when there is no JDK. Synthetic measurement
-# feed (fillDemoEpoch → solveEpoch); no phone GNSS in CI.
+# feed (fillDemoEpoch → solveEpoch) plus NTRIP memio/loopback → MSM; no
+# phone GNSS and no remote caster in CI.
 JDK ?= $(shell if [ -n "$$JAVA_HOME" ]; then echo "$$JAVA_HOME"; \
 	elif command -v javac >/dev/null; then dirname "$$(dirname "$$(readlink -f "$$(command -v javac)")")"; fi)
-JNI_SRC = android/app/src/main/cpp/sqgnss_jni.c src/sqgnss.c
+JNI_SRC = android/app/src/main/cpp/sqgnss_jni.c src/sqgnss.c src/sqntrip.c \
+	src/sqntrip_transport.c src/sqrtcm.c
 
 test-jni: | $(BUILD)
 	@if [ "$$(uname -s)" != Linux ]; then \

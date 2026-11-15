@@ -20,8 +20,9 @@ S3.2 WASAPI/macOS is done on `main` via
 [#141](https://github.com/squirelworks/squirrelsoft/pull/141).
 **GNSS-android-jni** first step is on `main` (#146). Phone GnssMeasurement is
 on `main` (#148). Live NTRIP transport is on `main` (#150). RTCM decode
-skeleton (#151) and Sarah RTCM follow-ups (#152 / #153) are on `main`
-*(lane `-2eaf`)*. Remaining Soft coding is mostly hygiene.
+skeleton (#151), Sarah RTCM follow-ups (#152 / #153), MSM obs (#160) and
+Android NTRIP caster wiring are on `main` / this PR *(lane `-2eaf`)*.
+Remaining Soft coding is mostly hygiene.
 See **[docs/AGENT_LANES.md](docs/AGENT_LANES.md)** for the `-2eaf` / `-b55f` split.
 **[HANDOFF.md](HANDOFF.md)** has the cards; next Squirrel-owned work remains
 **S6** and **PLAY**. **[docs/CONTINUANCE.md](docs/CONTINUANCE.md)** is the suite plan.
@@ -199,8 +200,8 @@ These milestones predate the suite roadmap and remain open. Formats stay owned b
 - [x] Phone GnssMeasurement feed into the JNI core (#148 on `main`) (CONTINUANCE).
 - [x] Live NTRIP TCP transport for corrections (#150 on `main`): `SqntClient` + portable sockets, offline memio/loopback tests only; TLS stub (CONTINUANCE).
 - [x] RTCM 3 decode skeleton *(lane `-2eaf`)*: `sqrtcm` frame sync / CRC-24Q / MSM+obs header parse; synthetic `squirrelgnss/tests/test_rtcm.c` only; NTRIP body feed hook (CONTINUANCE).
-- [x] RTCM MSM observation fields *(lane `-2eaf`)*: DF394–DF396 masks + MSM1–7 cell/sat fields in `sqrtcm`; synthetic `squirrelgnss/tests/test_rtcm.c` MSM4/MSM7 round-trips (CONTINUANCE). Android caster wiring still open.
-- [ ] Android NTRIP caster wiring *(lane `-2eaf`)*: feed `sqntrip`/`sqrtcm` from the SquirrelGNSS Android UI; synthetic/loopback CI only (CONTINUANCE).
+- [x] RTCM MSM observation fields *(lane `-2eaf`)*: DF394–DF396 masks + MSM1–7 cell/sat fields in `sqrtcm`; synthetic `squirrelgnss/tests/test_rtcm.c` MSM4/MSM7 round-trips (CONTINUANCE).
+- [x] Android NTRIP caster wiring *(lane `-2eaf`)*: feed `sqntrip`/`sqrtcm` from the SquirrelGNSS Android UI (JNI memio/loopback + operator dial); synthetic/loopback CI only (CONTINUANCE).
 
 ### SquirrelSound desktop (sqdsp)
 - [x] Radix-2 FFT, windows, periodogram, Welch PSD, STFT; pitch, THD, SNR; WAV I/O, CLI reports, SVG plots; live SDL spectrum/waterfall + ALSA mic (done)

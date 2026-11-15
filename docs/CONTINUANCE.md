@@ -156,8 +156,8 @@ and `grapher-flake` branches show this has already bitten).
   an app, reusing code that is already tested on desktop. First portable step
   (`sqntrip` skeleton #147, phone meas #148 and live NTRIP #150) are on
   `main`; RTCM decode skeleton (#151), Sarah follow-ups (#152 / #153 /
-  #157) and MSM observation fields are on this Soft lane (`-2eaf`);
-  Android caster wiring remains open.
+  #157), MSM observation fields (#160) and Android NTRIP caster wiring
+  are on this Soft lane (`-2eaf`).
 - **SquirrelCalc on Android**: `sqmath` + a native front-end gives a Desmos /
   TI-Nspire-class calculator on the phone from the same core.
 - **SquirrelQR beyond QR**: original decoders for Micro QR / rMQR, Data Matrix,

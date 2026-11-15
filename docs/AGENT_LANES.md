@@ -39,8 +39,8 @@ editing the docs boxes for its own cards per PR.
 - [x] **RTCM decode skeleton** `-2eaf` — PR #151 / #152 (on `main`)
 - [x] **RTCM Sarah round-2** `-2eaf` — PR #153 (merged)
 - [x] **Post-#153 RTCM notes** `-2eaf` — PR #157 / #158 (on `main`)
-- [x] **RTCM MSM observation fields** `-2eaf` — this PR
-- [ ] **Android NTRIP caster wiring** `-2eaf` — after MSM obs on `main`
+- [x] **RTCM MSM observation fields** `-2eaf` — PR #160 (on `main`)
+- [x] **Android NTRIP caster wiring** `-2eaf` — this PR
 
 Leave **S6** / **PLAY** to Squirrel (`needs: squirrel`).
 
@@ -80,7 +80,7 @@ Leave **S6** / **PLAY** to Squirrel (`needs: squirrel`).
 
 **Merged (do not re-claim):** os2 #183 W.3, #191 W.2, #192 W.5, #193 paging,
 #196 stay-thunks, #203 lanes canon; soft #148–#153 GNSS/NTRIP/RTCM (+ Sarah
-round-2), #157 / #158 post-#153 notes.
+round-2), #157 / #158 post-#153 notes, #160 MSM obs.
 
 ## Issue sync note
 
