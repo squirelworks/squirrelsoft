@@ -20,6 +20,18 @@ The three repos already form one stack: SquirrelBIOS boots Squirrel-OS/2
 C cores and then ported, and SquirrelDebug debugs the OS over QEMU's gdbstub.
 The best next steps make that stack tighter rather than wider.
 
+## 1b. Agent lanes (who takes which box)
+
+Two Cursor agents run in parallel. Branch suffix is the claim tag:
+
+| Lane | Suffix | Owns |
+|------|--------|------|
+| A | `-2eaf` | OS/2 Gen2 desktop (W.3 / 2.6 / W.2 / W.5 / W.6); Soft GNSS meas + live NTRIP; free BIOS follow-ups |
+| B | `-b55f` | OS/2 **2.9-lm-kernel** and **2.9-syscall64** only |
+
+Checklist and open-PR map: [docs/AGENT_LANES.md](AGENT_LANES.md). Do not
+take a box the other lane has tagged in `TODO.md` / `HANDOFF.md`.
+
 ## 2. Next milestones
 
 ### M1 — Ship what `main` already has (first)
