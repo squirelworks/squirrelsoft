@@ -3,7 +3,8 @@ CFLAGS ?= -std=c11 -Wall -Wextra -O2 -Iinclude
 LDFLAGS ?= -lm
 BUILD = build
 OBJ = $(BUILD)/sqgnss.o $(BUILD)/sqrinex.o $(BUILD)/sqsurvey.o $(BUILD)/sqrtk.o \
-	$(BUILD)/sqrecv.o $(BUILD)/sqserial.o $(BUILD)/sqntrip.o $(BUILD)/sqntrip_transport.o
+	$(BUILD)/sqrecv.o $(BUILD)/sqserial.o $(BUILD)/sqntrip.o $(BUILD)/sqntrip_transport.o \
+	$(BUILD)/sqrtcm.o
 
 UNAME_S := $(shell uname -s 2>/dev/null || echo Unknown)
 IS_WIN := $(findstring MINGW,$(UNAME_S))$(findstring MSYS,$(UNAME_S))$(findstring CYGWIN,$(UNAME_S))
@@ -18,16 +19,19 @@ all: $(BUILD)/squirrelgnss $(BUILD)/test_sqgnss
 $(BUILD):
 	mkdir -p $(BUILD)
 
-$(BUILD)/%.o: src/%.c include/sqgnss.h include/sqrinex.h include/sqrtk.h include/sqrecv.h include/sqntrip.h | $(BUILD)
+$(BUILD)/%.o: src/%.c include/sqgnss.h include/sqrinex.h include/sqrtk.h include/sqrecv.h \
+		include/sqntrip.h include/sqrtcm.h | $(BUILD)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(BUILD)/squirrelgnss: src/main.c include/sqgnss.h include/sqrecv.h include/sqntrip.h $(OBJ) | $(BUILD)
+$(BUILD)/squirrelgnss: src/main.c include/sqgnss.h include/sqrecv.h include/sqntrip.h \
+		include/sqrtcm.h $(OBJ) | $(BUILD)
 	$(CC) $(CFLAGS) src/main.c $(OBJ) -o $@ $(LDFLAGS)
 
 $(BUILD)/test_sqgnss: tests/test_sqgnss.c tests/test_rinex.c tests/test_rtk.c tests/test_recv.c \
-		tests/test_ntrip.c include/sqgnss.h include/sqntrip.h $(OBJ) | $(BUILD)
+		tests/test_ntrip.c tests/test_rtcm.c include/sqgnss.h include/sqntrip.h include/sqrtcm.h \
+		$(OBJ) | $(BUILD)
 	$(CC) $(CFLAGS) tests/test_sqgnss.c tests/test_rinex.c tests/test_rtk.c tests/test_recv.c \
-		tests/test_ntrip.c $(OBJ) -o $@ $(LDFLAGS)
+		tests/test_ntrip.c tests/test_rtcm.c $(OBJ) -o $@ $(LDFLAGS)
 
 test: $(BUILD)/test_sqgnss $(BUILD)/squirrelgnss test-jni
 	$(BUILD)/test_sqgnss

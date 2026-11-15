@@ -25,13 +25,18 @@ GNSS point positioning for land surveying. It covers:
   TCP session through injectable `SqntIo` (memory bytes or portable
   sockets). Unit tests use synthetic replies and `127.0.0.1` loopback only.
   TLS is requested via a flag but unsupported without an in-tree stack.
-  Correction bodies stay opaque (RTCM decode is next).
+- RTCM 3 skeleton (`sqrtcm`): preamble sync, CRC-24Q, and message/station
+  headers for legacy observations, station ARP and MSM (epoch + multi bit).
+  Stream bodies from NTRIP feed the framer; full MSM observation fields are
+  next.
 
 Android (`android/`): JNI to this core with a synthetic packed-observation
 feed for CI, and an optional phone `GnssMeasurement` / `Location` listener.
-NTRIP corrections are not wired into the app UI yet; the C transport is ready.
+NTRIP corrections are not wired into the app UI yet; the C transport and
+RTCM skeleton are ready.
 
 Not yet: other constellations (Galileo, BeiDou, GLONASS), CNAV inter-signal
-corrections for L5, RTK on L5, NTRIP TLS, RTCM decode, and app-side NTRIP.
+corrections for L5, RTK on L5, NTRIP TLS, full MSM observations, and
+app-side NTRIP.
 The receiver path has been checked on synthetic streams and through a
 pseudo-terminal, not yet on a receiver.

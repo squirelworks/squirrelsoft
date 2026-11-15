@@ -26,7 +26,7 @@ Two Cursor agents run in parallel. Branch suffix is the claim tag:
 
 | Lane | Suffix | Owns |
 |------|--------|------|
-| A | `-2eaf` | OS/2 Gen2 desktop (W.3 / 2.6 / W.2 / W.5 / W.6); Soft GNSS meas + live NTRIP; free BIOS follow-ups |
+| A | `-2eaf` | OS/2 Gen2 desktop (W.3 / 2.6 / W.2 / W.5 / W.6); Soft GNSS NTRIP + RTCM; free BIOS follow-ups |
 | B | `-b55f` | OS/2 **2.9-lm-kernel** and **2.9-syscall64** only |
 
 Checklist and open-PR map: [docs/AGENT_LANES.md](AGENT_LANES.md). Do not
@@ -154,8 +154,9 @@ and `grapher-flake` branches show this has already bitten).
   (synthetic packed-epoch path + optional phone listener on #148, lane
   `-2eaf`) and add an NTRIP client for corrections: RTK-grade positioning in
   an app, reusing code that is already tested on desktop. First portable step
-  (`sqntrip` skeleton #147 and phone meas #148) are on `main`; live TCP
-  transport is lane `-2eaf` (`cursor/impl-gnss-ntrip-live-2eaf`).
+  (`sqntrip` skeleton #147, phone meas #148 and live NTRIP #150) are on
+  `main`; RTCM decode skeleton is lane `-2eaf`
+  (`cursor/impl-gnss-rtcm-2eaf`).
 - **SquirrelCalc on Android**: `sqmath` + a native front-end gives a Desmos /
   TI-Nspire-class calculator on the phone from the same core.
 - **SquirrelQR beyond QR**: original decoders for Micro QR / rMQR, Data Matrix,

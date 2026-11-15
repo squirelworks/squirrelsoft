@@ -105,8 +105,12 @@ formulas. None of it comes from vendor receiver firmware.
   (memory caster for tests, portable sockets for a real host). CI uses
   synthetic bytes and `127.0.0.1` loopback only — no remote caster and no
   credentials in the tree. TLS is a clean failure until an original stack
-  exists. Correction payloads stay opaque (RTCM decode next). See
-  `docs/ntrip-transport.md`.
+  exists. See `docs/ntrip-transport.md`.
+- **RTCM 3 skeleton (`sqrtcm`):** frame sync on `0xD3`, CRC-24Q, and
+  message/station header parse for legacy observations, station ARP and
+  MSM (epoch + multi-message bit). Streaming framer accepts opaque NTRIP
+  body bytes. Observation fields / sat masks are a later step. Synthetic
+  tests only — see `docs/rtcm-decode.md`.
 
 ## Build
 
@@ -141,7 +145,8 @@ make test
 ./build/squirrelgnss receiver /dev/ttyUSB0 --nmea                  # an NMEA-only receiver's fixes
 ./build/squirrelgnss ubx-demo demo.ubx 30 --dual --l5 --junk       # a synthetic receiver stream
 ./build/squirrelgnss receiver demo.ubx --iono-free                 # ... read back and solved
-./build/squirrelgnss ntrip-synth                                   # offline loopback NTRIP
+./build/squirrelgnss ntrip-synth                                   # offline loopback NTRIP (+ RTCM decode)
+./build/squirrelgnss rtcm-synth                                    # offline RTCM3 frame build/decode
 # ./build/squirrelgnss ntrip caster.example:2101 NEAR --user demo --pass none   # live (not CI)
 ```
 
@@ -173,17 +178,18 @@ is published by the IGS data centres.
 A synthetic measurement feed packs demo-sky observations and solves them with
 `nativeSolveEpoch` (CI / host smoke). The app can also listen for phone
 `GnssMeasurement` / `Location` when permission and hardware allow. The C
-NTRIP transport is ready on desktop (`ntrip-synth` / `ntrip`); the Android
-UI does not dial a caster yet. Host smoke: `make test-jni` (or `make test`)
-builds `sqgnss_jni.c` for this machine and drives it from `android/jni-smoke/`
-— skipped when there is no JDK.
+NTRIP transport and the RTCM skeleton are ready on desktop (`ntrip-synth` /
+`rtcm-synth` / `ntrip`); the Android UI does not dial a caster yet. Host
+smoke: `make test-jni` (or `make test`) builds `sqgnss_jni.c` for this
+machine and drives it from `android/jni-smoke/` — skipped when there is no
+JDK.
 
 ## Tests
 
 `make test` runs `tests/test_sqgnss.c` (with `tests/test_rinex.c`,
-`tests/test_rtk.c`, `tests/test_recv.c` and `tests/test_ntrip.c`),
-`tests/cli_smoke.sh`, and the Android JNI host smoke above. The unit
-tests cover:
+`tests/test_rtk.c`, `tests/test_recv.c`, `tests/test_ntrip.c` and
+`tests/test_rtcm.c`), `tests/cli_smoke.sh`, and the Android JNI host smoke
+above. The unit tests cover:
 
 - fixed points of the ellipsoid, and 539 round trips (poles, the antimeridian,
   -5 km to 20,200 km)
@@ -237,3 +243,6 @@ tests cover:
   401, `SOURCETABLE` with two `STR;` mounts, HTTP 200 + `STR;` body
   promotion, `SqntClient` over memory I/O, TLS-unsupported path, and a
   `127.0.0.1` loopback TCP synthetic caster — no remote network in CI
+- RTCM 3: CRC-24Q empty frame, MSM/obs header pack+parse, streaming framer
+  with junk/resync and bad CRC, chunked feeds, reserved length bits, and
+  NTRIP ICY body → `sqrtcm_framer_feed` glue — synthetic bytes only
