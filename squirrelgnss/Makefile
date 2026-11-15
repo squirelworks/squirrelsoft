@@ -3,7 +3,13 @@ CFLAGS ?= -std=c11 -Wall -Wextra -O2 -Iinclude
 LDFLAGS ?= -lm
 BUILD = build
 OBJ = $(BUILD)/sqgnss.o $(BUILD)/sqrinex.o $(BUILD)/sqsurvey.o $(BUILD)/sqrtk.o \
-	$(BUILD)/sqrecv.o $(BUILD)/sqserial.o $(BUILD)/sqntrip.o
+	$(BUILD)/sqrecv.o $(BUILD)/sqserial.o $(BUILD)/sqntrip.o $(BUILD)/sqntrip_transport.o
+
+UNAME_S := $(shell uname -s 2>/dev/null || echo Unknown)
+IS_WIN := $(findstring MINGW,$(UNAME_S))$(findstring MSYS,$(UNAME_S))$(findstring CYGWIN,$(UNAME_S))
+ifneq ($(IS_WIN),)
+LDFLAGS += -lws2_32
+endif
 
 .PHONY: all test test-jni clean android android-test
 

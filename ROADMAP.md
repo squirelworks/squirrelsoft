@@ -19,7 +19,7 @@ Every item is a checkbox. Tick it in the PR that merges its last piece. Nested b
 S3.2 WASAPI/macOS is done on `main` via
 [#141](https://github.com/squirelworks/squirrelsoft/pull/141).
 **GNSS-android-jni** first step is on `main` (#146). Phone GnssMeasurement is
-*(in progress #148, lane `-2eaf`)*; live NTRIP transport is *(claimed lane `-2eaf`)*.
+on `main` (#148). Live NTRIP transport is in this PR *(lane `-2eaf`)*.
 See **[docs/AGENT_LANES.md](docs/AGENT_LANES.md)** for the `-2eaf` / `-b55f` split.
 **[HANDOFF.md](HANDOFF.md)** has the cards; next Squirrel-owned work remains
 **S6** and **PLAY**. **[docs/CONTINUANCE.md](docs/CONTINUANCE.md)** is the suite plan.
@@ -194,7 +194,8 @@ These milestones predate the suite roadmap and remain open. Formats stay owned b
 - [x] Serial receiver input (`squirrelgnss receiver`): NMEA fixes and satellites in view, u-blox RXM-RAWX/RXM-SFRBX/NAV-PVT with the navigation message decoded to ephemerides, solved live beside the receiver and logged as RINEX
 - [x] Android scaffold + JNI to `sqgnss` with host `squirrelgnss/android/jni-smoke` (synthetic demo PVT; no real GNSS in CI)
 - [x] NTRIP client skeleton (`sqntrip`): GET request + Basic auth, ICY/HTTP caster response and sourcetable parse; `squirrelgnss/tests/test_ntrip.c` uses synthetic caster bytes only (no network). First step toward phone RTK corrections (CONTINUANCE).
-- [ ] Phone GnssMeasurement feed into the JNI core *(in progress #148, lane `-2eaf`)*; live NTRIP transport for corrections *(claimed lane `-2eaf`)* (CONTINUANCE)
+- [x] Phone GnssMeasurement feed into the JNI core (#148 on `main`) (CONTINUANCE).
+- [x] Live NTRIP TCP transport for corrections *(lane `-2eaf`)*: `SqntClient` + portable sockets, offline memio/loopback tests only; TLS stub (CONTINUANCE). RTCM decode / Android caster wiring still open.
 
 ### SquirrelSound desktop (sqdsp)
 - [x] Radix-2 FFT, windows, periodogram, Welch PSD, STFT; pitch, THD, SNR; WAV I/O, CLI reports, SVG plots; live SDL spectrum/waterfall + ALSA mic (done)

@@ -98,13 +98,15 @@ formulas. None of it comes from vendor receiver firmware.
   early, (f1/f)² times more on L2 and L5), L5, the satellite group delay on
   L2 and L5 code, and ambiguities that belong to a receiver wherever it
   goes. It's for tests and demos.
-- **NTRIP client skeleton (`sqntrip`):** builds NTRIP/HTTP GET requests
-  (User-Agent `NTRIP …`, optional Basic auth, NTRIP 2 version/Host headers)
-  and parses caster replies from a buffer — `ICY 200` / `HTTP/1.x` stream
-  bodies and `SOURCETABLE` / `STR;` tables. No sockets and no network in
-  tests; a host supplies the bytes. Correction payloads stay opaque for
-  now (RTCM decode and a live transport are the next step toward Android
-  `GnssMeasurement` + NTRIP RTK corrections).
+- **NTRIP client (`sqntrip`):** builds NTRIP/HTTP GET requests
+  (User-Agent `NTRIP …`, optional Basic auth, NTRIP 2 version/Host headers),
+  parses caster replies (`ICY 200` / `HTTP/1.x` streams and `SOURCETABLE` /
+  `STR;` tables), and runs a live TCP transport behind injectable `SqntIo`
+  (memory caster for tests, portable sockets for a real host). CI uses
+  synthetic bytes and `127.0.0.1` loopback only — no remote caster and no
+  credentials in the tree. TLS is a clean failure until an original stack
+  exists. Correction payloads stay opaque (RTCM decode next). See
+  `docs/ntrip-transport.md`.
 
 ## Build
 
@@ -139,6 +141,8 @@ make test
 ./build/squirrelgnss receiver /dev/ttyUSB0 --nmea                  # an NMEA-only receiver's fixes
 ./build/squirrelgnss ubx-demo demo.ubx 30 --dual --l5 --junk       # a synthetic receiver stream
 ./build/squirrelgnss receiver demo.ubx --iono-free                 # ... read back and solved
+./build/squirrelgnss ntrip-synth                                   # offline loopback NTRIP
+# ./build/squirrelgnss ntrip caster.example:2101 NEAR --user demo --pass none   # live (not CI)
 ```
 
 `receiver` prints the receiver's NMEA fixes until raw epochs arrive (always
@@ -168,8 +172,9 @@ is published by the IGS data centres.
 `android/` (`works.squirrel.gnss`) links the same `sqgnss` core through JNI.
 A synthetic measurement feed packs demo-sky observations and solves them with
 `nativeSolveEpoch` (CI / host smoke). The app can also listen for phone
-`GnssMeasurement` / `Location` when permission and hardware allow; NTRIP
-corrections are not wired yet. Host smoke: `make test-jni` (or `make test`)
+`GnssMeasurement` / `Location` when permission and hardware allow. The C
+NTRIP transport is ready on desktop (`ntrip-synth` / `ntrip`); the Android
+UI does not dial a caster yet. Host smoke: `make test-jni` (or `make test`)
 builds `sqgnss_jni.c` for this machine and drives it from `android/jni-smoke/`
 — skipped when there is no JDK.
 
@@ -229,5 +234,6 @@ tests cover:
   RINEX L5 round trips with and without L2
 - NTRIP: Base64 Basic auth, GET request lines (sourcetable `/`, mount,
   NTRIP 2 Host/version), ICY 200 stream body through chunked feeds, HTTP
-  401, `SOURCETABLE` with two `STR;` mounts, and HTTP 200 + `STR;` body
-  promotion — all from synthetic caster bytes, no network
+  401, `SOURCETABLE` with two `STR;` mounts, HTTP 200 + `STR;` body
+  promotion, `SqntClient` over memory I/O, TLS-unsupported path, and a
+  `127.0.0.1` loopback TCP synthetic caster — no remote network in CI

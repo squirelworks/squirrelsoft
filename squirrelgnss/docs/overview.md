@@ -20,17 +20,18 @@ GNSS point positioning for land surveying. It covers:
   then integer least squares (LAMBDA-style decorrelation and search) with
   a ratio test; the kinematic filter keeps the ambiguities in information
   form, eliminating each epoch's rover, and handles cycle slips
-- NTRIP client skeleton (`sqntrip`): builds caster GET requests (NTRIP 1/2
-  headers, Basic auth) and parses ICY/HTTP replies and sourcetables from
-  a byte buffer. No sockets; unit tests feed synthetic caster responses.
-  Correction bodies stay opaque (RTCM decode and a live transport come
-  later, with phone `GnssMeasurement` on Android)
+- NTRIP client (`sqntrip`): builds caster GET requests (NTRIP 1/2 headers,
+  Basic auth), parses ICY/HTTP replies and sourcetables, and opens a live
+  TCP session through injectable `SqntIo` (memory bytes or portable
+  sockets). Unit tests use synthetic replies and `127.0.0.1` loopback only.
+  TLS is requested via a flag but unsupported without an in-tree stack.
+  Correction bodies stay opaque (RTCM decode is next).
 
 Android (`android/`): JNI to this core with a synthetic packed-observation
 feed for CI, and an optional phone `GnssMeasurement` / `Location` listener.
-NTRIP corrections are not wired yet.
+NTRIP corrections are not wired into the app UI yet; the C transport is ready.
 
 Not yet: other constellations (Galileo, BeiDou, GLONASS), CNAV inter-signal
-corrections for L5, RTK on L5, live NTRIP sockets/TLS, and phone GNSS.
+corrections for L5, RTK on L5, NTRIP TLS, RTCM decode, and app-side NTRIP.
 The receiver path has been checked on synthetic streams and through a
 pseudo-terminal, not yet on a receiver.
