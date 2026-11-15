@@ -44,10 +44,10 @@ Used here, in `ROADMAP.md` and on the issues (as labels).
   (`./gradlew :app:assembleDebug :app:testDebugUnitTest` per app), in
   `.github/workflows/ci.yml` on every PR. Desktop packages: see
   `docs/packaging.md` and `.github/workflows/release.yml`.
-- **Open Cursor/Codex coding items *(lane `-2eaf`)*:** phone `GnssMeasurement`
-  (#148) + live NTRIP transport after that (Android JNI first step and
-  `sqntrip` skeleton on `main` via #146 / #147). Next Squirrel-owned work
-  remains **S6** repo split and **PLAY** uploads.
+- **Open Cursor/Codex coding items *(lane `-2eaf`)*:** after live NTRIP
+  transport (this PR), remaining Soft coding is mostly hygiene; next
+  Squirrel-owned work remains **S6** repo split and **PLAY** uploads.
+  Phone meas (#148) and `sqntrip` skeleton (#147) are on `main`.
 - **Agent lanes:** suite split is in [docs/AGENT_LANES.md](docs/AGENT_LANES.md)
   (`-2eaf` = this Soft/Gen2/BIOS lane; `-b55f` = OS/2 2.9 only).
 
@@ -87,11 +87,11 @@ Android SDK 35). Without an SDK, the Gradle harnesses in the project's
 ## Suggested order
 
 1. ~~**GNSS-ntrip**~~ — on `main` (#147): portable `sqntrip` + `test_ntrip.c`.
-2. **Phone GnssMeasurement + live NTRIP** *(in progress / claimed lane `-2eaf`)* —
-   #148 measurement feed; then live caster transport into the RTK core /
-   Android JNI scaffold.
-3. **S6 repo split** *(Squirrel)* — prep inventory on `main`; see S6 card.
-4. **PLAY uploads** *(Squirrel)* — Sound 0.0.14/0.0.15, QR 0.1.7, Suica
+2. ~~**Phone GnssMeasurement**~~ — on `main` (#148).
+3. ~~**Live NTRIP transport**~~ — this PR *(lane `-2eaf`)*: TCP + TLS stub
+   over `sqntrip`; offline synthetic / loopback tests only.
+4. **S6 repo split** *(Squirrel)* — prep inventory on `main`; see S6 card.
+5. **PLAY uploads** *(Squirrel)* — Sound 0.0.14/0.0.15, QR 0.1.7, Suica
    0.0.13/0.0.14 (already on `main`; do not invent uploads).
 
 Done earlier (kept for history):
@@ -180,19 +180,26 @@ Done earlier (kept for history):
 
 ### GNSS-android-jni — SquirrelGNSS on Android (CONTINUANCE)  `status: done` (#146 on `main`)
 
-### GNSS-android-meas — phone / synthetic measurement feed  `status: in progress` lane `-2eaf` (#148)
+### GNSS-android-meas — phone / synthetic measurement feed  `status: done` (#148 on `main`)
 - Packed obs → PVT via JNI (`nativeFillDemoEpoch` / `nativeSolveEpoch`),
   `SyntheticMeasFeed` for CI, optional `PhoneGnssFeed`, Kotlin packing /
-  `GnssRawMapper`, JVM + instrumented synthetic tests. Branch
-  `cursor/impl-gnss-android-meas-2eaf`. Still open after merge: live NTRIP
-  transport (also lane `-2eaf`).
+  `GnssRawMapper`, JVM + instrumented synthetic tests.
 
 ### GNSS-ntrip — NTRIP client skeleton (CONTINUANCE)  `status: done` (#147 on `main`)
 - Portable `sqntrip` in `squirrelgnss/` (`include/sqntrip.h`, `src/sqntrip.c`):
   GET request builder (NTRIP 1/2 headers, Basic auth), ICY/HTTP response
   parser, sourcetable `STR;` parse. Unit tests in `tests/test_ntrip.c` feed
   synthetic caster bytes only — no network in CI. Wired into `make test`.
-  Still open *(lane `-2eaf`)*: live TCP/TLS transport and RTCM decode.
+
+### GNSS-ntrip-live — live NTRIP TCP transport (CONTINUANCE)  `status: done` lane `-2eaf`
+- `SqntIo` / `SqntClient` / `SqntTcp` in `sqntrip_transport.c`: injectable I/O,
+  memory caster, portable TCP (Winsock on Windows), loopback listen/accept.
+  TLS flag fails cleanly (`sqnt_tls_supported() == 0`; no third-party TLS).
+  Tests: synthetic memio + `127.0.0.1` loopback only. CLI: `ntrip-synth`
+  (CI) and `ntrip HOST:PORT` (operator; not dialled from CI). Design note:
+  `squirrelgnss/docs/ntrip-transport.md`. Branch
+  `cursor/impl-gnss-ntrip-live-2eaf`. Still open: RTCM decode and Android
+  caster wiring.
 
 ### PLAY-0.0.14 — upload SquirrelSound 0.0.14  `needs: squirrel`
 - Build the AAB locally with the upload key and upload it to closed testing

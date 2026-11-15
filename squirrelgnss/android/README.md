@@ -5,8 +5,8 @@
 JNI bridge to the desktop `sqgnss` core: geodesy, stakeout, and a
 **synthetic measurement feed** (fill packed observations → solve PVT) for CI.
 Optional phone `GnssMeasurement` / `Location` listening when the user grants
-location permission and GPS hardware is present. NTRIP corrections are not
-wired yet.
+location permission and GPS hardware is present. Desktop `sqntrip` has live
+TCP transport; this app does not dial a caster yet.
 
 - No microphone (see **SquirrelSound**)
 - No QR camera (see **SquirrelQR**)

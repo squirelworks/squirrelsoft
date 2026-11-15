@@ -154,7 +154,8 @@ and `grapher-flake` branches show this has already bitten).
   (synthetic packed-epoch path + optional phone listener on #148, lane
   `-2eaf`) and add an NTRIP client for corrections: RTK-grade positioning in
   an app, reusing code that is already tested on desktop. First portable step
-  (`sqntrip` skeleton) is on `main`; next is live transport after #148.
+  (`sqntrip` skeleton #147 and phone meas #148) are on `main`; live TCP
+  transport is lane `-2eaf` (`cursor/impl-gnss-ntrip-live-2eaf`).
 - **SquirrelCalc on Android**: `sqmath` + a native front-end gives a Desmos /
   TI-Nspire-class calculator on the phone from the same core.
 - **SquirrelQR beyond QR**: original decoders for Micro QR / rMQR, Data Matrix,
