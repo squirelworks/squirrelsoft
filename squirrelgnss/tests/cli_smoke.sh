@@ -60,6 +60,11 @@ $G help | grep -q demo-track || fail "help"
 # Offline NTRIP transport: local loopback synthetic caster (no remote network).
 out=$($G ntrip-synth) || fail "ntrip-synth exit: $out"
 echo "$out" | grep -q "^ntrip-synth ok status=200" || fail "ntrip-synth: $out"
+echo "$out" | grep -q "rtcm_frames=1 msg=1077 station=2001" || fail "ntrip-synth rtcm: $out"
 $G ntrip >/dev/null 2>&1; [ $? -eq 2 ] || fail "ntrip without HOST:PORT should exit 2"
 $G help | grep -q ntrip-synth || fail "help mentions ntrip-synth"
+# Offline RTCM3 skeleton: synthetic MSM + station ARP frames only.
+out=$($G rtcm-synth) || fail "rtcm-synth exit: $out"
+echo "$out" | grep -q "^rtcm-synth ok frames=2 msm=1077" || fail "rtcm-synth: $out"
+$G help | grep -q rtcm-synth || fail "help mentions rtcm-synth"
 echo "squirrelgnss cli smoke ok"

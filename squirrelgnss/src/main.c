@@ -3,6 +3,7 @@
 #include "sqntrip.h"
 #include "sqrecv.h"
 #include "sqrinex.h"
+#include "sqrtcm.h"
 #include "sqrtk.h"
 
 #include <math.h>
@@ -43,6 +44,7 @@ static void usage(FILE *f) {
           "  squirrelgnss ntrip-synth   offline loopback NTRIP (synthetic caster; CI-safe)\n"
           "  squirrelgnss ntrip HOST:PORT [MOUNT] [--user U] [--pass P] [--v2] [--tls]\n"
           "                       live TCP to a caster (not used in CI; no baked-in credentials)\n"
+          "  squirrelgnss rtcm-synth    offline RTCM3 frame build + decode (synthetic; CI-safe)\n"
           "  squirrelgnss help\n"
           "demo-track solves a synthetic 30-satellite sky; --fault adds a bias to one\n"
           "satellite, which the fault detection should exclude.\n"
@@ -904,10 +906,15 @@ int main(int argc, char **argv) {
             got_len += (size_t)n;
             got[got_len] = 0;
         }
-        static const char reply[] = "ICY 200 OK\r\n\r\n"
-                                    "\xd3\x00\x05"
-                                    "SYNTH";
-        rio.write(rio.ctx, reply, sizeof reply - 1);
+        /* CRC-valid synthetic MSM7 frame so the body can feed sqrtcm. */
+        unsigned char payload[8], frame[32], reply[96];
+        size_t plen = sqrtcm_pack_msm_header(payload, sizeof payload, 1077, 2001, 123456u, 0);
+        size_t flen = sqrtcm_frame(frame, sizeof frame, payload, plen);
+        const char *hdr = "ICY 200 OK\r\n\r\n";
+        size_t hlen = strlen(hdr);
+        memcpy(reply, hdr, hlen);
+        memcpy(reply + hlen, frame, flen);
+        rio.write(rio.ctx, reply, hlen + flen);
         sqnt_tcp_close(&server);
         if (sqnt_client_drain_body(&cli)) {
             fprintf(stderr, "squirrelgnss: %s\n", cli.err);
@@ -915,10 +922,40 @@ int main(int argc, char **argv) {
             sqnt_tcp_close(&listener);
             return 1;
         }
-        printf("ntrip-synth ok status=%d kind=%d body=%zu icy=%d mount=SYNTH\n", cli.parser.status,
-               cli.parser.kind, cli.parser.body_len, cli.parser.icy);
+        SqrtcmFramer rf;
+        SqrtcmMsg rm;
+        sqrtcm_framer_init(&rf);
+        int nmsg = sqrtcm_framer_feed(&rf, body, cli.parser.body_len, &rm, 1);
+        printf("ntrip-synth ok status=%d kind=%d body=%zu icy=%d mount=SYNTH "
+               "rtcm_frames=%d msg=%u station=%u\n",
+               cli.parser.status, cli.parser.kind, cli.parser.body_len, cli.parser.icy, nmsg,
+               nmsg > 0 ? rm.msg_type : 0u, nmsg > 0 ? rm.station_id : 0u);
         sqnt_client_close(&cli);
         sqnt_tcp_close(&listener);
+        return 0;
+    }
+    if (!strcmp(cmd, "rtcm-synth")) {
+        /* Offline encode/decode of synthetic RTCM3; no network. */
+        unsigned char msm[8], obs[3], stream[64];
+        size_t n1 = sqrtcm_pack_msm_header(msm, sizeof msm, 1077, 2001, 345600000u, 0);
+        size_t n2 = sqrtcm_pack_obs_header(obs, sizeof obs, 1005, 42);
+        size_t off = 0;
+        size_t f1 = sqrtcm_frame(stream + off, sizeof stream - off, msm, n1);
+        off += f1;
+        size_t f2 = sqrtcm_frame(stream + off, sizeof stream - off, obs, n2);
+        off += f2;
+        SqrtcmFramer fr;
+        SqrtcmMsg msgs[4];
+        sqrtcm_framer_init(&fr);
+        int got = sqrtcm_framer_feed(&fr, stream, off, msgs, 4);
+        if (got != 2 || msgs[0].msg_type != 1077 || msgs[0].station_id != 2001 ||
+            msgs[1].msg_type != 1005 || msgs[1].station_id != 42) {
+            fprintf(stderr, "squirrelgnss: rtcm-synth decode mismatch (got=%d)\n", got);
+            return 1;
+        }
+        printf("rtcm-synth ok frames=%d msm=%u station=%u epoch=%u arp=%u station=%u bytes=%zu\n",
+               got, msgs[0].msg_type, msgs[0].station_id, msgs[0].epoch_ms, msgs[1].msg_type,
+               msgs[1].station_id, off);
         return 0;
     }
     if (!strcmp(cmd, "ntrip")) {

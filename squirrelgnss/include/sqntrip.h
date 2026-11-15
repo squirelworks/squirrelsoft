@@ -9,7 +9,7 @@
  * Layout follows the public NTRIP 1.0 description (RTCM Paper
  * 200-2004/SC104-STD) and the NTRIP 2.0 HTTP header additions. Response
  * bodies after a stream 200 are opaque correction bytes (typically RTCM);
- * this module does not decode RTCM.
+ * pass them to `sqrtcm_framer_feed` (see sqrtcm.h) to sync and header-parse.
  */
 #ifndef SQNTRIP_H
 #define SQNTRIP_H
