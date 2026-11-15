@@ -213,7 +213,8 @@ Done earlier (kept for history):
   #153: rescan after bad CRC, owned payloads on multi-frame feed,
   `SQRTCM_INQ_MAX` / `rescan_drop`, GLONASS day+ms epoch documented.
   Post-#153: head/tail inq ring, prepend-overflow drop test. Unit tests in
-  `tests/test_rtcm.c` (synthetic frames only). Design note:  `squirrelgnss/docs/rtcm-decode.md`. Still open: full MSM observation
+  `tests/test_rtcm.c` (synthetic frames only). Design note:
+  `squirrelgnss/docs/rtcm-decode.md`. Still open: full MSM observation
   fields and Android caster wiring.
 
 ### Soft-Sarah-followups — NTRIP / RTCM / phone / MIT hygiene  `status: done` (#152 / #153 on `main`)
@@ -223,6 +224,7 @@ Done earlier (kept for history):
   `sqrtcm_msg_payload` / `sqrtcm_msg_assign`. Post-#153 notes on `main`
   (#157): inq head/tail ring (O(1) take), prepend-overflow whole-tail drop
   test, `framer_feed` drain only when `n==0`.
+
 ### PLAY-0.0.14 — upload SquirrelSound 0.0.14  `needs: squirrel`
 - Build the AAB locally with the upload key and upload it to closed testing
   (`scripts/` has the Play helpers). Do not commit or attach the AAB anywhere.

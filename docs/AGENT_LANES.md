@@ -23,11 +23,12 @@ editing the docs boxes for its own cards per PR.
 
 ### squirrel-os2 — Generation 2 desktop (exclusive of 2.9)
 
-- [ ] **W.3-launchpad** `-2eaf` — PR #183
+- [x] **W.3-launchpad** `-2eaf` — PR #183 (merged)
 - [ ] **2.6-icons** + **2.6-drag** `-2eaf` — PR #184
 - [ ] **2.6-shadows** `-2eaf` — PR #188
 - [x] **W.2-templates** `-2eaf` — PR #191 (merged)
-- [ ] **W.5-openas** `-2eaf` — PR #192
+- [x] **W.5-openas** `-2eaf` — PR #192 (merged)
+- [ ] **Sarah Gen2 follow-ups** `-2eaf` — PR #197
 - [ ] **W.6-startup** `-2eaf` — after icons/shadows on `main`
 - [ ] **W.6-syssetup** `-2eaf` — same wave as W.6-startup
 
@@ -37,6 +38,7 @@ editing the docs boxes for its own cards per PR.
 - [x] **Live NTRIP transport** `-2eaf` — PR #150 (on `main`)
 - [x] **RTCM decode skeleton** `-2eaf` — PR #151 / #152 (on `main`)
 - [x] **RTCM Sarah round-2** `-2eaf` — PR #153 (merged)
+- [x] **Post-#153 RTCM notes** `-2eaf` — PR #157 / #158 (on `main`)
 
 Remaining Soft coding is CI/rebase hygiene. Leave **S6** / **PLAY** to
 Squirrel (`needs: squirrel`).
@@ -57,12 +59,12 @@ Squirrel (`needs: squirrel`).
 ### squirrel-os2 — 64-bit kernel
 
 - [x] **2.9-lm-paging** `-b55f` — PR #193 (merged)
-- [ ] **2.9-lm-stay-thunks** `-b55f` — PR #196
-- [ ] **2.9-lm-boot64** `-b55f` — after #196
+- [x] **2.9-lm-stay-thunks** `-b55f` — PR #196 (merged)
+- [ ] **2.9-lm-boot64** `-b55f` — PR #204
 - [ ] **2.9-lm-kernel** tick `-b55f` — only when stay+thunks+boot64 are on `main`
 - [ ] **2.9-syscall64** `-b55f` — after lm-kernel ticked
 
-**Stand down from:** W.3, 2.6-*, W.2, W.5, W.6 while Lane A PRs are open.
+**Stand down from:** 2.6-*, W.6 (and Gen2 Sarah follow-ups) while Lane A PRs are open.
 
 ---
 
@@ -70,13 +72,14 @@ Squirrel (`needs: squirrel`).
 
 | Repo | PR | Branch | Tag | Box |
 |------|----|--------|-----|-----|
-| os2 | #183 | `…-w3-launchpad-2eaf` | `-2eaf` | W.3-launchpad |
 | os2 | #184 | `…-2.6-icons-drag-2eaf` | `-2eaf` | 2.6-icons, 2.6-drag |
 | os2 | #188 | `…-2.6-shadows-2eaf` | `-2eaf` | 2.6-shadows |
-| os2 | #192 | `…-w5-openas-2eaf` | `-2eaf` | W.5-openas |
-| os2 | #196 | `…-2.9-lm-stay-thunks-b55f` | `-b55f` | 2.9-lm-stay-thunks |
+| os2 | #197 | `…-followup-gen2-sarah-2eaf` | `-2eaf` | Sarah Gen2 follow-ups |
+| os2 | #204 | `…-2.9-lm-boot64-b55f` | `-b55f` | 2.9-lm-boot64 |
 
-**Merged (do not re-claim):** os2 #191 W.2, #193 paging; soft #148–#153 GNSS/NTRIP/RTCM (+ Sarah round-2).
+**Merged (do not re-claim):** os2 #183 W.3, #191 W.2, #192 W.5, #193 paging,
+#196 stay-thunks, #203 lanes canon; soft #148–#153 GNSS/NTRIP/RTCM (+ Sarah
+round-2), #157 / #158 post-#153 notes.
 
 ## Issue sync note
 
