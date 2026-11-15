@@ -150,7 +150,8 @@ class PhoneGnssFeed(
         /** Map a platform event to a packed epoch (GPS rows only). */
         fun mapEvent(event: GnssMeasurementsEvent, tReceiver: Double = towFromClock(event.clock)): MeasurementEpoch? {
             val clock = event.clock
-            val meas = event.measurements
+            // GnssMeasurementsEvent.measurements is a Collection, not a List.
+            val meas = event.measurements.toList()
             if (meas.isEmpty()) return null
             val constellation = IntArray(meas.size)
             val svid = IntArray(meas.size)

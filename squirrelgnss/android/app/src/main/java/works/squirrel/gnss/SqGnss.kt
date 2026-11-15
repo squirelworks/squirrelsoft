@@ -43,9 +43,6 @@ object SqGnss {
         val errM: Double,
     )
 
-    /** @deprecated Use [Fix]; kept as a type alias for the first-step API. */
-    typealias DemoFix = Fix
-
     @JvmStatic
     private external fun nativeLlhToEcef(llh: DoubleArray, ecef: DoubleArray): Boolean
 
