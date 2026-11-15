@@ -197,7 +197,7 @@ These milestones predate the suite roadmap and remain open. Formats stay owned b
 - [x] NTRIP client skeleton (`sqntrip`): GET request + Basic auth, ICY/HTTP caster response and sourcetable parse; `squirrelgnss/tests/test_ntrip.c` uses synthetic caster bytes only (no network). First step toward phone RTK corrections (CONTINUANCE).
 - [x] Phone GnssMeasurement feed into the JNI core (#148 on `main`) (CONTINUANCE).
 - [x] Live NTRIP TCP transport for corrections (#150 on `main`): `SqntClient` + portable sockets, offline memio/loopback tests only; TLS stub (CONTINUANCE).
-- [x] RTCM 3 decode skeleton *(lane `-2eaf`)*: `sqrtcm` frame sync / CRC-24Q / MSM+obs header parse; synthetic `test_rtcm.c` only; NTRIP body feed hook (CONTINUANCE). Full MSM observations / Android caster wiring still open.
+- [x] RTCM 3 decode skeleton *(lane `-2eaf`)*: `sqrtcm` frame sync / CRC-24Q / MSM+obs header parse; synthetic `squirrelgnss/tests/test_rtcm.c` only; NTRIP body feed hook (CONTINUANCE). Full MSM observations / Android caster wiring still open.
 
 ### SquirrelSound desktop (sqdsp)
 - [x] Radix-2 FFT, windows, periodogram, Welch PSD, STFT; pitch, THD, SNR; WAV I/O, CLI reports, SVG plots; live SDL spectrum/waterfall + ALSA mic (done)
