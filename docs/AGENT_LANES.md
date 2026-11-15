@@ -8,6 +8,11 @@ rebase an existing PR; never redo it on a new branch.
 (chosen over #200 by rock–paper–scissors; see [#202](https://github.com/squirelworks/squirrel-os2/issues/202)).
 If this file and #201 disagree, prefer #201 for claim lines and `main` for code.
 
+**Path to 3.0.0:** fine-grained tag walkthrough (near-term finish+release,
+OS/2 / BIOS / Soft ladders, resume-on-credit-reset) lives in
+**[PATH_TO_3.0.0.md](PATH_TO_3.0.0.md)**. CONTINUANCE M3 = destination **3.0.0**.
+Ask `-b55f` to confirm lane rows there / on the Soft epic when credits reset.
+
 | Lane | Branch suffix | Scope |
 |------|---------------|-------|
 | **A** | `-2eaf` | Gen2 desktop finish; Soft GNSS/NTRIP/RTCM; BIOS leftover Phase G / board configs; CI/rebase hygiene on own PRs |
@@ -19,13 +24,35 @@ editing the docs boxes for its own cards per PR.
 
 ---
 
+## Near-term finish list (then owner releases)
+
+Land these **before** calling the current-main OS/2 cut ready. Full checklist
+and tag order: [PATH_TO_3.0.0.md](PATH_TO_3.0.0.md) §2.
+
+| Repo | PR | Lane | Status |
+|------|----|------|--------|
+| os2 | [#184](https://github.com/squirelworks/squirrel-os2/pull/184) icons/drag | `-2eaf` | open — finish |
+| os2 | [#197](https://github.com/squirelworks/squirrel-os2/pull/197) Gen2 Sarah | `-2eaf` | open — finish |
+| os2 | [#204](https://github.com/squirelworks/squirrel-os2/pull/204) lm-boot64 | `-b55f` | open — rebase when CONFLICTING |
+| os2 | [#205](https://github.com/squirelworks/squirrel-os2/pull/205) release coord docs | `-b55f` | open — docs |
+| soft | [#162](https://github.com/squirelworks/squirrelsoft/pull/162) Android NTRIP | `-2eaf` | open — finish |
+| bios | [#189](https://github.com/squirelworks/squirrelbios/pull/189) capsule/ESRT | `-2eaf` | **merged** |
+
+Owner publish (agents prep only): optional OS/2 **v2.3.0 @ `fc3ae21`**
+(per #205); BIOS **v2.2.0** (fold capsule or **v2.2.1**); OS/2 **v2.3.1**
+(or **v2.4.0** Gen2) after #184+#197; Soft = PLAY uploads, no suite tag.
+
+Handshake: `-b55f` #204 → lm-kernel tick → syscall64; `-2eaf` #184 → #197 → W.6.
+
+---
+
 ## Lane A checklist (`-2eaf` — this agent)
 
 ### squirrel-os2 — Generation 2 desktop (exclusive of 2.9)
 
 - [x] **W.3-launchpad** `-2eaf` — PR #183 (merged)
 - [ ] **2.6-icons** + **2.6-drag** `-2eaf` — PR #184
-- [ ] **2.6-shadows** `-2eaf` — PR #188
+- [x] **2.6-shadows** `-2eaf` — PR #188 (merged)
 - [x] **W.2-templates** `-2eaf` — PR #191 (merged)
 - [x] **W.5-openas** `-2eaf` — PR #192 (merged)
 - [ ] **Sarah Gen2 follow-ups** `-2eaf` — PR #197
@@ -40,13 +67,14 @@ editing the docs boxes for its own cards per PR.
 - [x] **RTCM Sarah round-2** `-2eaf` — PR #153 (merged)
 - [x] **Post-#153 RTCM notes** `-2eaf` — PR #157 / #158 (on `main`)
 - [x] **RTCM MSM observation fields** `-2eaf` — PR #160 (on `main`)
-- [x] **Android NTRIP caster wiring** `-2eaf` — this PR
+- [x] **Android NTRIP caster wiring** `-2eaf` — PR #162 (on `main`)
 
 Leave **S6** / **PLAY** to Squirrel (`needs: squirrel`).
 
 ### squirrelbios
 
-- [ ] Free `cursor-codex` follow-ups not claimed by `-b55f` (Setup UI next steps, etc.)
+- [x] **UpdateCapsule + ESRT** `-2eaf` — PR #189 (merged)
+- [ ] Free `cursor-codex` follow-ups not claimed by `-b55f` (capsule signed-apply, board configs, etc.)
 
 ### Hygiene
 
@@ -74,13 +102,15 @@ Leave **S6** / **PLAY** to Squirrel (`needs: squirrel`).
 | Repo | PR | Branch | Tag | Box |
 |------|----|--------|-----|-----|
 | os2 | #184 | `…-2.6-icons-drag-2eaf` | `-2eaf` | 2.6-icons, 2.6-drag |
-| os2 | #188 | `…-2.6-shadows-2eaf` | `-2eaf` | 2.6-shadows |
 | os2 | #197 | `…-followup-gen2-sarah-2eaf` | `-2eaf` | Sarah Gen2 follow-ups |
 | os2 | #204 | `…-2.9-lm-boot64-b55f` | `-b55f` | 2.9-lm-boot64 |
+| os2 | #205 | `…-release-coord-b55f` | `-b55f` | docs release coord |
+| soft | #165 | `…-path-to-3.0.0-2eaf` | `-2eaf` | docs PATH_TO_3.0.0 |
 
-**Merged (do not re-claim):** os2 #183 W.3, #191 W.2, #192 W.5, #193 paging,
-#196 stay-thunks, #203 lanes canon; soft #148–#153 GNSS/NTRIP/RTCM (+ Sarah
-round-2), #157 / #158 post-#153 notes, #160 MSM obs.
+**Merged (do not re-claim):** os2 #183 W.3, #188 shadows, #191 W.2, #192 W.5,
+#193 paging, #196 stay-thunks, #203 lanes canon; bios #189 capsule; soft
+#148–#153 GNSS/NTRIP/RTCM (+ Sarah round-2), #157 / #158 post-#153 notes,
+#160 MSM obs, #162 Android NTRIP.
 
 ## Issue sync note
 
