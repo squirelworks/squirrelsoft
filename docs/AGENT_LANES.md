@@ -39,9 +39,10 @@ editing the docs boxes for its own cards per PR.
 - [x] **RTCM decode skeleton** `-2eaf` — PR #151 / #152 (on `main`)
 - [x] **RTCM Sarah round-2** `-2eaf` — PR #153 (merged)
 - [x] **Post-#153 RTCM notes** `-2eaf` — PR #157 / #158 (on `main`)
+- [x] **RTCM MSM observation fields** `-2eaf` — this PR
+- [ ] **Android NTRIP caster wiring** `-2eaf` — after MSM obs on `main`
 
-Remaining Soft coding is CI/rebase hygiene. Leave **S6** / **PLAY** to
-Squirrel (`needs: squirrel`).
+Leave **S6** / **PLAY** to Squirrel (`needs: squirrel`).
 
 ### squirrelbios
 

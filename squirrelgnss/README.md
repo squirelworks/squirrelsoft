@@ -106,16 +106,17 @@ formulas. None of it comes from vendor receiver firmware.
   synthetic bytes and `127.0.0.1` loopback only — no remote caster and no
   credentials in the tree. TLS is a clean failure until an original stack
   exists. See `docs/ntrip-transport.md`.
-- **RTCM 3 skeleton (`sqrtcm`):** frame sync on `0xD3`, CRC-24Q, and
+- **RTCM 3 (`sqrtcm`):** frame sync on `0xD3`, CRC-24Q, and
   message/station header parse for legacy observations, station ARP and
-  MSM (epoch + multi-message bit). Streaming framer accepts opaque NTRIP
-  body bytes; after bad CRC it re-queues from `buf[1]` into a head/tail ring
-  (all good frames in the tail; whole-tail drop + `rescan_drop` on prepend
-  overflow), and `framer_feed` owns each payload copy (`payload_owned` /
-  `sqrtcm_msg_payload` for safe struct copies). GLONASS MSM day+ms epoch is
-  documented for later.
-  Observation fields / sat masks are a later step. Synthetic tests only —
-  see `docs/rtcm-decode.md`.
+  MSM (epoch + multi-message bit). Full MSM1–7 observation decode
+  (DF394–DF396 masks, DF397–DF408 / DF420 cell fields) via
+  `sqrtcm_parse_msm` / `sqrtcm_pack_msm`. Streaming framer accepts opaque
+  NTRIP body bytes; after bad CRC it re-queues from `buf[1]` into a
+  head/tail ring (all good frames in the tail; whole-tail drop +
+  `rescan_drop` on prepend overflow), and `framer_feed` owns each payload
+  copy (`payload_owned` / `sqrtcm_msg_payload` for safe struct copies).
+  GLONASS MSM day+ms epoch is documented for later. Synthetic tests only —
+  see `docs/rtcm-decode.md`. Android caster wiring is still open.
 
 ## Build
 
@@ -248,7 +249,8 @@ above. The unit tests cover:
   401, `SOURCETABLE` with two `STR;` mounts, HTTP 200 + `STR;` body
   promotion, `SqntClient` over memory I/O, TLS-unsupported path, and a
   `127.0.0.1` loopback TCP synthetic caster — no remote network in CI
-- RTCM 3: CRC-24Q empty frame, MSM/obs header pack+parse, streaming framer
+- RTCM 3: CRC-24Q empty frame, MSM/obs header pack+parse, MSM4/MSM7
+  observation field round-trips (masks + cell DF fields), streaming framer
   with junk/resync and bad CRC, preamble recovery after bad CRC, multi-frame
   rescan delivery, prepend-overflow whole-tail drop (`rescan_drop`), owned
   multi-frame payloads + struct-copy safety, chunked feeds, reserved length
