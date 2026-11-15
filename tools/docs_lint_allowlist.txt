@@ -5,5 +5,5 @@
 # Use only for known historical mismatches that cannot be fixed without
 # reticking many boxes. Prefer fixing ROADMAP/TODO in the same PR.
 #
-# S3.2 WASAPI / macOS system-audio boxes stay open until PR #141 merges;
+# S3.2 WASAPI / macOS system-audio boxes are ticked on main after #141;
 # they do not currently name harness checks, so no allowlist entry is needed.

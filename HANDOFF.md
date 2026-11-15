@@ -1,4 +1,4 @@
-# Hand-off to Cursor / Codex (2026-11-14)
+# Hand-off to Cursor / Codex (2026-11-15)
 
 From 2026-11-14 the remaining SquirrelSoft work is left for Cursor or Codex to
 pick up. This file says what is done, what is in flight, and what is open,
@@ -7,7 +7,7 @@ for the whole suite (this repo, squirrelbios and squirrel-os2), is
 [docs/CONTINUANCE.md](docs/CONTINUANCE.md).
 
 Source of truth, in order: `ROADMAP.md` on `main`, then the GitHub issues
-(#30, #31, #32, #28 and the hand-off tracker), then this file. If they
+(#30, #31, #32, #28 and the hand-off tracker #131), then this file. If they
 disagree, `main`'s code wins; fix the docs in your PR.
 
 ## Status legend
@@ -29,12 +29,14 @@ Used here, in `ROADMAP.md` and on the issues (as labels).
   Settings, octave bars, WAV, calibration) and **0.0.15** (landscape, scope,
   peak labels), SquirrelQR **0.1.7** (torch / zoom / batch), SquirrelSuica
   **0.0.13** (issuer labels, bus rows, WAON) and **0.0.14** (MIT station tables).
+  Do not invent or claim Play uploads; only Squirrel publishes AABs.
 - **Desktop (C, SDL2 via `libs/sqgui`):** SquirrelStation, SquirrelCAD,
-  SquirrelGNSS, SquirrelSound (mic + Pulse/WASAPI/CoreAudio loopback, GUI),
-  SquirrelSuica (PC/SC, RC-S380 over libusb, GUI, CSV — S3.3 done), SquirrelQR
-  (files, PNG, X11/portal/Win/mac capture, V4L2 webcam, GUI, encoder — S3.4 done
-  via #138 / #142), SquirrelCalc, SquirrelPaint, SquirrelGames, SquirrelDebug.
-  Everything in S5 is done. PKG (S3.5 + S4) is on `main`.
+  SquirrelGNSS, SquirrelSound (mic + Pulse/WASAPI/CoreAudio loopback, GUI —
+  S3.2 done via #141), SquirrelSuica (PC/SC, RC-S380 over libusb, GUI, CSV —
+  S3.3 done), SquirrelQR (files, PNG, X11/portal/Win/mac capture, V4L2 webcam,
+  GUI, encoder — S3.4 done via #138 / #142), SquirrelCalc, SquirrelPaint,
+  SquirrelGames, SquirrelDebug. S3, S4 and S5 are complete on `main`. PKG
+  (S3.5 + S4) is on `main`.
 - **Shared cores:** `libs/sqdsp`, `libs/sqfelica`, `libs/sqqr`, `libs/sqmath`, `libs/sqgui`.
 - **Test gate:** `make test` on ubuntu / windows / macos (every lib and program,
   the Python SuicaAnalysis twin, and host JNI smokes for QR / Sound /
@@ -42,6 +44,8 @@ Used here, in `ROADMAP.md` and on the issues (as labels).
   (`./gradlew :app:assembleDebug :app:testDebugUnitTest` per app), in
   `.github/workflows/ci.yml` on every PR. Desktop packages: see
   `docs/packaging.md` and `.github/workflows/release.yml`.
+- **Open Cursor/Codex coding items:** none. Next work is Squirrel-owned
+  (**S6** repo split, **PLAY** uploads).
 
 ## Rules (Squirrel's; do not break)
 
@@ -78,17 +82,24 @@ and unit-test the Kotlin against stubs.
 
 ## Suggested order
 
+Cursor/Codex coding queue for this repo is empty after #141. Next for
+Squirrel:
+
+1. **S6 repo split** *(Squirrel)* — prep inventory on `main`; see S6 card.
+2. **PLAY uploads** *(Squirrel)* — Sound 0.0.14/0.0.15, QR 0.1.7, Suica
+   0.0.13/0.0.14 (already on `main`; do not invent uploads).
+
+Done earlier (kept for history):
+
 1. ~~SND-landscape + SND-scope + SND-peaks~~ (done on `main`: SquirrelSound 0.0.15).
 2. ~~FEL-jni-smoke~~ (done: S2 JNI box).
 3. ~~QR-torch-zoom + QR-batch~~ (done: SquirrelQR 0.1.7).
 4. ~~**SUICA-labels + SUICA-bus + FEL-pasmo-waon**~~ (done: SquirrelSuica 0.0.13).
 5. ~~**SUICA-stations**~~ (done: SquirrelSuica 0.0.14, MIT table).
 6. ~~**PKG** (S3.5 + S4)~~ (done: packages + win/mac/ubuntu `make test` in CI).
-7. ~~**SND-wasapi** / **SND-macos**~~ (done: native loopback + CI silent capture).
+7. ~~**SND-wasapi** / **SND-macos**~~ (done on `main` via #141: native loopback + CI silent capture).
 8. ~~**QR-webcam**~~ (done: #138, V4L2 + synthetic CI frame).
 9. ~~**QR-wayland / QR-capture-win-mac**~~ (done: #142, portal / GDI-DXGI / ScreenCaptureKit).
-10. **S6 repo split** with Squirrel (prep inventory on `main`; see S6 card).
-11. **PLAY uploads** *(Squirrel)* — Sound 0.0.14/0.0.15, QR 0.1.7, Suica 0.0.13/0.0.14.
 
 ## Task cards
 
@@ -179,6 +190,10 @@ and unit-test the Kotlin against stubs.
 
 - #24, #27, #29 (implementation done), #85, #86, #87 (S3.3 steps merged), and
   the probes #83, #84 are closed with this hand-off.
-- #28 can close (0.0.15 landscape + scope + peaks are on `main`). #30 / #31 can
-  close once #141 (S3.2 WASAPI/macOS) merges; #32 (S6 epic) and #88
-  (forward plan) stay open.
+- **#28 can close** if still open (0.0.15 landscape + scope + peaks are on
+  `main`; implementation done — only a real-device phone check remains for
+  Squirrel and is non-blocking).
+- **#30 / #31 can close** (S3 native front-ends / desktop parity complete;
+  S3.2 WASAPI/macOS merged via #141).
+- #32 (S6 epic) and #88 (forward plan) stay open. Tracker #131 can be updated
+  to show only Squirrel-owned S6 / PLAY lines.
