@@ -20,7 +20,8 @@ S3.2 WASAPI/macOS is done on `main` via
 [#141](https://github.com/squirelworks/squirrelsoft/pull/141).
 **GNSS-android-jni** first step is on `main` (#146). Phone GnssMeasurement is
 on `main` (#148). Live NTRIP transport is on `main` (#150). RTCM decode
-skeleton is in this PR *(lane `-2eaf`)*.
+skeleton (#151) and Sarah RTCM follow-ups (#152 / #153) are on `main`
+*(lane `-2eaf`)*. Remaining Soft coding is mostly hygiene.
 See **[docs/AGENT_LANES.md](docs/AGENT_LANES.md)** for the `-2eaf` / `-b55f` split.
 **[HANDOFF.md](HANDOFF.md)** has the cards; next Squirrel-owned work remains
 **S6** and **PLAY**. **[docs/CONTINUANCE.md](docs/CONTINUANCE.md)** is the suite plan.
