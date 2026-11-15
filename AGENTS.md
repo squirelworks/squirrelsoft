@@ -1,6 +1,6 @@
 # Agent guide (Cursor, Codex and other coding agents)
 
-SquirrelSoft: Android apps (SquirrelSuica, SquirrelSuicaAnalysis, SquirrelSound, SquirrelQR) and desktop
+SquirrelSoft: Android apps (SquirrelSuica, SquirrelSuicaAnalysis, SquirrelSound, SquirrelQR, SquirrelGNSS) and desktop
 C programs (Station, CAD, GNSS, Sound, Suica, QR, Calc, Paint, Games, Debug) on shared C cores in `libs/`.
 It is also the umbrella for the suite: github.com/squirelworks/squirrelbios and squirrel-os2.
 

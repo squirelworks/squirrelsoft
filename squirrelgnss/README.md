@@ -156,11 +156,19 @@ longitude, height, HDOP, VDOP, residual RMS, any excluded satellite, and the
 E/N/U error when `--truth` is given. A broadcast navigation file for the day
 is published by the IGS data centres.
 
+## Android
+
+`android/` is a first-step app (`works.squirrel.gnss`) that links the same
+`sqgnss` core through JNI. Host smoke: `make test-jni` (or `make test`) builds
+`sqgnss_jni.c` for this machine and drives it from
+`android/jni-smoke/` — synthetic sky only, skipped when there is no JDK. Phone
+`GnssMeasurement` and NTRIP are not wired yet.
+
 ## Tests
 
 `make test` runs `tests/test_sqgnss.c` (with `tests/test_rinex.c`,
-`tests/test_rtk.c` and `tests/test_recv.c`) and
-`tests/cli_smoke.sh`. The unit
+`tests/test_rtk.c` and `tests/test_recv.c`),
+`tests/cli_smoke.sh`, and the Android JNI host smoke above. The unit
 tests cover:
 
 - fixed points of the ellipsoid, and 539 round trips (poles, the antimeridian,

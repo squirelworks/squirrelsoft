@@ -89,7 +89,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        app: [squirrelsound, squirrelsuica, squirrelsuica-analysis, squirrelqr]
+        app: [squirrelsound, squirrelsuica, squirrelsuica-analysis, squirrelqr, squirrelgnss]
     defaults:
       run:
         working-directory: ${{ matrix.app }}/android
