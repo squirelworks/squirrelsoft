@@ -1,5 +1,6 @@
 /* squirrelgnss: command line over sqgnss. Original code. */
 #include "sqgnss.h"
+#include "sqntrip.h"
 #include "sqrecv.h"
 #include "sqrinex.h"
 #include "sqrtk.h"
@@ -39,6 +40,9 @@ static void usage(FILE *f) {
           "                       [--mask DEG] [--truth LAT,LON,H] [--nmea] [--rinex OBS NAV]\n"
           "  squirrelgnss ubx-demo FILE [EPOCHS] [--at LAT,LON,H] [--noise M] [--iono M] [--dual] [--l5]\n"
           "                       [--no-nmea] [--junk]\n"
+          "  squirrelgnss ntrip-synth   offline loopback NTRIP (synthetic caster; CI-safe)\n"
+          "  squirrelgnss ntrip HOST:PORT [MOUNT] [--user U] [--pass P] [--v2] [--tls]\n"
+          "                       live TCP to a caster (not used in CI; no baked-in credentials)\n"
           "  squirrelgnss help\n"
           "demo-track solves a synthetic 30-satellite sky; --fault adds a bias to one\n"
           "satellite, which the fault detection should exclude.\n"
@@ -856,6 +860,134 @@ int main(int argc, char **argv) {
     if (!strcmp(cmd, "rtk")) return rtk(argc, argv);
     if (!strcmp(cmd, "receiver")) return receiver(argc, argv);
     if (!strcmp(cmd, "ubx-demo")) return ubx_demo(argc, argv);
+    if (!strcmp(cmd, "ntrip-synth")) {
+        /* Local 127.0.0.1 synthetic caster: proves TCP + sqntrip without a remote host. */
+        SqntTcp listener, server, client;
+        char err[160];
+        int port = 0;
+        if (sqnt_tcp_listen_loopback(&listener, &port, err, sizeof err)) {
+            fprintf(stderr, "squirrelgnss: %s\n", err);
+            return 1;
+        }
+        char portstr[16];
+        snprintf(portstr, sizeof portstr, "%d", port);
+        if (sqnt_tcp_connect(&client, "127.0.0.1", portstr, 0, err, sizeof err) ||
+            sqnt_tcp_accept(&listener, &server, err, sizeof err)) {
+            fprintf(stderr, "squirrelgnss: %s\n", err);
+            sqnt_tcp_close(&listener);
+            return 1;
+        }
+        unsigned char body[256];
+        SqntClient cli;
+        SqntRequest req;
+        sqnt_client_init(&cli, sqnt_tcp_io(&client), body, sizeof body);
+        sqnt_request_init(&req);
+        snprintf(req.mount, sizeof req.mount, "SYNTH");
+        if (sqnt_client_request(&cli, &req)) {
+            fprintf(stderr, "squirrelgnss: %s\n", cli.err);
+            sqnt_client_close(&cli);
+            sqnt_tcp_close(&server);
+            sqnt_tcp_close(&listener);
+            return 1;
+        }
+        SqntIo rio = sqnt_tcp_io(&server);
+        rio.close = NULL;
+        char got[512];
+        size_t got_len = 0;
+        got[0] = 0;
+        unsigned char chunk[128];
+        while (!strstr(got, "\r\n\r\n") && got_len < sizeof got - 1) {
+            long n = rio.read(rio.ctx, chunk, sizeof chunk);
+            if (n <= 0) break;
+            if (got_len + (size_t)n >= sizeof got) break;
+            memcpy(got + got_len, chunk, (size_t)n);
+            got_len += (size_t)n;
+            got[got_len] = 0;
+        }
+        static const char reply[] = "ICY 200 OK\r\n\r\n"
+                                    "\xd3\x00\x05"
+                                    "SYNTH";
+        rio.write(rio.ctx, reply, sizeof reply - 1);
+        sqnt_tcp_close(&server);
+        if (sqnt_client_drain_body(&cli)) {
+            fprintf(stderr, "squirrelgnss: %s\n", cli.err);
+            sqnt_client_close(&cli);
+            sqnt_tcp_close(&listener);
+            return 1;
+        }
+        printf("ntrip-synth ok status=%d kind=%d body=%zu icy=%d mount=SYNTH\n", cli.parser.status,
+               cli.parser.kind, cli.parser.body_len, cli.parser.icy);
+        sqnt_client_close(&cli);
+        sqnt_tcp_close(&listener);
+        return 0;
+    }
+    if (!strcmp(cmd, "ntrip")) {
+        /* Live caster. CI never runs this; credentials come only from argv. */
+        if (argc < 3) return usage(stderr), 2;
+        const char *where = argv[2];
+        const char *mount = "";
+        const char *user = "";
+        const char *pass = "";
+        int v2 = 0, use_tls = 0;
+        int i = 3;
+        if (i < argc && argv[i][0] != '-') mount = argv[i++];
+        for (; i < argc; i++) {
+            int more = i + 1 < argc;
+            if (!strcmp(argv[i], "--user") && more) user = argv[++i];
+            else if (!strcmp(argv[i], "--pass") && more) pass = argv[++i];
+            else if (!strcmp(argv[i], "--v2")) v2 = 1;
+            else if (!strcmp(argv[i], "--tls")) use_tls = 1;
+            else return usage(stderr), 2;
+        }
+        char host[SQNT_MAX_HOST], port[16];
+        const char *colon = strrchr(where, ':');
+        if (!colon || !colon[1]) return usage(stderr), 2;
+        size_t hn = (size_t)(colon - where);
+        if (!hn || hn >= sizeof host) return usage(stderr), 2;
+        memcpy(host, where, hn);
+        host[hn] = 0;
+        snprintf(port, sizeof port, "%s", colon + 1);
+
+        SqntTcp tcp;
+        char err[192];
+        if (sqnt_tcp_connect(&tcp, host, port, use_tls, err, sizeof err)) {
+            fprintf(stderr, "squirrelgnss: %s\n", err);
+            return 1;
+        }
+        unsigned char body[65536];
+        SqntClient cli;
+        sqnt_client_init(&cli, sqnt_tcp_io(&tcp), body, sizeof body);
+        SqntRequest req;
+        sqnt_request_init(&req);
+        snprintf(req.mount, sizeof req.mount, "%s", mount);
+        snprintf(req.user, sizeof req.user, "%s", user);
+        snprintf(req.password, sizeof req.password, "%s", pass);
+        req.ntrip_version = v2 ? 2 : 1;
+        if (v2) snprintf(req.host, sizeof req.host, "%s", where);
+        if (sqnt_client_request(&cli, &req) || sqnt_client_drain_headers(&cli)) {
+            fprintf(stderr, "squirrelgnss: %s\n", cli.err);
+            sqnt_client_close(&cli);
+            return 1;
+        }
+        /* A few body pumps so stream mounts show a sample; sourcetable drains. */
+        if (cli.parser.kind == SQNT_KIND_SOURCETABLE) {
+            sqnt_client_drain_body(&cli);
+            SqntSourcetable st;
+            int n = sqnt_parse_sourcetable((const char *)body, cli.parser.body_len, &st);
+            printf("ntrip status=%d kind=sourcetable entries=%d complete=%d\n", cli.parser.status, n,
+                   st.complete);
+            for (int k = 0; k < st.n && k < 8; k++)
+                printf("  STR %s %s %s\n", st.entry[k].mount, st.entry[k].format, st.entry[k].nav_system);
+        } else {
+            for (int k = 0; k < 8 && !cli.eof; k++) {
+                if (sqnt_client_pump(&cli) < 0) break;
+            }
+            printf("ntrip status=%d kind=%d icy=%d body=%zu\n", cli.parser.status, cli.parser.kind,
+                   cli.parser.icy, cli.parser.body_len);
+        }
+        sqnt_client_close(&cli);
+        return cli.parser.status == 200 ? 0 : 1;
+    }
     if (!strcmp(cmd, "guide")) {
         SqgGeodetic here, target;
         double tol = 0.02;

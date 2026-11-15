@@ -1,4 +1,4 @@
-/* NTRIP client skeleton: synthetic HTTP/ICY caster responses only. No network. */
+/* NTRIP client: synthetic HTTP/ICY bytes and local loopback TCP. No remote network. */
 #include "sqntrip.h"
 
 #include <stdio.h>
@@ -147,6 +147,126 @@ static void test_sourcetable_via_http_body(void) {
     CHECK(st.complete && !strcmp(st.entry[0].mount, "ONLY"));
 }
 
+static void test_memio_client_stream(void) {
+    static const unsigned char reply[] =
+        "ICY 200 OK\r\n"
+        "\r\n"
+        "\xd3\x00\x08"
+        "FAKE-RTCM";
+    unsigned char tx[512], body[128];
+    SqntMemIo mem;
+    SqntClient cli;
+    SqntRequest req;
+
+    sqnt_memio_init(&mem, reply, sizeof reply - 1, tx, sizeof tx);
+    sqnt_client_init(&cli, sqnt_memio_io(&mem), body, sizeof body);
+    sqnt_request_init(&req);
+    snprintf(req.mount, sizeof req.mount, "NEAR");
+    snprintf(req.user, sizeof req.user, "demo");
+    snprintf(req.password, sizeof req.password, "none");
+
+    CHECK(sqnt_client_request(&cli, &req) == 0);
+    CHECK(mem.tx_len > 0);
+    CHECK(strstr((char *)tx, "GET /NEAR HTTP/1.0\r\n") == (char *)tx);
+    CHECK(strstr((char *)tx, "Authorization: Basic ZGVtbzpub25l\r\n") != NULL);
+
+    CHECK(sqnt_client_drain_body(&cli) == 0);
+    CHECK(cli.parser.header_done && cli.parser.status == 200 && cli.parser.icy == 1);
+    CHECK(cli.parser.kind == SQNT_KIND_STREAM);
+    CHECK(cli.parser.body_len == sizeof("\xd3\x00\x08" "FAKE-RTCM") - 1);
+    CHECK(body[0] == 0xd3 && memcmp(body + 3, "FAKE-RTCM", 8) == 0);
+    sqnt_client_close(&cli);
+}
+
+static void test_memio_client_sourcetable(void) {
+    const char *reply = "SOURCETABLE 200 OK\r\n"
+                        "Content-Type: gnss/sourcetable\r\n"
+                        "\r\n"
+                        "STR;LOOP;Local;RTCM 3.2;;2;GPS;NET;JPN;35.0;139.0;0;0;;;;;\r\n"
+                        "ENDSOURCETABLE\r\n";
+    unsigned char tx[256], body[512];
+    SqntMemIo mem;
+    SqntClient cli;
+    SqntRequest req;
+
+    sqnt_memio_init(&mem, reply, strlen(reply), tx, sizeof tx);
+    sqnt_client_init(&cli, sqnt_memio_io(&mem), body, sizeof body);
+    sqnt_request_init(&req);
+    CHECK(sqnt_client_request(&cli, &req) == 0);
+    CHECK(strstr((char *)tx, "GET / HTTP/1.0\r\n") == (char *)tx);
+    CHECK(sqnt_client_drain_body(&cli) == 0);
+    CHECK(cli.parser.kind == SQNT_KIND_SOURCETABLE);
+    SqntSourcetable st;
+    CHECK(sqnt_parse_sourcetable((const char *)body, cli.parser.body_len, &st) == 1);
+    CHECK(st.complete && !strcmp(st.entry[0].mount, "LOOP"));
+    sqnt_client_close(&cli);
+}
+
+static void test_tls_unsupported(void) {
+    CHECK(sqnt_tls_supported() == 0);
+    SqntTcp t;
+    char err[128];
+    CHECK(sqnt_tcp_connect(&t, "127.0.0.1", "9", 1, err, sizeof err) < 0);
+    CHECK(strstr(err, "TLS") != NULL);
+}
+
+static void test_loopback_tcp_caster(void) {
+    /* Local 127.0.0.1 only: synthetic caster, no remote host and no credentials. */
+    SqntTcp listener, server, client;
+    char err[160];
+    int port = 0;
+    CHECK(sqnt_tcp_listen_loopback(&listener, &port, err, sizeof err) == 0);
+    CHECK(port > 0);
+
+    char portstr[16];
+    snprintf(portstr, sizeof portstr, "%d", port);
+    CHECK(sqnt_tcp_connect(&client, "127.0.0.1", portstr, 0, err, sizeof err) == 0);
+    CHECK(sqnt_tcp_accept(&listener, &server, err, sizeof err) == 0);
+
+    unsigned char body[256];
+    SqntClient cli;
+    SqntRequest req;
+    sqnt_client_init(&cli, sqnt_tcp_io(&client), body, sizeof body);
+    sqnt_request_init(&req);
+    snprintf(req.mount, sizeof req.mount, "NEAR");
+    req.ntrip_version = 2;
+    snprintf(req.host, sizeof req.host, "127.0.0.1:%d", port);
+    CHECK(sqnt_client_request(&cli, &req) == 0);
+
+    /* Read the GET on the accepted socket, then reply like a caster. */
+    SqntIo rio = sqnt_tcp_io(&server);
+    rio.close = NULL; /* keep server open until we finish the reply */
+    char got[1024];
+    size_t got_len = 0;
+    got[0] = 0;
+    unsigned char chunk[256];
+    while (!strstr(got, "\r\n\r\n")) {
+        long n = rio.read(rio.ctx, chunk, sizeof chunk);
+        CHECK(n > 0);
+        if (got_len + (size_t)n >= sizeof got) break;
+        memcpy(got + got_len, chunk, (size_t)n);
+        got_len += (size_t)n;
+        got[got_len] = 0;
+        if (got_len > 800) break;
+    }
+    CHECK(strstr(got, "GET /NEAR HTTP/1.0\r\n") != NULL);
+    CHECK(strstr(got, "Ntrip-Version: Ntrip/2.0\r\n") != NULL);
+
+    static const char reply[] = "ICY 200 OK\r\n\r\n"
+                                "\xd3\x00\x04"
+                                "LOOP";
+    CHECK(rio.write(rio.ctx, reply, sizeof reply - 1) == (long)(sizeof reply - 1));
+    sqnt_tcp_close(&server); /* peer EOF after body */
+
+    CHECK(sqnt_client_drain_body(&cli) == 0);
+    CHECK(cli.parser.status == 200 && cli.parser.kind == SQNT_KIND_STREAM);
+    CHECK(cli.parser.body_len == sizeof("\xd3\x00\x04" "LOOP") - 1);
+    CHECK(body[0] == 0xd3 && memcmp(body + 3, "LOOP", 4) == 0);
+
+    sqnt_client_close(&cli); /* closes client TCP */
+    sqnt_tcp_close(&listener);
+}
+
 void test_ntrip_all(int *checks, int *failures) {
     nchecks = checks;
     nfails = failures;
@@ -156,4 +276,8 @@ void test_ntrip_all(int *checks, int *failures) {
     test_http_401();
     test_sourcetable_response();
     test_sourcetable_via_http_body();
+    test_memio_client_stream();
+    test_memio_client_sourcetable();
+    test_tls_unsupported();
+    test_loopback_tcp_caster();
 }
