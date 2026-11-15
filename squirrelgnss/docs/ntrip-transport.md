@@ -11,6 +11,8 @@ Lane `-2eaf`. Builds on the buffer-fed `sqntrip` skeleton (#147).
   bytes into `SqntParser`.
 - **`SqntTcp`**: portable TCP connect (POSIX sockets / Winsock), plus
   `listen_loopback` / `accept` for local synthetic casters on `127.0.0.1`.
+  POSIX writes use `MSG_NOSIGNAL` / `SO_NOSIGPIPE` so a dropped caster cannot
+  SIGPIPE-kill the process.
 - **TLS**: `use_tls` is accepted and fails cleanly today
   (`sqnt_tls_supported() == 0`). CONTINUANCE asks not to bolt on a third-party
   TLS stack; plain NTRIP over TCP remains the supported live path.

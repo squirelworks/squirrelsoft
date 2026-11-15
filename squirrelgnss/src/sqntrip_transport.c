@@ -56,7 +56,12 @@ static void sqnt_sock_close(sqnt_sock_t s) {
 }
 static int sqnt_sock_write(sqnt_sock_t s, const void *buf, size_t n) {
     for (;;) {
+        /* MSG_NOSIGNAL: do not SIGPIPE-kill the process if the caster drops. */
+#ifdef MSG_NOSIGNAL
+        ssize_t r = send(s, buf, n, MSG_NOSIGNAL);
+#else
         ssize_t r = send(s, buf, n, 0);
+#endif
         if (r < 0 && errno == EINTR) continue;
         return (int)r;
     }
@@ -219,6 +224,18 @@ static void set_nodelay(sqnt_sock_t s) {
     setsockopt(s, IPPROTO_TCP, TCP_NODELAY, (const char *)&one, sizeof one);
 }
 
+/* Avoid SIGPIPE on a dropped caster: Linux/BSD send(MSG_NOSIGNAL), and
+ * SO_NOSIGPIPE where available (macOS / some BSDs). Winsock does not raise
+ * SIGPIPE; EPIPE/WSAECONNRESET still surface as send() failure. */
+static void set_nosigpipe(sqnt_sock_t s) {
+#ifdef SO_NOSIGPIPE
+    int one = 1;
+    setsockopt(s, SOL_SOCKET, SO_NOSIGPIPE, (const char *)&one, sizeof one);
+#else
+    (void)s;
+#endif
+}
+
 static long tcp_write(void *ctx, const void *buf, size_t n) {
     SqntTcp *t = (SqntTcp *)ctx;
     if (!t || t->sock == SQNT_TCP_CLOSED) return -1;
@@ -302,6 +319,7 @@ int sqnt_tcp_connect(SqntTcp *t, const char *host, const char *port, int use_tls
         return -1;
     }
     set_nodelay(fd);
+    set_nosigpipe(fd);
     t->sock = from_sock(fd);
     return 0;
 }
@@ -366,6 +384,7 @@ int sqnt_tcp_accept(SqntTcp *listener, SqntTcp *client, char *err, size_t err_ca
         return -1;
     }
     set_nodelay(fd);
+    set_nosigpipe(fd);
     client->sock = from_sock(fd);
     return 0;
 }

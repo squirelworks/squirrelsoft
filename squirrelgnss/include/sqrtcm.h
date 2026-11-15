@@ -10,6 +10,10 @@
  * 10-bit length, CRC-24Q) and the common 12+12-bit message / station
  * header shared by legacy observations, station ARP and MSM messages.
  * Satellite/signal masks and observation fields are left for a later step.
+ *
+ * GLONASS MSM (1081–1087) epoch note: the 30-bit DF004-style field is
+ * day-of-week (3 bits) + ms-of-day (27 bits), not GPS ms-of-week. This
+ * skeleton still exposes it as epoch_ms; split when GLONASS decode lands.
  */
 #ifndef SQRTCM_H
 #define SQRTCM_H
@@ -34,12 +38,16 @@ typedef struct {
     unsigned msg_type;   /* DF002, 12 bits */
     unsigned station_id; /* DF003, 12 bits when payload has them */
     int have_station;
-    unsigned epoch_ms; /* MSM GPS-style GNSS epoch (30 bits), when present */
+    /* MSM epoch: GPS-style ms-of-week for 107x/109x/…; for GLONASS 1081–1087
+     * the same 30 bits are day+ms (see file header). Full split later. */
+    unsigned epoch_ms;
     int have_epoch;
     int multi; /* MSM multiple-message bit, or -1 if unknown */
     int category;
     const unsigned char *payload; /* message body only (no preamble/CRC) */
     size_t payload_len;
+    /* Owned copy so multi-frame feed results stay valid after f->buf reuse. */
+    unsigned char payload_copy[SQRTCM_MAX_PAYLOAD];
 } SqrtcmMsg;
 
 /* CRC-24Q over data[0..n). Polynomial 0x1864CFB, init 0, no reflection. */
@@ -57,7 +65,9 @@ size_t sqrtcm_frame(unsigned char *out, size_t cap, const unsigned char *payload
  * 1071–1077 / 1081–1087 / 1091–1097 / 1101–1107 / 1111–1117 / 1121–1127.
  * Writes 8 bytes (64 bits through the smoothing interval); remaining MSM
  * fields (masks, observations) are left zero / absent for the skeleton.
- * Returns 8, or 0 on bad args / overflow. */
+ * Returns 8, or 0 on bad args / overflow.
+ * Note: 1081–1087 callers should eventually pass day+ms packing, not
+ * GPS ms-of-week (documented stub; decode split is a later step). */
 size_t sqrtcm_pack_msm_header(unsigned char *out, size_t cap, unsigned msg_type,
                               unsigned station_id, unsigned epoch_ms, int multi);
 
@@ -69,6 +79,9 @@ size_t sqrtcm_pack_obs_header(unsigned char *out, size_t cap, unsigned msg_type,
 /* Parse DF002 / DF003 (and MSM epoch / multi when category is MSM) from a
  * payload that already passed CRC. Returns 0, or -1 if too short. */
 int sqrtcm_parse_header(const unsigned char *payload, size_t len, SqrtcmMsg *out);
+
+/* Copy payload into msg->payload_copy and point msg->payload there. */
+void sqrtcm_msg_own_payload(SqrtcmMsg *msg);
 
 /* ---- streaming framer ---- */
 
@@ -84,13 +97,17 @@ typedef struct {
 } SqrtcmFramer;
 
 void sqrtcm_framer_init(SqrtcmFramer *f);
-/* One byte in: 1 when a CRC-good frame completes (*out filled; payload
- * points into f->buf until the next call), else 0. */
+/* One byte in: 1 when a CRC-good frame completes (*out filled). After a bad
+ * CRC or rejected length, bytes already buffered are rescanned from buf[1]
+ * for the next 0xD3. On success from sqrtcm_framer_byte alone, payload may
+ * still point into f->buf until the next call — use sqrtcm_msg_own_payload
+ * or sqrtcm_framer_feed when holding multiple messages. */
 int sqrtcm_framer_byte(SqrtcmFramer *f, unsigned char b, SqrtcmMsg *out);
 
 /* Feed a buffer (e.g. NTRIP stream body). Stores up to max_msgs good
- * frames in msgs[]. Returns the number stored; framer->ok counts all
- * good frames seen even when msgs fills up. */
+ * frames in msgs[] with payloads copied into each msg's payload_copy.
+ * Returns the number stored; framer->ok counts all good frames seen even
+ * when msgs fills up. */
 int sqrtcm_framer_feed(SqrtcmFramer *f, const void *data, size_t n, SqrtcmMsg *msgs,
                        int max_msgs);
 

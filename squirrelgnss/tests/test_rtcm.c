@@ -146,6 +146,68 @@ static void test_reserved_length_bits(void) {
     CHECK(f.ok == 0 && f.bad_len >= 1);
 }
 
+static void test_rescan_finds_preamble_after_bad_crc(void) {
+    /* False preamble + short payload whose body starts a real good frame.
+     * After bad CRC, framer must rescan from buf[1] and recover the good one. */
+    unsigned char payload[3];
+    CHECK(sqrtcm_pack_obs_header(payload, sizeof payload, 1005, 9) == 3);
+    unsigned char good[16];
+    size_t gn = sqrtcm_frame(good, sizeof good, payload, 3);
+    CHECK(gn == 9);
+
+    /* Craft a bad frame: 0xD3, len=gn (claims the good frame is the body),
+     * then the good frame bytes as "payload+crc" so CRC fails, but good[0]
+     * (0xD3) sits inside the discarded buffer. */
+    unsigned char stream[64];
+    size_t off = 0;
+    stream[off++] = SQRTCM_PREAMBLE;
+    stream[off++] = 0x00;
+    stream[off++] = (unsigned char)gn; /* length = size of good frame */
+    memcpy(stream + off, good, gn);
+    off += gn;
+    /* Fake CRC trailer (3 bytes) so the framer reaches finish; wrong CRC. */
+    stream[off++] = 0x00;
+    stream[off++] = 0x00;
+    stream[off++] = 0x00;
+
+    SqrtcmFramer f;
+    SqrtcmMsg msgs[2];
+    sqrtcm_framer_init(&f);
+    int n = sqrtcm_framer_feed(&f, stream, off, msgs, 2);
+    CHECK(f.bad_crc >= 1);
+    CHECK(n >= 1);
+    CHECK(msgs[0].msg_type == 1005 && msgs[0].station_id == 9);
+}
+
+static void test_feed_payload_not_stale(void) {
+    /* Two frames in one feed: each msgs[i].payload must still match its header. */
+    unsigned char p1[3], p2[3];
+    CHECK(sqrtcm_pack_obs_header(p1, sizeof p1, 1005, 1) == 3);
+    CHECK(sqrtcm_pack_obs_header(p2, sizeof p2, 1006, 2) == 3);
+    unsigned char a[16], b[16];
+    size_t na = sqrtcm_frame(a, sizeof a, p1, 3);
+    size_t nb = sqrtcm_frame(b, sizeof b, p2, 3);
+    unsigned char stream[32];
+    memcpy(stream, a, na);
+    memcpy(stream + na, b, nb);
+
+    SqrtcmFramer f;
+    SqrtcmMsg msgs[2];
+    sqrtcm_framer_init(&f);
+    CHECK(sqrtcm_framer_feed(&f, stream, na + nb, msgs, 2) == 2);
+    CHECK(msgs[0].msg_type == 1005 && msgs[0].station_id == 1);
+    CHECK(msgs[1].msg_type == 1006 && msgs[1].station_id == 2);
+    CHECK(msgs[0].payload_len == 3 && msgs[1].payload_len == 3);
+    /* Payload bytes must still decode as the first / second header. */
+    SqrtcmMsg again;
+    CHECK(sqrtcm_parse_header(msgs[0].payload, msgs[0].payload_len, &again) == 0);
+    CHECK(again.msg_type == 1005 && again.station_id == 1);
+    CHECK(sqrtcm_parse_header(msgs[1].payload, msgs[1].payload_len, &again) == 0);
+    CHECK(again.msg_type == 1006 && again.station_id == 2);
+    CHECK(msgs[0].payload == msgs[0].payload_copy);
+    CHECK(msgs[1].payload == msgs[1].payload_copy);
+}
+
 static void test_ntrip_body_glue(void) {
     /* Optional glue: after an NTRIP stream 200, feed body into sqrtcm. */
     unsigned char payload[8];
@@ -186,5 +248,7 @@ void test_rtcm_all(int *checks, int *failures) {
     test_resync_and_bad_crc();
     test_chunked_feed();
     test_reserved_length_bits();
+    test_rescan_finds_preamble_after_bad_crc();
+    test_feed_payload_not_stale();
     test_ntrip_body_glue();
 }

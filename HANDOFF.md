@@ -44,10 +44,11 @@ Used here, in `ROADMAP.md` and on the issues (as labels).
   (`./gradlew :app:assembleDebug :app:testDebugUnitTest` per app), in
   `.github/workflows/ci.yml` on every PR. Desktop packages: see
   `docs/packaging.md` and `.github/workflows/release.yml`.
-- **Open Cursor/Codex coding items *(lane `-2eaf`)*:** after RTCM decode
-  (this PR), remaining Soft coding is mostly hygiene; next Squirrel-owned
-  work remains **S6** repo split and **PLAY** uploads. Phone meas (#148),
-  `sqntrip` (#147) and live NTRIP (#150) are on `main`.
+- **Open Cursor/Codex coding items *(lane `-2eaf`)*:** Sarah follow-ups for
+  Soft #148/#150/#151/#140 (this PR); remaining Soft coding is mostly hygiene;
+  next Squirrel-owned work remains **S6** repo split and **PLAY** uploads.
+  Phone meas (#148), `sqntrip` (#147), live NTRIP (#150) and RTCM (#151) are
+  on `main`.
 - **Agent lanes:** suite split is in [docs/AGENT_LANES.md](docs/AGENT_LANES.md)
   (`-2eaf` = this Soft/Gen2/BIOS lane; `-b55f` = OS/2 2.9 only).
 
@@ -90,10 +91,13 @@ Android SDK 35). Without an SDK, the Gradle harnesses in the project's
 2. ~~**Phone GnssMeasurement**~~ — on `main` (#148).
 3. ~~**Live NTRIP transport**~~ — on `main` (#150): TCP + TLS stub over
    `sqntrip`; offline synthetic / loopback tests only.
-4. ~~**RTCM decode skeleton**~~ — this PR *(lane `-2eaf`)*: `sqrtcm` frame
-   sync / CRC-24Q / MSM+obs header parse; synthetic unit tests only.
-5. **S6 repo split** *(Squirrel)* — prep inventory on `main`; see S6 card.
-6. **PLAY uploads** *(Squirrel)* — Sound 0.0.14/0.0.15, QR 0.1.7, Suica
+4. ~~**RTCM decode skeleton**~~ — on `main` (#151): `sqrtcm` frame sync /
+   CRC-24Q / MSM+obs header parse; synthetic unit tests only.
+5. **Sarah Soft follow-ups** — this PR *(lane `-2eaf`)*: NTRIP SIGPIPE guard,
+   RTCM rescan + owned payloads + GLONASS epoch note, phone demo-eph label /
+   null TOW / `start()` honesty, MIT `StationCode.LICENSE.txt`.
+6. **S6 repo split** *(Squirrel)* — prep inventory on `main`; see S6 card.
+7. **PLAY uploads** *(Squirrel)* — Sound 0.0.14/0.0.15, QR 0.1.7, Suica
    0.0.13/0.0.14 (already on `main`; do not invent uploads).
 
 Done earlier (kept for history):
@@ -201,15 +205,19 @@ Done earlier (kept for history):
   (CI) and `ntrip HOST:PORT` (operator; not dialled from CI). Design note:
   `squirrelgnss/docs/ntrip-transport.md`.
 
-### GNSS-rtcm — RTCM 3 decode skeleton (CONTINUANCE)  `status: done` lane `-2eaf`
+### GNSS-rtcm — RTCM 3 decode skeleton (CONTINUANCE)  `status: done` (#151 on `main`)
 - Portable `sqrtcm` (`include/sqrtcm.h`, `src/sqrtcm.c`): preamble sync,
   CRC-24Q, message/station header parse for legacy obs, station ARP and MSM;
   streaming `SqrtcmFramer` + `sqrtcm_framer_feed` for NTRIP body bytes.
-  Unit tests in `tests/test_rtcm.c` (synthetic frames only). CLI:
-  `rtcm-synth`; `ntrip-synth` emits a CRC-valid MSM7 and decodes it. Design
-  note: `squirrelgnss/docs/rtcm-decode.md`. Branch
-  `cursor/impl-gnss-rtcm-2eaf`. Still open: full MSM observation fields and
-  Android caster wiring.
+  Follow-up: rescan after bad CRC, owned payloads on multi-frame feed,
+  GLONASS day+ms epoch documented. Unit tests in `tests/test_rtcm.c`
+  (synthetic frames only). Design note: `squirrelgnss/docs/rtcm-decode.md`.
+  Still open: full MSM observation fields and Android caster wiring.
+
+### Soft-Sarah-followups — NTRIP / RTCM / phone / MIT hygiene  `status: in progress` lane `-2eaf`
+- Branch `cursor/followup-gnss-sarah-2eaf`: #150 SIGPIPE, #151 framer notes,
+  #148 demo-eph UI + TOW null + `start()` false when nothing listens, #140
+  MIT license text next to station tables.
 
 ### PLAY-0.0.14 — upload SquirrelSound 0.0.14  `needs: squirrel`
 - Build the AAB locally with the upload key and upload it to closed testing

@@ -24,7 +24,9 @@ Adapted from
 `df256abd66b62c2d9681dbb29519eb9315205f84`, which that project publishes under
 the **MIT License** (Copyright (c) 2025 KIRISHIKI Yudai). MIT permits use,
 copy, modification, and redistribution (including commercial) provided the
-copyright notice and permission notice are retained.
+copyright notice and permission notice are retained. The full upstream MIT
+text ships next to this table as [`StationCode.LICENSE.txt`](StationCode.LICENSE.txt)
+(and beside the Android resource copy).
 
 Headers are normalized to the English names above; the upstream `備考` field
 is kept as `note` (ASCII commas inside notes are folded to `、` so the file
