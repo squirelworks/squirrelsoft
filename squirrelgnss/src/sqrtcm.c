@@ -140,39 +140,45 @@ void sqrtcm_msg_assign(SqrtcmMsg *dst, const SqrtcmMsg *src) {
     sqrtcm_msg_fix_payload(dst);
 }
 
-/* ---- framer input / rescan queue ---- */
+/* ---- framer input / rescan ring ---- */
+
+static size_t inq_cap(const SqrtcmFramer *f) { return sizeof f->inq; }
 
 static int inq_append(SqrtcmFramer *f, unsigned char b) {
-    if (f->inq_n >= sizeof f->inq) {
+    size_t cap = inq_cap(f);
+    if (f->inq_n >= cap) {
         f->rescan_drop++;
         return -1;
     }
-    f->inq[f->inq_n++] = b;
+    size_t i = (f->inq_head + f->inq_n) % cap;
+    f->inq[i] = b;
+    f->inq_n++;
     return 0;
 }
 
-/* Prepend n bytes at the front (rejected-frame rescan from buf[1]). */
+/* Prepend n bytes at the front (rejected-frame rescan from buf[1]).
+ * On overflow the whole tail is dropped and counted in rescan_drop. */
 static int inq_prepend(SqrtcmFramer *f, const unsigned char *p, size_t n) {
+    size_t cap = inq_cap(f);
     if (!n) return 0;
-    if (n > sizeof f->inq) {
+    if (n > cap || f->inq_n + n > cap) {
         f->rescan_drop += (unsigned)n;
         return -1;
     }
-    if (f->inq_n + n > sizeof f->inq) {
-        f->rescan_drop += (unsigned)n;
-        return -1;
+    /* Walk head backward so take order stays p[0], p[1], … */
+    for (size_t i = n; i > 0; i--) {
+        f->inq_head = (f->inq_head + cap - 1) % cap;
+        f->inq[f->inq_head] = p[i - 1];
+        f->inq_n++;
     }
-    memmove(f->inq + n, f->inq, f->inq_n);
-    memcpy(f->inq, p, n);
-    f->inq_n += n;
     return 0;
 }
 
 static int inq_take(SqrtcmFramer *f, unsigned char *b) {
     if (f->inq_n == 0) return 0;
-    *b = f->inq[0];
+    *b = f->inq[f->inq_head];
+    f->inq_head = (f->inq_head + 1) % inq_cap(f);
     f->inq_n--;
-    if (f->inq_n) memmove(f->inq, f->inq + 1, f->inq_n);
     return 1;
 }
 
@@ -286,6 +292,17 @@ int sqrtcm_framer_feed(SqrtcmFramer *f, const void *data, size_t n, SqrtcmMsg *m
     const unsigned char *p = (const unsigned char *)data;
     int stored = 0;
     SqrtcmMsg tmp;
+    /* n==0: drain frames left queued by sqrtcm_framer_byte (no per-byte
+     * loop). When n>0 the per-byte inner drain already empties the ring. */
+    if (n == 0) {
+        for (;;) {
+            SqrtcmMsg *slot = (msgs && stored < max_msgs) ? &msgs[stored] : &tmp;
+            if (!framer_drain(f, slot)) break;
+            sqrtcm_msg_own_payload(slot);
+            if (msgs && stored < max_msgs) stored++;
+        }
+        return stored;
+    }
     for (size_t i = 0; i < n; i++) {
         (void)inq_append(f, p[i]);
         for (;;) {
@@ -294,14 +311,6 @@ int sqrtcm_framer_feed(SqrtcmFramer *f, const void *data, size_t n, SqrtcmMsg *m
             sqrtcm_msg_own_payload(slot);
             if (msgs && stored < max_msgs) stored++;
         }
-    }
-    /* Drain any frames already fully present in the queue (e.g. a second
-     * good frame found during the last byte's rescan). */
-    for (;;) {
-        SqrtcmMsg *slot = (msgs && stored < max_msgs) ? &msgs[stored] : &tmp;
-        if (!framer_drain(f, slot)) break;
-        sqrtcm_msg_own_payload(slot);
-        if (msgs && stored < max_msgs) stored++;
     }
     return stored;
 }

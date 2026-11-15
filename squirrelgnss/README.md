@@ -109,10 +109,11 @@ formulas. None of it comes from vendor receiver firmware.
 - **RTCM 3 skeleton (`sqrtcm`):** frame sync on `0xD3`, CRC-24Q, and
   message/station header parse for legacy observations, station ARP and
   MSM (epoch + multi-message bit). Streaming framer accepts opaque NTRIP
-  body bytes; after bad CRC it re-queues from `buf[1]` (all good frames in
-  the tail, `rescan_drop` on queue overflow), and `framer_feed` owns each
-  payload copy (`payload_owned` / `sqrtcm_msg_payload` for safe struct
-  copies). GLONASS MSM day+ms epoch is documented for later.
+  body bytes; after bad CRC it re-queues from `buf[1]` into a head/tail ring
+  (all good frames in the tail; whole-tail drop + `rescan_drop` on prepend
+  overflow), and `framer_feed` owns each payload copy (`payload_owned` /
+  `sqrtcm_msg_payload` for safe struct copies). GLONASS MSM day+ms epoch is
+  documented for later.
   Observation fields / sat masks are a later step. Synthetic tests only —
   see `docs/rtcm-decode.md`.
 
@@ -249,6 +250,6 @@ above. The unit tests cover:
   `127.0.0.1` loopback TCP synthetic caster — no remote network in CI
 - RTCM 3: CRC-24Q empty frame, MSM/obs header pack+parse, streaming framer
   with junk/resync and bad CRC, preamble recovery after bad CRC, multi-frame
-  rescan delivery, owned multi-frame payloads + struct-copy safety, chunked
-  feeds, reserved length bits, and NTRIP ICY body → `sqrtcm_framer_feed`
-  glue — synthetic bytes only
+  rescan delivery, prepend-overflow whole-tail drop (`rescan_drop`), owned
+  multi-frame payloads + struct-copy safety, chunked feeds, reserved length
+  bits, and NTRIP ICY body → `sqrtcm_framer_feed` glue — synthetic bytes only

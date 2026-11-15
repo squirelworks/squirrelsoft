@@ -110,9 +110,11 @@ typedef struct {
     size_t need; /* payload length from the length field */
     size_t len;  /* bytes stored in buf (includes preamble) */
     unsigned char buf[SQRTCM_MAX_FRAME];
-    /* Input/rescan queue: new bytes and rejected-frame tails (from buf[1]).
-     * Sized for worst-case single reject re-inject + another max frame. */
+    /* Input/rescan ring: new bytes and rejected-frame tails (from buf[1]).
+     * Sized for worst-case single reject re-inject + another max frame.
+     * inq_head is the next byte to take; inq_n is the live count. */
     unsigned char inq[SQRTCM_INQ_MAX];
+    size_t inq_head;
     size_t inq_n;
     unsigned ok;
     unsigned bad_crc;

@@ -94,9 +94,8 @@ Android SDK 35). Without an SDK, the Gradle harnesses in the project's
    CRC-24Q / MSM+obs header parse; synthetic unit tests only.
 5. ~~**Sarah Soft follow-ups (#152 / #153)**~~ — on `main`: NTRIP SIGPIPE,
    RTCM rescan + owned payloads, phone demo-eph / TOW / `start()`, MIT
-   license text; #153 multi-frame rescan delivery, inq capacity /
-   `rescan_drop`, `SqrtcmMsg` copy fixup.
-6. **S6 repo split** *(Squirrel)* — prep inventory on `main`; see S6 card.
+   license text; #153 multi-frame rescan / inq / copy fixup. Post-#153
+   notes (this PR): inq head/tail ring, prepend-overflow test, feed drain.6. **S6 repo split** *(Squirrel)* — prep inventory on `main`; see S6 card.
 7. **PLAY uploads** *(Squirrel)* — Sound 0.0.14/0.0.15, QR 0.1.7, Suica
    0.0.13/0.0.14 (already on `main`; do not invent uploads).
 
@@ -210,17 +209,18 @@ Done earlier (kept for history):
   CRC-24Q, message/station header parse for legacy obs, station ARP and MSM;
   streaming `SqrtcmFramer` + `sqrtcm_framer_feed` for NTRIP body bytes.
   #153: rescan after bad CRC, owned payloads on multi-frame feed,
-  `SQRTCM_INQ_MAX` / `rescan_drop`, GLONASS day+ms epoch documented. Unit
-  tests in `tests/test_rtcm.c` (synthetic frames only). Design note:
-  `squirrelgnss/docs/rtcm-decode.md`. Still open: full MSM observation
+  `SQRTCM_INQ_MAX` / `rescan_drop`, GLONASS day+ms epoch documented.
+  Post-#153: head/tail inq ring, prepend-overflow drop test. Unit tests in
+  `tests/test_rtcm.c` (synthetic frames only). Design note:  `squirrelgnss/docs/rtcm-decode.md`. Still open: full MSM observation
   fields and Android caster wiring.
 
 ### Soft-Sarah-followups — NTRIP / RTCM / phone / MIT hygiene  `status: done` (#152 / #153 on `main`)
 - #150 SIGPIPE, #151 framer notes, #148 demo-eph UI + TOW null + `start()`
   honesty, #140 MIT license text. #153 on `main`: RTCM multi-frame rescan
   delivery, `SQRTCM_INQ_MAX` + `rescan_drop`, `payload_owned` /
-  `sqrtcm_msg_payload` / `sqrtcm_msg_assign`.
-
+  `sqrtcm_msg_payload` / `sqrtcm_msg_assign`. Post-#153 notes (this PR):
+  inq head/tail ring (O(1) take), prepend-overflow whole-tail drop test,
+  `framer_feed` drain only when `n==0`.
 ### PLAY-0.0.14 — upload SquirrelSound 0.0.14  `needs: squirrel`
 - Build the AAB locally with the upload key and upload it to closed testing
   (`scripts/` has the Play helpers). Do not commit or attach the AAB anywhere.

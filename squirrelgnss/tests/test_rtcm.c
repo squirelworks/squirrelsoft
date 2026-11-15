@@ -260,6 +260,51 @@ static void test_rescan_multi_frame(void) {
     CHECK(f2.ok == 2);
 }
 
+static void test_inq_prepend_overflow_drops_tail(void) {
+    /* When prepend cannot fit, the whole rejected tail is dropped (counted
+     * in rescan_drop) so any good frame inside that tail is lost. Normal
+     * feed keeps the ring empty while mid-frame; stuff the ring full to
+     * exercise the overflow safety path. */
+    unsigned char payload[3];
+    CHECK(sqrtcm_pack_obs_header(payload, sizeof payload, 1005, 3) == 3);
+    unsigned char good[16];
+    size_t gn = sqrtcm_frame(good, sizeof good, payload, 3);
+    CHECK(gn == 9);
+
+    unsigned char badstream[32];
+    size_t blen = 0;
+    badstream[blen++] = SQRTCM_PREAMBLE;
+    badstream[blen++] = 0x00;
+    badstream[blen++] = (unsigned char)gn;
+    memcpy(badstream + blen, good, gn);
+    blen += gn;
+    badstream[blen++] = 0xAA;
+    badstream[blen++] = 0xBB;
+    badstream[blen++] = 0xCC;
+    /* blen == 15; on reject, prepend size is blen - 1 == 14. */
+
+    SqrtcmFramer f;
+    SqrtcmMsg msgs[4];
+    sqrtcm_framer_init(&f);
+    /* Hold an incomplete bad frame in buf (queue empty). */
+    CHECK(sqrtcm_framer_feed(&f, badstream, blen - 1, msgs, 4) == 0);
+    CHECK(f.ok == 0 && f.bad_crc == 0);
+
+    /* Completing CRC byte at the ring head; rest of the ring is occupied so
+     * free space after take is 0 — prepend of 14 must fail. */
+    memset(f.inq, 0x00, sizeof f.inq);
+    f.inq[0] = badstream[blen - 1];
+    f.inq_head = 0;
+    f.inq_n = SQRTCM_INQ_MAX;
+
+    unsigned drop0 = f.rescan_drop;
+    int n = sqrtcm_framer_feed(&f, NULL, 0, msgs, 4);
+    CHECK(f.bad_crc >= 1);
+    CHECK(f.rescan_drop >= drop0 + (unsigned)(blen - 1));
+    CHECK(n == 0);
+    CHECK(f.ok == 0); /* good frame inside the dropped tail was not delivered */
+}
+
 static void test_msg_struct_copy_safety(void) {
     unsigned char p[3];
     CHECK(sqrtcm_pack_obs_header(p, sizeof p, 1005, 42) == 3);
@@ -338,6 +383,7 @@ void test_rtcm_all(int *checks, int *failures) {
     test_rescan_finds_preamble_after_bad_crc();
     test_feed_payload_not_stale();
     test_rescan_multi_frame();
+    test_inq_prepend_overflow_drops_tail();
     test_msg_struct_copy_safety();
     test_ntrip_body_glue();
 }
