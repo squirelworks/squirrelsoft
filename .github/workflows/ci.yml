@@ -69,7 +69,11 @@ jobs:
           sudo pcscd --disable-polkit
       - name: make test
         env:
+          # Linux: Pulse null-sink tone. Windows/macOS: native WASAPI/CoreAudio
+          # loopback (real default render, or synthetic Silent Output when the
+          # runner has no audio endpoint) via test_capture.sh.
           REQUIRE_LOOPBACK: ${{ matrix.host == 'linux' && '1' || '0' }}
+          REQUIRE_NATIVE_LOOPBACK: ${{ matrix.host != 'linux' && '1' || '0' }}
         run: |
           set -euo pipefail
           if [ "${{ matrix.host }}" = linux ]; then

@@ -22,8 +22,8 @@ the plan beyond it for the whole suite (this repo, squirrelbios, squirrel-os2). 
 on `main`; `- [ ]` is **open for Cursor/Codex**; *(in progress)* means a branch exists, finish it rather than
 redo it; *(Squirrel)* means only the owner can do it (Play Console, real cards and readers, creating repos).
 The same states are labels on the GitHub issues (`status: done`, `status: in progress`, `cursor-codex`,
-`needs: squirrel`). In progress: **SND-wasapi / SND-macos** via open PR [#141](https://github.com/squirelworks/squirrelsoft/pull/141)
-(`cursor/impl-snd-wasapi-macos-2eaf`) — leave those boxes open until it merges.
+`needs: squirrel`). **SND-wasapi / SND-macos** (S3.2) is done on this tip via
+[#141](https://github.com/squirelworks/squirrelsoft/pull/141); no other Cursor/Codex items are in progress.
 
 ## S0 — Fix what users hit today (0.0.9 / 0.1.6)
 - [x] S0.1 Suica history block-list encoding fix + reader mode on a background thread (#33, #36, #38; issue 02).
@@ -66,10 +66,10 @@ The same states are labels on the GitHub issues (`status: done`, `status: in pro
 
 ## S3 — Native front-ends, desktop parity (#30, #31)
 - [x] S3.1 Retire the SquirrelQR PWA as a product: moved to `squirrelqr/web-demo/` with a "not a product" README (#66).
-- [ ] S3.2 SquirrelSound desktop: SDL2 GUI with the same split view; mic and system-audio loopback on every OS.
+- [x] S3.2 SquirrelSound desktop: SDL2 GUI with the same split view; mic and system-audio loopback on every OS.
   - [x] Step 1: capture sources: `--source mic` (SDL2 capture), `--device`, `--source loopback` from the PulseAudio/PipeWire monitor source, `squirrelsound devices`; CI with SDL's disk driver and a null sink (#78).
-  - [ ] WASAPI loopback on Windows *(in progress — PR #141)*
-  - [ ] macOS system audio (ScreenCaptureKit or a virtual device) *(in progress — PR #141)*
+  - [x] WASAPI loopback on Windows (`live_audio_wasapi.c`; CI silent default render)
+  - [x] macOS system audio (`live_audio_coreaudio.m`: ScreenCaptureKit when allowed, silent CoreAudio device for CI)
   - [x] Split-view GUI window on `libs/sqgui`: toolbar, spectrum over LOFARgram, `--gui-snapshot` for CI
 - [x] S3.3 SquirrelSuica desktop: PaSoRi RC-S380/RC-S300, same `sqfelica` parsing, GUI with balance + history.
   - [x] Step 1: `squirrelsuica/desktop/`, a C reader on `sqfelica` over a transport interface, balance and history with station names, replays SuicaAnalysis dumps (#71).

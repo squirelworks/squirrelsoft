@@ -10,7 +10,7 @@ typedef enum {
     LIVE_SRC_WAV,
     LIVE_SRC_ALSA,
     LIVE_SRC_MIC,      /* SDL audio capture: ALSA/PulseAudio/PipeWire, WASAPI, CoreAudio */
-    LIVE_SRC_LOOPBACK  /* what the computer is playing: a PulseAudio/PipeWire monitor source */
+    LIVE_SRC_LOOPBACK  /* system audio: Pulse/PipeWire monitor, WASAPI loopback, or CoreAudio */
 } LiveSourceKind;
 
 typedef struct LiveAudio LiveAudio;
@@ -53,8 +53,9 @@ int live_audio_poll(LiveAudio *la);
 /* Name of the capture device the source opened (mic / loopback), or "". */
 const char *live_audio_device_name(const LiveAudio *la);
 
-/* Capture devices as listed by SDL (monitor sources included), one per line
- * with "monitor" or "input" in front, written to out. Returns the count or -1. */
+/* Capture / loopback devices, one per line with "monitor" or "input" in
+ * front (SDL inputs plus native WASAPI/CoreAudio monitors when built).
+ * Returns the count or -1. */
 int live_audio_list_devices(FILE *out);
 
 /* Pick the loopback device among capture device names: with want set, the

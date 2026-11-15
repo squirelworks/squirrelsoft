@@ -64,11 +64,14 @@ for this machine and drives each native entry point from a JVM
 ./build/squirrelsound live --source mic --multires      # multi-resolution spectrum (3 levels; --multires 2..4)
 ```
 
-`--source loopback` listens to the computer's own output through the
-monitor source of the default PulseAudio/PipeWire sink (`--device` picks
-another one by name). Windows (WASAPI loopback) and macOS come later in
-roadmap S3.2. `--source alsa` keeps the direct ALSA reader for systems
-without SDL.
+`--source loopback` listens to the computer's own output: the monitor
+source of the default PulseAudio/PipeWire sink on Linux, WASAPI render
+loopback on Windows, and CoreAudio (ScreenCaptureKit when allowed, else a
+silent device for CI) on macOS. On headless Windows/macOS hosts with no
+render endpoint, the native backends list `Monitor of Silent Output` and
+feed timed silence so `devices` / `--source loopback` still work in CI.
+`--device` picks another endpoint by name. `--source alsa` keeps the
+direct ALSA reader for systems without SDL.
 
 The live window (drawn with `libs/sqgui`) has the Android Live tab's split
 view: a toolbar with Start/Stop, Hold, Reset and Fountain, then the range

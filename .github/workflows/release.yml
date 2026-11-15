@@ -133,7 +133,7 @@ jobs:
                 echo "Unsigned CI packages (PKG / S3.5) for every desktop program."
                 echo "Windows zip/MSI, macOS .app in .dmg, Linux AppImage + .deb."
                 echo
-                echo "Unblocks later SND-wasapi, SND-macos, and QR-capture-win-mac CI."
+                echo "Unblocks later QR-capture-win-mac CI."
               } > "$notes"
             fi
           else
@@ -392,7 +392,7 @@ jobs:
               echo "Unsigned CI packages (PKG / S3.5) for every desktop program."
               echo "Windows zip/MSI, macOS .app in .dmg, Linux AppImage + .deb."
               echo
-              echo "Unblocks later SND-wasapi, SND-macos, and QR-capture-win-mac CI."
+              echo "Unblocks later QR-capture-win-mac CI."
             } > "$notes"
           fi
           cd dist

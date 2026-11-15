@@ -34,7 +34,7 @@ scripts/release/package_desktop.sh squirrelgnss /tmp/dist linux-x86_64
 
 Windows and macOS runners (and installable packages) were the gate for:
 
-- **SND-wasapi** / **SND-macos** — system-audio capture backends (still open; PR #141)
+- ~~**SND-wasapi** / **SND-macos**~~ — done (WASAPI / CoreAudio loopback + CI)
 - **QR-capture-win-mac** / **QR-wayland** — done: GDI/DXGI, ScreenCaptureKit,
   and xdg-desktop-portal; CI decodes via `QR_CAPTURE_FRAME`
 
