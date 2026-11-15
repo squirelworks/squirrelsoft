@@ -22,8 +22,8 @@ the plan beyond it for the whole suite (this repo, squirrelbios, squirrel-os2). 
 on `main`; `- [ ]` is **open for Cursor/Codex**; *(in progress)* means a branch exists, finish it rather than
 redo it; *(Squirrel)* means only the owner can do it (Play Console, real cards and readers, creating repos).
 The same states are labels on the GitHub issues (`status: done`, `status: in progress`, `cursor-codex`,
-`needs: squirrel`). In progress: **SND-wasapi / SND-macos** via open PR [#141](https://github.com/squirelworks/squirrelsoft/pull/141)
-(`cursor/impl-snd-wasapi-macos-2eaf`) — leave those boxes open until it merges.
+`needs: squirrel`). **SND-wasapi / SND-macos** (S3.2) is done on this tip via
+[#141](https://github.com/squirelworks/squirrelsoft/pull/141); no other Cursor/Codex items are in progress.
 
 ## S0 — Fix what users hit today (0.0.9 / 0.1.6)
 - [x] S0.1 Suica history block-list encoding fix + reader mode on a background thread (#33, #36, #38; issue 02).

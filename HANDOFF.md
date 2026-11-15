@@ -160,7 +160,7 @@ and unit-test the Kotlin against stubs.
   desktop program; `.github/workflows/release.yml` and `ci.yml` run `make test`
   on windows-latest / macos-latest / ubuntu-latest; draft Releases attach the
   packages (unsigned OK). See `docs/packaging.md`. Unblocked QR-capture-win-mac
-  (#142) and the open SND-wasapi/macos work (#141).
+  (#142) and SND-wasapi/macos (#141).
 
 ### PLAY-0.0.14 — upload SquirrelSound 0.0.14  `needs: squirrel`
 - Build the AAB locally with the upload key and upload it to closed testing
@@ -179,6 +179,6 @@ and unit-test the Kotlin against stubs.
 
 - #24, #27, #29 (implementation done), #85, #86, #87 (S3.3 steps merged), and
   the probes #83, #84 are closed with this hand-off.
-- #28 can close (0.0.15 landscape + scope + peaks are on `main`). #30 / #31 stay
-  open until S3.2 (WASAPI/macOS via #141) is done; #32 (S6 epic) and #88
+- #28 can close (0.0.15 landscape + scope + peaks are on `main`). #30 / #31 can
+  close once #141 (S3.2 WASAPI/macOS) merges; #32 (S6 epic) and #88
   (forward plan) stay open.
