@@ -87,6 +87,10 @@ class PhoneGnssFeed(
     fun hasGpsProvider(): Boolean =
         locationManager?.allProviders?.contains(LocationManager.GPS_PROVIDER) == true
 
+    /**
+     * Register Location and/or GnssMeasurements listeners. Returns false when
+     * neither registers (caller must not treat the feed as live).
+     */
     @SuppressLint("MissingPermission")
     fun start(): Boolean {
         if (started) return true
@@ -99,7 +103,8 @@ class PhoneGnssFeed(
             listener.onStatus("No LocationManager")
             return false
         }
-        started = true
+
+        var locationOk = false
         try {
             lm.requestLocationUpdates(
                 LocationManager.GPS_PROVIDER,
@@ -108,14 +113,15 @@ class PhoneGnssFeed(
                 locationListener,
                 Looper.getMainLooper(),
             )
+            locationOk = true
         } catch (e: SecurityException) {
-            started = false
             listener.onStatus("Location denied: ${e.message}")
             return false
         } catch (e: IllegalArgumentException) {
             listener.onStatus("GPS provider missing: ${e.message}")
         }
-        val registered = try {
+
+        val measurementsOk = try {
             if (Build.VERSION.SDK_INT >= 30) {
                 lm.registerGnssMeasurementsCallback(measurementsCallback, mainHandler)
             } else {
@@ -126,9 +132,19 @@ class PhoneGnssFeed(
             listener.onStatus("GnssMeasurements unavailable: ${e.message}")
             false
         }
+
+        if (!locationOk && !measurementsOk) {
+            listener.onStatus("Neither Location nor GnssMeasurements registered")
+            return false
+        }
+
+        started = true
         listener.onStatus(
-            if (registered) "Phone GNSS + Location listening"
-            else "Location listening (no raw GnssMeasurements)",
+            when {
+                locationOk && measurementsOk -> "Phone GNSS + Location listening"
+                measurementsOk -> "Phone GnssMeasurements listening (no Location)"
+                else -> "Location listening (no raw GnssMeasurements)"
+            },
         )
         return true
     }
@@ -147,8 +163,16 @@ class PhoneGnssFeed(
     }
 
     companion object {
-        /** Map a platform event to a packed epoch (GPS rows only). */
-        fun mapEvent(event: GnssMeasurementsEvent, tReceiver: Double = towFromClock(event.clock)): MeasurementEpoch? {
+        /**
+         * Map a platform event to a packed epoch (GPS rows only).
+         * Returns null when the clock has no full bias (no reliable TOW) or
+         * when mapping yields too few GPS rows.
+         */
+        fun mapEvent(
+            event: GnssMeasurementsEvent,
+            tReceiver: Double? = towFromClock(event.clock),
+        ): MeasurementEpoch? {
+            if (tReceiver == null) return null
             val clock = event.clock
             // GnssMeasurementsEvent.measurements is a Collection, not a List.
             val meas = event.measurements.toList()
@@ -183,16 +207,15 @@ class PhoneGnssFeed(
             )
         }
 
-        private fun towFromClock(clock: GnssClock): Double {
-            val tow = GnssRawMapper.receiverTimeOfWeekSec(
+        /** Receiver TOW from the GNSS clock, or null when full bias is absent. */
+        internal fun towFromClock(clock: GnssClock): Double? =
+            GnssRawMapper.receiverTimeOfWeekSec(
                 clock.timeNanos,
                 if (clock.hasFullBiasNanos()) clock.fullBiasNanos else 0L,
                 if (clock.hasBiasNanos()) clock.biasNanos else 0.0,
                 clock.hasFullBiasNanos(),
                 clock.hasBiasNanos(),
             )
-            return tow ?: 100000.0
-        }
 
         private fun measurementStateOk(m: GnssMeasurement): Boolean {
             val state = m.state
