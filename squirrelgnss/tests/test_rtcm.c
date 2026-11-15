@@ -200,12 +200,99 @@ static void test_feed_payload_not_stale(void) {
     CHECK(msgs[0].payload_len == 3 && msgs[1].payload_len == 3);
     /* Payload bytes must still decode as the first / second header. */
     SqrtcmMsg again;
-    CHECK(sqrtcm_parse_header(msgs[0].payload, msgs[0].payload_len, &again) == 0);
+    CHECK(sqrtcm_parse_header(sqrtcm_msg_payload(&msgs[0]), msgs[0].payload_len, &again) == 0);
     CHECK(again.msg_type == 1005 && again.station_id == 1);
-    CHECK(sqrtcm_parse_header(msgs[1].payload, msgs[1].payload_len, &again) == 0);
+    CHECK(sqrtcm_parse_header(sqrtcm_msg_payload(&msgs[1]), msgs[1].payload_len, &again) == 0);
     CHECK(again.msg_type == 1006 && again.station_id == 2);
-    CHECK(msgs[0].payload == msgs[0].payload_copy);
-    CHECK(msgs[1].payload == msgs[1].payload_copy);
+    CHECK(msgs[0].payload_owned && msgs[0].payload == msgs[0].payload_copy);
+    CHECK(msgs[1].payload_owned && msgs[1].payload == msgs[1].payload_copy);
+}
+
+static void test_rescan_multi_frame(void) {
+    /* Bad outer frame whose body is two good frames: rescan must deliver both. */
+    unsigned char p1[3], p2[3];
+    CHECK(sqrtcm_pack_obs_header(p1, sizeof p1, 1005, 11) == 3);
+    CHECK(sqrtcm_pack_obs_header(p2, sizeof p2, 1006, 22) == 3);
+    unsigned char g1[16], g2[16];
+    size_t n1 = sqrtcm_frame(g1, sizeof g1, p1, 3);
+    size_t n2 = sqrtcm_frame(g2, sizeof g2, p2, 3);
+    CHECK(n1 == 9 && n2 == 9);
+
+    unsigned char stream[64];
+    size_t off = 0;
+    size_t body = n1 + n2;
+    stream[off++] = SQRTCM_PREAMBLE;
+    stream[off++] = 0x00;
+    stream[off++] = (unsigned char)body;
+    memcpy(stream + off, g1, n1);
+    off += n1;
+    memcpy(stream + off, g2, n2);
+    off += n2;
+    stream[off++] = 0x00; /* bogus CRC */
+    stream[off++] = 0x00;
+    stream[off++] = 0x00;
+
+    SqrtcmFramer f;
+    SqrtcmMsg msgs[4];
+    sqrtcm_framer_init(&f);
+    int n = sqrtcm_framer_feed(&f, stream, off, msgs, 4);
+    CHECK(f.bad_crc >= 1);
+    CHECK(n == 2);
+    CHECK(f.ok == 2);
+    CHECK(msgs[0].msg_type == 1005 && msgs[0].station_id == 11);
+    CHECK(msgs[1].msg_type == 1006 && msgs[1].station_id == 22);
+    CHECK(f.rescan_drop == 0);
+
+    /* Byte API returns one frame per call; feed(..., 0) drains the rest. */
+    SqrtcmFramer f2;
+    SqrtcmMsg one, two;
+    sqrtcm_framer_init(&f2);
+    int got1 = 0;
+    for (size_t i = 0; i < off; i++) {
+        if (sqrtcm_framer_byte(&f2, stream[i], &one)) {
+            CHECK(one.msg_type == 1005 && one.station_id == 11);
+            got1 = 1;
+        }
+    }
+    CHECK(got1);
+    CHECK(sqrtcm_framer_feed(&f2, NULL, 0, &two, 1) == 1);
+    CHECK(two.msg_type == 1006 && two.station_id == 22);
+    CHECK(f2.ok == 2);
+}
+
+static void test_msg_struct_copy_safety(void) {
+    unsigned char p[3];
+    CHECK(sqrtcm_pack_obs_header(p, sizeof p, 1005, 42) == 3);
+    unsigned char frame[16];
+    size_t n = sqrtcm_frame(frame, sizeof frame, p, 3);
+
+    SqrtcmFramer f;
+    SqrtcmMsg msg;
+    sqrtcm_framer_init(&f);
+    CHECK(sqrtcm_framer_feed(&f, frame, n, &msg, 1) == 1);
+    CHECK(msg.payload_owned);
+    CHECK(msg.payload == msg.payload_copy);
+    unsigned char saved0 = sqrtcm_msg_payload(&msg)[0];
+    unsigned char saved1 = sqrtcm_msg_payload(&msg)[1];
+
+    /* Plain struct copy: raw .payload points at src's buffer; accessor / fix
+     * / assign keep the destination's own copy. */
+    SqrtcmMsg plain = msg;
+    msg.payload_copy[0] ^= 0xFFu;
+    CHECK(plain.payload == msg.payload_copy); /* stale raw pointer */
+    CHECK(sqrtcm_msg_payload(&plain)[0] == saved0); /* owned flag => own buf */
+    CHECK(sqrtcm_msg_payload(&plain)[1] == saved1);
+    sqrtcm_msg_fix_payload(&plain);
+    CHECK(plain.payload == plain.payload_copy);
+    CHECK(plain.payload[0] == saved0);
+
+    msg.payload_copy[0] = saved0; /* restore for assign check */
+    SqrtcmMsg via_assign;
+    sqrtcm_msg_assign(&via_assign, &msg);
+    CHECK(via_assign.payload == via_assign.payload_copy);
+    CHECK(via_assign.payload_owned);
+    msg.payload_copy[0] ^= 0xFFu;
+    CHECK(via_assign.payload[0] == saved0);
 }
 
 static void test_ntrip_body_glue(void) {
@@ -250,5 +337,7 @@ void test_rtcm_all(int *checks, int *failures) {
     test_reserved_length_bits();
     test_rescan_finds_preamble_after_bad_crc();
     test_feed_payload_not_stale();
+    test_rescan_multi_frame();
+    test_msg_struct_copy_safety();
     test_ntrip_body_glue();
 }

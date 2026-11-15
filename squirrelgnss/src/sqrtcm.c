@@ -97,6 +97,7 @@ int sqrtcm_parse_header(const unsigned char *payload, size_t len, SqrtcmMsg *out
     memset(out, 0, sizeof *out);
     out->payload = payload;
     out->payload_len = len;
+    out->payload_owned = 0;
     out->msg_type = get_bits(payload, 0, 12);
     out->category = sqrtcm_msg_category(out->msg_type);
     out->multi = -1;
@@ -115,6 +116,7 @@ int sqrtcm_parse_header(const unsigned char *payload, size_t len, SqrtcmMsg *out
 void sqrtcm_msg_own_payload(SqrtcmMsg *msg) {
     if (!msg) return;
     if (!msg->payload || msg->payload_len == 0) {
+        msg->payload_owned = 1;
         msg->payload = msg->payload_copy;
         return;
     }
@@ -123,7 +125,55 @@ void sqrtcm_msg_own_payload(SqrtcmMsg *msg) {
     }
     if (msg->payload != msg->payload_copy)
         memcpy(msg->payload_copy, msg->payload, msg->payload_len);
+    msg->payload_owned = 1;
     msg->payload = msg->payload_copy;
+}
+
+void sqrtcm_msg_fix_payload(SqrtcmMsg *msg) {
+    if (!msg) return;
+    if (msg->payload_owned) msg->payload = msg->payload_copy;
+}
+
+void sqrtcm_msg_assign(SqrtcmMsg *dst, const SqrtcmMsg *src) {
+    if (!dst || !src) return;
+    *dst = *src;
+    sqrtcm_msg_fix_payload(dst);
+}
+
+/* ---- framer input / rescan queue ---- */
+
+static int inq_append(SqrtcmFramer *f, unsigned char b) {
+    if (f->inq_n >= sizeof f->inq) {
+        f->rescan_drop++;
+        return -1;
+    }
+    f->inq[f->inq_n++] = b;
+    return 0;
+}
+
+/* Prepend n bytes at the front (rejected-frame rescan from buf[1]). */
+static int inq_prepend(SqrtcmFramer *f, const unsigned char *p, size_t n) {
+    if (!n) return 0;
+    if (n > sizeof f->inq) {
+        f->rescan_drop += (unsigned)n;
+        return -1;
+    }
+    if (f->inq_n + n > sizeof f->inq) {
+        f->rescan_drop += (unsigned)n;
+        return -1;
+    }
+    memmove(f->inq + n, f->inq, f->inq_n);
+    memcpy(f->inq, p, n);
+    f->inq_n += n;
+    return 0;
+}
+
+static int inq_take(SqrtcmFramer *f, unsigned char *b) {
+    if (f->inq_n == 0) return 0;
+    *b = f->inq[0];
+    f->inq_n--;
+    if (f->inq_n) memmove(f->inq, f->inq + 1, f->inq_n);
+    return 1;
 }
 
 /* ---- framer ---- */
@@ -134,7 +184,7 @@ void sqrtcm_framer_init(SqrtcmFramer *f) { memset(f, 0, sizeof *f); }
 
 /* Step without rescan. Returns 0 = need more, 1 = good frame in *out,
  * 2 = rejected (bad CRC / length); f->buf[0..len) still holds the rejected
- * bytes so the caller can rescan from buf[1]. */
+ * bytes so the caller can re-queue from buf[1]. */
 static int framer_step(SqrtcmFramer *f, unsigned char b, SqrtcmMsg *out) {
     switch (f->state) {
     case S_IDLE:
@@ -194,6 +244,7 @@ static int framer_step(SqrtcmFramer *f, unsigned char b, SqrtcmMsg *out) {
             sqrtcm_msg_own_payload(out);
             f->state = S_IDLE;
             f->len = 0;
+            f->need = 0;
             return 1;
         }
     }
@@ -204,75 +255,20 @@ static int framer_step(SqrtcmFramer *f, unsigned char b, SqrtcmMsg *out) {
     }
 }
 
-/* Prepend f->buf[1..len) in front of q[qi..qn) after a reject, then clear f. */
-static size_t rescan_queue_prepend(SqrtcmFramer *f, unsigned char *q, size_t qcap, size_t qi,
-                                   size_t qn) {
-    if (f->len > 1) {
-        size_t add = f->len - 1;
-        size_t rest = qn - qi;
-        if (qi + add + rest <= qcap) {
-            memmove(q + qi + add, q + qi, rest);
-            memcpy(q + qi, f->buf + 1, add);
-            qn = qi + add + rest;
-        }
-    }
-    f->state = S_IDLE;
-    f->len = 0;
-    f->need = 0;
-    return qn;
-}
-
-/* After a reject, drop buf[0] and re-inject buf[1..len) so a real 0xD3 inside
- * the discarded bytes is not lost. Iterative (no deep recursion). Returns 1
- * on the first good frame; any trailing bytes stay in the framer (or are
- * consumed into further rejects/resync). Extra complete frames in the same
- * rescan are delivered by continuing the queue into f after owning *out is
- * the caller's job on the next feed byte — we keep only the first *out. */
-static int framer_rescan_reject(SqrtcmFramer *f, SqrtcmMsg *out) {
-    unsigned char q[SQRTCM_MAX_FRAME];
-    size_t qn;
-
-    if (f->len <= 1) {
-        f->state = S_IDLE;
-        f->len = 0;
-        f->need = 0;
-        return 0;
-    }
-    qn = f->len - 1;
-    memcpy(q, f->buf + 1, qn);
-    f->state = S_IDLE;
-    f->len = 0;
-    f->need = 0;
-
-    size_t qi = 0;
-    while (qi < qn) {
-        int r = framer_step(f, q[qi++], out);
-        if (r == 1) {
-            /* Absorb remainder into f without overwriting *out. */
-            SqrtcmMsg discard;
-            while (qi < qn) {
-                int r2 = framer_step(f, q[qi], &discard);
-                if (r2 == 2) {
-                    qn = rescan_queue_prepend(f, q, sizeof q, qi, qn);
-                    continue;
-                }
-                if (r2 == 1) {
-                    /* Rare: second frame in one rescan. Re-queue its payload
-                     * path by treating the already-parsed discard as done;
-                     * leave framer idle and push any unread q bytes next. */
-                    f->state = S_IDLE;
-                    f->len = 0;
-                    f->need = 0;
-                    /* Deliberately drop the extra frame from this byte call;
-                     * feed() of a whole buffer usually sees frames one-by-one
-                     * from distinct input bytes. */
-                }
-                qi++;
-            }
-            return 1;
-        }
+/* Drain the input queue: re-queue rejected tails from buf[1] so every good
+ * frame hidden in a reject is eventually delivered. Returns 1 with *out set
+ * on the first good frame; remaining queued bytes stay for the next drain. */
+static int framer_drain(SqrtcmFramer *f, SqrtcmMsg *out) {
+    unsigned char b;
+    while (inq_take(f, &b)) {
+        int r = framer_step(f, b, out);
+        if (r == 1) return 1;
         if (r == 2) {
-            qn = rescan_queue_prepend(f, q, sizeof q, qi, qn);
+            if (f->len > 1)
+                (void)inq_prepend(f, f->buf + 1, f->len - 1);
+            f->state = S_IDLE;
+            f->len = 0;
+            f->need = 0;
             continue;
         }
     }
@@ -281,10 +277,8 @@ static int framer_rescan_reject(SqrtcmFramer *f, SqrtcmMsg *out) {
 
 int sqrtcm_framer_byte(SqrtcmFramer *f, unsigned char b, SqrtcmMsg *out) {
     if (!f || !out) return 0;
-    int r = framer_step(f, b, out);
-    if (r == 1) return 1;
-    if (r == 2) return framer_rescan_reject(f, out);
-    return 0;
+    (void)inq_append(f, b);
+    return framer_drain(f, out);
 }
 
 int sqrtcm_framer_feed(SqrtcmFramer *f, const void *data, size_t n, SqrtcmMsg *msgs, int max_msgs) {
@@ -293,12 +287,21 @@ int sqrtcm_framer_feed(SqrtcmFramer *f, const void *data, size_t n, SqrtcmMsg *m
     int stored = 0;
     SqrtcmMsg tmp;
     for (size_t i = 0; i < n; i++) {
-        SqrtcmMsg *slot = (msgs && stored < max_msgs) ? &msgs[stored] : &tmp;
-        if (sqrtcm_framer_byte(f, p[i], slot)) {
-            /* Detach payload before the next frame overwrites f->buf. */
+        (void)inq_append(f, p[i]);
+        for (;;) {
+            SqrtcmMsg *slot = (msgs && stored < max_msgs) ? &msgs[stored] : &tmp;
+            if (!framer_drain(f, slot)) break;
             sqrtcm_msg_own_payload(slot);
             if (msgs && stored < max_msgs) stored++;
         }
+    }
+    /* Drain any frames already fully present in the queue (e.g. a second
+     * good frame found during the last byte's rescan). */
+    for (;;) {
+        SqrtcmMsg *slot = (msgs && stored < max_msgs) ? &msgs[stored] : &tmp;
+        if (!framer_drain(f, slot)) break;
+        sqrtcm_msg_own_payload(slot);
+        if (msgs && stored < max_msgs) stored++;
     }
     return stored;
 }

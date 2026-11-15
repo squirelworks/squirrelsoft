@@ -24,6 +24,8 @@
 #define SQRTCM_PREAMBLE 0xD3
 #define SQRTCM_MAX_PAYLOAD 1023 /* 10-bit length field */
 #define SQRTCM_MAX_FRAME (3 + SQRTCM_MAX_PAYLOAD + 3)
+/* Input/rescan queue sized for a rejected max frame plus another max frame. */
+#define SQRTCM_INQ_MAX (SQRTCM_MAX_FRAME * 2)
 
 /* Message-number ranges we recognise for v1 header parse. */
 enum {
@@ -44,9 +46,12 @@ typedef struct {
     int have_epoch;
     int multi; /* MSM multiple-message bit, or -1 if unknown */
     int category;
-    const unsigned char *payload; /* message body only (no preamble/CRC) */
+    /* Prefer sqrtcm_msg_payload() after a plain struct copy: when
+     * payload_owned is set, bytes live in payload_copy and a raw
+     * `a = b` leaves a.payload pointing at b's buffer. */
+    const unsigned char *payload;
     size_t payload_len;
-    /* Owned copy so multi-frame feed results stay valid after f->buf reuse. */
+    unsigned char payload_owned; /* 1 => use payload_copy, not a borrow */
     unsigned char payload_copy[SQRTCM_MAX_PAYLOAD];
 } SqrtcmMsg;
 
@@ -80,8 +85,23 @@ size_t sqrtcm_pack_obs_header(unsigned char *out, size_t cap, unsigned msg_type,
  * payload that already passed CRC. Returns 0, or -1 if too short. */
 int sqrtcm_parse_header(const unsigned char *payload, size_t len, SqrtcmMsg *out);
 
-/* Copy payload into msg->payload_copy and point msg->payload there. */
+/* Copy payload into msg->payload_copy, set payload_owned, point payload there. */
 void sqrtcm_msg_own_payload(SqrtcmMsg *msg);
+
+/* After a plain struct copy (`dst = src`), re-point dst->payload into
+ * dst->payload_copy when payload_owned. No-op for external borrows. */
+void sqrtcm_msg_fix_payload(SqrtcmMsg *msg);
+
+/* Struct assign that copies bytes then fixes the payload pointer. */
+void sqrtcm_msg_assign(SqrtcmMsg *dst, const SqrtcmMsg *src);
+
+/* Safe payload view: owned buffer when payload_owned, else payload borrow.
+ * Safe after a plain `a = b` without calling fix_payload. */
+static inline const unsigned char *sqrtcm_msg_payload(const SqrtcmMsg *msg) {
+    if (!msg) return NULL;
+    if (msg->payload_owned) return msg->payload_copy;
+    return msg->payload;
+}
 
 /* ---- streaming framer ---- */
 
@@ -90,24 +110,31 @@ typedef struct {
     size_t need; /* payload length from the length field */
     size_t len;  /* bytes stored in buf (includes preamble) */
     unsigned char buf[SQRTCM_MAX_FRAME];
+    /* Input/rescan queue: new bytes and rejected-frame tails (from buf[1]).
+     * Sized for worst-case single reject re-inject + another max frame. */
+    unsigned char inq[SQRTCM_INQ_MAX];
+    size_t inq_n;
     unsigned ok;
     unsigned bad_crc;
     unsigned junk;
-    unsigned bad_len; /* reserved bits set or length rejected */
+    unsigned bad_len;     /* reserved bits set or length rejected */
+    unsigned rescan_drop; /* bytes dropped when inq could not fit a prepend */
 } SqrtcmFramer;
 
 void sqrtcm_framer_init(SqrtcmFramer *f);
+
 /* One byte in: 1 when a CRC-good frame completes (*out filled). After a bad
- * CRC or rejected length, bytes already buffered are rescanned from buf[1]
- * for the next 0xD3. On success from sqrtcm_framer_byte alone, payload may
- * still point into f->buf until the next call — use sqrtcm_msg_own_payload
- * or sqrtcm_framer_feed when holding multiple messages. */
+ * CRC or rejected length, bytes already buffered are re-queued from buf[1]
+ * and drained so every good frame in that tail is delivered (byte API returns
+ * one per call; further frames stay queued until the next call / feed).
+ * On success, payload is owned in out. */
 int sqrtcm_framer_byte(SqrtcmFramer *f, unsigned char b, SqrtcmMsg *out);
 
 /* Feed a buffer (e.g. NTRIP stream body). Stores up to max_msgs good
  * frames in msgs[] with payloads copied into each msg's payload_copy.
  * Returns the number stored; framer->ok counts all good frames seen even
- * when msgs fills up. */
+ * when msgs fills up. Drains the rescan/input queue so multi-frame rescans
+ * are not truncated at the first hit. */
 int sqrtcm_framer_feed(SqrtcmFramer *f, const void *data, size_t n, SqrtcmMsg *msgs,
                        int max_msgs);
 
