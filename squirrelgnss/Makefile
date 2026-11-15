@@ -28,7 +28,8 @@ test: $(BUILD)/test_sqgnss $(BUILD)/squirrelgnss test-jni
 	sh tests/cli_smoke.sh $(BUILD)
 
 # The Android JNI bridge built for this machine and driven from a JVM
-# (android/jni-smoke): skipped when there is no JDK. Synthetic sky only.
+# (android/jni-smoke): skipped when there is no JDK. Synthetic measurement
+# feed (fillDemoEpoch → solveEpoch); no phone GNSS in CI.
 JDK ?= $(shell if [ -n "$$JAVA_HOME" ]; then echo "$$JAVA_HOME"; \
 	elif command -v javac >/dev/null; then dirname "$$(dirname "$$(readlink -f "$$(command -v javac)")")"; fi)
 JNI_SRC = android/app/src/main/cpp/sqgnss_jni.c src/sqgnss.c

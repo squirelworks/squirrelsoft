@@ -1,9 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">SquirrelGNSS</string>
-    <string name="tagline">Synthetic-sky PVT through the desktop sqgnss core (JNI). Phone GNSS comes later.</string>
-    <string name="run_demo">Run synthetic demo</string>
+    <string name="tagline">Synthetic measurement feed → sqgnss JNI (CI). Optional phone GnssMeasurement / Location when hardware is present.</string>
+    <string name="run_demo">Run synthetic feed</string>
+    <string name="run_phone">Listen for phone GNSS</string>
     <string name="status_no_core">Native sqgnss core not loaded.</string>
-    <string name="status_solve_failed">Synthetic demo solve failed.</string>
-    <string name="status_demo">Demo fix\n  lat %1$.8f\n  lon %2$.8f\n  h   %3$.3f m\n  sats %4$d  HDOP %5$.2f  VDOP %6$.2f\n  3-D err %7$.4f m\nStakeout 0.001° N → %8$.2f m north</string>
+    <string name="status_solve_failed">Synthetic measurement solve failed.</string>
+    <string name="status_permission_denied">Location permission denied — synthetic feed only.</string>
+    <string name="status_no_gps">No GPS provider on this device — synthetic feed only.</string>
+    <string name="status_phone_start_failed">Could not start phone GNSS feed.</string>
+    <string name="status_phone_idle">Phone feed: idle (synthetic only).</string>
+    <string name="status_phone_meas">Phone meas: %1$d SVs → fix lat %2$.6f lon %3$.6f (used %4$d)</string>
+    <string name="status_phone_meas_no_fix">Phone meas: %1$d SVs (no PVT yet — need matching eph)</string>
+    <string name="status_phone_location">Phone location (%1$s): lat %2$.6f lon %3$.6f ±%4$.1f m</string>
+    <string name="status_synthetic">Synthetic feed (%1$d obs)\n  lat %2$.8f\n  lon %3$.8f\n  h   %4$.3f m\n  sats %5$d  HDOP %6$.2f  VDOP %7$.2f\n  3-D err %8$.4f m\nStakeout 0.001° N → %9$.2f m north\n\n%10$s</string>
 </resources>

@@ -11,5 +11,7 @@ class SqGnssTest {
         assertFalse(SqGnss.available)
         assertNull(SqGnss.llhToEcef(SqGnss.Llh(0.0, 0.0, 0.0)))
         assertNull(SqGnss.demoSolve(SqGnss.Llh(35.681236, 139.767125, 40.0)))
+        assertNull(SqGnss.fillDemoEpoch(SqGnss.Llh(35.681236, 139.767125, 40.0)))
+        assertNull(SyntheticMeasFeed.run())
     }
 }

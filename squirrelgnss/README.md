@@ -165,11 +165,13 @@ is published by the IGS data centres.
 
 ## Android
 
-`android/` is a first-step app (`works.squirrel.gnss`) that links the same
-`sqgnss` core through JNI. Host smoke: `make test-jni` (or `make test`) builds
-`sqgnss_jni.c` for this machine and drives it from
-`android/jni-smoke/` — synthetic sky only, skipped when there is no JDK. Phone
-`GnssMeasurement` and NTRIP are not wired yet.
+`android/` (`works.squirrel.gnss`) links the same `sqgnss` core through JNI.
+A synthetic measurement feed packs demo-sky observations and solves them with
+`nativeSolveEpoch` (CI / host smoke). The app can also listen for phone
+`GnssMeasurement` / `Location` when permission and hardware allow; NTRIP
+corrections are not wired yet. Host smoke: `make test-jni` (or `make test`)
+builds `sqgnss_jni.c` for this machine and drives it from `android/jni-smoke/`
+— skipped when there is no JDK.
 
 ## Tests
 
