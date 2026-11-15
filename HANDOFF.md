@@ -50,8 +50,10 @@ Used here, in `ROADMAP.md` and on the issues (as labels).
   uploads (`needs: squirrel`): Sound 0.0.14/0.0.15, QR 0.1.7, Suica 0.0.13/0.0.14.
 - **Agent lanes:** suite split is in [docs/AGENT_LANES.md](docs/AGENT_LANES.md)
   (`-2eaf` = this Soft/Gen2/BIOS lane; `-b55f` = OS/2 2.9 only).
-- **Path to suite/OS 3.0.0:** [docs/PATH_TO_3.0.0.md](docs/PATH_TO_3.0.0.md)
-  (near-term finish list, fine-grained tag ladders, resume instructions).
+- **Path to suite/OS 3.0.0:** Soft [docs/PATH_TO_3.0.0.md](docs/PATH_TO_3.0.0.md)
+  is a **suite index** (PLAY/S6 + BIOS pointer). Canonical OS ladder:
+  squirrel-os2 `documentation/releases/TO_3.0.0.md`
+  ([os2#205](https://github.com/squirelworks/squirrel-os2/pull/205)).
   Go/no-go: Soft [#161](https://github.com/squirelworks/squirrelsoft/issues/161).
   Soft **#162** is on `main`; leave PLAY/S6 to Squirrel; suite tags are
   OS/2/BIOS only (owner publishes).
@@ -110,8 +112,9 @@ Android SDK 35). Without an SDK, the Gradle harnesses in the project's
 8. **S6 repo split** *(Squirrel)* — prep inventory on `main`; see S6 card.
 9. **PLAY uploads** *(Squirrel)* — Sound 0.0.14/0.0.15, QR 0.1.7, Suica
    0.0.13/0.0.14 (already on `main`; do not invent uploads).
-10. **Suite path to 3.0.0** — docs in [docs/PATH_TO_3.0.0.md](docs/PATH_TO_3.0.0.md)
-    (PR #165); Soft coding is hygiene; OS/2/BIOS ladders are cross-repo.
+10. **Suite path to 3.0.0** — Soft [docs/PATH_TO_3.0.0.md](docs/PATH_TO_3.0.0.md)
+    is the suite index; OS ladder is os2 `TO_3.0.0.md` (#205). Soft coding
+    is hygiene.
 
 Done earlier (kept for history):
 
