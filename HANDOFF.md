@@ -182,7 +182,8 @@ Done earlier (kept for history):
 
 ### GNSS-android-meas — phone / synthetic measurement feed  `status: in progress` lane `-2eaf` (#148)
 - Packed obs → PVT via JNI (`nativeFillDemoEpoch` / `nativeSolveEpoch`),
-  `SyntheticMeasFeed` for CI, optional `PhoneGnssFeed`. Branch
+  `SyntheticMeasFeed` for CI, optional `PhoneGnssFeed`, Kotlin packing /
+  `GnssRawMapper`, JVM + instrumented synthetic tests. Branch
   `cursor/impl-gnss-android-meas-2eaf`. Still open after merge: live NTRIP
   transport (also lane `-2eaf`).
 

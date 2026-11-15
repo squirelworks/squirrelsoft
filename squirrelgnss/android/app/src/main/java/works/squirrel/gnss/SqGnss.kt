@@ -1,16 +1,19 @@
 package works.squirrel.gnss
 
 /**
- * Kotlin side of the JNI bridge to the desktop SquirrelGNSS core (`sqgnss.c`),
- * the same geodesy and synthetic-sky PVT the CLI uses. Phone
- * `GnssMeasurement` / NTRIP are not wired yet — this is the first Android
- * step so CI can exercise the bridge with synthetic data only.
+ * Kotlin side of the JNI bridge to the desktop SquirrelGNSS core (`sqgnss.c`).
  *
- * [nativeDemoSolve] fills [out] (length >= [OUT_LEN]) as documented in
- * `sqgnss_jni.c`; keep both in step.
+ * First step (#146): geodesy, stakeout, synthetic-sky [demoSolve].
+ * Second step: packed observation epochs via [fillDemoEpoch] / [solveEpoch]
+ * so a measurement feed (synthetic for CI, phone GnssMeasurement or Location
+ * when hardware is present) can drive the same PVT path. NTRIP corrections
+ * stay open.
+ *
+ * Packed solve output [OUT_LEN] matches `sqgnss_jni.c`; keep both in step.
  */
 object SqGnss {
     const val OUT_LEN = 9
+    const val MAX_SATS = 32
 
     /** False when the native library is missing (e.g. JVM unit tests). */
     val available: Boolean by lazy {
@@ -28,14 +31,15 @@ object SqGnss {
 
     data class Enu(val e: Double, val n: Double, val u: Double)
 
-    /** One synthetic-sky fix: solution LLH, quality, and 3-D error vs the truth site. */
-    data class DemoFix(
+    /** One PVT fix from the native core (demo or fed epoch). */
+    data class Fix(
         val llh: Llh,
         val clockBiasM: Double,
         val nUsed: Int,
         val hdop: Double,
         val vdop: Double,
         val rmsM: Double,
+        /** 3-D error vs truth when truth was supplied; else negative. */
         val errM: Double,
     )
 
@@ -57,6 +61,33 @@ object SqGnss {
         clockBiasM: Double,
         noiseM: Double,
         seed: Int,
+        out: DoubleArray,
+    ): Boolean
+
+    @JvmStatic
+    private external fun nativeFillDemoEpoch(
+        lat: Double,
+        lon: Double,
+        heightM: Double,
+        tGps: Double,
+        clockBiasM: Double,
+        noiseM: Double,
+        seed: Int,
+        tReceiverOut: DoubleArray,
+        prns: IntArray,
+        ranges: DoubleArray,
+        snrs: DoubleArray,
+    ): Int
+
+    @JvmStatic
+    private external fun nativeSolveEpoch(
+        tReceiver: Double,
+        tEph: Double,
+        prns: IntArray,
+        ranges: DoubleArray,
+        snrs: DoubleArray,
+        n: Int,
+        truthLlh: DoubleArray?,
         out: DoubleArray,
     ): Boolean
 
@@ -98,13 +129,69 @@ object SqGnss {
         clockBiasM: Double = 15.0,
         noiseM: Double = 0.0,
         seed: Int = 1,
-    ): DemoFix? {
+    ): Fix? {
         if (!available) return null
         val out = DoubleArray(OUT_LEN)
         if (!nativeDemoSolve(truth.latDeg, truth.lonDeg, truth.heightM, tGps, clockBiasM, noiseM, seed, out)) {
             return null
         }
-        return DemoFix(
+        return fixFromOut(out)
+    }
+
+    /**
+     * Fill packed observation arrays from the synthetic sky at [truth].
+     * Returns the epoch, or null when the native core is missing / failed.
+     */
+    fun fillDemoEpoch(
+        truth: Llh,
+        tGps: Double = 100000.0,
+        clockBiasM: Double = 15.0,
+        noiseM: Double = 0.0,
+        seed: Int = 1,
+    ): MeasurementEpoch? {
+        if (!available) return null
+        val tReceiverOut = DoubleArray(1)
+        val prns = IntArray(MAX_SATS)
+        val ranges = DoubleArray(MAX_SATS)
+        val snrs = DoubleArray(MAX_SATS)
+        val n = nativeFillDemoEpoch(
+            truth.latDeg, truth.lonDeg, truth.heightM, tGps, clockBiasM, noiseM, seed,
+            tReceiverOut, prns, ranges, snrs,
+        )
+        if (n < 4) return null
+        // t_receiver = t_true + clock/c; keep t_true as tEph for demo orbits.
+        return MeasurementEpoch.fromPacked(
+            tReceiver = tReceiverOut[0],
+            prns = prns,
+            ranges = ranges,
+            snrs = snrs,
+            n = n,
+            tEph = tGps,
+        )
+    }
+
+    /**
+     * Solve PVT from a packed observation epoch against demo ephemerides at
+     * [MeasurementEpoch.tEph]. When [truth] is set, [Fix.errM] is the 3-D
+     * error in metres.
+     */
+    fun solveEpoch(epoch: MeasurementEpoch, truth: Llh? = null): Fix? {
+        if (!available) return null
+        if (epoch.observations.size < 4) return null
+        val packed = epoch.pack(MAX_SATS) ?: return null
+        val out = DoubleArray(OUT_LEN)
+        val truthArr = truth?.let { doubleArrayOf(it.latDeg, it.lonDeg, it.heightM) }
+        if (!nativeSolveEpoch(
+                epoch.tReceiver, epoch.tEph, packed.prns, packed.ranges, packed.snrs, packed.n, truthArr, out,
+            )
+        ) {
+            return null
+        }
+        return fixFromOut(out)
+    }
+
+    private fun fixFromOut(out: DoubleArray): Fix =
+        Fix(
             llh = Llh(out[0], out[1], out[2]),
             clockBiasM = out[3],
             nUsed = out[4].toInt(),
@@ -113,5 +200,4 @@ object SqGnss {
             rmsM = out[7],
             errM = out[8],
         )
-    }
 }

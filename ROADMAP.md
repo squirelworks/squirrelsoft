@@ -67,7 +67,7 @@ The same states are labels on the GitHub issues (`status: done`, `status: in pro
   - [x] SquirrelQR: `make test` builds `sqqr_jni.c` for the host and drives it from a JVM (`squirrelqr/android/jni-smoke`)
   - [x] SquirrelSound: the same for `sqdsp_jni.c` (`squirrelsound/android/jni-smoke`)
   - [x] SquirrelSuica analysis (`sqfelica_jni.c`) (`squirrelsuica-analysis/android/jni-smoke`)
-  - [x] SquirrelGNSS: the same for `sqgnss_jni.c` (`squirrelgnss/android/jni-smoke`; synthetic demo only)
+  - [x] SquirrelGNSS: the same for `sqgnss_jni.c` (`squirrelgnss/android/jni-smoke`; synthetic measurement feed)
 
 ## S3 — Native front-ends, desktop parity (#30, #31)
 - [x] S3.1 Retire the SquirrelQR PWA as a product: moved to `squirrelqr/web-demo/` with a "not a product" README (#66).

@@ -26,6 +26,10 @@ GNSS point positioning for land surveying. It covers:
   Correction bodies stay opaque (RTCM decode and a live transport come
   later, with phone `GnssMeasurement` on Android)
 
+Android (`android/`): JNI to this core with a synthetic packed-observation
+feed for CI, and an optional phone `GnssMeasurement` / `Location` listener.
+NTRIP corrections are not wired yet.
+
 Not yet: other constellations (Galileo, BeiDou, GLONASS), CNAV inter-signal
 corrections for L5, RTK on L5, live NTRIP sockets/TLS, and phone GNSS.
 The receiver path has been checked on synthetic streams and through a
