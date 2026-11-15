@@ -98,6 +98,13 @@ formulas. None of it comes from vendor receiver firmware.
   early, (f1/f)² times more on L2 and L5), L5, the satellite group delay on
   L2 and L5 code, and ambiguities that belong to a receiver wherever it
   goes. It's for tests and demos.
+- **NTRIP client skeleton (`sqntrip`):** builds NTRIP/HTTP GET requests
+  (User-Agent `NTRIP …`, optional Basic auth, NTRIP 2 version/Host headers)
+  and parses caster replies from a buffer — `ICY 200` / `HTTP/1.x` stream
+  bodies and `SOURCETABLE` / `STR;` tables. No sockets and no network in
+  tests; a host supplies the bytes. Correction payloads stay opaque for
+  now (RTCM decode and a live transport are the next step toward Android
+  `GnssMeasurement` + NTRIP RTK corrections).
 
 ## Build
 
@@ -167,7 +174,7 @@ is published by the IGS data centres.
 ## Tests
 
 `make test` runs `tests/test_sqgnss.c` (with `tests/test_rinex.c`,
-`tests/test_rtk.c` and `tests/test_recv.c`),
+`tests/test_rtk.c`, `tests/test_recv.c` and `tests/test_ntrip.c`),
 `tests/cli_smoke.sh`, and the Android JNI host smoke above. The unit
 tests cover:
 
@@ -218,3 +225,7 @@ tests cover:
   NAV-PVT; a whole stream solved to under a centimetre ionosphere-free
   through 6 m of ionosphere (L1 alone is metres off), L1/L5 alone, and
   RINEX L5 round trips with and without L2
+- NTRIP: Base64 Basic auth, GET request lines (sourcetable `/`, mount,
+  NTRIP 2 Host/version), ICY 200 stream body through chunked feeds, HTTP
+  401, `SOURCETABLE` with two `STR;` mounts, and HTTP 200 + `STR;` body
+  promotion — all from synthetic caster bytes, no network

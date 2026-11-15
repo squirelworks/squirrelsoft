@@ -194,7 +194,8 @@ These milestones predate the suite roadmap and remain open. Formats stay owned b
 - [x] L5 observations: RINEX in and out, the synthetic sky, the ionosphere-free point position from L1/L2 or L1/L5 (`--iono-free`)
 - [x] Serial receiver input (`squirrelgnss receiver`): NMEA fixes and satellites in view, u-blox RXM-RAWX/RXM-SFRBX/NAV-PVT with the navigation message decoded to ephemerides, solved live beside the receiver and logged as RINEX
 - [x] Android scaffold + JNI to `sqgnss` with host `squirrelgnss/android/jni-smoke` (synthetic demo PVT; no real GNSS in CI)
-- [ ] Phone GnssMeasurement feed into the JNI core; NTRIP client for corrections (CONTINUANCE)
+- [x] NTRIP client skeleton (`sqntrip`): GET request + Basic auth, ICY/HTTP caster response and sourcetable parse; `squirrelgnss/tests/test_ntrip.c` uses synthetic caster bytes only (no network). First step toward phone RTK corrections (CONTINUANCE).
+- [ ] Phone GnssMeasurement feed into the JNI core; live NTRIP transport for corrections (CONTINUANCE)
 
 ### SquirrelSound desktop (sqdsp)
 - [x] Radix-2 FFT, windows, periodogram, Welch PSD, STFT; pitch, THD, SNR; WAV I/O, CLI reports, SVG plots; live SDL spectrum/waterfall + ALSA mic (done)

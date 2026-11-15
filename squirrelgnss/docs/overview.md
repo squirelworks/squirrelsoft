@@ -20,7 +20,13 @@ GNSS point positioning for land surveying. It covers:
   then integer least squares (LAMBDA-style decorrelation and search) with
   a ratio test; the kinematic filter keeps the ambiguities in information
   form, eliminating each epoch's rover, and handles cycle slips
+- NTRIP client skeleton (`sqntrip`): builds caster GET requests (NTRIP 1/2
+  headers, Basic auth) and parses ICY/HTTP replies and sourcetables from
+  a byte buffer. No sockets; unit tests feed synthetic caster responses.
+  Correction bodies stay opaque (RTCM decode and a live transport come
+  later, with phone `GnssMeasurement` on Android)
 
 Not yet: other constellations (Galileo, BeiDou, GLONASS), CNAV inter-signal
-corrections for L5, and RTK on L5. The receiver path has been checked on
-synthetic streams and through a pseudo-terminal, not yet on a receiver.
+corrections for L5, RTK on L5, live NTRIP sockets/TLS, and phone GNSS.
+The receiver path has been checked on synthetic streams and through a
+pseudo-terminal, not yet on a receiver.
