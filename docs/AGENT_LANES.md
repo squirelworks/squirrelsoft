@@ -6,7 +6,7 @@ rebase an existing PR; never redo it on a new branch.
 
 | Lane | Branch suffix | Scope |
 |------|---------------|-------|
-| **A** | `-2eaf` | Gen2 desktop finish; Soft GNSS/NTRIP; BIOS leftover Phase G / board configs; CI/rebase hygiene on own PRs |
+| **A** | `-2eaf` | Gen2 desktop finish; Soft GNSS/NTRIP/RTCM; BIOS leftover Phase G / board configs; CI/rebase hygiene on own PRs |
 | **B** | `-b55f` | **2.9-lm-kernel** and **2.9-syscall64** only (and follow-ups that stay inside long-mode) |
 
 Shared files (`TODO.md`, `ROADMAP.md`, `HANDOFF.md`, check lists): rebase onto
@@ -30,7 +30,8 @@ editing the docs boxes for its own cards per PR.
 ### squirrelsoft — GNSS CONTINUANCE
 
 - [x] **Phone GnssMeasurement feed** `-2eaf` — PR #148 (on `main`)
-- [x] **Live NTRIP transport** `-2eaf` — branch `cursor/impl-gnss-ntrip-live-2eaf`
+- [x] **Live NTRIP transport** `-2eaf` — PR #150 (on `main`)
+- [x] **RTCM decode skeleton** `-2eaf` — branch `cursor/impl-gnss-rtcm-2eaf`
 
 Leave **S6** / **PLAY** to Squirrel (`needs: squirrel`).
 
@@ -67,7 +68,8 @@ Leave **S6** / **PLAY** to Squirrel (`needs: squirrel`).
 | os2 | #192 | `…-w5-openas-2eaf` | `-2eaf` | W.5-openas |
 | os2 | #193 | `…-2.9-lm-paging-b55f` | `-b55f` | 2.9-lm-kernel (partial) |
 | soft | #148 | `…-gnss-android-meas-2eaf` | `-2eaf` | Phone GnssMeasurement (merged) |
-| soft | (open) | `…-gnss-ntrip-live-2eaf` | `-2eaf` | Live NTRIP transport |
+| soft | #150 | `…-gnss-ntrip-live-2eaf` | `-2eaf` | Live NTRIP transport (merged) |
+| soft | (open) | `…-gnss-rtcm-2eaf` | `-2eaf` | RTCM decode skeleton |
 
 ## Issue sync note
 

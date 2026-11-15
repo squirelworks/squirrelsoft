@@ -18,7 +18,7 @@ Lane `-2eaf`. Builds on the buffer-fed `sqntrip` skeleton (#147).
 ## Spec notes
 
 Public NTRIP 1.0 (RTCM Paper 200-2004/SC104-STD) and NTRIP 2.0 HTTP headers.
-Correction bodies stay opaque (RTCM decode is a later step).
+Correction bodies are framed by `sqrtcm` (see `docs/rtcm-decode.md`).
 
 ## CI / safety
 
