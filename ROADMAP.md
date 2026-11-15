@@ -18,12 +18,11 @@ Every item is a checkbox. Tick it in the PR that merges its last piece. Nested b
 
 S3.2 WASAPI/macOS is done on `main` via
 [#141](https://github.com/squirelworks/squirrelsoft/pull/141).
-**GNSS-android-jni** is *(in progress)* on `cursor/impl-gnss-android-jni-2eaf`
-(first step: Android scaffold + host jni-smoke; phone GnssMeasurement / NTRIP
-still open). **[HANDOFF.md](HANDOFF.md)** has the cards and suggested order;
-next Squirrel-owned work remains **S6** (repo split) and **PLAY** uploads.
-**[docs/CONTINUANCE.md](docs/CONTINUANCE.md)** is the plan beyond it for the
-whole suite (this repo, squirrelbios, squirrel-os2).
+**GNSS-android-jni** first step is on `main` (#146). Phone GnssMeasurement is
+*(in progress #148, lane `-2eaf`)*; live NTRIP transport is *(claimed lane `-2eaf`)*.
+See **[docs/AGENT_LANES.md](docs/AGENT_LANES.md)** for the `-2eaf` / `-b55f` split.
+**[HANDOFF.md](HANDOFF.md)** has the cards; next Squirrel-owned work remains
+**S6** and **PLAY**. **[docs/CONTINUANCE.md](docs/CONTINUANCE.md)** is the suite plan.
 In this file: `- [x]` is done on `main`; `- [ ]` is **open for Cursor/Codex**;
 *(in progress)* means a branch exists, finish it rather than redo it; *(Squirrel)*
 means only the owner can do it (Play Console, real cards and readers, creating repos).
@@ -195,7 +194,7 @@ These milestones predate the suite roadmap and remain open. Formats stay owned b
 - [x] Serial receiver input (`squirrelgnss receiver`): NMEA fixes and satellites in view, u-blox RXM-RAWX/RXM-SFRBX/NAV-PVT with the navigation message decoded to ephemerides, solved live beside the receiver and logged as RINEX
 - [x] Android scaffold + JNI to `sqgnss` with host `squirrelgnss/android/jni-smoke` (synthetic demo PVT; no real GNSS in CI)
 - [x] NTRIP client skeleton (`sqntrip`): GET request + Basic auth, ICY/HTTP caster response and sourcetable parse; `squirrelgnss/tests/test_ntrip.c` uses synthetic caster bytes only (no network). First step toward phone RTK corrections (CONTINUANCE).
-- [ ] Phone GnssMeasurement feed into the JNI core; live NTRIP transport for corrections (CONTINUANCE)
+- [ ] Phone GnssMeasurement feed into the JNI core *(in progress #148, lane `-2eaf`)*; live NTRIP transport for corrections *(claimed lane `-2eaf`)* (CONTINUANCE)
 
 ### SquirrelSound desktop (sqdsp)
 - [x] Radix-2 FFT, windows, periodogram, Welch PSD, STFT; pitch, THD, SNR; WAV I/O, CLI reports, SVG plots; live SDL spectrum/waterfall + ALSA mic (done)
