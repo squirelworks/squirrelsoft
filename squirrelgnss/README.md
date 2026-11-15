@@ -109,8 +109,10 @@ formulas. None of it comes from vendor receiver firmware.
 - **RTCM 3 skeleton (`sqrtcm`):** frame sync on `0xD3`, CRC-24Q, and
   message/station header parse for legacy observations, station ARP and
   MSM (epoch + multi-message bit). Streaming framer accepts opaque NTRIP
-  body bytes. Observation fields / sat masks are a later step. Synthetic
-  tests only — see `docs/rtcm-decode.md`.
+  body bytes; after bad CRC it rescans from `buf[1]`, and `framer_feed`
+  owns each payload copy. GLONASS MSM day+ms epoch is documented for later.
+  Observation fields / sat masks are a later step. Synthetic tests only —
+  see `docs/rtcm-decode.md`.
 
 ## Build
 
@@ -244,5 +246,6 @@ above. The unit tests cover:
   promotion, `SqntClient` over memory I/O, TLS-unsupported path, and a
   `127.0.0.1` loopback TCP synthetic caster — no remote network in CI
 - RTCM 3: CRC-24Q empty frame, MSM/obs header pack+parse, streaming framer
-  with junk/resync and bad CRC, chunked feeds, reserved length bits, and
-  NTRIP ICY body → `sqrtcm_framer_feed` glue — synthetic bytes only
+  with junk/resync and bad CRC, preamble recovery after bad CRC, owned
+  multi-frame payloads, chunked feeds, reserved length bits, and NTRIP
+  ICY body → `sqrtcm_framer_feed` glue — synthetic bytes only
