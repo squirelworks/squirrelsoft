@@ -40,12 +40,13 @@ Used here, in `ROADMAP.md` and on the issues (as labels).
 - **Shared cores:** `libs/sqdsp`, `libs/sqfelica`, `libs/sqqr`, `libs/sqmath`, `libs/sqgui`.
 - **Test gate:** `make test` on ubuntu / windows / macos (every lib and program,
   the Python SuicaAnalysis twin, and host JNI smokes for QR / Sound /
-  SuicaAnalysis on Linux) and the Android job
+  SuicaAnalysis / GNSS on Linux) and the Android job
   (`./gradlew :app:assembleDebug :app:testDebugUnitTest` per app), in
   `.github/workflows/ci.yml` on every PR. Desktop packages: see
   `docs/packaging.md` and `.github/workflows/release.yml`.
-- **Open Cursor/Codex coding items:** none. Next work is Squirrel-owned
-  (**S6** repo split, **PLAY** uploads).
+- **Open Cursor/Codex coding items:** **GNSS-android-jni** (first step on
+  branch; phone GnssMeasurement / NTRIP still open). Next Squirrel-owned
+  work remains **S6** repo split and **PLAY** uploads.
 
 ## Rules (Squirrel's; do not break)
 
@@ -76,17 +77,16 @@ cd squirrelsound/android && ./gradlew :app:assembleDebug :app:testDebugUnitTest
 ```
 
 Android apps: `squirrelsuica/android`, `squirrelsuica-analysis/android`,
-`squirrelsound/android`, `squirrelqr/android` (JDK 17, Android SDK 35). Without
-an SDK, the Gradle harnesses in the project's `squirrelsoft-kit/tools/` compile
-and unit-test the Kotlin against stubs.
+`squirrelsound/android`, `squirrelqr/android`, `squirrelgnss/android` (JDK 17,
+Android SDK 35). Without an SDK, the Gradle harnesses in the project's
+`squirrelsoft-kit/tools/` compile and unit-test the Kotlin against stubs.
 
 ## Suggested order
 
-Cursor/Codex coding queue for this repo is empty after #141. Next for
-Squirrel:
-
-1. **S6 repo split** *(Squirrel)* — prep inventory on `main`; see S6 card.
-2. **PLAY uploads** *(Squirrel)* — Sound 0.0.14/0.0.15, QR 0.1.7, Suica
+1. **GNSS-android-jni** *(in progress)* — first step on
+   `cursor/impl-gnss-android-jni-2eaf`; phone GnssMeasurement / NTRIP still open.
+2. **S6 repo split** *(Squirrel)* — prep inventory on `main`; see S6 card.
+3. **PLAY uploads** *(Squirrel)* — Sound 0.0.14/0.0.15, QR 0.1.7, Suica
    0.0.13/0.0.14 (already on `main`; do not invent uploads).
 
 Done earlier (kept for history):
@@ -172,6 +172,12 @@ Done earlier (kept for history):
   on windows-latest / macos-latest / ubuntu-latest; draft Releases attach the
   packages (unsigned OK). See `docs/packaging.md`. Unblocked QR-capture-win-mac
   (#142) and SND-wasapi/macos (#141).
+
+### GNSS-android-jni — SquirrelGNSS on Android (CONTINUANCE)  `status: in progress`
+- First step on `cursor/impl-gnss-android-jni-2eaf`: `squirrelgnss/android`
+  app scaffold, JNI wrap of `sqgnss` (geodesy, stakeout, synthetic demo PVT),
+  host `android/jni-smoke` hooked into `make test` / CI Android matrix. No
+  phone GNSS hardware and no NTRIP yet — those stay open on the ROADMAP.
 
 ### PLAY-0.0.14 — upload SquirrelSound 0.0.14  `needs: squirrel`
 - Build the AAB locally with the upload key and upload it to closed testing

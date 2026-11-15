@@ -29,7 +29,7 @@ and CI job today).
 | `squirrelsoft-soundanalysis` | `squirrelsound/` | `libs/sqdsp`, `libs/sqgui` | `works.squirrel.sound` |
 | `squirrelsoft-qr` | `squirrelqr/` | `libs/sqqr`, `libs/sqgui` | `works.squirrel.qr` |
 | `squirrelsoft-cad` | `squirrelstation/`, `squirrelcad/` | `libs/sqgui` | — (desktop) |
-| `squirrelsoft-gnss` | `squirrelgnss/` | — | — (desktop) |
+| `squirrelsoft-gnss` | `squirrelgnss/` | — | `squirrelgnss/android` (JNI scaffold; phone GNSS later) |
 | `squirrelsoft-calc` | `squirrelcalc/` | `libs/sqmath`, `libs/sqgui` | — (desktop) |
 | `squirrelsoft-games` | `squirrelgames/` | `libs/sqgui` | — (desktop) |
 
@@ -150,7 +150,7 @@ umbrella jobs, scoped to one repo:
 | `squirrelsoft-soundanalysis` | `make -C squirrelsound test` (SDL2/ALSA/Pulse) | `./gradlew` in `squirrelsound/android` |
 | `squirrelsoft-qr` | `make -C squirrelqr test` (SDL2/X11) | `./gradlew` in `squirrelqr/android` |
 | `squirrelsoft-cad` | `make -C squirrelstation test` + `make -C squirrelcad test` | — |
-| `squirrelsoft-gnss` | `make -C squirrelgnss test` | — |
+| `squirrelsoft-gnss` | `make -C squirrelgnss test` | `cd squirrelgnss/android && ./gradlew :app:assembleDebug :app:testDebugUnitTest` |
 | `squirrelsoft-calc` | `make -C squirrelcalc test` | — |
 | `squirrelsoft-games` | `make -C squirrelgames test` | — |
 

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">SquirrelGNSS</string>
+    <string name="tagline">Synthetic-sky PVT through the desktop sqgnss core (JNI). Phone GNSS comes later.</string>
+    <string name="run_demo">Run synthetic demo</string>
+    <string name="status_no_core">Native sqgnss core not loaded.</string>
+    <string name="status_solve_failed">Synthetic demo solve failed.</string>
+    <string name="status_demo">Demo fix\n  lat %1$.8f\n  lon %2$.8f\n  h   %3$.3f m\n  sats %4$d  HDOP %5$.2f  VDOP %6$.2f\n  3-D err %7$.4f m\nStakeout 0.001° N → %8$.2f m north</string>
+</resources>

@@ -16,17 +16,19 @@ Every item is a checkbox. Tick it in the PR that merges its last piece. Nested b
 
 ## Hand-off status (2026-11-15)
 
-Cursor / Codex coding items for this repo are done on `main` after
-[#141](https://github.com/squirelworks/squirrelsoft/pull/141) (S3.2 WASAPI/macOS).
-**[HANDOFF.md](HANDOFF.md)** has the cards and suggested order; next is **S6**
-(repo split) and **PLAY** uploads *(Squirrel)*. **[docs/CONTINUANCE.md](docs/CONTINUANCE.md)**
-is the plan beyond it for the whole suite (this repo, squirrelbios, squirrel-os2).
+S3.2 WASAPI/macOS is done on `main` via
+[#141](https://github.com/squirelworks/squirrelsoft/pull/141).
+**GNSS-android-jni** is *(in progress)* on `cursor/impl-gnss-android-jni-2eaf`
+(first step: Android scaffold + host jni-smoke; phone GnssMeasurement / NTRIP
+still open). **[HANDOFF.md](HANDOFF.md)** has the cards and suggested order;
+next Squirrel-owned work remains **S6** (repo split) and **PLAY** uploads.
+**[docs/CONTINUANCE.md](docs/CONTINUANCE.md)** is the plan beyond it for the
+whole suite (this repo, squirrelbios, squirrel-os2).
 In this file: `- [x]` is done on `main`; `- [ ]` is **open for Cursor/Codex**;
 *(in progress)* means a branch exists, finish it rather than redo it; *(Squirrel)*
 means only the owner can do it (Play Console, real cards and readers, creating repos).
 The same states are labels on the GitHub issues (`status: done`, `status: in progress`,
-`cursor-codex`, `needs: squirrel`). No Cursor/Codex items are in progress; #28 can
-close if still open.
+`cursor-codex`, `needs: squirrel`). #28 can close if still open.
 
 ## S0 — Fix what users hit today (0.0.9 / 0.1.6)
 - [x] S0.1 Suica history block-list encoding fix + reader mode on a background thread (#33, #36, #38; issue 02).
@@ -66,6 +68,7 @@ close if still open.
   - [x] SquirrelQR: `make test` builds `sqqr_jni.c` for the host and drives it from a JVM (`squirrelqr/android/jni-smoke`)
   - [x] SquirrelSound: the same for `sqdsp_jni.c` (`squirrelsound/android/jni-smoke`)
   - [x] SquirrelSuica analysis (`sqfelica_jni.c`) (`squirrelsuica-analysis/android/jni-smoke`)
+  - [x] SquirrelGNSS: the same for `sqgnss_jni.c` (`squirrelgnss/android/jni-smoke`; synthetic demo only)
 
 ## S3 — Native front-ends, desktop parity (#30, #31)
 - [x] S3.1 Retire the SquirrelQR PWA as a product: moved to `squirrelqr/web-demo/` with a "not a product" README (#66).
@@ -190,6 +193,8 @@ These milestones predate the suite roadmap and remain open. Formats stay owned b
 - [x] Kinematic RTK (moving rover epoch by epoch, cycle slips, `rtk --kinematic`)
 - [x] L5 observations: RINEX in and out, the synthetic sky, the ionosphere-free point position from L1/L2 or L1/L5 (`--iono-free`)
 - [x] Serial receiver input (`squirrelgnss receiver`): NMEA fixes and satellites in view, u-blox RXM-RAWX/RXM-SFRBX/NAV-PVT with the navigation message decoded to ephemerides, solved live beside the receiver and logged as RINEX
+- [x] Android scaffold + JNI to `sqgnss` with host `squirrelgnss/android/jni-smoke` (synthetic demo PVT; no real GNSS in CI)
+- [ ] Phone GnssMeasurement feed into the JNI core; NTRIP client for corrections (CONTINUANCE)
 
 ### SquirrelSound desktop (sqdsp)
 - [x] Radix-2 FFT, windows, periodogram, Welch PSD, STFT; pitch, THD, SNR; WAV I/O, CLI reports, SVG plots; live SDL spectrum/waterfall + ALSA mic (done)

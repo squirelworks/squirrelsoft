@@ -11,7 +11,7 @@ libraries.
 |-----------|---------|-----------------|
 | `squirrelstation/` | **SquirrelStation** | MicroStation-class 3D design / DGN-style CAD |
 | `squirrelcad/` | **SquirrelCAD** | AutoCAD-class 2D/3D drafting |
-| `squirrelgnss/` | **SquirrelGNSS** | Continuous satellite / GPS land surveying |
+| `squirrelgnss/` | **SquirrelGNSS** | Continuous satellite / GPS land surveying (desktop + Android JNI scaffold) |
 | `squirrelsound/` | **SquirrelSound** | Spectral sound analyzer (`sqdsp`) + phone Spectroid UI |
 | `squirrelqr/` | **SquirrelQR** | Phone QR code reader only |
 | `squirrelsuica/` | **SquirrelSuica** | FeliCa Suica/PASMO reader with station-name history (USB + Android) |
