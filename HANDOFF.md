@@ -44,11 +44,10 @@ Used here, in `ROADMAP.md` and on the issues (as labels).
   (`./gradlew :app:assembleDebug :app:testDebugUnitTest` per app), in
   `.github/workflows/ci.yml` on every PR. Desktop packages: see
   `docs/packaging.md` and `.github/workflows/release.yml`.
-- **Open Cursor/Codex coding items *(lane `-2eaf`)*:** Soft #152 Sarah notes
-  on RTCM (multi-frame rescan, inq drop counter, `SqrtcmMsg` copy safety) in
-  this PR; remaining Soft coding is mostly hygiene; next Squirrel-owned work
-  remains **S6** repo split and **PLAY** uploads. Phone meas (#148),
-  `sqntrip` (#147), live NTRIP (#150) and RTCM (#151/#152) are on `main`.
+- **Open Cursor/Codex coding items *(lane `-2eaf`)*:** remaining Soft coding is
+  mostly hygiene; next Squirrel-owned work remains **S6** repo split and
+  **PLAY** uploads (`needs: squirrel`). Phone meas (#148), `sqntrip` (#147),
+  live NTRIP (#150) and RTCM (#151/#152/#153) are on `main`.
 - **Agent lanes:** suite split is in [docs/AGENT_LANES.md](docs/AGENT_LANES.md)
   (`-2eaf` = this Soft/Gen2/BIOS lane; `-b55f` = OS/2 2.9 only).
 
@@ -93,10 +92,10 @@ Android SDK 35). Without an SDK, the Gradle harnesses in the project's
    `sqntrip`; offline synthetic / loopback tests only.
 4. ~~**RTCM decode skeleton**~~ — on `main` (#151): `sqrtcm` frame sync /
    CRC-24Q / MSM+obs header parse; synthetic unit tests only.
-5. ~~**Sarah Soft follow-ups (#152)**~~ — on `main`: NTRIP SIGPIPE, RTCM
-   rescan + owned payloads, phone demo-eph / TOW / `start()`, MIT license
-   text. Post-merge notes: multi-frame rescan delivery, inq capacity /
-   `rescan_drop`, `SqrtcmMsg` copy fixup (this PR).
+5. ~~**Sarah Soft follow-ups (#152 / #153)**~~ — on `main`: NTRIP SIGPIPE,
+   RTCM rescan + owned payloads, phone demo-eph / TOW / `start()`, MIT
+   license text; #153 multi-frame rescan delivery, inq capacity /
+   `rescan_drop`, `SqrtcmMsg` copy fixup.
 6. **S6 repo split** *(Squirrel)* — prep inventory on `main`; see S6 card.
 7. **PLAY uploads** *(Squirrel)* — Sound 0.0.14/0.0.15, QR 0.1.7, Suica
    0.0.13/0.0.14 (already on `main`; do not invent uploads).
@@ -206,20 +205,21 @@ Done earlier (kept for history):
   (CI) and `ntrip HOST:PORT` (operator; not dialled from CI). Design note:
   `squirrelgnss/docs/ntrip-transport.md`.
 
-### GNSS-rtcm — RTCM 3 decode skeleton (CONTINUANCE)  `status: done` (#151 on `main`)
+### GNSS-rtcm — RTCM 3 decode skeleton (CONTINUANCE)  `status: done` (#151 / #153 on `main`)
 - Portable `sqrtcm` (`include/sqrtcm.h`, `src/sqrtcm.c`): preamble sync,
   CRC-24Q, message/station header parse for legacy obs, station ARP and MSM;
   streaming `SqrtcmFramer` + `sqrtcm_framer_feed` for NTRIP body bytes.
-  Follow-up: rescan after bad CRC, owned payloads on multi-frame feed,
-  GLONASS day+ms epoch documented. Unit tests in `tests/test_rtcm.c`
-  (synthetic frames only). Design note: `squirrelgnss/docs/rtcm-decode.md`.
-  Still open: full MSM observation fields and Android caster wiring.
+  #153: rescan after bad CRC, owned payloads on multi-frame feed,
+  `SQRTCM_INQ_MAX` / `rescan_drop`, GLONASS day+ms epoch documented. Unit
+  tests in `tests/test_rtcm.c` (synthetic frames only). Design note:
+  `squirrelgnss/docs/rtcm-decode.md`. Still open: full MSM observation
+  fields and Android caster wiring.
 
-### Soft-Sarah-followups — NTRIP / RTCM / phone / MIT hygiene  `status: done` (#152 on `main`)
+### Soft-Sarah-followups — NTRIP / RTCM / phone / MIT hygiene  `status: done` (#152 / #153 on `main`)
 - #150 SIGPIPE, #151 framer notes, #148 demo-eph UI + TOW null + `start()`
-  honesty, #140 MIT license text. Post-merge follow-up (this PR): RTCM
-  multi-frame rescan delivery, `SQRTCM_INQ_MAX` + `rescan_drop`,
-  `payload_owned` / `sqrtcm_msg_payload` / `sqrtcm_msg_assign`.
+  honesty, #140 MIT license text. #153 on `main`: RTCM multi-frame rescan
+  delivery, `SQRTCM_INQ_MAX` + `rescan_drop`, `payload_owned` /
+  `sqrtcm_msg_payload` / `sqrtcm_msg_assign`.
 
 ### PLAY-0.0.14 — upload SquirrelSound 0.0.14  `needs: squirrel`
 - Build the AAB locally with the upload key and upload it to closed testing
@@ -243,5 +243,6 @@ Done earlier (kept for history):
   Squirrel and is non-blocking).
 - **#30 / #31 can close** (S3 native front-ends / desktop parity complete;
   S3.2 WASAPI/macOS merged via #141).
+- #152 / #153 (Sarah RTCM follow-ups) are on `main` (merged via #152–#155).
 - #32 (S6 epic) and #88 (forward plan) stay open. Tracker #131 can be updated
   to show only Squirrel-owned S6 / PLAY lines.

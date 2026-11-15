@@ -38,7 +38,8 @@ editing the docs boxes for its own cards per PR.
 - [x] **RTCM decode skeleton** `-2eaf` — PR #151 / #152 (on `main`)
 - [x] **RTCM Sarah round-2** `-2eaf` — PR #153 (merged)
 
-Leave **S6** / **PLAY** to Squirrel (`needs: squirrel`).
+Remaining Soft coding is CI/rebase hygiene. Leave **S6** / **PLAY** to
+Squirrel (`needs: squirrel`).
 
 ### squirrelbios
 
