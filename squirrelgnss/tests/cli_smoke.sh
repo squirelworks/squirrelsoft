@@ -65,6 +65,7 @@ $G ntrip >/dev/null 2>&1; [ $? -eq 2 ] || fail "ntrip without HOST:PORT should e
 $G help | grep -q ntrip-synth || fail "help mentions ntrip-synth"
 # Offline RTCM3 skeleton: synthetic MSM + station ARP frames only.
 out=$($G rtcm-synth) || fail "rtcm-synth exit: $out"
-echo "$out" | grep -q "^rtcm-synth ok frames=2 msm=1077" || fail "rtcm-synth: $out"
+echo "$out" | grep -q "^rtcm-synth ok frames=2 msm=1074" || fail "rtcm-synth: $out"
+echo "$out" | grep -q "cells=1 cnr=38" || fail "rtcm-synth msm cells: $out"
 $G help | grep -q rtcm-synth || fail "help mentions rtcm-synth"
 echo "squirrelgnss cli smoke ok"

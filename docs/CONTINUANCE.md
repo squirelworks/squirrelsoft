@@ -155,8 +155,9 @@ and `grapher-flake` branches show this has already bitten).
   `-2eaf`) and add an NTRIP client for corrections: RTK-grade positioning in
   an app, reusing code that is already tested on desktop. First portable step
   (`sqntrip` skeleton #147, phone meas #148 and live NTRIP #150) are on
-  `main`; RTCM decode skeleton (#151) and Sarah follow-ups (#152 / #153 /
-  #157) are on `main` (lane `-2eaf`).
+  `main`; RTCM decode skeleton (#151), Sarah follow-ups (#152 / #153 /
+  #157) and MSM observation fields are on this Soft lane (`-2eaf`);
+  Android caster wiring remains open.
 - **SquirrelCalc on Android**: `sqmath` + a native front-end gives a Desmos /
   TI-Nspire-class calculator on the phone from the same core.
 - **SquirrelQR beyond QR**: original decoders for Micro QR / rMQR, Data Matrix,
