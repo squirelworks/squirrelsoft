@@ -1,0 +1,420 @@
+/* SquirrelFlightLab / Fighter Jet Flight Lab — CLI front-end. Original code. */
+#define _POSIX_C_SOURCE 200809L
+#include "fl_aero.h"
+#include "fl_avionics.h"
+#include "fl_dyn.h"
+#include "fl_planned.h"
+#include "fl_project.h"
+#include "fl_scenario.h"
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+static void usage(FILE *f) {
+    fputs(
+        "usage: squirrelflightlab <command> [options]\n"
+        "\n"
+        "  help                         this text\n"
+        "  demo                         happy-path: AoA sweep + short flight history\n"
+        "  project [FILE]               print default or loaded .sqflt project\n"
+        "  aoa-sweep [options]          parametric lift/drag/moment vs angle of attack\n"
+        "      --project FILE  --V MPS  --alpha0 DEG --alpha1 DEG --n N  --de DEG\n"
+        "      --csv FILE      write table; also prints a small ASCII CL plot\n"
+        "  record [options]             integrate dynamics and write a time history\n"
+        "      --project FILE  --duration S  --dt S  --throttle T  --de/--da/--dr DEG\n"
+        "      --csv FILE\n"
+        "  scenario NAME [options]      trim_cruise | pull_up | roll\n"
+        "      --project FILE  --max-q DPS  --min-nz N  --min-roll DEG  --max-alt-loss M\n"
+        "  avionics-check [FILE]        compare project channels to device-doc expect map\n"
+        "  planned                      list scaffold/planned surfaces (CFD, tunnel, HIL)\n"
+        "  cfd-import PATH | tunnel PATH | hil ENDPOINT\n"
+        "                               planned stubs (always fail with a clear message)\n"
+        "\n"
+        "Units: geometry mm/g from ISM hardware docs; dynamics SI. Axes: body +X nose,\n"
+        "+Y right, +Z down. See docs/overview.md.\n",
+        f);
+}
+
+static int read_file(const char *path, char **out, size_t *out_n) {
+    FILE *f = fopen(path, "rb");
+    if (!f) return -1;
+    if (fseek(f, 0, SEEK_END) != 0) {
+        fclose(f);
+        return -1;
+    }
+    long n = ftell(f);
+    if (n < 0 || n > 1 << 20) {
+        fclose(f);
+        return -1;
+    }
+    rewind(f);
+    char *buf = malloc((size_t)n + 1);
+    if (!buf) {
+        fclose(f);
+        return -1;
+    }
+    if (fread(buf, 1, (size_t)n, f) != (size_t)n) {
+        free(buf);
+        fclose(f);
+        return -1;
+    }
+    buf[n] = 0;
+    fclose(f);
+    *out = buf;
+    if (out_n) *out_n = (size_t)n;
+    return 0;
+}
+
+static int load_project(FlProject *p, const char *path, char *err, int err_cap) {
+    if (!path) {
+        fl_project_default_ism_fighter(p);
+        return 0;
+    }
+    char *text = NULL;
+    if (read_file(path, &text, NULL) != 0) {
+        snprintf(err, err_cap, "cannot read %s", path);
+        return -1;
+    }
+    int rc = fl_project_parse(p, text, err, err_cap);
+    free(text);
+    return rc;
+}
+
+static int write_text(const char *path, const char *text) {
+    FILE *f = fopen(path, "wb");
+    if (!f) return -1;
+    size_t n = strlen(text);
+    int ok = fwrite(text, 1, n, f) == n;
+    if (fclose(f) || !ok) return -1;
+    return 0;
+}
+
+static void ascii_cl_plot(const FlAoARow *rows, int n) {
+    if (n < 2) return;
+    double mn = rows[0].CL, mx = rows[0].CL;
+    int i;
+    for (i = 1; i < n; i++) {
+        if (rows[i].CL < mn) mn = rows[i].CL;
+        if (rows[i].CL > mx) mx = rows[i].CL;
+    }
+    if (mx - mn < 1e-9) {
+        mx = mn + 1.0;
+    }
+    puts("CL vs alpha (scaffold ASCII plot):");
+    for (i = 0; i < n; i++) {
+        int w = (int)((rows[i].CL - mn) / (mx - mn) * 40.0 + 0.5);
+        if (w < 0) w = 0;
+        if (w > 40) w = 40;
+        printf("%6.1f |", rows[i].alpha_deg);
+        int j;
+        for (j = 0; j < w; j++) putchar('#');
+        printf("  CL=%.3f\n", rows[i].CL);
+    }
+}
+
+static const char *opt_val(int argc, char **argv, int *i) {
+    if (*i + 1 >= argc) return NULL;
+    (*i)++;
+    return argv[*i];
+}
+
+static int cmd_aoa(int argc, char **argv) {
+    const char *project = NULL, *csv = NULL;
+    double V = 22.0, a0 = -4.0, a1 = 12.0, de = 0.0;
+    int n = 17;
+    int i;
+    for (i = 0; i < argc; i++) {
+        if (strcmp(argv[i], "--project") == 0) {
+            project = opt_val(argc, argv, &i);
+            if (!project) return 2;
+        } else if (strcmp(argv[i], "--V") == 0) {
+            const char *v = opt_val(argc, argv, &i);
+            if (!v) return 2;
+            V = atof(v);
+        } else if (strcmp(argv[i], "--alpha0") == 0) {
+            const char *v = opt_val(argc, argv, &i);
+            if (!v) return 2;
+            a0 = atof(v);
+        } else if (strcmp(argv[i], "--alpha1") == 0) {
+            const char *v = opt_val(argc, argv, &i);
+            if (!v) return 2;
+            a1 = atof(v);
+        } else if (strcmp(argv[i], "--n") == 0) {
+            const char *v = opt_val(argc, argv, &i);
+            if (!v) return 2;
+            n = atoi(v);
+        } else if (strcmp(argv[i], "--de") == 0) {
+            const char *v = opt_val(argc, argv, &i);
+            if (!v) return 2;
+            de = atof(v);
+        } else if (strcmp(argv[i], "--csv") == 0) {
+            csv = opt_val(argc, argv, &i);
+            if (!csv) return 2;
+        } else return 2;
+    }
+    FlProject p;
+    char err[FL_MAX_MSG];
+    if (load_project(&p, project, err, sizeof err) != 0) {
+        fprintf(stderr, "squirrelflightlab: %s\n", err);
+        return 1;
+    }
+    FlAeroModel m;
+    fl_aero_from_project(&m, &p);
+    FlAoARow rows[FL_MAX_SWEEP];
+    int got = fl_aero_aoa_sweep(&m, V, a0, a1, n, de, rows, FL_MAX_SWEEP);
+    if (got < 0) {
+        fprintf(stderr, "squirrelflightlab: bad sweep args\n");
+        return 1;
+    }
+    FlStabilityDerivs d;
+    fl_aero_stability(&m, &d);
+    printf("project=%s  V=%.2f m/s  S=%.4f m^2  c=%.4f m\n", p.name, V, m.S_m2, m.c_m);
+    printf("stability: CLa=%.3f Cma=%.3f SM=%.3f c  Clb=%.3f Cnb=%.3f\n", d.CLa, d.Cma,
+           d.static_margin_c, d.Clb, d.Cnb);
+    ascii_cl_plot(rows, got);
+    char table[1 << 16];
+    if (fl_aero_sweep_csv(rows, got, table, sizeof table) < 0) {
+        fprintf(stderr, "squirrelflightlab: csv buffer full\n");
+        return 1;
+    }
+    fputs(table, stdout);
+    if (csv && write_text(csv, table) != 0) {
+        fprintf(stderr, "squirrelflightlab: cannot write %s\n", csv);
+        return 1;
+    }
+    return 0;
+}
+
+static int cmd_record(int argc, char **argv) {
+    const char *project = NULL, *csv = NULL;
+    double duration = 2.0, dt = 0.01, throttle = 0.55, de = -1.5, da = 0.0, dr = 0.0;
+    int i;
+    for (i = 0; i < argc; i++) {
+        if (strcmp(argv[i], "--project") == 0) {
+            project = opt_val(argc, argv, &i);
+            if (!project) return 2;
+        } else if (strcmp(argv[i], "--duration") == 0) {
+            const char *v = opt_val(argc, argv, &i);
+            if (!v) return 2;
+            duration = atof(v);
+        } else if (strcmp(argv[i], "--dt") == 0) {
+            const char *v = opt_val(argc, argv, &i);
+            if (!v) return 2;
+            dt = atof(v);
+        } else if (strcmp(argv[i], "--throttle") == 0) {
+            const char *v = opt_val(argc, argv, &i);
+            if (!v) return 2;
+            throttle = atof(v);
+        } else if (strcmp(argv[i], "--de") == 0) {
+            const char *v = opt_val(argc, argv, &i);
+            if (!v) return 2;
+            de = atof(v);
+        } else if (strcmp(argv[i], "--da") == 0) {
+            const char *v = opt_val(argc, argv, &i);
+            if (!v) return 2;
+            da = atof(v);
+        } else if (strcmp(argv[i], "--dr") == 0) {
+            const char *v = opt_val(argc, argv, &i);
+            if (!v) return 2;
+            dr = atof(v);
+        } else if (strcmp(argv[i], "--csv") == 0) {
+            csv = opt_val(argc, argv, &i);
+            if (!csv) return 2;
+        } else return 2;
+    }
+    FlProject p;
+    char err[FL_MAX_MSG];
+    if (load_project(&p, project, err, sizeof err) != 0) {
+        fprintf(stderr, "squirrelflightlab: %s\n", err);
+        return 1;
+    }
+    FlSim sim;
+    fl_sim_init(&sim, &p);
+    FlControls c = {.throttle = throttle, .de_deg = de, .da_deg = da, .dr_deg = dr};
+    fl_sim_set_controls(&sim, &c);
+    int ns = fl_sim_run(&sim, duration, dt, dt);
+    if (ns < 0) {
+        fprintf(stderr, "squirrelflightlab: record failed\n");
+        return 1;
+    }
+    printf("recorded %d samples over %.2f s (project=%s)\n", ns, duration, p.name);
+    char table[1 << 18];
+    if (fl_sim_history_csv(&sim, table, sizeof table) < 0) {
+        fprintf(stderr, "squirrelflightlab: history csv buffer full\n");
+        return 1;
+    }
+    /* print a short preview */
+    int lines = 0;
+    const char *s = table;
+    while (*s && lines < 8) {
+        const char *e = strchr(s, '\n');
+        if (!e) break;
+        fwrite(s, 1, (size_t)(e - s + 1), stdout);
+        s = e + 1;
+        lines++;
+    }
+    if (*s) puts("...");
+    if (csv && write_text(csv, table) != 0) {
+        fprintf(stderr, "squirrelflightlab: cannot write %s\n", csv);
+        return 1;
+    }
+    return 0;
+}
+
+static int cmd_scenario(int argc, char **argv) {
+    if (argc < 1) return 2;
+    const char *name = argv[0];
+    const char *project = NULL;
+    FlScenario list[FL_SCEN_COUNT];
+    int n = 0;
+    fl_scenario_defaults(list, &n);
+    const FlScenario *found = fl_scenario_by_name(list, n, name);
+    if (!found) {
+        fprintf(stderr, "squirrelflightlab: unknown scenario '%s'\n", name);
+        return 2;
+    }
+    FlScenario sc = *found;
+    int i;
+    for (i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "--project") == 0) {
+            project = opt_val(argc, argv, &i);
+            if (!project) return 2;
+        } else if (strcmp(argv[i], "--max-q") == 0) {
+            const char *v = opt_val(argc, argv, &i);
+            if (!v) return 2;
+            sc.max_abs_pitch_rate_dps = atof(v);
+        } else if (strcmp(argv[i], "--min-nz") == 0) {
+            const char *v = opt_val(argc, argv, &i);
+            if (!v) return 2;
+            sc.min_nz = atof(v);
+        } else if (strcmp(argv[i], "--min-roll") == 0) {
+            const char *v = opt_val(argc, argv, &i);
+            if (!v) return 2;
+            sc.min_abs_roll_deg = atof(v);
+        } else if (strcmp(argv[i], "--max-alt-loss") == 0) {
+            const char *v = opt_val(argc, argv, &i);
+            if (!v) return 2;
+            sc.max_altitude_loss_m = atof(v);
+        } else return 2;
+    }
+    FlProject p;
+    char err[FL_MAX_MSG];
+    if (load_project(&p, project, err, sizeof err) != 0) {
+        fprintf(stderr, "squirrelflightlab: %s\n", err);
+        return 1;
+    }
+    FlSim sim;
+    fl_sim_init(&sim, &p);
+    FlScenarioResult res;
+    if (fl_scenario_run(&sim, &sc, &res) != 0) {
+        fprintf(stderr, "squirrelflightlab: scenario failed to run\n");
+        return 1;
+    }
+    puts(res.summary);
+    return res.passed ? 0 : 1;
+}
+
+static int cmd_avionics(const char *path) {
+    FlProject p;
+    char err[FL_MAX_MSG];
+    if (load_project(&p, path, err, sizeof err) != 0) {
+        fprintf(stderr, "squirrelflightlab: %s\n", err);
+        return 1;
+    }
+    FlDeviceExpect expect[FL_MAX_CHANNELS];
+    int ne = fl_avionics_default_expect(expect, FL_MAX_CHANNELS);
+    FlAvionicsReport rep;
+    fl_avionics_check(&p, expect, ne, &rep);
+    char text[8192];
+    fl_avionics_report_text(&rep, text, sizeof text);
+    fputs(text, stdout);
+    return (rep.nmismatch || rep.nmissing) ? 1 : 0;
+}
+
+static int cmd_demo(void) {
+    puts("=== Fighter Jet Flight Lab demo (scaffold) ===");
+    char *args_aoa[] = {"--n", "9", "--alpha0", "-2", "--alpha1", "10", "--V", "22"};
+    int rc = cmd_aoa(8, args_aoa);
+    if (rc) return rc;
+    puts("");
+    char *args_rec[] = {"--duration", "1.5", "--dt", "0.05", "--de", "-2"};
+    rc = cmd_record(6, args_rec);
+    if (rc) return rc;
+    puts("");
+    FlScenario list[FL_SCEN_COUNT];
+    int n = 0;
+    fl_scenario_defaults(list, &n);
+    FlProject p;
+    fl_project_default_ism_fighter(&p);
+    FlSim sim;
+    fl_sim_init(&sim, &p);
+    int i;
+    for (i = 0; i < n; i++) {
+        FlScenarioResult res;
+        if (fl_scenario_run(&sim, &list[i], &res) != 0) return 1;
+        puts(res.summary);
+    }
+    puts("demo ok");
+    return 0;
+}
+
+int main(int argc, char **argv) {
+    if (argc < 2) {
+        usage(stderr);
+        return 2;
+    }
+    const char *cmd = argv[1];
+    if (strcmp(cmd, "help") == 0 || strcmp(cmd, "--help") == 0 || strcmp(cmd, "-h") == 0) {
+        usage(stdout);
+        return 0;
+    }
+    if (strcmp(cmd, "demo") == 0) return cmd_demo();
+    if (strcmp(cmd, "project") == 0) {
+        FlProject p;
+        char err[FL_MAX_MSG];
+        const char *path = argc >= 3 ? argv[2] : NULL;
+        if (load_project(&p, path, err, sizeof err) != 0) {
+            fprintf(stderr, "squirrelflightlab: %s\n", err);
+            return 1;
+        }
+        char buf[4096];
+        if (fl_project_format(&p, buf, sizeof buf) < 0) return 1;
+        fputs(buf, stdout);
+        printf("# surfaces=%d channels=%d\n", p.nsurfaces, p.nchannels);
+        return 0;
+    }
+    if (strcmp(cmd, "aoa-sweep") == 0) return cmd_aoa(argc - 2, argv + 2);
+    if (strcmp(cmd, "record") == 0) return cmd_record(argc - 2, argv + 2);
+    if (strcmp(cmd, "scenario") == 0) return cmd_scenario(argc - 2, argv + 2);
+    if (strcmp(cmd, "avionics-check") == 0)
+        return cmd_avionics(argc >= 3 ? argv[2] : NULL);
+    if (strcmp(cmd, "planned") == 0) {
+        int n = 0;
+        const FlPlannedSurface *list = fl_planned_list(&n);
+        int i;
+        for (i = 0; i < n; i++)
+            printf("%s [%s]: %s\n", list[i].name, list[i].status, list[i].note);
+        return 0;
+    }
+    if (strcmp(cmd, "cfd-import") == 0 || strcmp(cmd, "tunnel") == 0 ||
+        strcmp(cmd, "hil") == 0) {
+        if (argc < 3) {
+            usage(stderr);
+            return 2;
+        }
+        char err[FL_MAX_MSG];
+        int rc;
+        if (strcmp(cmd, "cfd-import") == 0)
+            rc = fl_planned_cfd_mesh_import(argv[2], err, sizeof err);
+        else if (strcmp(cmd, "tunnel") == 0)
+            rc = fl_planned_wind_tunnel_correlate(argv[2], err, sizeof err);
+        else
+            rc = fl_planned_hil_connect(argv[2], err, sizeof err);
+        fprintf(stderr, "squirrelflightlab: %s\n", err);
+        return rc ? 1 : 0;
+    }
+    fprintf(stderr, "squirrelflightlab: unknown command '%s'\n", cmd);
+    usage(stderr);
+    return 2;
+}

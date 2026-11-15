@@ -38,6 +38,7 @@ case "$app" in
   squirrelpaint)          name=SquirrelPaint;         desktop=c;      binary=squirrelpaint ;;
   squirrelgames)          name=SquirrelGames;         desktop=c;      binary=squirrelgames ;;
   squirreldebug)          name=SquirrelDebug;         desktop=c;      binary=squirreldebug ;;
+  squirrelflightlab)      name=SquirrelFlightLab;     desktop=c;      binary=squirrelflightlab ;;
   *) echo "unknown app: $app" >&2; exit 2 ;;
 esac
 

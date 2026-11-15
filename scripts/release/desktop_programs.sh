@@ -12,4 +12,5 @@ squirrelcalc
 squirrelpaint
 squirrelgames
 squirreldebug
+squirrelflightlab
 EOF

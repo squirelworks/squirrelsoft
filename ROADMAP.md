@@ -3,7 +3,7 @@
 State as of `main` at `edead43` (2026-11-15). Android native apps (Kotlin, Android Views, CameraX/ML Kit, AudioRecord, NfcF):
 **SquirrelSuica 0.0.12**, **SquirrelSuicaAnalysis 0.0.3**, **SquirrelSound 0.0.13**, **SquirrelQR 0.1.6** on Play closed testing;
 `main` also has SquirrelSound **0.0.14** / **0.0.15**, SquirrelQR **0.1.7**, SquirrelSuica **0.0.13** / **0.0.14** waiting for Play upload *(Squirrel)* — do not invent uploads.
-Desktop C tools: SquirrelStation, SquirrelCAD, SquirrelGNSS, `sqdsp` + live SDL spectrum (mic + Pulse/WASAPI/CoreAudio loopback), and the desktop readers
+Desktop C tools: SquirrelStation, SquirrelCAD, SquirrelGNSS, SquirrelFlightLab, `sqdsp` + live SDL spectrum (mic + Pulse/WASAPI/CoreAudio loopback), and the desktop readers
 `squirrelsuica/desktop/` (PC/SC, RC-S380, GUI, CSV) and `squirrelqr/desktop/` (files, PNG, X11/portal/Win/mac capture, webcam, GUI).
 Shared C cores in `libs/` (`sqdsp`, `sqfelica`, `sqqr`, `sqmath`, `sqgui`).
 The SquirrelQR PWA is retired (`squirrelqr/web-demo/`, not a product). Play scripts in `scripts/`, CI in `.github/workflows/`.
@@ -125,6 +125,21 @@ The same states are labels on the GitHub issues (`status: done`, `status: in pro
 - [x] S5.4 SquirrelDebug (desktop debugger UI for Squirrel OS/2 over serial/QEMU gdbstub)
   - [x] The GDB remote protocol, an x86 disassembler (16 and 32 bits, NASM syntax), registers, memory, breakpoints, step, next, run to, continue and stop, real and protected mode told apart by QEMU's monitor, symbols from nm, a practice machine, TCP, serial and QEMU started by it, the window and the command line
 - Each designed so its core compiles for Squirrel OS/2 (freestanding C, no libc beyond a small shim).
+
+## S7 — Fighter Jet Flight Lab / SquirrelFlightLab (ISM hardware pair)
+
+Desktop scaffold for first-party aero, flight-dynamics and avionics co-check of
+the International Squirrel Machines fighter jet. No third-party flight sim as
+source of truth. Design note: `squirrelflightlab/docs/overview.md`.
+
+- [x] S7.1 App scaffold: `squirrelflightlab/` portable core + CLI, sample `.sqflt`,
+  device-doc channel stub, README status Scaffolded; checks `tests/test_flightlab.c`,
+  `tests/cli_smoke.sh`, `scripts/demo_happy_path.sh`
+- [ ] S7.2 Lock geometry / mass against published ISM hardware docs; shared channel
+  types with the hardware repo *(open product decision)*
+- [ ] S7.3 Higher-fidelity replaceable aero provider + tunnel CSV override
+- [ ] S7.4 `sqgui` strip-chart window on the same core
+- [ ] S7.5 HIL against the real avionics PCB (planned stub today)
 
 ## S6 — Repo split (#32)
 - [x] Prep inventory (agent): `scripts/s6_repo_split_prep.sh`, `docs/s6-repo-split.md`, `docs/s6-ci-stubs/` — path lists, suggested CI, umbrella README link draft. No remotes created or deleted.
