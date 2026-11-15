@@ -8,10 +8,12 @@ rebase an existing PR; never redo it on a new branch.
 (chosen over #200 by rock–paper–scissors; see [#202](https://github.com/squirelworks/squirrel-os2/issues/202)).
 If this file and #201 disagree, prefer #201 for claim lines and `main` for code.
 
-**Path to 3.0.0:** fine-grained tag walkthrough (near-term finish+release,
-OS/2 / BIOS / Soft ladders, resume-on-credit-reset) lives in
-**[PATH_TO_3.0.0.md](PATH_TO_3.0.0.md)**. CONTINUANCE M3 = destination **3.0.0**.
-Ask `-b55f` to confirm lane rows there / on the Soft epic when credits reset.
+**Path to 3.0.0:** Soft **[PATH_TO_3.0.0.md](PATH_TO_3.0.0.md)** is a **suite
+index** only. Canonical OS ladder / resume walkthrough:
+squirrel-os2 [`documentation/releases/TO_3.0.0.md`](https://github.com/squirelworks/squirrel-os2/blob/cursor/release-coord-b55f/documentation/releases/TO_3.0.0.md)
+([os2#205](https://github.com/squirelworks/squirrel-os2/pull/205)). CONTINUANCE
+M3 = destination **3.0.0**. Ask `-b55f` to confirm OS claim rows on #201 /
+`TO_3.0.0.md` when credits reset.
 
 | Lane | Branch suffix | Scope |
 |------|---------------|-------|
@@ -26,8 +28,10 @@ editing the docs boxes for its own cards per PR.
 
 ## Near-term finish list (then owner releases)
 
-Land these **before** calling the current-main OS/2 cut ready. Full checklist
-and tag order: [PATH_TO_3.0.0.md](PATH_TO_3.0.0.md) §2.
+Land these **before** calling the current-main OS/2 cut ready. Full OS
+checklist and tag order: os2
+[`TO_3.0.0.md`](https://github.com/squirelworks/squirrel-os2/blob/cursor/release-coord-b55f/documentation/releases/TO_3.0.0.md)
+(Soft index: [PATH_TO_3.0.0.md](PATH_TO_3.0.0.md)).
 
 | Repo | PR | Lane | Status |
 |------|----|------|--------|
@@ -35,7 +39,7 @@ and tag order: [PATH_TO_3.0.0.md](PATH_TO_3.0.0.md) §2.
 | os2 | [#197](https://github.com/squirelworks/squirrel-os2/pull/197) Gen2 Sarah | `-2eaf` | open — finish |
 | os2 | [#204](https://github.com/squirelworks/squirrel-os2/pull/204) lm-boot64 | `-b55f` | open — rebase when CONFLICTING |
 | os2 | [#205](https://github.com/squirelworks/squirrel-os2/pull/205) release coord docs | `-b55f` | open — docs |
-| soft | [#162](https://github.com/squirelworks/squirrelsoft/pull/162) Android NTRIP | `-2eaf` | open — finish |
+| soft | [#162](https://github.com/squirelworks/squirrelsoft/pull/162) Android NTRIP | `-2eaf` | **merged** |
 | bios | [#189](https://github.com/squirelworks/squirrelbios/pull/189) capsule/ESRT | `-2eaf` | **merged** |
 
 Owner publish (agents prep only): optional OS/2 **v2.3.0 @ `fc3ae21`**
@@ -104,13 +108,13 @@ Leave **S6** / **PLAY** to Squirrel (`needs: squirrel`).
 | os2 | #184 | `…-2.6-icons-drag-2eaf` | `-2eaf` | 2.6-icons, 2.6-drag |
 | os2 | #197 | `…-followup-gen2-sarah-2eaf` | `-2eaf` | Sarah Gen2 follow-ups |
 | os2 | #204 | `…-2.9-lm-boot64-b55f` | `-b55f` | 2.9-lm-boot64 |
-| os2 | #205 | `…-release-coord-b55f` | `-b55f` | docs release coord |
-| soft | #165 | `…-path-to-3.0.0-2eaf` | `-2eaf` | docs PATH_TO_3.0.0 |
+| os2 | #205 | `…-release-coord-b55f` | `-b55f` | docs release coord + `TO_3.0.0.md` |
 
 **Merged (do not re-claim):** os2 #183 W.3, #188 shadows, #191 W.2, #192 W.5,
 #193 paging, #196 stay-thunks, #203 lanes canon; bios #189 capsule; soft
 #148–#153 GNSS/NTRIP/RTCM (+ Sarah round-2), #157 / #158 post-#153 notes,
-#160 MSM obs, #162 Android NTRIP.
+#160 MSM obs, #162 Android NTRIP, #165 PATH_TO_3.0.0 (suite index retarget
+follows on `cursor/path-point-os2-2eaf`).
 
 ## Issue sync note
 
