@@ -35,20 +35,24 @@ object GnssRawMapper {
         return tow
     }
 
+    /** GPS week length in nanoseconds (604800e9); fits in Long. */
+    const val GPS_WEEK_NANOS = 604_800_000_000_000L
+
     /**
      * Pseudorange metres from receiver time-of-week and SV transmit time
-     * (both GPS seconds of week).
+     * (both GPS seconds of week). Diff is done in integer nanoseconds so
+     * `Double * 1e-9` rounding does not break centimetre-class unit checks.
      */
     fun pseudorangeM(tRxWeekSec: Double, receivedSvTimeNanos: Long): Double? {
         if (!tRxWeekSec.isFinite()) return null
-        var tTx = receivedSvTimeNanos.toDouble() * 1e-9
-        if (!tTx.isFinite()) return null
-        tTx %= GPS_WEEK_SEC
-        if (tTx < 0) tTx += GPS_WEEK_SEC
-        var dt = tRxWeekSec - tTx
-        if (dt > GPS_WEEK_SEC / 2) dt -= GPS_WEEK_SEC
-        if (dt < -GPS_WEEK_SEC / 2) dt += GPS_WEEK_SEC
-        val pr = dt * C_LIGHT
+        var tRxNanos = kotlin.math.round(tRxWeekSec * 1e9).toLong() % GPS_WEEK_NANOS
+        if (tRxNanos < 0) tRxNanos += GPS_WEEK_NANOS
+        var tTxNanos = receivedSvTimeNanos % GPS_WEEK_NANOS
+        if (tTxNanos < 0) tTxNanos += GPS_WEEK_NANOS
+        var dtNanos = tRxNanos - tTxNanos
+        if (dtNanos > GPS_WEEK_NANOS / 2) dtNanos -= GPS_WEEK_NANOS
+        if (dtNanos < -GPS_WEEK_NANOS / 2) dtNanos += GPS_WEEK_NANOS
+        val pr = dtNanos * 1e-9 * C_LIGHT
         if (!pr.isFinite() || pr <= 0.0 || pr > 1.0e8) return null
         return pr
     }
