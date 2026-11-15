@@ -2,6 +2,7 @@
 #include "sqrtcm.h"
 #include "sqntrip.h"
 
+#include <math.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -43,15 +44,19 @@ static void test_categories(void) {
 }
 
 static void test_msm_header_roundtrip(void) {
-    unsigned char payload[8];
-    CHECK(sqrtcm_pack_msm_header(payload, sizeof payload, 1077, 2001, 345678901u, 1) == 8);
+    unsigned char payload[SQRTCM_MSM_HEADER_BYTES];
+    CHECK(sqrtcm_pack_msm_header(payload, sizeof payload, 1077, 2001, 345678901u, 1) ==
+          SQRTCM_MSM_HEADER_BYTES);
     SqrtcmMsg m;
-    CHECK(sqrtcm_parse_header(payload, 8, &m) == 0);
+    CHECK(sqrtcm_parse_header(payload, SQRTCM_MSM_HEADER_BYTES, &m) == 0);
     CHECK(m.msg_type == 1077);
     CHECK(m.have_station && m.station_id == 2001);
     CHECK(m.have_epoch && m.epoch_ms == 345678901u);
     CHECK(m.multi == 1);
     CHECK(m.category == SQRTCM_CAT_MSM);
+    CHECK(sqrtcm_msm_type(1077) == 7);
+    CHECK(sqrtcm_msm_type(1074) == 4);
+    CHECK(sqrtcm_msm_type(1004) == 0);
 
     CHECK(sqrtcm_pack_msm_header(payload, sizeof payload, 1004, 1, 0, 0) == 0); /* not MSM */
     CHECK(sqrtcm_pack_obs_header(payload, sizeof payload, 1004, 42) == 3);
@@ -61,11 +66,12 @@ static void test_msm_header_roundtrip(void) {
 }
 
 static void test_frame_and_framer(void) {
-    unsigned char payload[8];
-    CHECK(sqrtcm_pack_msm_header(payload, sizeof payload, 1084, 17, 1000u, 0) == 8);
+    unsigned char payload[SQRTCM_MSM_HEADER_BYTES];
+    CHECK(sqrtcm_pack_msm_header(payload, sizeof payload, 1084, 17, 1000u, 0) ==
+          SQRTCM_MSM_HEADER_BYTES);
     unsigned char frame[32];
-    size_t n = sqrtcm_frame(frame, sizeof frame, payload, 8);
-    CHECK(n == 3 + 8 + 3);
+    size_t n = sqrtcm_frame(frame, sizeof frame, payload, SQRTCM_MSM_HEADER_BYTES);
+    CHECK(n == 3 + SQRTCM_MSM_HEADER_BYTES + 3);
 
     SqrtcmFramer f;
     SqrtcmMsg msg;
@@ -77,7 +83,7 @@ static void test_frame_and_framer(void) {
     CHECK(got && f.ok == 1 && f.bad_crc == 0);
     CHECK(msg.msg_type == 1084 && msg.station_id == 17 && msg.epoch_ms == 1000u);
     CHECK(msg.multi == 0 && msg.category == SQRTCM_CAT_MSM);
-    CHECK(msg.payload_len == 8);
+    CHECK(msg.payload_len == SQRTCM_MSM_HEADER_BYTES);
 }
 
 static void test_resync_and_bad_crc(void) {
@@ -113,8 +119,8 @@ static void test_resync_and_bad_crc(void) {
 }
 
 static void test_chunked_feed(void) {
-    unsigned char p1[8], p2[3];
-    CHECK(sqrtcm_pack_msm_header(p1, sizeof p1, 1075, 99, 42u, 0) == 8);
+    unsigned char p1[SQRTCM_MSM_HEADER_BYTES], p2[3];
+    CHECK(sqrtcm_pack_msm_header(p1, sizeof p1, 1075, 99, 42u, 0) == SQRTCM_MSM_HEADER_BYTES);
     CHECK(sqrtcm_pack_obs_header(p2, sizeof p2, 1006, 5) == 3);
     unsigned char a[32], b[16];
     size_t na = sqrtcm_frame(a, sizeof a, p1, 8);
@@ -342,10 +348,11 @@ static void test_msg_struct_copy_safety(void) {
 
 static void test_ntrip_body_glue(void) {
     /* Optional glue: after an NTRIP stream 200, feed body into sqrtcm. */
-    unsigned char payload[8];
-    CHECK(sqrtcm_pack_msm_header(payload, sizeof payload, 1077, 1234, 555u, 0) == 8);
+    unsigned char payload[SQRTCM_MSM_HEADER_BYTES];
+    CHECK(sqrtcm_pack_msm_header(payload, sizeof payload, 1077, 1234, 555u, 0) ==
+          SQRTCM_MSM_HEADER_BYTES);
     unsigned char frame[32];
-    size_t flen = sqrtcm_frame(frame, sizeof frame, payload, 8);
+    size_t flen = sqrtcm_frame(frame, sizeof frame, payload, SQRTCM_MSM_HEADER_BYTES);
 
     unsigned char reply[128];
     size_t rlen = 0;
@@ -370,6 +377,155 @@ static void test_ntrip_body_glue(void) {
     CHECK(msgs[0].epoch_ms == 555u && msgs[0].category == SQRTCM_CAT_MSM);
 }
 
+static void fill_msm4_demo(SqrtcmMsm *m) {
+    memset(m, 0, sizeof *m);
+    m->msg_type = 1074;
+    m->msm_type = 4;
+    m->station_id = 2001;
+    m->epoch_ms = 345600000u;
+    m->multi = 0;
+    m->n_sat = 2;
+    m->sat_id[0] = 3;
+    m->sat_id[1] = 7;
+    m->n_sig = 2;
+    m->sig_id[0] = 2; /* L1 C/A-style id in the 1..32 table */
+    m->sig_id[1] = 16;
+    m->n_cell = 3;
+    m->cell_sat[0] = 0;
+    m->cell_sig[0] = 0;
+    m->cell_sat[1] = 0;
+    m->cell_sig[1] = 1;
+    m->cell_sat[2] = 1;
+    m->cell_sig[2] = 0;
+    m->rough_ms[0] = 70;
+    m->rough_mod[0] = 512; /* +0.5 ms */
+    m->rough_ms[1] = 71;
+    m->rough_mod[1] = 0;
+    m->fine_pr[0] = 100;
+    m->fine_phase[0] = 200;
+    m->lock[0] = 5;
+    m->half_cycle[0] = 0;
+    m->cnr[0] = 40;
+    m->fine_pr[1] = -50;
+    m->fine_phase[1] = -100;
+    m->lock[1] = 3;
+    m->half_cycle[1] = 1;
+    m->cnr[1] = 35;
+    m->fine_pr[2] = 0;
+    m->fine_phase[2] = 1;
+    m->lock[2] = 7;
+    m->half_cycle[2] = 0;
+    m->cnr[2] = 42;
+}
+
+static void test_msm4_obs_roundtrip(void) {
+    SqrtcmMsm src, got;
+    fill_msm4_demo(&src);
+    unsigned char payload[256];
+    size_t n = sqrtcm_pack_msm(payload, sizeof payload, &src);
+    CHECK(n > SQRTCM_MSM_HEADER_BYTES);
+    CHECK(sqrtcm_parse_msm(payload, n, &got) == 0);
+    CHECK(got.msg_type == 1074 && got.msm_type == 4);
+    CHECK(got.station_id == 2001 && got.epoch_ms == 345600000u);
+    CHECK(got.n_sat == 2 && got.sat_id[0] == 3 && got.sat_id[1] == 7);
+    CHECK(got.n_sig == 2 && got.sig_id[0] == 2 && got.sig_id[1] == 16);
+    CHECK(got.n_cell == 3);
+    CHECK(got.have_rough_range && !got.have_rough_rate);
+    CHECK(got.have_fine_pr && got.have_fine_phase && got.have_cnr);
+    CHECK(!got.ext_res && !got.have_fine_phaserate);
+    CHECK(got.rough_ms[0] == 70 && got.rough_mod[0] == 512);
+    CHECK(got.rough_ms[1] == 71 && got.rough_mod[1] == 0);
+    CHECK(got.cell_sat[0] == 0 && got.cell_sig[0] == 0);
+    CHECK(got.cell_sat[1] == 0 && got.cell_sig[1] == 1);
+    CHECK(got.cell_sat[2] == 1 && got.cell_sig[2] == 0);
+    CHECK(got.fine_pr[0] == 100 && got.fine_phase[0] == 200 && got.cnr[0] == 40);
+    CHECK(got.fine_pr[1] == -50 && got.half_cycle[1] == 1 && got.cnr[1] == 35);
+    CHECK(got.lock[2] == 7 && got.cnr[2] == 42);
+
+    double rough0 = sqrtcm_msm_rough_range_m(&got, 0);
+    CHECK(isfinite(rough0));
+    CHECK(fabs(rough0 - 70.5 * SQRTCM_MSM_MS_TO_M) < 1e-6);
+    double pr0 = sqrtcm_msm_pseudorange_m(&got, 0);
+    CHECK(isfinite(pr0));
+    CHECK(pr0 > rough0); /* fine_pr = +100 */
+    double ph0 = sqrtcm_msm_phaserange_m(&got, 0);
+    CHECK(isfinite(ph0));
+
+    /* Header parse still works on the same payload. */
+    SqrtcmMsg hdr;
+    CHECK(sqrtcm_parse_header(payload, n, &hdr) == 0);
+    CHECK(hdr.msg_type == 1074 && hdr.station_id == 2001);
+
+    /* Framer delivers the payload intact for MSM parse. */
+    unsigned char frame[512];
+    size_t flen = sqrtcm_frame(frame, sizeof frame, payload, n);
+    CHECK(flen > 0);
+    SqrtcmFramer f;
+    SqrtcmMsg msg;
+    sqrtcm_framer_init(&f);
+    CHECK(sqrtcm_framer_feed(&f, frame, flen, &msg, 1) == 1);
+    SqrtcmMsm via_frame;
+    CHECK(sqrtcm_parse_msm(sqrtcm_msg_payload(&msg), msg.payload_len, &via_frame) == 0);
+    CHECK(via_frame.n_cell == 3 && via_frame.cnr[0] == 40);
+}
+
+static void test_msm7_obs_roundtrip(void) {
+    SqrtcmMsm src, got;
+    memset(&src, 0, sizeof src);
+    src.msg_type = 1077;
+    src.msm_type = 7;
+    src.station_id = 99;
+    src.epoch_ms = 1000u;
+    src.n_sat = 1;
+    src.sat_id[0] = 12;
+    src.n_sig = 1;
+    src.sig_id[0] = 2;
+    src.n_cell = 1;
+    src.cell_sat[0] = 0;
+    src.cell_sig[0] = 0;
+    src.rough_ms[0] = 65;
+    src.rough_mod[0] = 256;
+    src.rough_rate[0] = -12;
+    src.fine_pr[0] = 1024;
+    src.fine_phase[0] = -2048;
+    src.lock[0] = 500;
+    src.half_cycle[0] = 0;
+    src.cnr[0] = 400; /* 10-bit extended CNR raw */
+    src.fine_phaserate[0] = 7;
+
+    unsigned char payload[256];
+    size_t n = sqrtcm_pack_msm(payload, sizeof payload, &src);
+    CHECK(n > 0);
+    CHECK(sqrtcm_parse_msm(payload, n, &got) == 0);
+    CHECK(got.msm_type == 7 && got.ext_res && got.have_rough_rate);
+    CHECK(got.have_fine_phaserate && got.have_cnr);
+    CHECK(got.rough_rate[0] == -12);
+    CHECK(got.fine_pr[0] == 1024 && got.fine_phase[0] == -2048);
+    CHECK(got.lock[0] == 500 && got.cnr[0] == 400);
+    CHECK(got.fine_phaserate[0] == 7);
+    CHECK(isfinite(sqrtcm_msm_pseudorange_m(&got, 0)));
+    CHECK(isfinite(sqrtcm_msm_phaserange_m(&got, 0)));
+}
+
+static void test_msm_invalid_and_truncated(void) {
+    SqrtcmMsm src, got;
+    fill_msm4_demo(&src);
+    src.rough_ms[0] = SQRTCM_MSM_ROUGH_MS_INVALID;
+    src.fine_pr[0] = SQRTCM_MSM_FINE15_INVALID;
+    unsigned char payload[256];
+    size_t n = sqrtcm_pack_msm(payload, sizeof payload, &src);
+    CHECK(n > 0);
+    CHECK(sqrtcm_parse_msm(payload, n, &got) == 0);
+    CHECK(isnan(sqrtcm_msm_rough_range_m(&got, 0)));
+    CHECK(isnan(sqrtcm_msm_pseudorange_m(&got, 0)));
+    /* Sat 1 still valid. */
+    CHECK(isfinite(sqrtcm_msm_rough_range_m(&got, 1)));
+
+    CHECK(sqrtcm_parse_msm(payload, 4, &got) == -1); /* truncated */
+    CHECK(sqrtcm_parse_msm(payload, n, NULL) == -1);
+    CHECK(sqrtcm_msm_type(9999) == 0);
+}
+
 void test_rtcm_all(int *checks, int *failures) {
     nchecks = checks;
     nfails = failures;
@@ -386,4 +542,7 @@ void test_rtcm_all(int *checks, int *failures) {
     test_inq_prepend_overflow_drops_tail();
     test_msg_struct_copy_safety();
     test_ntrip_body_glue();
+    test_msm4_obs_roundtrip();
+    test_msm7_obs_roundtrip();
+    test_msm_invalid_and_truncated();
 }

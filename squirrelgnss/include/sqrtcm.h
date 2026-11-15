@@ -1,19 +1,20 @@
 /*
- * sqrtcm: RTCM 3 frame sync, CRC-24Q and message-header parse for
- * SquirrelGNSS (original code).
+ * sqrtcm: RTCM 3 frame sync, CRC-24Q, header parse and MSM observation
+ * decode for SquirrelGNSS (original code).
  *
  * Buffer-fed only — no network and no third-party RTCM libraries. CI uses
  * synthetic frames built in-tree. Opaque NTRIP correction bodies from
  * sqntrip can be fed through SqrtcmFramer once a stream 200 body arrives.
  *
  * Layout follows the public RTCM 10403.x transport layer (preamble 0xD3,
- * 10-bit length, CRC-24Q) and the common 12+12-bit message / station
- * header shared by legacy observations, station ARP and MSM messages.
- * Satellite/signal masks and observation fields are left for a later step.
+ * 10-bit length, CRC-24Q), the common MSM header (DF002–DF418), satellite /
+ * signal / cell masks (DF394–DF396) and MSM1–MSM7 observation fields
+ * (DF397–DF408 / DF420). See squirrelgnss/docs/rtcm-decode.md.
  *
  * GLONASS MSM (1081–1087) epoch note: the 30-bit DF004-style field is
  * day-of-week (3 bits) + ms-of-day (27 bits), not GPS ms-of-week. This
- * skeleton still exposes it as epoch_ms; split when GLONASS decode lands.
+ * library still exposes it as epoch_ms; split day/ms when a GLONASS-aware
+ * consumer needs them.
  */
 #ifndef SQRTCM_H
 #define SQRTCM_H
@@ -26,6 +27,25 @@
 #define SQRTCM_MAX_FRAME (3 + SQRTCM_MAX_PAYLOAD + 3)
 /* Input/rescan queue sized for a rejected max frame plus another max frame. */
 #define SQRTCM_INQ_MAX (SQRTCM_MAX_FRAME * 2)
+
+/* MSM mask / cell limits from RTCM 10403.x (DF394/DF395/DF396). */
+#define SQRTCM_MSM_MAX_SAT 64
+#define SQRTCM_MSM_MAX_SIG 32
+#define SQRTCM_MSM_MAX_CELL 64
+/* Full MSM header through DF418 is 73 bits → 10 bytes. */
+#define SQRTCM_MSM_HEADER_BYTES 10
+#define SQRTCM_MSM_HEADER_BITS 73
+
+/* Rough-range / fine-obs invalid sentinels (RTCM DF tables). */
+#define SQRTCM_MSM_ROUGH_MS_INVALID 255u
+#define SQRTCM_MSM_ROUGH_RATE_INVALID (-8192)
+#define SQRTCM_MSM_FINE15_INVALID (-16384)
+#define SQRTCM_MSM_FINE20_INVALID (-524288)
+#define SQRTCM_MSM_PHASE22_INVALID (-2097152)
+#define SQRTCM_MSM_PHASE24_INVALID (-8388608)
+
+/* Approximate metres per millisecond of light travel (RTCM ranging unit). */
+#define SQRTCM_MSM_MS_TO_M 299792.458
 
 /* Message-number ranges we recognise for v1 header parse. */
 enum {
@@ -55,22 +75,70 @@ typedef struct {
     unsigned char payload_copy[SQRTCM_MAX_PAYLOAD];
 } SqrtcmMsg;
 
+/* Decoded MSM observation content (masks + satellite/cell fields). */
+typedef struct {
+    unsigned msg_type;
+    unsigned station_id;
+    unsigned epoch_ms;
+    int multi;
+    unsigned iods; /* DF409 */
+    unsigned clock_steering; /* DF411 */
+    unsigned ext_clock;      /* DF412 */
+    int divergence_free;     /* DF417 */
+    unsigned smooth_interval; /* DF418 */
+    int msm_type; /* 1–7 from message number; 0 if not MSM */
+
+    unsigned sat_id[SQRTCM_MSM_MAX_SAT]; /* 1..64 in ascending mask order */
+    int n_sat;
+    unsigned sig_id[SQRTCM_MSM_MAX_SIG]; /* 1..32 */
+    int n_sig;
+
+    /* Per-satellite rough fields (index matches sat_id[]). */
+    unsigned rough_ms[SQRTCM_MSM_MAX_SAT];  /* DF397; 255 = invalid */
+    unsigned rough_mod[SQRTCM_MSM_MAX_SAT];  /* DF398, 0..1023 */
+    int rough_rate[SQRTCM_MSM_MAX_SAT];      /* DF399; -8192 = invalid */
+    unsigned char have_rough_range;         /* MSM1,3,4,5,6,7 */
+    unsigned char have_rough_rate;          /* MSM5,7 */
+
+    /* Cells in satellite-major × signal-minor order of set DF396 bits. */
+    unsigned cell_sat[SQRTCM_MSM_MAX_CELL]; /* index into sat_id[] */
+    unsigned cell_sig[SQRTCM_MSM_MAX_CELL];  /* index into sig_id[] */
+    int n_cell;
+
+    int fine_pr[SQRTCM_MSM_MAX_CELL];       /* DF400/DF405 raw */
+    int fine_phase[SQRTCM_MSM_MAX_CELL];    /* DF401/DF406 raw */
+    unsigned lock[SQRTCM_MSM_MAX_CELL];     /* DF402/DF407 */
+    unsigned half_cycle[SQRTCM_MSM_MAX_CELL]; /* DF420 */
+    unsigned cnr[SQRTCM_MSM_MAX_CELL];      /* DF403/DF408 */
+    int fine_phaserate[SQRTCM_MSM_MAX_CELL]; /* DF404 raw */
+
+    unsigned char have_fine_pr;
+    unsigned char have_fine_phase;
+    unsigned char have_lock;
+    unsigned char have_half_cycle;
+    unsigned char have_cnr;
+    unsigned char have_fine_phaserate;
+    unsigned char ext_res; /* 1 for MSM6/7 extended resolution */
+} SqrtcmMsm;
+
 /* CRC-24Q over data[0..n). Polynomial 0x1864CFB, init 0, no reflection. */
 uint32_t sqrtcm_crc24q(const unsigned char *data, size_t n);
 
 /* Category for a 12-bit message number. */
 int sqrtcm_msg_category(unsigned msg_type);
 
+/* MSM subtype 1–7 from a 1071–1127-style message number, or 0 if not MSM. */
+int sqrtcm_msm_type(unsigned msg_type);
+
 /* Pack a validated frame: 0xD3 | reserved+len | payload | CRC-24Q.
  * Returns total byte length, or 0 if cap is too small / plen > 1023. */
 size_t sqrtcm_frame(unsigned char *out, size_t cap, const unsigned char *payload,
                     size_t plen);
 
-/* Pack the MSM common header bits (GPS-style 30-bit epoch) used by
+/* Pack the MSM common header bits through DF418 (73 bits → 10 bytes) used by
  * 1071–1077 / 1081–1087 / 1091–1097 / 1101–1107 / 1111–1117 / 1121–1127.
- * Writes 8 bytes (64 bits through the smoothing interval); remaining MSM
- * fields (masks, observations) are left zero / absent for the skeleton.
- * Returns 8, or 0 on bad args / overflow.
+ * IODS / reserved / clock / smoothing are left zero. Returns 10, or 0 on
+ * bad args / overflow.
  * Note: 1081–1087 callers should eventually pass day+ms packing, not
  * GPS ms-of-week (documented stub; decode split is a later step). */
 size_t sqrtcm_pack_msm_header(unsigned char *out, size_t cap, unsigned msg_type,
@@ -84,6 +152,22 @@ size_t sqrtcm_pack_obs_header(unsigned char *out, size_t cap, unsigned msg_type,
 /* Parse DF002 / DF003 (and MSM epoch / multi when category is MSM) from a
  * payload that already passed CRC. Returns 0, or -1 if too short. */
 int sqrtcm_parse_header(const unsigned char *payload, size_t len, SqrtcmMsg *out);
+
+/* Pack a full synthetic MSM payload (header + masks + obs fields) from *msm.
+ * msm->msm_type / have_* flags select which DF blocks are written. Returns
+ * byte length, or 0 on overflow / inconsistent masks. */
+size_t sqrtcm_pack_msm(unsigned char *out, size_t cap, const SqrtcmMsm *msm);
+
+/* Decode MSM header, DF394–DF396 masks and MSM1–7 observation fields.
+ * Returns 0 on success, -1 if not MSM / truncated / inconsistent. */
+int sqrtcm_parse_msm(const unsigned char *payload, size_t len, SqrtcmMsm *out);
+
+/* Rough range in metres for sat_index, or NaN if invalid / absent. */
+double sqrtcm_msm_rough_range_m(const SqrtcmMsm *m, int sat_index);
+
+/* Full pseudorange / phaserange in metres for a cell (rough + fine), or NaN. */
+double sqrtcm_msm_pseudorange_m(const SqrtcmMsm *m, int cell_index);
+double sqrtcm_msm_phaserange_m(const SqrtcmMsm *m, int cell_index);
 
 /* Copy payload into msg->payload_copy, set payload_owned, point payload there. */
 void sqrtcm_msg_own_payload(SqrtcmMsg *msg);

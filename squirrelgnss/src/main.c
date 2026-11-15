@@ -906,8 +906,8 @@ int main(int argc, char **argv) {
             got_len += (size_t)n;
             got[got_len] = 0;
         }
-        /* CRC-valid synthetic MSM7 frame so the body can feed sqrtcm. */
-        unsigned char payload[8], frame[32], reply[96];
+        /* CRC-valid synthetic MSM7 header frame so the body can feed sqrtcm. */
+        unsigned char payload[SQRTCM_MSM_HEADER_BYTES], frame[32], reply[96];
         size_t plen = sqrtcm_pack_msm_header(payload, sizeof payload, 1077, 2001, 123456u, 0);
         size_t flen = sqrtcm_frame(frame, sizeof frame, payload, plen);
         const char *hdr = "ICY 200 OK\r\n\r\n";
@@ -935,10 +935,34 @@ int main(int argc, char **argv) {
         return 0;
     }
     if (!strcmp(cmd, "rtcm-synth")) {
-        /* Offline encode/decode of synthetic RTCM3; no network. */
-        unsigned char msm[8], obs[3], stream[64];
-        size_t n1 = sqrtcm_pack_msm_header(msm, sizeof msm, 1077, 2001, 345600000u, 0);
+        /* Offline encode/decode of synthetic RTCM3 MSM4 obs + ARP; no network. */
+        SqrtcmMsm msm4;
+        memset(&msm4, 0, sizeof msm4);
+        msm4.msg_type = 1074;
+        msm4.msm_type = 4;
+        msm4.station_id = 2001;
+        msm4.epoch_ms = 345600000u;
+        msm4.n_sat = 1;
+        msm4.sat_id[0] = 5;
+        msm4.n_sig = 1;
+        msm4.sig_id[0] = 2;
+        msm4.n_cell = 1;
+        msm4.cell_sat[0] = 0;
+        msm4.cell_sig[0] = 0;
+        msm4.rough_ms[0] = 70;
+        msm4.rough_mod[0] = 0;
+        msm4.fine_pr[0] = 10;
+        msm4.fine_phase[0] = 20;
+        msm4.lock[0] = 4;
+        msm4.cnr[0] = 38;
+
+        unsigned char msm[256], obs[3], stream[512];
+        size_t n1 = sqrtcm_pack_msm(msm, sizeof msm, &msm4);
         size_t n2 = sqrtcm_pack_obs_header(obs, sizeof obs, 1005, 42);
+        if (!n1) {
+            fprintf(stderr, "squirrelgnss: rtcm-synth MSM pack failed\n");
+            return 1;
+        }
         size_t off = 0;
         size_t f1 = sqrtcm_frame(stream + off, sizeof stream - off, msm, n1);
         off += f1;
@@ -948,14 +972,18 @@ int main(int argc, char **argv) {
         SqrtcmMsg msgs[4];
         sqrtcm_framer_init(&fr);
         int got = sqrtcm_framer_feed(&fr, stream, off, msgs, 4);
-        if (got != 2 || msgs[0].msg_type != 1077 || msgs[0].station_id != 2001 ||
-            msgs[1].msg_type != 1005 || msgs[1].station_id != 42) {
+        SqrtcmMsm decoded;
+        if (got != 2 || msgs[0].msg_type != 1074 || msgs[0].station_id != 2001 ||
+            msgs[1].msg_type != 1005 || msgs[1].station_id != 42 ||
+            sqrtcm_parse_msm(sqrtcm_msg_payload(&msgs[0]), msgs[0].payload_len, &decoded) != 0 ||
+            decoded.n_cell != 1 || decoded.cnr[0] != 38) {
             fprintf(stderr, "squirrelgnss: rtcm-synth decode mismatch (got=%d)\n", got);
             return 1;
         }
-        printf("rtcm-synth ok frames=%d msm=%u station=%u epoch=%u arp=%u station=%u bytes=%zu\n",
-               got, msgs[0].msg_type, msgs[0].station_id, msgs[0].epoch_ms, msgs[1].msg_type,
-               msgs[1].station_id, off);
+        printf("rtcm-synth ok frames=%d msm=%u station=%u epoch=%u cells=%d cnr=%u "
+               "arp=%u station=%u bytes=%zu\n",
+               got, msgs[0].msg_type, msgs[0].station_id, msgs[0].epoch_ms, decoded.n_cell,
+               decoded.cnr[0], msgs[1].msg_type, msgs[1].station_id, off);
         return 0;
     }
     if (!strcmp(cmd, "ntrip")) {
