@@ -12,9 +12,11 @@ can be framed and header-parsed offline.
   GPS-style 30-bit epoch and the multiple-message bit.
 - **`SqrtcmFramer`**: byte-fed sync on `0xD3`, 10-bit length (reserved bits
   must be zero), CRC check; after bad CRC / rejected length, re-queues from
-  `buf[1]` into a sized input queue (`SQRTCM_INQ_MAX`) so every good frame in
-  that tail is delivered (not only the first). Overflow bumps `rescan_drop`.
-  `sqrtcm_framer_feed` copies each payload into `SqrtcmMsg.payload_copy`.
+  `buf[1]` into a sized head/tail input ring (`SQRTCM_INQ_MAX`) so every good
+  frame in that tail is delivered (not only the first). If a prepend cannot
+  fit, the whole rejected tail is dropped and `rescan_drop` counts those
+  bytes. `sqrtcm_framer_feed` copies each payload into `SqrtcmMsg.payload_copy`;
+  `feed(..., 0)` drains frames left queued by the byte API.
 - **`SqrtcmMsg` copy safety**: `payload_owned` + `sqrtcm_msg_payload()` /
   `sqrtcm_msg_fix_payload()` / `sqrtcm_msg_assign()` so a plain struct copy
   does not leave `.payload` pointing at another message's buffer.
