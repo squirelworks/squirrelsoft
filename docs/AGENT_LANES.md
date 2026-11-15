@@ -36,7 +36,7 @@ editing the docs boxes for its own cards per PR.
 - [x] **Phone GnssMeasurement feed** `-2eaf` — PR #148 (on `main`)
 - [x] **Live NTRIP transport** `-2eaf` — PR #150 (on `main`)
 - [x] **RTCM decode skeleton** `-2eaf` — PR #151 / #152 (on `main`)
-- [ ] **RTCM Sarah round-2** `-2eaf` — PR #153 (rescan / overflow / copy safety)
+- [x] **RTCM Sarah round-2** `-2eaf` — PR #153 (merged)
 
 Leave **S6** / **PLAY** to Squirrel (`needs: squirrel`).
 
@@ -74,9 +74,8 @@ Leave **S6** / **PLAY** to Squirrel (`needs: squirrel`).
 | os2 | #188 | `…-2.6-shadows-2eaf` | `-2eaf` | 2.6-shadows |
 | os2 | #192 | `…-w5-openas-2eaf` | `-2eaf` | W.5-openas |
 | os2 | #196 | `…-2.9-lm-stay-thunks-b55f` | `-b55f` | 2.9-lm-stay-thunks |
-| soft | #153 | `…-followup-rtcm-sarah-152-2eaf` | `-2eaf` | RTCM Sarah round-2 |
 
-**Merged (do not re-claim):** os2 #191 W.2, #193 paging; soft #148–#152 GNSS/NTRIP/RTCM.
+**Merged (do not re-claim):** os2 #191 W.2, #193 paging; soft #148–#153 GNSS/NTRIP/RTCM (+ Sarah round-2).
 
 ## Issue sync note
 
