@@ -1,9 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">SquirrelGNSS</string>
-    <string name="tagline">Synthetic measurement feed → sqgnss JNI (CI). Optional phone GnssMeasurement / Location when hardware is present.</string>
+    <string name="tagline">Synthetic measurement + NTRIP/MSM through JNI (CI). Optional phone GNSS and operator caster dial.</string>
     <string name="run_demo">Run synthetic feed</string>
     <string name="run_phone">Listen for phone GNSS</string>
+    <string name="run_ntrip_synth">NTRIP synth</string>
+    <string name="run_ntrip_dial">Dial caster</string>
+    <string name="ntrip_host_hint">host (operator dial)</string>
+    <string name="ntrip_port_hint">port</string>
+    <string name="ntrip_mount_hint">mountpoint</string>
     <string name="status_no_core">Native sqgnss core not loaded.</string>
     <string name="status_solve_failed">Synthetic measurement solve failed.</string>
     <string name="status_permission_denied">Location permission denied — synthetic feed only.</string>
@@ -13,5 +18,9 @@
     <string name="status_phone_meas">Phone meas (demo eph — not a real PVT): %1$d SVs → lat %2$.6f lon %3$.6f (used %4$d)</string>
     <string name="status_phone_meas_no_fix">Phone meas (demo eph): %1$d SVs (no PVT yet — need matching eph)</string>
     <string name="status_phone_location">Phone location (%1$s): lat %2$.6f lon %3$.6f ±%4$.1f m</string>
-    <string name="status_synthetic">Synthetic feed (%1$d obs)\n  lat %2$.8f\n  lon %3$.8f\n  h   %4$.3f m\n  sats %5$d  HDOP %6$.2f  VDOP %7$.2f\n  3-D err %8$.4f m\nStakeout 0.001° N → %9$.2f m north\n\n%10$s</string>
+    <string name="status_ntrip_idle">NTRIP: idle (use synth for CI; dial is operator-only).</string>
+    <string name="status_ntrip_failed">NTRIP path failed (no MSM frames).</string>
+    <string name="status_ntrip_need_fields">Dial needs host, port, and mount.</string>
+    <string name="status_ntrip_ok">NTRIP %1$s → MSM%2$d msg %3$d stn %4$d epoch %5$d sats %6$d sigs %7$d cells %8$d (body %9$d B, frames %10$d)</string>
+    <string name="status_synthetic">Synthetic feed (%1$d obs)\n  lat %2$.8f\n  lon %3$.8f\n  h   %4$.3f m\n  sats %5$d  HDOP %6$.2f  VDOP %7$.2f\n  3-D err %8$.4f m\nStakeout 0.001° N → %9$.2f m north\n\n%10$s\n\n%11$s</string>
 </resources>

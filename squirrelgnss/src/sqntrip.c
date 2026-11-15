@@ -216,6 +216,21 @@ static void copy_field(char *dst, size_t cap, const char *start, const char *end
     dst[n] = 0;
 }
 
+/* Truncating copy; avoids snprintf("%s") which gcc -Werror=format-truncation
+ * rejects when the source buffer is larger than the destination. */
+static void copy_trunc(char *dst, size_t cap, const char *src) {
+    size_t n;
+    if (!dst || !cap) return;
+    if (!src) {
+        dst[0] = 0;
+        return;
+    }
+    n = strlen(src);
+    if (n >= cap) n = cap - 1;
+    memcpy(dst, src, n);
+    dst[n] = 0;
+}
+
 static int parse_str_line(const char *line, SqntStrEntry *e) {
     /* STR;mount;id;format;format-details;carrier;nav;network;country;lat;lon;nmea;... */
     memset(e, 0, sizeof *e);
@@ -237,25 +252,25 @@ static int parse_str_line(const char *line, SqntStrEntry *e) {
         copy_field(tmp, sizeof tmp, a, b);
         switch (i) {
         case 0:
-            snprintf(e->mount, sizeof e->mount, "%s", tmp);
+            copy_trunc(e->mount, sizeof e->mount, tmp);
             break;
         case 1:
-            snprintf(e->identifier, sizeof e->identifier, "%s", tmp);
+            copy_trunc(e->identifier, sizeof e->identifier, tmp);
             break;
         case 2:
-            snprintf(e->format, sizeof e->format, "%s", tmp);
+            copy_trunc(e->format, sizeof e->format, tmp);
             break;
         case 4:
             e->carrier = (int)strtol(tmp, NULL, 10);
             break;
         case 5:
-            snprintf(e->nav_system, sizeof e->nav_system, "%s", tmp);
+            copy_trunc(e->nav_system, sizeof e->nav_system, tmp);
             break;
         case 6:
-            snprintf(e->network, sizeof e->network, "%s", tmp);
+            copy_trunc(e->network, sizeof e->network, tmp);
             break;
         case 7:
-            snprintf(e->country, sizeof e->country, "%s", tmp);
+            copy_trunc(e->country, sizeof e->country, tmp);
             break;
         case 8:
             e->lat_deg = strtod(tmp, NULL);

@@ -49,6 +49,69 @@
         app:layout_constraintBaseline_toBaselineOf="@id/run_demo"
         app:layout_constraintStart_toEndOf="@id/run_demo" />
 
+    <Button
+        android:id="@+id/run_ntrip_synth"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:text="@string/run_ntrip_synth"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/run_demo" />
+
+    <Button
+        android:id="@+id/run_ntrip_dial"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="12dp"
+        android:text="@string/run_ntrip_dial"
+        app:layout_constraintBaseline_toBaselineOf="@id/run_ntrip_synth"
+        app:layout_constraintStart_toEndOf="@id/run_ntrip_synth" />
+
+    <EditText
+        android:id="@+id/ntrip_host"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:layout_marginEnd="8dp"
+        android:hint="@string/ntrip_host_hint"
+        android:importantForAutofill="no"
+        android:inputType="textUri"
+        android:maxLines="1"
+        android:textSize="13sp"
+        app:layout_constraintEnd_toStartOf="@id/ntrip_port"
+        app:layout_constraintHorizontal_weight="2"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/run_ntrip_synth" />
+
+    <EditText
+        android:id="@+id/ntrip_port"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:hint="@string/ntrip_port_hint"
+        android:importantForAutofill="no"
+        android:inputType="number"
+        android:maxLines="1"
+        android:text="2101"
+        android:textSize="13sp"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_weight="1"
+        app:layout_constraintStart_toEndOf="@id/ntrip_host"
+        app:layout_constraintTop_toTopOf="@id/ntrip_host" />
+
+    <EditText
+        android:id="@+id/ntrip_mount"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:hint="@string/ntrip_mount_hint"
+        android:importantForAutofill="no"
+        android:inputType="text"
+        android:maxLines="1"
+        android:textSize="13sp"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/ntrip_host" />
+
     <TextView
         android:id="@+id/status"
         android:layout_width="0dp"
@@ -60,5 +123,5 @@
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/run_demo" />
+        app:layout_constraintTop_toBottomOf="@id/ntrip_mount" />
 </androidx.constraintlayout.widget.ConstraintLayout>

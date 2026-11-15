@@ -4,12 +4,14 @@ package works.squirrel.gnss;
  * Host smoke test for the Android JNI bridge (app/src/main/cpp/sqgnss_jni.c).
  * It declares the same natives as SqGnss.kt (same class name, so the same JNI
  * symbols), loads libsqgnss_jni built for this machine, and checks geodesy,
- * stakeout, synthetic-sky PVT, and the packed measurement feed path
- * (fillDemoEpoch → solveEpoch) — no phone GNSS. Run by `make test-jni`
- * in squirrelgnss.
+ * stakeout, synthetic-sky PVT, the packed measurement feed path
+ * (fillDemoEpoch → solveEpoch), and NTRIP → RTCM MSM framing (memio +
+ * 127.0.0.1 loopback) — no phone GNSS and no remote caster. Run by
+ * `make test-jni` in squirrelgnss.
  */
 public final class SqGnss {
     static final int OUT_LEN = 9;
+    static final int NTRIP_OUT_LEN = 12;
     static final int MAX_SATS = 32;
 
     static native boolean nativeLlhToEcef(double[] llh, double[] ecef);
@@ -22,6 +24,11 @@ public final class SqGnss {
                                           double[] tReceiverOut, int[] prns, double[] ranges, double[] snrs);
     static native boolean nativeSolveEpoch(double tReceiver, double tEph, int[] prns, double[] ranges,
                                            double[] snrs, int n, double[] truthLlh, double[] out);
+    static native boolean nativeNtripSynthMsm(int[] out);
+    static native boolean nativeNtripFeedResponse(byte[] bytes, int[] out);
+    static native boolean nativeNtripDial(String host, String port, String mount, String user,
+                                          String pass, int ntripVersion, int[] out);
+    static native boolean nativeNtripLoopbackMsm(int[] out);
 
     static int checks, failures;
 
@@ -101,6 +108,26 @@ public final class SqGnss {
         check(nativeFillDemoEpoch(tokyo[0], tokyo[1], tokyo[2], 100000, 15, 0, 1, tRx, new int[2], new double[2],
                 new double[2]) >= 0, "fill with short cap still returns");
         check(!nativeSolveEpoch(tRx[0], tTrue, null, ranges, snrs, n, tokyo, out2), "null prns");
+
+        /* NTRIP memio synth: ICY 200 + MSM4 → framer → MSM parse */
+        int[] nout = new int[NTRIP_OUT_LEN];
+        check(nativeNtripSynthMsm(nout), "ntrip synth msm");
+        check(nout[0] == 200 && nout[1] == 1, "ntrip synth status/kind");
+        check(nout[2] > 0 && nout[3] >= 1, "ntrip synth body/frames");
+        check(nout[4] == 1074 && nout[5] == 2001 && nout[6] == 345600000, "ntrip synth MSM4 header");
+        check(nout[7] == 4 && nout[8] == 2 && nout[9] == 2 && nout[10] == 3, "ntrip synth MSM4 cells");
+        check(nout[11] == 3, "ntrip synth category MSM");
+        check(!nativeNtripSynthMsm(new int[3]), "ntrip synth out too short");
+
+        /* Loopback TCP synthetic caster (127.0.0.1 only) */
+        int[] lout = new int[NTRIP_OUT_LEN];
+        check(nativeNtripLoopbackMsm(lout), "ntrip loopback msm");
+        check(lout[4] == 1074 && lout[7] == 4 && lout[10] == 3, "ntrip loopback MSM4");
+
+        /* Feed-response rejects empty / non-stream bytes */
+        check(!nativeNtripFeedResponse(new byte[0], nout), "ntrip feed empty");
+        check(!nativeNtripFeedResponse("HTTP/1.0 401 Unauthorized\r\n\r\n".getBytes(), nout),
+                "ntrip feed 401");
 
         System.out.println("jni smoke: " + checks + " checks, " + failures + " failed");
         System.exit(failures == 0 ? 0 : 1);

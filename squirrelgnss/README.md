@@ -116,7 +116,9 @@ formulas. None of it comes from vendor receiver firmware.
   `rescan_drop` on prepend overflow), and `framer_feed` owns each payload
   copy (`payload_owned` / `sqrtcm_msg_payload` for safe struct copies).
   GLONASS MSM day+ms epoch is documented for later. Synthetic tests only —
-  see `docs/rtcm-decode.md`. Android caster wiring is still open.
+  see `docs/rtcm-decode.md`. Android feeds the same cores over JNI
+  (memio / loopback in CI; operator dial in the UI) — see
+  `docs/android-ntrip.md`.
 
 ## Build
 
@@ -180,15 +182,15 @@ is published by the IGS data centres.
 
 ## Android
 
-`android/` (`works.squirrel.gnss`) links the same `sqgnss` core through JNI.
-A synthetic measurement feed packs demo-sky observations and solves them with
-`nativeSolveEpoch` (CI / host smoke). The app can also listen for phone
-`GnssMeasurement` / `Location` when permission and hardware allow. The C
-NTRIP transport and the RTCM skeleton are ready on desktop (`ntrip-synth` /
-`rtcm-synth` / `ntrip`); the Android UI does not dial a caster yet. Host
-smoke: `make test-jni` (or `make test`) builds `sqgnss_jni.c` for this
+`android/` (`works.squirrel.gnss`) links `sqgnss` + `sqntrip` + `sqrtcm`
+through JNI. A synthetic measurement feed packs demo-sky observations and
+solves them with `nativeSolveEpoch` (CI / host smoke). NTRIP synth / loopback
+proves ICY body → `sqrtcm_framer_feed` → MSM parse on device; the UI can also
+dial an operator-chosen caster (not from CI). The app listens for phone
+`GnssMeasurement` / `Location` when permission and hardware allow. Host
+smoke: `make test-jni` (or `make test`) builds the JNI bridge for this
 machine and drives it from `android/jni-smoke/` — skipped when there is no
-JDK.
+JDK. Design note: `docs/android-ntrip.md`.
 
 ## Tests
 
@@ -255,3 +257,6 @@ above. The unit tests cover:
   rescan delivery, prepend-overflow whole-tail drop (`rescan_drop`), owned
   multi-frame payloads + struct-copy safety, chunked feeds, reserved length
   bits, and NTRIP ICY body → `sqrtcm_framer_feed` glue — synthetic bytes only
+- Android JNI: geodesy / synthetic PVT / packed meas feed, plus NTRIP memio
+  synth and `127.0.0.1` loopback → MSM4 parse (`make test-jni`) — no remote
+  caster

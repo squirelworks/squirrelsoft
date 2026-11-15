@@ -44,12 +44,12 @@ Used here, in `ROADMAP.md` and on the issues (as labels).
   (`./gradlew :app:assembleDebug :app:testDebugUnitTest` per app), in
   `.github/workflows/ci.yml` on every PR. Desktop packages: see
   `docs/packaging.md` and `.github/workflows/release.yml`.
-- **Open Cursor/Codex coding items *(lane `-2eaf`)*:** remaining Soft coding is
-  Android NTRIP caster wiring (after MSM obs) plus hygiene; next
-  Squirrel-owned work remains **S6** repo split and **PLAY** uploads
+- **Open Cursor/Codex coding items *(lane `-2eaf`)*:** Soft GNSS NTRIP/RTCM/
+  Android caster wiring is done on this lane; remaining Soft work is hygiene.
+  Next Squirrel-owned work remains **S6** repo split and **PLAY** uploads
   (`needs: squirrel`). Phone meas (#148), `sqntrip` (#147), live NTRIP
-  (#150), RTCM skeleton (#151/#152/#153/#157) and MSM observation fields
-  are on this lane.
+  (#150), RTCM skeleton (#151/#152/#153/#157), MSM observation fields
+  (#160) and Android NTRIP caster wiring are on this lane.
 - **Agent lanes:** suite split is in [docs/AGENT_LANES.md](docs/AGENT_LANES.md)
   (`-2eaf` = this Soft/Gen2/BIOS lane; `-b55f` = OS/2 2.9 only).
 
@@ -99,11 +99,11 @@ Android SDK 35). Without an SDK, the Gradle harnesses in the project's
    license text; #153 multi-frame rescan / inq / copy fixup. Post-#153
    notes on `main` (#157): inq head/tail ring, prepend-overflow test,
    feed drain.
-6. ~~**RTCM MSM observation fields**~~ — this PR (lane `-2eaf`): full
-   DF394–DF396 masks + MSM1–7 observation decode in `sqrtcm`; synthetic
-   `tests/test_rtcm.c` only. Android caster wiring still open.
-7. **Android NTRIP caster wiring** — follow-up: dial/feed corrections in
-   the SquirrelGNSS Android UI (synthetic / loopback tests only in CI).
+6. ~~**RTCM MSM observation fields**~~ — on `main` (#160): full DF394–DF396
+   masks + MSM1–7 observation decode in `sqrtcm`; synthetic
+   `tests/test_rtcm.c` only.
+7. ~~**Android NTRIP caster wiring**~~ — this PR (lane `-2eaf`): Android UI
+   + JNI feed `sqntrip`/`sqrtcm` (memio/loopback CI; operator dial).
 8. **S6 repo split** *(Squirrel)* — prep inventory on `main`; see S6 card.
 9. **PLAY uploads** *(Squirrel)* — Sound 0.0.14/0.0.15, QR 0.1.7, Suica
    0.0.13/0.0.14 (already on `main`; do not invent uploads).
@@ -229,13 +229,14 @@ Done earlier (kept for history):
   `sqrtcm_pack_msm` / `sqrtcm_parse_msm` + metre helpers; 73-bit MSM header
   through DF418. Synthetic round-trips in `squirrelgnss/tests/test_rtcm.c`
   (MSM4 / MSM7, invalid sentinels, framer glue). Design note cites
-  RTCM 10403.x §3.5.12–3.5.13. **Still open:** Android caster wiring.
+  RTCM 10403.x §3.5.12–3.5.13.
 
-### GNSS-android-caster — Android NTRIP caster wiring  `status: open` *(lane `-2eaf`)*
+### GNSS-android-caster — Android NTRIP caster wiring  `status: done` *(lane `-2eaf`)*
 - Wire `sqntrip` + `sqrtcm` into the SquirrelGNSS Android UI so a mount can
-  be dialled and MSM corrections fed into the core. CI must stay on
-  synthetic / loopback bytes only (no remote caster, no credentials in
-  fixtures).
+  be dialled and MSM corrections framed/parsed. JNI links the same C cores;
+  CI uses memio + `127.0.0.1` loopback only (host `make test-jni`, unit +
+  instrumented tests). Operator dial is UI-only. Design note:
+  `squirrelgnss/docs/android-ntrip.md`.
 
 ### Soft-Sarah-followups — NTRIP / RTCM / phone / MIT hygiene  `status: done` (#152 / #153 on `main`)
 - #150 SIGPIPE, #151 framer notes, #148 demo-eph UI + TOW null + `start()`

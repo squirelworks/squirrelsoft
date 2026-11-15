@@ -1,18 +1,22 @@
 package works.squirrel.gnss
 
 /**
- * Kotlin side of the JNI bridge to the desktop SquirrelGNSS core (`sqgnss.c`).
+ * Kotlin side of the JNI bridge to the desktop SquirrelGNSS cores
+ * (`sqgnss.c`, `sqntrip`, `sqrtcm`).
  *
  * First step (#146): geodesy, stakeout, synthetic-sky [demoSolve].
  * Second step: packed observation epochs via [fillDemoEpoch] / [solveEpoch]
  * so a measurement feed (synthetic for CI, phone GnssMeasurement or Location
- * when hardware is present) can drive the same PVT path. NTRIP corrections
- * stay open.
+ * when hardware is present) can drive the same PVT path.
+ * Third step: NTRIP caster wiring — [ntripSynthMsm] / [ntripLoopbackMsm]
+ * (CI-safe) and [ntripDial] (operator TCP; never from CI).
  *
- * Packed solve output [OUT_LEN] matches `sqgnss_jni.c`; keep both in step.
+ * Packed solve output [OUT_LEN] and NTRIP summary [NTRIP_OUT_LEN] match
+ * `sqgnss_jni.c`; keep both in step.
  */
 object SqGnss {
     const val OUT_LEN = 9
+    const val NTRIP_OUT_LEN = 12
     const val MAX_SATS = 32
 
     /** False when the native library is missing (e.g. JVM unit tests). */
@@ -42,6 +46,28 @@ object SqGnss {
         /** 3-D error vs truth when truth was supplied; else negative. */
         val errM: Double,
     )
+
+    /**
+     * Summary of one NTRIP stream 200 body after RTCM framing + MSM parse.
+     * Layout matches `nativeNtrip*` / `NTRIP_OUT_LEN` in `sqgnss_jni.c`.
+     */
+    data class NtripMsmResult(
+        val status: Int,
+        val kind: Int,
+        val bodyLen: Int,
+        val nFrames: Int,
+        val msgType: Int,
+        val stationId: Int,
+        val epochMs: Int,
+        val msmType: Int,
+        val nSat: Int,
+        val nSig: Int,
+        val nCell: Int,
+        val category: Int,
+    ) {
+        val isMsmStream: Boolean
+            get() = status == 200 && kind == 1 && nFrames >= 1 && msmType in 1..7
+    }
 
     @JvmStatic
     private external fun nativeLlhToEcef(llh: DoubleArray, ecef: DoubleArray): Boolean
@@ -90,6 +116,26 @@ object SqGnss {
         truthLlh: DoubleArray?,
         out: DoubleArray,
     ): Boolean
+
+    @JvmStatic
+    private external fun nativeNtripSynthMsm(out: IntArray): Boolean
+
+    @JvmStatic
+    private external fun nativeNtripFeedResponse(bytes: ByteArray, out: IntArray): Boolean
+
+    @JvmStatic
+    private external fun nativeNtripDial(
+        host: String,
+        port: String,
+        mount: String,
+        user: String,
+        pass: String,
+        ntripVersion: Int,
+        out: IntArray,
+    ): Boolean
+
+    @JvmStatic
+    private external fun nativeNtripLoopbackMsm(out: IntArray): Boolean
 
     fun llhToEcef(llh: Llh): Ecef? {
         if (!available) return null
@@ -190,6 +236,58 @@ object SqGnss {
         return fixFromOut(out)
     }
 
+    /**
+     * Offline memio NTRIP: synthetic ICY 200 + MSM4 obs → framed MSM summary.
+     * CI / host smoke only — no sockets.
+     */
+    fun ntripSynthMsm(): NtripMsmResult? {
+        if (!available) return null
+        val out = IntArray(NTRIP_OUT_LEN)
+        if (!nativeNtripSynthMsm(out)) return null
+        return ntripFromOut(out)
+    }
+
+    /**
+     * Feed a full caster reply (headers + body) through `sqntrip` → `sqrtcm`.
+     * Useful when the host already holds synthetic bytes (never real dumps).
+     */
+    fun ntripFeedResponse(bytes: ByteArray): NtripMsmResult? {
+        if (!available) return null
+        val out = IntArray(NTRIP_OUT_LEN)
+        if (!nativeNtripFeedResponse(bytes, out)) return null
+        return ntripFromOut(out)
+    }
+
+    /**
+     * Live TCP dial to [host]:[port] for [mount]. Operator-only; CI must not
+     * call this. Empty [user]/[pass] skips Basic auth.
+     */
+    fun ntripDial(
+        host: String,
+        port: String,
+        mount: String,
+        user: String = "",
+        pass: String = "",
+        ntripVersion: Int = 1,
+    ): NtripMsmResult? {
+        if (!available) return null
+        if (host.isBlank() || port.isBlank() || mount.isBlank()) return null
+        val out = IntArray(NTRIP_OUT_LEN)
+        if (!nativeNtripDial(host, port, mount, user, pass, ntripVersion, out)) return null
+        return ntripFromOut(out)
+    }
+
+    /**
+     * `127.0.0.1` loopback synthetic caster (TCP). Proves Android sockets +
+     * MSM parse without a remote host.
+     */
+    fun ntripLoopbackMsm(): NtripMsmResult? {
+        if (!available) return null
+        val out = IntArray(NTRIP_OUT_LEN)
+        if (!nativeNtripLoopbackMsm(out)) return null
+        return ntripFromOut(out)
+    }
+
     private fun fixFromOut(out: DoubleArray): Fix =
         Fix(
             llh = Llh(out[0], out[1], out[2]),
@@ -199,5 +297,21 @@ object SqGnss {
             vdop = out[6],
             rmsM = out[7],
             errM = out[8],
+        )
+
+    private fun ntripFromOut(out: IntArray): NtripMsmResult =
+        NtripMsmResult(
+            status = out[0],
+            kind = out[1],
+            bodyLen = out[2],
+            nFrames = out[3],
+            msgType = out[4],
+            stationId = out[5],
+            epochMs = out[6],
+            msmType = out[7],
+            nSat = out[8],
+            nSig = out[9],
+            nCell = out[10],
+            category = out[11],
         )
 }

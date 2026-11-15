@@ -51,9 +51,10 @@ GLONASS MSM (1081–1087): the 30-bit epoch is day-of-week (3) + ms-of-day (27),
 not GPS ms-of-week. The library still exposes it as `epoch_ms`; split when a
 GLONASS-aware consumer needs day/ms separately.
 
-## Still open
+## Android
 
-- Android NTRIP caster wiring in the SquirrelGNSS UI (follow-up PR).
+SquirrelGNSS Android links this library (and `sqntrip`) through JNI — see
+`docs/android-ntrip.md`. CI stays on synthetic / loopback bytes only.
 
 ## CI / safety
 
