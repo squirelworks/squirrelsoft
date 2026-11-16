@@ -281,9 +281,14 @@ Done earlier (kept for history):
   absent); provisional label; `make verify`. NESC CSV / F-16 TP-1538 deferred
   (licence check before vendoring).
 
-### FLIGHTLAB-viability — Soft #176  `status: done` (this PR)
+### FLIGHTLAB-viability — Soft #176  `status: done` (#193)
 - S7.2e: `fl_viability` evaluates ISM `viability-criteria.yaml` gates vs class
   bands; MD+JSON reports; `viability-report` CLI; optional tool xcheck skip.
+
+### FLIGHTLAB-loadout — Soft #173  `status: done` (this PR)
+- S7.2f: `fl_loadout` validates station×adapter×store against ISM interface
+  fixtures; mass/CG/asymmetry + release envelopes; `loadout-check` CLI;
+  legal/illegal fixtures under `fixtures/loadouts/`.
 
 ### ISMBENCH-scaffold — keyboard/mouse HID harness  `status: done` (#169)
 - S8.1: `squirrelismbench/` matrix + mouse self-tests. Eric interface docs:

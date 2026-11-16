@@ -11,6 +11,7 @@
 #include "fl_scenario.h"
 #include "fl_verify.h"
 #include "fl_viability.h"
+#include "fl_loadout.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -42,6 +43,8 @@ static void usage(FILE *f) {
         "  verify [--openvsp F] [--avl F]  analytic verification suite (Soft #172)\n"
         "  viability-report [FILE] [--json OUT] [--md OUT]\n"
         "                               evaluate viability-criteria.yaml (Soft #176)\n"
+        "  loadout-check FILE [--iface DIR]\n"
+        "                               validate station×adapter×store loadout (Soft #173)\n"
         "  planned                      list scaffold/planned surfaces (CFD, tunnel, HIL)\n"
         "  cfd-import PATH | tunnel PATH | hil ENDPOINT\n"
         "                               planned stubs (always fail with a clear message)\n"
@@ -594,6 +597,34 @@ int main(int argc, char **argv) {
         char note[240];
         fl_viability_optional_xcheck(NULL, NULL, NULL, note, sizeof note);
         fprintf(stderr, "%s\n", note);
+        return rep.nfail ? 1 : 0;
+    }
+    if (strcmp(cmd, "loadout-check") == 0) {
+        const char *path = NULL;
+        const char *iface = "fixtures/ism-interfaces";
+        int i;
+        for (i = 2; i < argc; i++) {
+            if (strcmp(argv[i], "--iface") == 0 && i + 1 < argc)
+                iface = argv[++i];
+            else if (argv[i][0] == '-')
+                return 2;
+            else
+                path = argv[i];
+        }
+        if (!path) {
+            fprintf(stderr, "squirrelflightlab: loadout-check needs FILE\n");
+            return 2;
+        }
+        FlLoReport rep;
+        char err[FL_MAX_MSG];
+        int rc = fl_loadout_validate(iface, path, &rep, err, sizeof err);
+        if (rc < 0) {
+            fprintf(stderr, "squirrelflightlab: %s\n", err);
+            return 1;
+        }
+        char md[16384];
+        fl_loadout_report_md(&rep, md, sizeof md);
+        fputs(md, stdout);
         return rep.nfail ? 1 : 0;
     }
     if (strcmp(cmd, "planned") == 0) {

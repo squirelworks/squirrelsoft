@@ -1,0 +1,9 @@
+# Soft #173 — illegal: NATO 30in adapter on tip rail STA-1
+schema_version: "1.0.0"
+aircraft_id: "ISM-FJ-1"
+stations:
+  - station: STA-1
+    store_id: ISM-INERT-AAM-S
+    adapter: nato_30in
+  - station: STA-2
+    store_id: ISM-INERT-AAM-S

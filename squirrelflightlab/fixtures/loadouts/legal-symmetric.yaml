@@ -1,0 +1,15 @@
+# Soft #173 — legal symmetric tip AAM loadout (inert only)
+schema_version: "1.0.0"
+aircraft_id: "ISM-FJ-1"
+stations:
+  - station: STA-1
+    store_id: ISM-INERT-AAM-S
+  - station: STA-2
+    store_id: ISM-INERT-AAM-S
+flight_condition:
+  keas_kt: 300
+  aoa_deg: 2.0
+  nz_g: 1.0
+  sideslip_deg: 0.0
+  wow: false
+  gear: up

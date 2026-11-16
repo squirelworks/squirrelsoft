@@ -10,6 +10,7 @@
 #include "fl_scenario.h"
 #include "fl_verify.h"
 #include "fl_viability.h"
+#include "fl_loadout.h"
 
 #include <math.h>
 #include <stdio.h>
@@ -237,6 +238,30 @@ static void test_ism_and_fcs(void) {
     free(iface);
 }
 
+static void test_loadout(void) {
+    FlLoReport rep;
+    char err[256];
+    expect(fl_loadout_validate("fixtures/ism-interfaces",
+                               "fixtures/loadouts/legal-symmetric.yaml", &rep, err,
+                               sizeof err) == 0,
+           err);
+    expect(rep.nfail == 0, "legal loadout");
+    expect(strstr(rep.label, "provisional") != NULL, "loadout provisional");
+    expect(fl_loadout_validate("fixtures/ism-interfaces",
+                               "fixtures/loadouts/illegal-heavy-tip.yaml", &rep, err,
+                               sizeof err) == 1,
+           "heavy tip must fail");
+    expect(rep.nfail > 0, "heavy tip nfail");
+    expect(fl_loadout_validate("fixtures/ism-interfaces",
+                               "fixtures/loadouts/illegal-adapter.yaml", &rep, err,
+                               sizeof err) == 1,
+           "bad adapter must fail");
+    expect(fl_loadout_validate("fixtures/ism-interfaces",
+                               "fixtures/loadouts/illegal-envelope.yaml", &rep, err,
+                               sizeof err) == 1,
+           "bad envelope must fail");
+}
+
 static void test_viability(void) {
     FlViaReport rep;
     char err[256];
@@ -340,6 +365,7 @@ int main(void) {
     test_ism_interfaces();
     test_verify();
     test_viability();
+    test_loadout();
     if (fails) {
         fprintf(stderr, "%d failure(s)\n", fails);
         return 1;

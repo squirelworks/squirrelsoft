@@ -1,6 +1,6 @@
 # Fighter Jet Flight Lab (SquirrelFlightLab)
 
-**Status: Scaffolded** (S7.1–S7.2e)
+**Status: Scaffolded** (S7.1–S7.2f)
 
 First-party SquirrelSoft lab for simulating and validating the International
 Squirrel Machines (ISM) fighter jet — aerodynamics, flight controls, avionics
@@ -40,6 +40,7 @@ trim / pull-up / roll scenarios.
 | `fl_iface` | Load all `fighter-jet/interfaces/*.yaml` by `schema_version` | Nested closed allowlists |
 | `fl_verify` | Analytic verification (pendulum/rigid/ballistic/trim/phugoid) | NESC / F-16 TP-1538 |
 | `fl_viability` | Evaluate `viability-criteria.yaml` → MD/JSON | Full AVL/OpenVSP/CalculiX compare |
+| `fl_loadout` | Station×adapter×store validation (inert) | More multi-origin matrix cases |
 | `fl_fcs` | Scripted FCS co-check + pass/fail report | Envelope numbers from Victor |
 | `fl_aero` | Parametric CL/CD/Cm, AoA sweep, CSV | Higher-fidelity provider |
 | `fl_dyn` | 6-DOF sketch, history (RK4 via squirrelnum) | Atmosphere + quaternions |

@@ -1,0 +1,8 @@
+# Soft #173 — illegal: heavy tank on tip rail (mass + station compatibility)
+schema_version: "1.0.0"
+aircraft_id: "ISM-FJ-1"
+stations:
+  - station: STA-1
+    store_id: ISM-INERT-FUEL-600
+  - station: STA-2
+    store_id: ISM-INERT-AAM-S
