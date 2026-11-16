@@ -1,0 +1,20 @@
+ISM-HID mouse interface 1
+# Soft CI fixture for Eric's ISM mouse. Replace from
+# international-squirrel-machines/mouse/ when ISM #90 lands.
+# Soft does not design the sensor or shell — settings contract only.
+sensor: optical_stub
+buttons: 5
+scroll: vertical
+hid_report: boot_mouse
+cpi_default: 800
+report_hz: 125
+dpi_profile: default
+dpi_step: 400
+dpi_step: 800
+dpi_step: 1600
+dpi_step: 3200
+button left: left
+button right: right
+button middle: middle
+button side1: back
+button side2: forward

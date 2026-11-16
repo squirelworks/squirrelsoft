@@ -26,6 +26,7 @@ libraries.
 | `squirrelkbdcfg/` | **SquirrelKbdCfg** | Eric ISM keyboard layout map + firmware configurator (Soft #180) |
 | `squirrelhudtool/` | **SquirrelHUDTool** | ISM fighter HUD/HMI symbology & page layout CLI (Soft tooling) |
 | `squirrelshipbench/` | **SquirrelShipBench** | Soft harness for Victor warship hydro/board + bomber heat-flux stubs |
+| `squirrelmousecfg/` | **SquirrelMouseCfg** | Eric ISM mouse DPI profiles + button remap (Soft #181) |
 
 ## Build
 

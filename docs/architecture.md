@@ -27,6 +27,9 @@ stays in `international-squirrel-machines/keyboard/`).
 SquirrelISMBench (`squirrelismbench/`) is Soft HID/device bench software for
 Eric’s consumer devices (keyboard, mouse, typewriter matrix, RAM-module SPD /
 synthetic bank patterns, printer, Soft-proposed plotter, …).
+SquirrelMouseCfg (`squirrelmousecfg/`) is the Soft companion for Eric’s ISM
+mouse (DPI profiles + button remap against Soft fixtures; hardware SoT stays in
+`international-squirrel-machines/mouse/`).
 SquirrelHILBench (`squirrelhilbench/`) is Soft operator UI for ISM fighter HIL
 benches (mock transport, channel health, stimulus logs); harness SoT stays in
 ISM. Weapons boundary: stores display only — no guidance / seekers / arming.

@@ -208,9 +208,8 @@ Soft settings/config UI; hardware SoT stays in ISM. Order: keyboard → mouse �
 RAM (later). Separate from `squirrelismbench` harness and from Steve’s Flight Lab.
 
 - [x] S9.1 `squirrelkbdcfg/` — layout map + firmware config round-trip (Soft #180)
-- [ ] S9.2 Mouse DPI / button settings app (Soft #181)
+- [x] S9.2 `squirrelmousecfg/` — DPI profiles + button remap (Soft #181)
 - [ ] S9.3 RAM-module self-test utility (Soft #182; after peripherals)
-
 
 ## S10 — ISM fighter Soft UI (Victor; not Flight Lab)
 
