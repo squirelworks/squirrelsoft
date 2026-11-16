@@ -1,0 +1,23 @@
+ISM-FJ interface 1
+# Soft CI fixture: bay I/O concentrator map from ISM wiring-harness + kicad README.
+# J1–J4 → trunks A1–A4 (aileron, elevator, rudder, throttle). Pins are Soft
+# scaffold indices until Victor freezes connector ICDs (ISM #88).
+device_doc_id: ism-fighter-avionics-bay-stub
+channel imu_ax: pin 1
+channel imu_ay: pin 2
+channel imu_az: pin 3
+channel imu_gx: pin 4
+channel imu_gy: pin 5
+channel imu_gz: pin 6
+channel radio_throttle: pin 7
+channel radio_aileron: pin 8
+channel radio_elevator: pin 9
+channel radio_rudder: pin 10
+channel act_aileron: pin 11 header J1 trunk A1
+channel act_elevator: pin 12 header J2 trunk A2
+channel act_rudder: pin 13 header J3 trunk A3
+channel act_throttle: pin 14 header J4 trunk A4
+surface aileron_l: channel act_aileron
+surface aileron_r: channel act_aileron
+surface elevator: channel act_elevator
+surface rudder: channel act_rudder

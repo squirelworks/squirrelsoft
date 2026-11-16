@@ -27,6 +27,10 @@ $P scenario roll >/dev/null || fail "roll"
 $P scenario nope >/dev/null 2>&1; [ $? -eq 2 ] || fail "bad scenario → 2"
 
 $P avionics-check >/dev/null || fail "avionics-check"
+$P ism-load --params fixtures/ism-fighter/ism-fj-1.ismfj-params \
+  --iface fixtures/ism-fighter/bay-io.ismfj-iface | grep -q PASS || fail "ism-load"
+$P fcs-check --report "$B/fcs_report.txt" | grep -q "result: PASS" || fail "fcs-check"
+grep -q "result: PASS" "$B/fcs_report.txt" || fail "fcs report file"
 $P planned | grep -q cfd_mesh_import || fail "planned"
 $P cfd-import x.msh >/dev/null 2>&1; [ $? -eq 1 ] || fail "cfd stub exit 1"
 $P tunnel x.csv >/dev/null 2>&1; [ $? -eq 1 ] || fail "tunnel stub exit 1"

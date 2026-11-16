@@ -1,12 +1,12 @@
 # Fighter Jet Flight Lab (SquirrelFlightLab)
 
-**Status: Scaffolded**
+**Status: Scaffolded** (S7.1–S7.2)
 
-First-party SquirrelSoft lab for designing, simulating, and validating the
-International Squirrel Machines (ISM) fighter jet — aerodynamics, flight
-controls, avionics behaviour, and structural assumptions — without treating
-third-party flight sims as the source of truth. Contemporary aero tools may be
-studied as reference only; this product is pure SquirrelSoft / Squirrel-OS/2.
+First-party SquirrelSoft lab for simulating and validating the International
+Squirrel Machines (ISM) fighter jet — aerodynamics, flight controls, avionics
+behaviour — without treating third-party flight sims as the source of truth.
+**Airframe / ICD truth is Victor’s ISM repo** (`fighter-jet/`). Soft only loads
+and co-checks; Soft does not design hardware.
 
 Working title alternatives (open): *SquirrelFlightLab*, *ISM Flight Lab*,
 *SquirrelAero Lab*.
@@ -33,12 +33,14 @@ trim / pull-up / roll scenarios.
 
 | Module | Role | Deepen next |
 |--------|------|-------------|
-| `fl_project` | Workspace + `.sqflt` design inputs (fuselage, planform stubs, surfaces, mass/CG, actuator map) | Lock scale against ISM hardware docs |
-| `fl_aero` | Parametric CL/CD/Cm (+ lateral stubs), AoA sweep, stability derivatives, CSV export | Replaceable higher-fidelity aero model |
-| `fl_dyn` | Rigid-body 6-DOF sketch, throttle / pitch / roll / yaw, pause/step/reset, history | Better integration, actuators, atmosphere |
-| `fl_avionics` | IMU / radio / actuator channel co-check vs device-doc expect map | Shared types with ISM KiCad bay; HIL |
-| `fl_scenario` | `trim_cruise`, `pull_up`, `roll` with editable thresholds | More envelopes + regression suites |
-| `fl_planned` | CFD mesh import, wind-tunnel correlation, HIL — **stubbed** | Implement when hardware/CFD land |
+| `fl_project` | Workspace + `.sqflt` design inputs | Prefer ISM param files |
+| `fl_ism` | Load `ISM-FJ parameters` / `ISM-FJ interface` texts | Refresh fixtures from ISM #88 |
+| `fl_fcs` | Scripted FCS co-check + pass/fail report | Envelope numbers from Victor |
+| `fl_aero` | Parametric CL/CD/Cm, AoA sweep, CSV | Higher-fidelity provider |
+| `fl_dyn` | 6-DOF sketch, history | Better integration |
+| `fl_avionics` | Channel co-check vs bay expect map | HIL |
+| `fl_scenario` | `trim_cruise`, `pull_up`, `roll` | More envelopes |
+| `fl_planned` | CFD / tunnel / HIL — **stubbed** | When hardware lands |
 
 Out of scope for v0: photoreal visuals, multiplayer, weapons, classified data,
 full CFD, certified flight-test tooling, shipping Gerbers/STLs.

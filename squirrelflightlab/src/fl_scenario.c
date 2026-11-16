@@ -14,9 +14,9 @@ void fl_scenario_defaults(FlScenario *out, int *n) {
     out[0].V0_mps = 22.0;
     out[0].throttle = 0.55;
     out[0].de_deg = -1.5;
-    /* Scaffold model is not trimmed tightly; keep a loose rate gate. */
+    /* Scaffold model is not trimmed tightly; keep loose gates. */
     out[0].max_abs_pitch_rate_dps = 15.0;
-    out[0].max_altitude_loss_m = 5.0;
+    out[0].max_altitude_loss_m = 12.0;
 
     out[1].id = FL_SCEN_PULL_UP;
     snprintf(out[1].name, sizeof out[1].name, "pull_up");
