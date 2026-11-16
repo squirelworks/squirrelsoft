@@ -135,11 +135,26 @@ source of truth. Design note: `squirrelflightlab/docs/overview.md`.
 - [x] S7.1 App scaffold: `squirrelflightlab/` portable core + CLI, sample `.sqflt`,
   device-doc channel stub, README status Scaffolded; checks `tests/test_flightlab.c`,
   `tests/cli_smoke.sh`, `scripts/demo_happy_path.sh`
-- [ ] S7.2 Lock geometry / mass against published ISM hardware docs; shared channel
-  types with the hardware repo *(open product decision)*
+- [x] S7.2 Load ISM fighter parameter + bay interface files (Soft #168); CI fixtures
+  from published ISM study numbers; `ism-load` + scripted `fcs-check` pass/fail
+  report; checks `tests/test_flightlab.c`, `fixtures/ism-fighter/`
+  *(Victor publishes machine-readable SoT under fighter-jet/ — ISM #88)*
 - [ ] S7.3 Higher-fidelity replaceable aero provider + tunnel CSV override
 - [ ] S7.4 `sqgui` strip-chart window on the same core
 - [ ] S7.5 HIL against the real avionics PCB (planned stub today)
+
+## S8 — ISM device bench harness (Soft test software)
+
+Steve lane: simulators / harnesses only. Eric owns consumer hardware; Victor owns
+military. Gaps → ISM issues, not Soft hardware PRs.
+
+- [x] S8.1 `squirrelismbench/` scaffold: 60% keyboard matrix + mouse sensor/scroll
+  self-tests driven by interface files; CI fixtures; checks
+  `tests/test_ismbench.c`, `tests/cli_smoke.sh`
+  *(Eric interface docs: ISM #89 keyboard, #90 mouse)*
+- [ ] S8.2 Live USB HID path against real 60% keyboard / mouse
+- [ ] S8.3 PSU / UPS load + telemetry benches
+- [ ] S8.4 Storage read/write benches; expand to remaining lab equipment
 
 ## S6 — Repo split (#32)
 - [x] Prep inventory (agent): `scripts/s6_repo_split_prep.sh`, `docs/s6-repo-split.md`, `docs/s6-ci-stubs/` — path lists, suggested CI, umbrella README link draft. No remotes created or deleted.

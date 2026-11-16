@@ -35,7 +35,8 @@ Used here, in `ROADMAP.md` and on the issues (as labels).
   S3.2 done via #141), SquirrelSuica (PC/SC, RC-S380 over libusb, GUI, CSV —
   S3.3 done), SquirrelQR (files, PNG, X11/portal/Win/mac capture, V4L2 webcam,
   GUI, encoder — S3.4 done via #138 / #142), SquirrelCalc, SquirrelPaint,
-  SquirrelGames, SquirrelDebug, SquirrelFlightLab (scaffold). S3, S4 and S5 are complete on `main`. PKG
+  SquirrelGames, SquirrelDebug, SquirrelFlightLab, SquirrelISMBench (scaffold).
+  S3, S4 and S5 are complete on `main`. PKG
   (S3.5 + S4) is on `main`.
 - **Shared cores:** `libs/sqdsp`, `libs/sqfelica`, `libs/sqqr`, `libs/sqmath`, `libs/sqgui`.
 - **Test gate:** `make test` on ubuntu / windows / macos (every lib and program,
@@ -255,13 +256,18 @@ Done earlier (kept for history):
   test, `framer_feed` drain only when `n==0`.
 
 
-### FLIGHTLAB-scaffold — ISM Fighter Jet Flight Lab  `status: done` (this PR)
-- New desktop app `squirrelflightlab/`: project workspace, parametric aero AoA
-  sweep, 6-DOF flight-history stub, avionics channel co-check, trim/pull-up/roll
-  scenarios, planned CFD/tunnel/HIL stubs. Happy path:
-  `make -C squirrelflightlab demo` / `scripts/demo_happy_path.sh`. Design note
-  `squirrelflightlab/docs/overview.md`. Open decisions (scale, livery, aero
-  fidelity, shared bombers/rockets lab) listed there. Follow-ups are S7.2+.
+### FLIGHTLAB-scaffold — ISM Fighter Jet Flight Lab  `status: done` (#167)
+- Desktop app `squirrelflightlab/` scaffold on `main`.
+
+### FLIGHTLAB-ism-params — load ISM params + FCS co-check  `status: done` (this PR)
+- S7.2: `fl_ism` / `fl_fcs`, fixtures under `fixtures/ism-fighter/`, CLI
+  `ism-load` and `fcs-check` with pass/fail report. Soft #168 acceptance for
+  load + scripted FCS co-check. Victor SoT files: ISM #88. Soft does not design
+  airframe hardware.
+
+### ISMBENCH-scaffold — keyboard/mouse HID harness  `status: done` (this PR)
+- S8.1: `squirrelismbench/` matrix + mouse self-tests. Eric interface docs:
+  ISM #89 / #90. Live USB and other lab benches are S8.2+.
 
 ### PLAY-0.0.14 — upload SquirrelSound 0.0.14  `needs: squirrel`
 - Build the AAB locally with the upload key and upload it to closed testing

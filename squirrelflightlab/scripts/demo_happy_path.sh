@@ -33,7 +33,14 @@ echo "-- Avionics co-check --"
 "$P" avionics-check samples/ism-fighter-v0.sqflt | head -5
 
 echo ""
+echo "-- ISM params + FCS co-check --"
+"$P" ism-load --params fixtures/ism-fighter/ism-fj-1.ismfj-params \
+  --iface fixtures/ism-fighter/bay-io.ismfj-iface | head -3
+"$P" fcs-check --report "$OUT/fcs_report.txt"
+
+echo ""
 echo "Wrote:"
 echo "  $OUT/aoa_sweep.csv"
 echo "  $OUT/flight_history.csv"
+echo "  $OUT/fcs_report.txt"
 echo "demo_happy_path ok"

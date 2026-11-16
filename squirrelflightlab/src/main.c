@@ -3,6 +3,8 @@
 #include "fl_aero.h"
 #include "fl_avionics.h"
 #include "fl_dyn.h"
+#include "fl_fcs.h"
+#include "fl_ism.h"
 #include "fl_planned.h"
 #include "fl_project.h"
 #include "fl_scenario.h"
@@ -27,12 +29,16 @@ static void usage(FILE *f) {
         "  scenario NAME [options]      trim_cruise | pull_up | roll\n"
         "      --project FILE  --max-q DPS  --min-nz N  --min-roll DEG  --max-alt-loss M\n"
         "  avionics-check [FILE]        compare project channels to device-doc expect map\n"
+        "  ism-load --params F [--iface F]   load ISM-FJ parameter (+ interface) files\n"
+        "  fcs-check [options]          scripted FCS co-check; writes pass/fail report\n"
+        "      --params F  --iface F  --report FILE\n"
         "  planned                      list scaffold/planned surfaces (CFD, tunnel, HIL)\n"
         "  cfd-import PATH | tunnel PATH | hil ENDPOINT\n"
         "                               planned stubs (always fail with a clear message)\n"
         "\n"
-        "Units: geometry mm/g from ISM hardware docs; dynamics SI. Axes: body +X nose,\n"
-        "+Y right, +Z down. See docs/overview.md.\n",
+        "ISM SoT: international-squirrel-machines fighter-jet/ (Victor). Soft loads\n"
+        "params/interfaces; CI fixtures under fixtures/ism-fighter/ until ISM #88.\n"
+        "Units: geometry mm/g; dynamics SI. Axes: +X nose, +Y right, +Z down.\n",
         f);
 }
 
@@ -332,8 +338,112 @@ static int cmd_avionics(const char *path) {
     return (rep.nmismatch || rep.nmissing) ? 1 : 0;
 }
 
+static int load_ism_files(FlProject *p, FlIsmMeta *meta, const char *params,
+                          const char *iface, char *err, int err_cap) {
+    char *text = NULL;
+    if (!params) {
+        snprintf(err, err_cap, "need --params FILE");
+        return -1;
+    }
+    if (read_file(params, &text, NULL) != 0) {
+        snprintf(err, err_cap, "cannot read %s", params);
+        return -1;
+    }
+    if (fl_ism_parse_params(p, meta, text, err, err_cap) != 0) {
+        free(text);
+        return -1;
+    }
+    free(text);
+    if (meta) snprintf(meta->params_path, sizeof meta->params_path, "%s", params);
+    if (iface) {
+        if (read_file(iface, &text, NULL) != 0) {
+            snprintf(err, err_cap, "cannot read %s", iface);
+            return -1;
+        }
+        if (fl_ism_parse_interface(p, meta, text, err, err_cap) != 0) {
+            free(text);
+            return -1;
+        }
+        free(text);
+        if (meta) snprintf(meta->iface_path, sizeof meta->iface_path, "%s", iface);
+    }
+    return 0;
+}
+
+static int cmd_ism_load(int argc, char **argv) {
+    const char *params = NULL, *iface = NULL;
+    int i;
+    for (i = 0; i < argc; i++) {
+        if (strcmp(argv[i], "--params") == 0) {
+            params = opt_val(argc, argv, &i);
+            if (!params) return 2;
+        } else if (strcmp(argv[i], "--iface") == 0) {
+            iface = opt_val(argc, argv, &i);
+            if (!iface) return 2;
+        } else return 2;
+    }
+    FlProject p;
+    FlIsmMeta meta;
+    char err[FL_MAX_MSG];
+    if (load_ism_files(&p, &meta, params, iface, err, sizeof err) != 0) {
+        fprintf(stderr, "squirrelflightlab: %s\n", err);
+        return 1;
+    }
+    FlIsmVerify v;
+    fl_ism_verify_project(&p, &meta, &v);
+    puts(v.summary);
+    char buf[4096];
+    if (fl_project_format(&p, buf, sizeof buf) < 0) return 1;
+    fputs(buf, stdout);
+    printf("# surfaces=%d channels=%d\n", p.nsurfaces, p.nchannels);
+    return v.ok ? 0 : 1;
+}
+
+static int cmd_fcs_check(int argc, char **argv) {
+    const char *params = "fixtures/ism-fighter/ism-fj-1.ismfj-params";
+    const char *iface = "fixtures/ism-fighter/bay-io.ismfj-iface";
+    const char *report = NULL;
+    int i;
+    for (i = 0; i < argc; i++) {
+        if (strcmp(argv[i], "--params") == 0) {
+            params = opt_val(argc, argv, &i);
+            if (!params) return 2;
+        } else if (strcmp(argv[i], "--iface") == 0) {
+            iface = opt_val(argc, argv, &i);
+            if (!iface) return 2;
+        } else if (strcmp(argv[i], "--report") == 0) {
+            report = opt_val(argc, argv, &i);
+            if (!report) return 2;
+        } else return 2;
+    }
+    FlProject p;
+    FlIsmMeta meta;
+    char err[FL_MAX_MSG];
+    if (load_ism_files(&p, &meta, params, iface, err, sizeof err) != 0) {
+        fprintf(stderr, "squirrelflightlab: %s\n", err);
+        return 1;
+    }
+    FlSim sim;
+    fl_sim_init(&sim, &p);
+    FlFcsLimits lim;
+    fl_fcs_limits_default(&lim);
+    FlFcsResult res;
+    if (fl_fcs_co_check(&sim, &lim, &res) != 0) {
+        fprintf(stderr, "squirrelflightlab: fcs-check failed to run\n");
+        return 1;
+    }
+    char text[2048];
+    if (fl_fcs_report(&meta, &lim, &res, text, sizeof text) < 0) return 1;
+    fputs(text, stdout);
+    if (report && write_text(report, text) != 0) {
+        fprintf(stderr, "squirrelflightlab: cannot write %s\n", report);
+        return 1;
+    }
+    return res.passed ? 0 : 1;
+}
+
 static int cmd_demo(void) {
-    puts("=== Fighter Jet Flight Lab demo (scaffold) ===");
+    puts("=== Fighter Jet Flight Lab demo ===");
     char *args_aoa[] = {"--n", "9", "--alpha0", "-2", "--alpha1", "10", "--V", "22"};
     int rc = cmd_aoa(8, args_aoa);
     if (rc) return rc;
@@ -355,6 +465,9 @@ static int cmd_demo(void) {
         if (fl_scenario_run(&sim, &list[i], &res) != 0) return 1;
         puts(res.summary);
     }
+    puts("");
+    rc = cmd_fcs_check(0, NULL);
+    if (rc) return rc;
     puts("demo ok");
     return 0;
 }
@@ -389,6 +502,8 @@ int main(int argc, char **argv) {
     if (strcmp(cmd, "scenario") == 0) return cmd_scenario(argc - 2, argv + 2);
     if (strcmp(cmd, "avionics-check") == 0)
         return cmd_avionics(argc >= 3 ? argv[2] : NULL);
+    if (strcmp(cmd, "ism-load") == 0) return cmd_ism_load(argc - 2, argv + 2);
+    if (strcmp(cmd, "fcs-check") == 0) return cmd_fcs_check(argc - 2, argv + 2);
     if (strcmp(cmd, "planned") == 0) {
         int n = 0;
         const FlPlannedSurface *list = fl_planned_list(&n);

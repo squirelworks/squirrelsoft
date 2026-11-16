@@ -1,0 +1,45 @@
+ISM-FJ parameters 1
+# Soft CI fixture snapshot of published ISM-FJ-1 study numbers.
+# SoT: international-squirrel-machines fighter-jet/shell/airframe.scad
+#      + diagrams/stations.md (Victor). Refresh when ISM #88 lands.
+vehicle_id: ISM-FJ-1
+source_note: fixture from airframe.scad L=420 span=280 sweep=35 (ISM study model)
+device_doc_id: ism-fighter-avionics-bay-stub
+fuselage_length_mm: 420
+fuselage_scale: 1.0
+wing_span_mm: 280
+wing_root_chord_mm: 110
+wing_tip_chord_mm: 45
+wing_sweep_deg: 35
+wing_area_mm2: 21700
+hstab_area_mm2: 5000
+vstab_area_mm2: 4200
+mass_g: 850
+cg_x_mm: 180
+cg_y_mm: 0
+cg_z_mm: 5
+ixx_g_mm2: 2.5e7
+iyy_g_mm2: 8.0e7
+izz_g_mm2: 9.5e7
+thrust_max_n: 12
+throttle_idle: 0.05
+surface.elevator.chord_mm: 50
+surface.elevator.span_mm: 100
+surface.elevator.area_mm2: 5000
+surface.elevator.hinge_x_mm: 386
+surface.elevator.max_deflect_deg: 25
+surface.aileron_l.chord_mm: 30
+surface.aileron_l.span_mm: 60
+surface.aileron_l.area_mm2: 1800
+surface.aileron_l.hinge_x_mm: 200
+surface.aileron_l.max_deflect_deg: 20
+surface.aileron_r.chord_mm: 30
+surface.aileron_r.span_mm: 60
+surface.aileron_r.area_mm2: 1800
+surface.aileron_r.hinge_x_mm: 200
+surface.aileron_r.max_deflect_deg: 20
+surface.rudder.chord_mm: 35
+surface.rudder.span_mm: 70
+surface.rudder.area_mm2: 2450
+surface.rudder.hinge_x_mm: 400
+surface.rudder.max_deflect_deg: 25

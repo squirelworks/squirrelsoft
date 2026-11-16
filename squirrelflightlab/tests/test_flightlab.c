@@ -2,13 +2,44 @@
 #include "fl_aero.h"
 #include "fl_avionics.h"
 #include "fl_dyn.h"
+#include "fl_fcs.h"
+#include "fl_ism.h"
 #include "fl_planned.h"
 #include "fl_project.h"
 #include "fl_scenario.h"
 
 #include <math.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+
+static char *slurp(const char *path) {
+    FILE *f = fopen(path, "rb");
+    if (!f) return NULL;
+    if (fseek(f, 0, SEEK_END) != 0) {
+        fclose(f);
+        return NULL;
+    }
+    long n = ftell(f);
+    if (n < 0) {
+        fclose(f);
+        return NULL;
+    }
+    rewind(f);
+    char *b = malloc((size_t)n + 1);
+    if (!b) {
+        fclose(f);
+        return NULL;
+    }
+    if (fread(b, 1, (size_t)n, f) != (size_t)n) {
+        free(b);
+        fclose(f);
+        return NULL;
+    }
+    b[n] = 0;
+    fclose(f);
+    return b;
+}
 
 static int fails;
 
@@ -118,6 +149,37 @@ static void test_planned(void) {
     expect(strstr(err, "not implemented") != NULL, "cfd msg");
 }
 
+static void test_ism_and_fcs(void) {
+    char *params = slurp("fixtures/ism-fighter/ism-fj-1.ismfj-params");
+    char *iface = slurp("fixtures/ism-fighter/bay-io.ismfj-iface");
+    expect(params != NULL && iface != NULL, "fixture files");
+    if (!params || !iface) {
+        free(params);
+        free(iface);
+        return;
+    }
+    FlProject p;
+    FlIsmMeta meta;
+    char err[128];
+    expect(fl_ism_parse_params(&p, &meta, params, err, sizeof err) == 0, err);
+    expect(fl_ism_parse_interface(&p, &meta, iface, err, sizeof err) == 0, err);
+    expect(fabs(p.fuselage_length_mm - 420.0) < 1e-6, "ISM L=420");
+    expect(fabs(p.wing_sweep_deg - 35.0) < 1e-6, "ISM sweep=35");
+    expect(fl_project_channel(&p, "act_aileron") != NULL, "act_aileron");
+    FlIsmVerify v;
+    fl_ism_verify_project(&p, &meta, &v);
+    expect(v.ok == 1, v.summary);
+    FlSim sim;
+    fl_sim_init(&sim, &p);
+    FlFcsLimits lim;
+    fl_fcs_limits_default(&lim);
+    FlFcsResult res;
+    expect(fl_fcs_co_check(&sim, &lim, &res) == 0, "fcs run");
+    expect(res.passed == 1, res.summary);
+    free(params);
+    free(iface);
+}
+
 int main(void) {
     test_project_roundtrip();
     test_aoa_sweep();
@@ -125,6 +187,7 @@ int main(void) {
     test_avionics();
     test_scenarios();
     test_planned();
+    test_ism_and_fcs();
     if (fails) {
         fprintf(stderr, "%d failure(s)\n", fails);
         return 1;

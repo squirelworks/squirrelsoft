@@ -6,7 +6,8 @@ LDFLAGS ?= -lm
 BUILD = build
 
 OBJ = $(BUILD)/fl_project.o $(BUILD)/fl_aero.o $(BUILD)/fl_dyn.o \
-	$(BUILD)/fl_avionics.o $(BUILD)/fl_scenario.o $(BUILD)/fl_planned.o
+	$(BUILD)/fl_avionics.o $(BUILD)/fl_scenario.o $(BUILD)/fl_planned.o \
+	$(BUILD)/fl_ism.o $(BUILD)/fl_fcs.o
 HDR = $(wildcard include/*.h)
 
 .PHONY: all test clean demo

@@ -1,0 +1,9 @@
+ISM-HID mouse interface 1
+# Soft CI fixture for Eric's ISM mouse. Replace from
+# international-squirrel-machines/mouse/ when ISM #90 lands.
+sensor: optical_stub
+buttons: 3
+scroll: vertical
+hid_report: boot_mouse
+cpi_default: 800
+report_hz: 125

@@ -4,6 +4,7 @@
 #include <string.h>
 
 int fl_avionics_default_expect(FlDeviceExpect *out, int cap) {
+    /* Matches ISM bay I/O (J1–J4 → A1–A4): wiring-harness + Soft fixture. */
     static const FlDeviceExpect k[] = {
         {"imu_ax", 1, 1},
         {"imu_ay", 1, 2},
@@ -15,11 +16,10 @@ int fl_avionics_default_expect(FlDeviceExpect *out, int cap) {
         {"radio_aileron", 1, 8},
         {"radio_elevator", 1, 9},
         {"radio_rudder", 1, 10},
-        {"act_elevator", 1, 11},
-        {"act_aileron_l", 1, 12},
-        {"act_aileron_r", 1, 13},
-        {"act_rudder", 1, 14},
-        {"act_throttle", 1, 15},
+        {"act_aileron", 1, 11},
+        {"act_elevator", 1, 12},
+        {"act_rudder", 1, 13},
+        {"act_throttle", 1, 14},
     };
     int n = (int)(sizeof k / sizeof k[0]);
     int i;
@@ -100,9 +100,8 @@ int fl_avionics_sample(const FlSim *sim, FlSensorSample *out, int cap) {
     PUT("radio_aileron", sim->ctrl.da_deg);
     PUT("radio_elevator", sim->ctrl.de_deg);
     PUT("radio_rudder", sim->ctrl.dr_deg);
+    PUT("act_aileron", sim->ctrl.da_deg);
     PUT("act_elevator", sim->ctrl.de_deg);
-    PUT("act_aileron_l", sim->ctrl.da_deg);
-    PUT("act_aileron_r", -sim->ctrl.da_deg);
     PUT("act_rudder", sim->ctrl.dr_deg);
     PUT("act_throttle", sim->ctrl.throttle);
 #undef PUT

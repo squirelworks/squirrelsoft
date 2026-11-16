@@ -1,6 +1,6 @@
-# ISM fighter-jet avionics bay — scaffold device-doc channel map
-# Source of truth (when published): ISM hardware repo KiCad avionics bay.
-# Pins below are the expected header map used by `avionics-check`.
+# ISM fighter-jet avionics bay — Soft expect map (snapshot of ISM docs)
+# SoT: international-squirrel-machines fighter-jet/diagrams/wiring-harness.md
+#      + kicad/README.md (J1–J4 → A1–A4). Freeze pending Victor ISM #88.
 #
 # pin  role
 1  imu_ax
@@ -13,8 +13,7 @@
 8  radio_aileron
 9  radio_elevator
 10 radio_rudder
-11 act_elevator
-12 act_aileron_l
-13 act_aileron_r
-14 act_rudder
-15 act_throttle
+11 act_aileron
+12 act_elevator
+13 act_rudder
+14 act_throttle

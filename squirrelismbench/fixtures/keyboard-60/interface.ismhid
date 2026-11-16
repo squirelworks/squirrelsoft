@@ -1,0 +1,18 @@
+ISM-HID keyboard interface 1
+# Soft CI fixture for Eric's 60% keyboard. Replace from
+# international-squirrel-machines/keyboard/60-percent/ when ISM #89 lands.
+# Soft does not design the matrix — this is a proposed test contract.
+layout: 60-percent
+rows: 5
+cols: 14
+diode: col2row
+hid_report: boot_keyboard
+debounce_ms: 5
+scan_hz: 1000
+key ESC: 0 0
+key A: 2 1
+key S: 2 2
+key D: 2 3
+key F: 2 4
+key SPC: 4 6
+key ENT: 3 13

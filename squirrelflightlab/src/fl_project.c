@@ -43,12 +43,8 @@ void fl_project_default_ism_fighter(FlProject *p) {
     p->fuselage_length_mm = 420.0;
     p->fuselage_scale = 1.0;
     p->wing_span_mm = 280.0;
-    p->wing_root_chord_mm = 120.0;
-    p->wing_tip_chord_mm = 80.0;
-    p->wing_area_mm2 = 28000.0;
-    p->wing_sweep_deg = 25.0;
-    p->hstab_area_mm2 = 4500.0;
-    p->vstab_area_mm2 = 3200.0;
+    p->hstab_area_mm2 = 5000.0;
+    p->vstab_area_mm2 = 4200.0;
 
     p->mass_g = 850.0;
     p->cg_x_mm = 180.0;
@@ -61,12 +57,18 @@ void fl_project_default_ism_fighter(FlProject *p) {
     p->thrust_max_n = 12.0;
     p->throttle_idle = 0.05;
 
-    add_surface(p, "elevator", 40.0, 100.0, 4000.0, 380.0, 25.0, 10);
+    /* Study defaults aligned with ISM airframe.scad until params file loads. */
+    p->wing_root_chord_mm = 110.0;
+    p->wing_tip_chord_mm = 45.0;
+    p->wing_area_mm2 = 21700.0;
+    p->wing_sweep_deg = 35.0;
+
+    add_surface(p, "elevator", 50.0, 100.0, 5000.0, 386.0, 25.0, 12);
     add_surface(p, "aileron_l", 30.0, 60.0, 1800.0, 200.0, 20.0, 11);
-    add_surface(p, "aileron_r", 30.0, 60.0, 1800.0, 200.0, 20.0, 12);
+    add_surface(p, "aileron_r", 30.0, 60.0, 1800.0, 200.0, 20.0, 11);
     add_surface(p, "rudder", 35.0, 70.0, 2450.0, 400.0, 25.0, 13);
 
-    /* KiCad-style header map stubs — pins match samples/device-doc-channels.txt */
+    /* Bay map: fixtures/ism-fighter/bay-io.ismfj-iface (ISM SoT snapshot). */
     add_channel(p, "IMU_AX", "imu_ax", 1, 9.80665 / 2048.0, 0.0);
     add_channel(p, "IMU_AY", "imu_ay", 2, 9.80665 / 2048.0, 0.0);
     add_channel(p, "IMU_AZ", "imu_az", 3, 9.80665 / 2048.0, 0.0);
@@ -77,11 +79,10 @@ void fl_project_default_ism_fighter(FlProject *p) {
     add_channel(p, "RAD_AIL", "radio_aileron", 8, 1.0, 0.0);
     add_channel(p, "RAD_ELE", "radio_elevator", 9, 1.0, 0.0);
     add_channel(p, "RAD_RUD", "radio_rudder", 10, 1.0, 0.0);
-    add_channel(p, "ACT_ELE", "act_elevator", 11, 1.0, 0.0);
-    add_channel(p, "ACT_AIL_L", "act_aileron_l", 12, 1.0, 0.0);
-    add_channel(p, "ACT_AIL_R", "act_aileron_r", 13, 1.0, 0.0);
-    add_channel(p, "ACT_RUD", "act_rudder", 14, 1.0, 0.0);
-    add_channel(p, "ACT_ESC", "act_throttle", 15, 1.0, 0.0);
+    add_channel(p, "ACT_AIL", "act_aileron", 11, 1.0, 0.0);
+    add_channel(p, "ACT_ELE", "act_elevator", 12, 1.0, 0.0);
+    add_channel(p, "ACT_RUD", "act_rudder", 13, 1.0, 0.0);
+    add_channel(p, "ACT_ESC", "act_throttle", 14, 1.0, 0.0);
 }
 
 static int starts_with(const char *s, const char *p) {

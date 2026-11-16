@@ -36,7 +36,15 @@ aero take structs; the front-end owns I/O. Extension points:
 - HIL transport behind `fl_planned_hil_connect` once the PCB protocol exists
 - Optional `libs/sqflight` extraction if another app needs the same core (S6)
 
+## Soft lane rule
+Steve / Soft programs **test software only** (simulators, harnesses, benches).
+Victor owns fighter-jet hardware/ICD files (ISM #88). Soft never designs the
+airframe PCB or shell.
+
 ## MVP modules (what v0 actually does)
+
+0. **ISM param/interface load** — `fl_ism` reads Victor's (or CI fixture)
+   `.ismfj-params` / `.ismfj-iface`; `fcs-check` writes a pass/fail artifact.
 
 1. **Project workspace** — default ISM fighter inputs; load/save `.sqflt`
    (fuselage length/scale, wing planform placeholders, control surfaces,
