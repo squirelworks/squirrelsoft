@@ -56,6 +56,9 @@ typedef struct {
     double thrust_max_n;
     double throttle_idle;
 
+    /* Study-model / RC / full-scale label (inputs stay mm/g; dyn uses SI). */
+    FlScaleMode scale_mode;
+
     FlSurface surfaces[FL_MAX_SURFACES];
     int nsurfaces;
 

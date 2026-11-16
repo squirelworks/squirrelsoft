@@ -143,6 +143,12 @@ source of truth. Design note: `squirrelflightlab/docs/overview.md`.
   Soft top-level allowlist gate; `ism-interfaces` CLI; fixtures
   `fixtures/ism-interfaces/` refreshed from ISM `main`; checks
   `tests/test_flightlab.c`, `tests/cli_smoke.sh`
+- [x] S7.2c `libs/squirrelnum` NR-grounded numerics (Soft #174): RK4, adaptive
+  RK45/DP, Brent, lerp/spline/table, small LA, quaternions — original code,
+  NR chapters cited, no copied listings; Flight Lab defaults to RK4 with
+  Euler retained for comparison; SI unit helpers + mm/g mix-up tests;
+  `docs/units-and-scale.md`; checks `libs/squirrelnum/tests/`,
+  `tests/test_flightlab.c`
 - [ ] S7.3 Higher-fidelity replaceable aero provider + tunnel CSV override
 - [ ] S7.4 `sqgui` strip-chart window on the same core
 - [ ] S7.5 HIL against the real avionics PCB (planned stub today)

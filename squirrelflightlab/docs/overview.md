@@ -30,8 +30,11 @@ fl_yaml ──► fl_iface (schema_version + Soft top-level allowlist)
         │
         └─ CLI: ism-interfaces DIR
 
+fl_dyn ── RK4 via libs/squirrelnum (Euler optional); SI internals
 fl_planned ── stubs only: CFD mesh, wind tunnel, HIL
 main.c     ── thin CLI (future: sqgui window on the same core)
+
+Units: see docs/units-and-scale.md (mm/g project → SI dynamics).
 ```
 
 Portable C11 core in this app folder (same pattern as SquirrelGNSS): no OS

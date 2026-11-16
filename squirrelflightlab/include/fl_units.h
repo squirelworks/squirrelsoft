@@ -20,11 +20,21 @@
 #define FL_RAD2DEG (180.0 / FL_PI)
 #define FL_G0 9.80665 /* m/s^2 */
 
+/* Project / ISM study inputs are mm and g; dynamics use SI only. */
 static inline double fl_mm_to_m(double mm) { return mm * 0.001; }
 static inline double fl_m_to_mm(double m) { return m * 1000.0; }
 static inline double fl_g_to_kg(double g) { return g * 0.001; }
+static inline double fl_kg_to_g(double kg) { return kg * 1000.0; }
+/* g·mm² → kg·m²: (1e-3 kg) * (1e-3 m)^2 = 1e-9 */
+static inline double fl_g_mm2_to_kg_m2(double g_mm2) { return g_mm2 * 1e-9; }
 static inline double fl_deg(double rad) { return rad * FL_RAD2DEG; }
 static inline double fl_rad(double deg) { return deg * FL_DEG2RAD; }
+
+typedef enum {
+    FL_SCALE_STUDY = 0, /* ~420 mm fuselage placeholders */
+    FL_SCALE_RC,        /* Eric RC targets (future) */
+    FL_SCALE_FULL       /* ISM full-scale (future) */
+} FlScaleMode;
 
 /* Sea-level ISA density stub (kg/m^3). Replaceable aero atmosphere later. */
 #define FL_RHO_SL 1.225

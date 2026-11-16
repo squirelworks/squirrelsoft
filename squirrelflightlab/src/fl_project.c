@@ -56,6 +56,7 @@ void fl_project_default_ism_fighter(FlProject *p) {
 
     p->thrust_max_n = 12.0;
     p->throttle_idle = 0.05;
+    p->scale_mode = FL_SCALE_STUDY;
 
     /* Study defaults aligned with ISM airframe.scad until params file loads. */
     p->wing_root_chord_mm = 110.0;
@@ -214,12 +215,13 @@ int fl_project_format(const FlProject *p, char *out, int out_cap) {
                      "iyy_g_mm2: %.6g\n"
                      "izz_g_mm2: %.6g\n"
                      "thrust_max_n: %.3f\n"
-                     "throttle_idle: %.3f\n",
+                     "throttle_idle: %.3f\n"
+                     "scale_mode: %d\n",
                      p->name, p->notes, p->device_doc_id, p->fuselage_length_mm,
                      p->fuselage_scale, p->wing_span_mm, p->wing_root_chord_mm,
                      p->wing_tip_chord_mm, p->wing_area_mm2, p->wing_sweep_deg,
                      p->hstab_area_mm2, p->vstab_area_mm2, p->mass_g, p->cg_x_mm,
                      p->cg_y_mm, p->cg_z_mm, p->ixx_g_mm2, p->iyy_g_mm2, p->izz_g_mm2,
-                     p->thrust_max_n, p->throttle_idle);
+                     p->thrust_max_n, p->throttle_idle, (int)p->scale_mode);
     return (n < 0 || n >= out_cap) ? -1 : n;
 }
