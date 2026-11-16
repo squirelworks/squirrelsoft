@@ -48,6 +48,8 @@ $P planned | grep -q "wind_tunnel_correlate \[active\]" || fail "tunnel active"
 $P cfd-import x.msh >/dev/null 2>&1; [ $? -eq 1 ] || fail "cfd stub exit 1"
 $P tunnel fixtures/tunnel/soft-scaffold-correlate.csv | grep -q PASS || fail "tunnel correlate"
 $P tunnel fixtures/tunnel/soft-scaffold-correlate.csv | grep -q "NR Ch.3.1" || fail "tunnel NR"
+$P strip-chart --ppm "$B/strip.ppm" | grep -q "NR Ch.3.1" || fail "strip-chart"
+[ -f "$B/strip.ppm" ] || fail "strip ppm"
 $P hil /dev/ttyUSB0 >/dev/null 2>&1; [ $? -eq 1 ] || fail "hil stub exit 1"
 
 # Sample project file

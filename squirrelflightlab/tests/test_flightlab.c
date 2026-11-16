@@ -1,6 +1,7 @@
 /* Unit tests for SquirrelFlightLab portable core. */
 #include "fl_aero.h"
 #include "fl_avionics.h"
+#include "fl_chart.h"
 #include "fl_dyn.h"
 #include "fl_fcs.h"
 #include "fl_iface.h"
@@ -11,6 +12,8 @@
 #include "fl_verify.h"
 #include "fl_viability.h"
 #include "fl_loadout.h"
+
+#include "sqgui.h"
 
 #include <math.h>
 #include <stdio.h>
@@ -206,6 +209,30 @@ static void test_planned(void) {
     char err[128];
     expect(fl_planned_cfd_mesh_import("x.msh", err, sizeof err) == -1, "cfd stub");
     expect(strstr(err, "not implemented") != NULL, "cfd msg");
+}
+
+static void test_strip_chart(void) {
+    FlProject p;
+    fl_project_default_ism_fighter(&p);
+    FlChartStyle st;
+    fl_chart_style_default(&st);
+    st.w = 320;
+    st.h = 180;
+    uint32_t *px = calloc((size_t)st.w * (size_t)st.h, sizeof *px);
+    expect(px != NULL, "chart pixels");
+    if (!px) return;
+    sqg_canvas cv;
+    sqg_canvas_init(&cv, px, st.w, st.h, st.w);
+    int segs = fl_chart_render_demo(&cv, &p, &st, 1.0, 0.05);
+    expect(segs > 10, "chart segments");
+    /* Non-background pixel present */
+    {
+        int i, painted = 0;
+        for (i = 0; i < st.w * st.h; i++)
+            if (px[i] != st.bg) painted++;
+        expect(painted > 100, "painted pixels");
+    }
+    free(px);
 }
 
 static void test_tunnel_provider(void) {
@@ -469,6 +496,7 @@ int main(void) {
     test_scenarios();
     test_planned();
     test_tunnel_provider();
+    test_strip_chart();
     test_ism_and_fcs();
     test_ism_interfaces();
     test_verify();
