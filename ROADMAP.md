@@ -209,8 +209,8 @@ military. Gaps → ISM issues, not Soft hardware PRs.
 - [x] S8.5 `squirrelshipbench/` — warship hydrostatics + control-board allowlist
   (ISM #43) and hypersonic bomber teaching heat-flux (ISM #37); Soft Simpson
   I_T (NR Ch. 4.1 class); checks `tests/test_shipbench.c`, `tests/cli_smoke.sh`
-- [ ] S8.4b Remaining storage / lab equipment benches; live I2C SPD + PSRAM;
-  live printer USB; plotter fab SoT refresh when ISM #6 lands
+- [ ] S8.4b Remaining storage / lab equipment benches; live I2C SPD + PSRAM
+  (Soft #203 / #204); live printer USB; plotter fab SoT refresh when ISM #6 lands
 
 ## S9 — Eric ISM companion apps (peripherals first)
 
@@ -219,7 +219,8 @@ RAM (later). Separate from `squirrelismbench` harness and from Steve’s Flight 
 
 - [x] S9.1 `squirrelkbdcfg/` — layout map + firmware config round-trip (Soft #180)
 - [x] S9.2 `squirrelmousecfg/` — DPI profiles + button remap (Soft #181)
-- [ ] S9.3 RAM-module self-test utility (Soft #182; after peripherals)
+- [x] S9.3 `squirrelramtest/` — SPD show + fixture self-test + pass/fail
+  artifact (Soft #182); checks `tests/test_ramtest.c`, `tests/cli_smoke.sh`
 
 ## S10 — ISM fighter Soft UI (Victor; not Flight Lab)
 

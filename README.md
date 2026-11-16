@@ -28,6 +28,7 @@ libraries.
 | `squirrelshipbench/` | **SquirrelShipBench** | Soft harness for Victor warship hydro/board + bomber heat-flux stubs |
 | `squirrelmousecfg/` | **SquirrelMouseCfg** | Eric ISM mouse DPI profiles + button remap (Soft #181) |
 | `squirrelbusmon/` | **SquirrelBusMon** | ISM avionics data-bus analyzer (decode / filter / replay; Soft tooling) |
+| `squirrelramtest/` | **SquirrelRamTest** | Eric ISM RAM-module SPD + fixture self-test (Soft #182) |
 
 ## Build
 

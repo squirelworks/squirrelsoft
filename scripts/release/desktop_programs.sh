@@ -21,4 +21,5 @@ squirrelkbdcfg
 squirrelhudtool
 squirrelmousecfg
 squirrelbusmon
+squirrelramtest
 EOF

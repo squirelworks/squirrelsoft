@@ -114,13 +114,15 @@ Leave **S6** / **PLAY** to Squirrel (`needs: squirrel`).
 | soft | [#187](https://github.com/squirelworks/squirrelsoft/pull/187) | `…-ism-hud-tool-2eaf` | `-2eaf` | HUD tool ISM #82 |
 | soft | [#188](https://github.com/squirelworks/squirrelsoft/pull/188) | `…-ism-mouse-cfg-2eaf` | `-2eaf` | Eric mouse cfg #181 |
 | soft | [#189](https://github.com/squirelworks/squirrelsoft/pull/189) | `…-ism-hil-bench-2eaf` | `-2eaf` | HIL UI ISM #80 |
-| soft | [#190](https://github.com/squirelworks/squirrelsoft/pull/190) | `…-ism-bus-analyzer-2eaf` | `-2eaf` | bus analyzer ISM #83 |
+| soft | [#190](https://github.com/squirelworks/squirrelsoft/pull/190) | `…-ism-bus-analyzer-2eaf` | `-2eaf` | bus analyzer ISM #83 *(merged)* |
+| soft | *(this PR)* | `…-ism-ram-test-2eaf` | `-2eaf` | Eric RAM self-test #182 / S9.3 |
 
 **Merged (do not re-claim):** os2 #183 W.3, #188 shadows, #191 W.2, #192 W.5,
 #193 paging, #196 stay-thunks, #203 lanes canon; bios #189 capsule; soft
 #148–#153 GNSS/NTRIP/RTCM (+ Sarah round-2), #157 / #158 post-#153 notes,
 #160 MSM obs, #162 Android NTRIP, #165 PATH_TO_3.0.0 (suite index retarget
-follows on `cursor/path-point-os2-2eaf`).
+follows on `cursor/path-point-os2-2eaf`), Soft ISM #184–#190 (kbd/mouse/HIL/
+MC/HUD/busmon).
 
 ## Issue sync note
 
