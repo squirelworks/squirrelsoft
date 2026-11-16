@@ -301,13 +301,18 @@ Done earlier (kept for history):
   compare; Eric scale static / tunnel / RC FC log correlation; NESC CSV /
   F-16 TP-1538 (licence check before vendoring).
 
-### FLIGHTLAB-tunnel-csv — S7.3 replaceable aero + tunnel CSV  `status: done` (this PR)
+### FLIGHTLAB-tunnel-csv — S7.3 replaceable aero + tunnel CSV  `status: done` (#199)
 - Soft tunnel CSV → `FL_AERO_PROVIDER_TUNNEL_TABLE`; CL/CD/Cm(α) via
   `sqn_lerp` (NR Ch. 3.1); linear CL/Cm fit (NR Ch. 15.1 class ideas, Soft
   original); `tunnel PATH` correlate vs parametric scaffold.
 - **Gaps:** real Eric/Victor tunnel logs (not Soft synthetic); CFD mesh import
-  still planned; spline tunnel tables (NR Ch. 3.3) optional follow-up;
-  `gh issue create` may 401 — gaps recorded here / in the PR.
+  still planned; spline tunnel tables (NR Ch. 3.3) optional follow-up.
+
+### FLIGHTLAB-strip-chart — S7.4 sqgui strip chart  `status: done` (this PR)
+- `fl_chart` + CLI `strip-chart`: headless `sqgui` canvas of sim history
+  (V/nz/α/θ); NR Ch. 3.1 lerp resample onto columns; optional PPM snapshot.
+- **Gaps:** interactive SDL strip window (optional); live HIL feed into chart
+  (S7.5); `gh issue create` may 401 — gaps recorded here / in the PR.
 
 ### FLIGHTLAB-loadout — Soft #173  `status: done` (#194)
 - S7.2f: `fl_loadout` validates station×adapter×store against ISM interface

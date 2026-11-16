@@ -47,6 +47,7 @@ trim / pull-up / roll scenarios.
 | `fl_avionics` | Channel co-check vs bay expect map | HIL |
 | `fl_scenario` | `trim_cruise`, `pull_up`, `roll` | More envelopes |
 | `fl_planned` / tunnel | CFD/HIL stubbed; **tunnel CSV provider active (S7.3)** | Real tunnel logs / HIL PCB |
+| `fl_chart` | **sqgui strip chart (S7.4)** headless + PPM | Optional SDL live window |
 
 Out of scope for v0: photoreal visuals, multiplayer, weapons, classified data,
 full CFD, certified flight-test tooling, shipping Gerbers/STLs.

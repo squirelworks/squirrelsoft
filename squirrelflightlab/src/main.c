@@ -2,6 +2,7 @@
 #define _POSIX_C_SOURCE 200809L
 #include "fl_aero.h"
 #include "fl_avionics.h"
+#include "fl_chart.h"
 #include "fl_dyn.h"
 #include "fl_fcs.h"
 #include "fl_iface.h"
@@ -12,6 +13,8 @@
 #include "fl_verify.h"
 #include "fl_viability.h"
 #include "fl_loadout.h"
+
+#include "sqgui.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -48,6 +51,9 @@ static void usage(FILE *f) {
         "  planned                      list scaffold/planned surfaces (CFD, tunnel, HIL)\n"
         "  tunnel PATH [--project FILE] Soft S7.3: load tunnel CSV into replaceable\n"
         "                               aero provider (NR Ch.3.1 lerp) + correlate\n"
+        "  strip-chart [options]        Soft S7.4: sqgui strip chart of sim history\n"
+        "      --project FILE  --duration S  --dt S  --ppm FILE\n"
+        "      --channels V,nz,alpha,theta\n"
         "  cfd-import PATH | hil ENDPOINT\n"
         "                               planned stubs (always fail with a clear message)\n"
         "\n"
@@ -635,6 +641,87 @@ int main(int argc, char **argv) {
         int i;
         for (i = 0; i < n; i++)
             printf("%s [%s]: %s\n", list[i].name, list[i].status, list[i].note);
+        return 0;
+    }
+    if (strcmp(cmd, "strip-chart") == 0) {
+        const char *project = NULL, *ppm = NULL, *channels = "V,nz";
+        double duration = 2.0, dt = 0.02;
+        int i;
+        for (i = 2; i < argc; i++) {
+            if (strcmp(argv[i], "--project") == 0) {
+                project = opt_val(argc, argv, &i);
+                if (!project) return 2;
+            } else if (strcmp(argv[i], "--duration") == 0) {
+                const char *v = opt_val(argc, argv, &i);
+                if (!v) return 2;
+                duration = atof(v);
+            } else if (strcmp(argv[i], "--dt") == 0) {
+                const char *v = opt_val(argc, argv, &i);
+                if (!v) return 2;
+                dt = atof(v);
+            } else if (strcmp(argv[i], "--ppm") == 0) {
+                ppm = opt_val(argc, argv, &i);
+                if (!ppm) return 2;
+            } else if (strcmp(argv[i], "--channels") == 0) {
+                channels = opt_val(argc, argv, &i);
+                if (!channels) return 2;
+            } else return 2;
+        }
+        FlProject p;
+        char err[FL_MAX_MSG];
+        if (load_project(&p, project, err, sizeof err) != 0) {
+            fprintf(stderr, "squirrelflightlab: %s\n", err);
+            return 1;
+        }
+        FlChartStyle st;
+        fl_chart_style_default(&st);
+        st.nch = 0;
+        {
+            char buf[128];
+            snprintf(buf, sizeof buf, "%s", channels);
+            char *save = NULL;
+            char *tok = strtok_r(buf, ",", &save);
+            while (tok && st.nch < 4) {
+                if (strcmp(tok, "V") == 0) st.ch[st.nch++] = FL_CHART_V;
+                else if (strcmp(tok, "nz") == 0) st.ch[st.nch++] = FL_CHART_NZ;
+                else if (strcmp(tok, "alpha") == 0) st.ch[st.nch++] = FL_CHART_ALPHA;
+                else if (strcmp(tok, "theta") == 0) st.ch[st.nch++] = FL_CHART_THETA;
+                else {
+                    fprintf(stderr, "squirrelflightlab: unknown channel '%s'\n", tok);
+                    return 2;
+                }
+                tok = strtok_r(NULL, ",", &save);
+            }
+        }
+        if (st.nch < 1) {
+            fprintf(stderr, "squirrelflightlab: need >=1 channel\n");
+            return 2;
+        }
+        uint32_t *px = calloc((size_t)st.w * (size_t)st.h, sizeof *px);
+        if (!px) {
+            fprintf(stderr, "squirrelflightlab: oom\n");
+            return 1;
+        }
+        sqg_canvas cv;
+        sqg_canvas_init(&cv, px, st.w, st.h, st.w);
+        int segs = fl_chart_render_demo(&cv, &p, &st, duration, dt);
+        if (segs < 1) {
+            fprintf(stderr, "squirrelflightlab: strip-chart draw failed\n");
+            free(px);
+            return 1;
+        }
+        printf("strip-chart %dx%d segments=%d channels=%d (NR Ch.3.1 resample)\n", st.w,
+               st.h, segs, st.nch);
+        puts("label: provisional, unvalidated against tunnel/flight test");
+        if (ppm) {
+            if (sqg_write_ppm(&cv, ppm) != 0) {
+                fprintf(stderr, "squirrelflightlab: cannot write %s\n", ppm);
+                free(px);
+                return 1;
+            }
+            printf("wrote %s\n", ppm);
+        }
+        free(px);
         return 0;
     }
     if (strcmp(cmd, "tunnel") == 0) {

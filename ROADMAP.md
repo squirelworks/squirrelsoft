@@ -172,7 +172,10 @@ source of truth. Design note: `squirrelflightlab/docs/overview.md`.
   ideas); `tunnel PATH` correlates vs parametric; CI fixture
   `fixtures/tunnel/soft-scaffold-correlate.csv`; checks in
   `tests/test_flightlab.c`, `tests/cli_smoke.sh`
-- [ ] S7.4 `sqgui` strip-chart window on the same core
+- [x] S7.4 `sqgui` strip-chart on the same core: `fl_chart` draws V/nz/α/θ
+  history into a headless `sqgui` canvas (PPM via `strip-chart --ppm`);
+  series resampled onto pixel columns with `sqn_lerp` (NR Ch. 3.1); SDL live
+  window deferred; checks in `tests/test_flightlab.c`, `tests/cli_smoke.sh`
 - [ ] S7.5 HIL against the real avionics PCB (planned stub today)
 - OS/2 as lab / ground host (UART, soft-RT, packaging): squirrel-os2#225 and
   [`ism-flightlab-gaps.md`](https://github.com/squirelworks/squirrel-os2/blob/cursor/ism-flightlab-gaps-b55f/documentation/guides/ism-flightlab-gaps.md)
