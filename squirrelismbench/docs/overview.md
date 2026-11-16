@@ -19,8 +19,9 @@ ISM device README / interfaces  →  ib_iface / ib_memory / ib_printer / ib_plot
         ├─ ib_memory    SPD XOR + walking/checker/LCG patterns (synthetic)
         ├─ ib_printer   motor / paper / head SPI stub (synthetic)
         ├─ ib_plotter   workspace + NR Ch.3.1 lerp path check (synthetic)
-        └─ ib_power     PSU/UPS load steps + Soft Simpson energy (NR Ch.4.1)
-main.c  CLI; live USB HID / I2C / power CDC planned
+        ├─ ib_power     PSU/UPS load steps + Soft Simpson energy (NR Ch.4.1)
+        └─ ib_hid       Soft SQHID1 mock USB HID framing (S8.2; live hidraw deferred)
+main.c  CLI; live hidraw / I2C / power CDC planned
 ```
 
 ## RAM patterns and NR

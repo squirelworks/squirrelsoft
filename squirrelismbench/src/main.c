@@ -4,6 +4,7 @@
 #include "ib_keyboard.h"
 #include "ib_memory.h"
 #include "ib_mouse.h"
+#include "ib_hid.h"
 #include "ib_plotter.h"
 #include "ib_power.h"
 #include "ib_printer.h"
@@ -25,6 +26,9 @@ static void usage(FILE *f) {
         "  plotter-test [--iface FILE]    plotter path + NR Ch.3.1 lerp\n"
         "  psu-test [--iface FILE]        PSU load steps + telemetry (S8.3)\n"
         "  ups-test [--iface FILE]        UPS load + capacity (S8.3)\n"
+        "  hid-test ENDPOINT              Soft S8.2: Soft mock USB HID (SQHID1)\n"
+        "                                 ENDPOINT=mock | fixtures/hid/*.sqhid\n"
+        "                                 live /dev/hidraw* deferred\n"
         "  demo                           run all against CI fixtures\n"
         "\n"
         "Soft tests Eric's ISM consumer devices. Interfaces are SoT in\n"
@@ -245,6 +249,29 @@ static int cmd_ups(int argc, char **argv) {
     return cmd_power("fixtures/ups/interface.ismups", argc, argv);
 }
 
+static int cmd_hid(int argc, char **argv) {
+    if (argc < 1) {
+        usage(stderr);
+        return 2;
+    }
+    const char *endpoint = argv[0];
+    IbHidSession sess;
+    char err[IB_MSG_LEN];
+    if (ib_hid_connect(endpoint, &sess, err, sizeof err) != 0) {
+        fprintf(stderr, "squirrelismbench: %s\n", err);
+        return 1;
+    }
+    IbHidTestResult res;
+    ib_hid_selftest(&sess, &res);
+    puts(res.summary);
+    char line[IB_HID_LINE];
+    ib_hid_encode_hello(line, sizeof line);
+    printf("frame: %s\n", line);
+    ib_hid_encode_hello_ack(line, sizeof line, sess.board_id);
+    printf("frame: %s\n", line);
+    return res.ok ? 0 : 1;
+}
+
 int main(int argc, char **argv) {
     if (argc < 2) {
         usage(stderr);
@@ -263,6 +290,7 @@ int main(int argc, char **argv) {
     if (strcmp(cmd, "plotter-test") == 0) return cmd_plotter(argc - 2, argv + 2);
     if (strcmp(cmd, "psu-test") == 0) return cmd_psu(argc - 2, argv + 2);
     if (strcmp(cmd, "ups-test") == 0) return cmd_ups(argc - 2, argv + 2);
+    if (strcmp(cmd, "hid-test") == 0) return cmd_hid(argc - 2, argv + 2);
     if (strcmp(cmd, "demo") == 0) {
         int a = cmd_keyboard(0, NULL);
         int b = cmd_mouse(0, NULL);
@@ -272,7 +300,9 @@ int main(int argc, char **argv) {
         int f = cmd_plotter(0, NULL);
         int g = cmd_psu(0, NULL);
         int h = cmd_ups(0, NULL);
-        if (a || b || c || d || e || f || g || h) return 1;
+        char *hid_argv[] = {"mock"};
+        int i = cmd_hid(1, hid_argv);
+        if (a || b || c || d || e || f || g || h || i) return 1;
         puts("squirrelismbench demo ok");
         return 0;
     }

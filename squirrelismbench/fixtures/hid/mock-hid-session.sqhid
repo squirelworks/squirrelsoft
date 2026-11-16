@@ -1,0 +1,10 @@
+SQHID1 Soft mock USB HID session
+# Soft CI fixture — synthetic boot reports; not a live hidraw dump.
+# Soft S8.2 path until Eric freezes a Soft/host USB HID interface.
+HELLO SoftISMBench/1.0
+HELLO_ACK ISM-HID-MOCK protocol=SQHID1
+REPORT kind=boot_keyboard hex=0000040000000000
+REPORT kind=boot_keyboard hex=0000000000000000
+REPORT kind=boot_mouse hex=010afb00
+REPORT kind=boot_mouse hex=00000000
+BYE

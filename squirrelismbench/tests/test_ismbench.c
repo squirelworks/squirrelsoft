@@ -2,6 +2,7 @@
 #include "ib_keyboard.h"
 #include "ib_memory.h"
 #include "ib_mouse.h"
+#include "ib_hid.h"
 #include "ib_plotter.h"
 #include "ib_power.h"
 #include "ib_printer.h"
@@ -118,6 +119,37 @@ int main(void) {
         IbPowerTestResult br;
         ib_power_selftest(&bad, &br);
         expect(br.ok == 0, "overcurrent fail");
+    }
+
+    {
+        IbHidSession sess;
+        IbHidTestResult hr;
+        char herr[128];
+        expect(ib_hid_connect("mock", &sess, herr, sizeof herr) == 0, herr);
+        ib_hid_selftest(&sess, &hr);
+        expect(hr.ok == 1, hr.summary);
+        expect(ib_hid_connect("/dev/hidraw0", &sess, herr, sizeof herr) == -1, "hid refuse");
+        expect(strstr(herr, "deferred") != NULL, herr);
+        char *hx = slurp("fixtures/hid/mock-hid-session.sqhid");
+        expect(hx != NULL, "hid fixture");
+        if (hx) {
+            expect(ib_hid_session_from_text(&sess, hx, herr, sizeof herr) == 0, herr);
+            ib_hid_selftest(&sess, &hr);
+            expect(hr.ok == 1, hr.summary);
+            free(hx);
+        }
+        /* Framing round-trip of a known A-key report. */
+        {
+            IbHidReport r, back;
+            char line[160];
+            memset(&r, 0, sizeof r);
+            r.kind = IB_HID_KIND_BOOT_KEYBOARD;
+            r.len = 8;
+            r.data[2] = 0x04;
+            expect(ib_hid_encode_report(line, sizeof line, &r) > 0, "enc report");
+            expect(ib_hid_parse_line(line, &back, NULL, NULL, NULL, NULL, 0) == 0, "parse");
+            expect(back.data[2] == 0x04 && back.len == 8, "A usage");
+        }
     }
 
     free(kt);

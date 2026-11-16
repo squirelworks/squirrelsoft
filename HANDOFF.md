@@ -351,13 +351,19 @@ Done earlier (kept for history):
 - **Gaps:** live printer USB; plotter fab SoT when ISM #6 leaves Planned;
   warship live board CDC; refresh Soft fixtures from ISM YAML when SoT freezes.
 
-### ISMBENCH-psu-ups — S8.3 PSU/UPS load + telemetry  `status: done` (this PR)
+### ISMBENCH-psu-ups — S8.3 PSU/UPS load + telemetry  `status: done` (#202)
 - `ib_power` + CLI `psu-test` / `ups-test`: Soft-proposed fixtures, load-step
   nameplate checks, required telemetry channels, Soft composite Simpson energy
   (NR Ch. 4.1 class; Soft original, no NR listings). UPS capacity/SOC gate.
-- **Gaps (file Soft/ISM issues if missing):** live USB-CDC PSU/UPS telemetry;
-  Eric machine-readable SoT refresh; S8.2 live HID still open; `gh issue create`
-  may 401 — gaps recorded here / in the PR.
+- **Gaps:** live USB-CDC PSU/UPS telemetry; Eric machine-readable SoT refresh.
+
+### ISMBENCH-hid-soft — S8.2 Soft mock USB HID path  `status: done` (this PR)
+- `ib_hid` Soft SQHID1 framing of boot keyboard (8-byte) + mouse (4-byte)
+  reports; `hid-test mock` / `fixtures/hid/*.sqhid`; encode/parse round-trip;
+  live `/dev/hidraw*` refused with clear deferral until Eric freezes Soft/host.
+- **Gaps (file Soft/ISM issues if missing):** live hidraw open/read once Soft
+  host path exists; refresh Soft `.sqhid` from ISM capture notes; `gh issue
+  create` may 401 — gaps recorded here / in the PR.
 
 ### KBDCFG-scaffold — Eric keyboard layout + firmware cfg  `status: done` (#184)
 - S9.1: `squirrelkbdcfg/` loads 60% fixture, prints layout, SQKB1 round-trip.

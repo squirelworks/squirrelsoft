@@ -1,10 +1,10 @@
 # SquirrelISMBench
 
-**Status: Active (S8.1 + S8.1b + S8.3 + S8.4a + S8.4b′)**
+**Status: Active (S8.1 + S8.1b + S8.2 Soft HID + S8.3 + S8.4a + S8.4b′)**
 
 Soft-side test harness for International Squirrel Machines **consumer** devices
 (Eric): keyboard, mouse, typewriter, RAM module, **printer**, Soft-proposed
-**plotter**, and Soft S8.3 **PSU / UPS** load + telemetry benches.
+**plotter**, Soft S8.3 **PSU / UPS**, and Soft S8.2 **mock USB HID** framing.
 
 ```
 make -C squirrelismbench
@@ -24,6 +24,7 @@ make -C squirrelismbench test
 | `plotter-test` | Workspace + path; midpoints via NR Ch. 3.1 lerp |
 | `psu-test` | PSU load steps + telemetry (S8.3; NR Ch. 4.1 Simpson) |
 | `ups-test` | UPS load + capacity/SOC (S8.3; NR Ch. 4.1 Simpson) |
+| `hid-test` | Soft S8.2 SQHID1 mock USB HID (`mock` / `.sqhid`; live deferred) |
 | `demo` | All against fixtures |
 
 ## Numerical Recipes
