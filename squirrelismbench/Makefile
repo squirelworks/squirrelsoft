@@ -1,10 +1,10 @@
-# SquirrelISMBench: Soft test harness for ISM consumer HID devices.
+# SquirrelISMBench: Soft test harness for ISM consumer HID + memory devices.
 CC ?= gcc
 CFLAGS ?= -std=c11 -Wall -Wextra -O2 -D_POSIX_C_SOURCE=200809L
 CFLAGS += -Iinclude
 BUILD = build
 
-OBJ = $(BUILD)/ib_iface.o $(BUILD)/ib_keyboard.o $(BUILD)/ib_mouse.o
+OBJ = $(BUILD)/ib_iface.o $(BUILD)/ib_keyboard.o $(BUILD)/ib_mouse.o $(BUILD)/ib_memory.o
 HDR = $(wildcard include/*.h)
 
 .PHONY: all test clean demo
