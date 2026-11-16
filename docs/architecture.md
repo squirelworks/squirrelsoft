@@ -45,6 +45,9 @@ SquirrelBusMon (`squirrelbusmon/`) is the Soft avionics data-bus analyzer
 (ISM #83): sample capture decode/filter/replay against an ICD catalog fixture;
 protocol SoT stays in ISM `fighter-jet/interfaces/`; SMS/stores topics are
 opaque display fields only.
+SquirrelRamTest (`squirrelramtest/`) is the Soft companion for Eric’s ISM
+RAM modules (SPD summary + fixture bank self-test + pass/fail artifact;
+hardware SoT stays in `international-squirrel-machines/memory/`).
 
 The app folders stay where they are for now. Moving them under `apps/` is churn with no benefit until a split happens.
 

@@ -1,0 +1,90 @@
+#include "rm_iface.h"
+#include "rm_report.h"
+#include "rm_selftest.h"
+#include "rm_spd.h"
+
+#include <stdio.h>
+#include <string.h>
+
+static const char *default_iface(void)
+{
+    return "fixtures/memory/interface.ismem";
+}
+
+static int load_iface(const char *path, RmIface *m)
+{
+    char err[RM_MSG_LEN];
+    if (rm_iface_load(path, m, err, (int)sizeof(err)) != 0) {
+        fprintf(stderr, "load: %s\n", err);
+        return 1;
+    }
+    return 0;
+}
+
+static int cmd_show(const char *iface_path)
+{
+    RmIface m;
+    char buf[1024];
+    if (load_iface(iface_path, &m) != 0)
+        return 1;
+    if (rm_spd_print(&m, buf, (int)sizeof(buf)) != 0)
+        return 1;
+    fputs(buf, stdout);
+    return 0;
+}
+
+static int cmd_selftest(const char *iface_path, const char *report_path)
+{
+    RmIface m;
+    RmTestResult res;
+    if (load_iface(iface_path, &m) != 0)
+        return 1;
+    if (rm_selftest_run(&m, &res) != 0)
+        return 1;
+    puts(res.summary);
+    if (report_path) {
+        if (rm_report_write(report_path, &m, &res) != 0) {
+            fprintf(stderr, "report write failed\n");
+            return 1;
+        }
+        printf("wrote %s\n", report_path);
+    }
+    return res.ok ? 0 : 1;
+}
+
+int main(int argc, char **argv)
+{
+    const char *iface = default_iface();
+    if (argc < 2) {
+        fprintf(stderr,
+                "usage: %s show|selftest|demo [--iface FILE] [--report FILE]\n",
+                argv[0]);
+        return 2;
+    }
+    if (strcmp(argv[1], "show") == 0) {
+        if (argc >= 4 && strcmp(argv[2], "--iface") == 0)
+            iface = argv[3];
+        return cmd_show(iface);
+    }
+    if (strcmp(argv[1], "selftest") == 0) {
+        const char *report = NULL;
+        int i;
+        for (i = 2; i < argc; i++) {
+            if (strcmp(argv[i], "--iface") == 0 && i + 1 < argc) {
+                iface = argv[++i];
+            } else if (strcmp(argv[i], "--report") == 0 && i + 1 < argc) {
+                report = argv[++i];
+            }
+        }
+        if (!report)
+            report = "build/ramtest-report.txt";
+        return cmd_selftest(iface, report);
+    }
+    if (strcmp(argv[1], "demo") == 0) {
+        if (cmd_show(iface) != 0)
+            return 1;
+        return cmd_selftest(iface, "build/demo-ramtest-report.txt");
+    }
+    fprintf(stderr, "unknown command\n");
+    return 2;
+}

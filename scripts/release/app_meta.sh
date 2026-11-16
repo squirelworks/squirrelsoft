@@ -47,6 +47,7 @@ case "$app" in
   squirrelshipbench)      name=SquirrelShipBench;     desktop=c;      binary=squirrelshipbench ;;
   squirrelmousecfg)       name=SquirrelMouseCfg;      desktop=c;      binary=squirrelmousecfg ;;
   squirrelbusmon)         name=SquirrelBusMon;       desktop=c;      binary=squirrelbusmon ;;
+  squirrelramtest)        name=SquirrelRamTest;      desktop=c;      binary=squirrelramtest ;;
   *) echo "unknown app: $app" >&2; exit 2 ;;
 esac
 
