@@ -22,7 +22,9 @@ static void usage(FILE *f) {
         "                               SMC/SMS display-only ticks\n"
         "  display-tick [--catalog FILE] [--safeing FILE] [--ticks N]\n"
         "                               one stores/safeing display page\n"
-        "  demo                         all roles against CI fixtures\n"
+        "  tick [--catalog FILE] [--safeing FILE] [--n N]\n"
+        "                               MC + SMS + display in one pass\n"
+        "  demo                         catalog + tick against CI fixtures\n"
         "\n"
         "These stubs are Soft test software for Flight Lab / HIL co-check.\n"
         "They are NOT flight software. SMS/stores = display + loadout flags\n"
@@ -208,11 +210,50 @@ static int cmd_display_tick(int argc, char **argv) {
     return 0;
 }
 
+
+static int cmd_tick(int argc, char **argv) {
+    const char *cpath = "fixtures/message-catalog.yaml";
+    const char *spath = "fixtures/safeing-display.yaml";
+    unsigned n = 1, t;
+    McCatalog cat;
+    McSmsDisplay sms;
+    int i;
+
+    for (i = 0; i < argc; i++) {
+        if (strcmp(argv[i], "--catalog") == 0) {
+            cpath = opt_val(argc, argv, &i);
+            if (!cpath) return 2;
+        } else if (strcmp(argv[i], "--safeing") == 0) {
+            spath = opt_val(argc, argv, &i);
+            if (!spath) return 2;
+        } else if (strcmp(argv[i], "--n") == 0 || strcmp(argv[i], "--ticks") == 0) {
+            const char *v = opt_val(argc, argv, &i);
+            if (!v || parse_u(v, &n) != 0 || n < 1) return 2;
+        } else {
+            return 2;
+        }
+    }
+    if (load_catalog(cpath, &cat) != 0) return 1;
+    if (load_sms(spath, &sms) != 0) return 1;
+    for (t = 1; t <= n; t++) {
+        McStubTickResult mr;
+        McSmsTickResult sr;
+        McDisplayTickResult dr;
+        mc_stub_tick(&cat, t, &mr);
+        mc_sms_tick(&sms, t, &sr);
+        mc_display_tick(&cat, &sms, t, &dr);
+        puts(mr.summary);
+        puts(sr.summary);
+        puts(dr.summary);
+        if (!mr.ok || !sr.ok || !dr.ok) return 1;
+    }
+    puts("tick ok");
+    return 0;
+}
+
 static int cmd_demo(void) {
     if (cmd_catalog(0, NULL) != 0) return 1;
-    if (cmd_mc_tick(0, NULL) != 0) return 1;
-    if (cmd_sms_tick(0, NULL) != 0) return 1;
-    if (cmd_display_tick(0, NULL) != 0) return 1;
+    if (cmd_tick(0, NULL) != 0) return 1;
     puts("squirrelmcstubs demo ok");
     return 0;
 }
@@ -228,6 +269,7 @@ int main(int argc, char **argv) {
         return 0;
     }
     if (strcmp(cmd, "catalog") == 0) return cmd_catalog(argc - 2, argv + 2);
+    if (strcmp(cmd, "tick") == 0) return cmd_tick(argc - 2, argv + 2);
     if (strcmp(cmd, "mc-tick") == 0) return cmd_mc_tick(argc - 2, argv + 2);
     if (strcmp(cmd, "sms-tick") == 0) return cmd_sms_tick(argc - 2, argv + 2);
     if (strcmp(cmd, "display-tick") == 0) return cmd_display_tick(argc - 2, argv + 2);

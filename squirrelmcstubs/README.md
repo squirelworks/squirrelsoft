@@ -27,6 +27,7 @@ make -C squirrelmcstubs test
 | Command | Purpose |
 |---------|---------|
 | `catalog [--catalog FILE]` | Parse fixture topic catalog |
+| `tick [--catalog FILE] [--safeing FILE] [--n N]` | Deterministic MC + SMS + display ticks |
 | `mc-tick [--ticks N]` | Deterministic MC stub publish ticks |
 | `sms-tick [--ticks N]` | SMC/SMS display-only safeing/loadout ticks |
 | `display-tick [--ticks N]` | One stores/safeing display-page publisher |
