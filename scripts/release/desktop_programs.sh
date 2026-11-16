@@ -14,4 +14,5 @@ squirrelgames
 squirreldebug
 squirrelflightlab
 squirrelismbench
+squirrelhilbench
 EOF

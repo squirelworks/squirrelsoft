@@ -175,6 +175,21 @@ military. Gaps → ISM issues, not Soft hardware PRs.
 - [ ] S8.3 PSU / UPS load + telemetry benches
 - [ ] S8.4 Storage read/write benches; expand to remaining lab equipment
 
+
+## S10 — ISM fighter Soft UI (Victor; not Flight Lab)
+
+Steve owns Flight Lab (`squirrelflightlab/`). Soft lane `-2eaf` owns the other
+fighter Soft apps from ISM #80–#83. Weapons boundary: stores integration and
+display only — no guidance, seekers, propulsion, warheads, fuzing, arming codes,
+or weapon-protocol internals.
+
+- [x] S10.1 HIL bench UI (ISM #80): `squirrelhilbench/` portable core + CLI,
+  mock bench profile, channel health, canned stimulus, Flight Lab replay CSV;
+  checks `tests/test_hilbench.c`, `tests/cli_smoke.sh`
+- [ ] S10.2 Mission-computer stubs (ISM #81)
+- [ ] S10.3 HUD / HMI tooling (ISM #82)
+- [ ] S10.4 Avionics data-bus analyzer (ISM #83)
+
 ## S6 — Repo split (#32)
 - [x] Prep inventory (agent): `scripts/s6_repo_split_prep.sh`, `docs/s6-repo-split.md`, `docs/s6-ci-stubs/` — path lists, suggested CI, umbrella README link draft. No remotes created or deleted.
 - [ ] *(Squirrel)* When an app has its own core lib, desktop + Android front-ends and CI: move to `squirrelsoft-suica`, `squirrelsoft-suica-analysis`, `squirrelsoft-soundanalysis`, `squirrelsoft-qr`, `squirrelsoft-cad` (Station+CAD), `squirrelsoft-gnss`, `squirrelsoft-calc`, `squirrelsoft-games`, keeping history (`git filter-repo` by the human). `squirrelsoft` stays as the umbrella with shared libs and Play scripts. The human performs the actual repo creation.
