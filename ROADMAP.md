@@ -176,7 +176,11 @@ source of truth. Design note: `squirrelflightlab/docs/overview.md`.
   history into a headless `sqgui` canvas (PPM via `strip-chart --ppm`);
   series resampled onto pixel columns with `sqn_lerp` (NR Ch. 3.1); SDL live
   window deferred; checks in `tests/test_flightlab.c`, `tests/cli_smoke.sh`
-- [ ] S7.5 HIL against the real avionics PCB (planned stub today)
+- [x] S7.5 Soft mock HIL against avionics PCB framing: `fl_hil` SQHIL1 line
+  protocol (encode/parse, fixture `.sqhil`, `hil mock`); host↔board channel
+  correlate via `sqn_lerp` (NR Ch. 3.1); live serial/USB refused until Victor
+  freezes PCB ICD (clear message; OS/2 host gaps squirrel-os2#225); checks in
+  `tests/test_flightlab.c`, `tests/cli_smoke.sh`
 - OS/2 as lab / ground host (UART, soft-RT, packaging): squirrel-os2#225 and
   [`ism-flightlab-gaps.md`](https://github.com/squirelworks/squirrel-os2/blob/cursor/ism-flightlab-gaps-b55f/documentation/guides/ism-flightlab-gaps.md)
   (lane `-b55f`; retarget link to `main` after merge). Soft keeps the app; OS owns the host gaps.

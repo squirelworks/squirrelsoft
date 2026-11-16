@@ -1,6 +1,7 @@
 /* Unit tests for SquirrelFlightLab portable core. */
 #include "fl_aero.h"
 #include "fl_avionics.h"
+#include "fl_hil.h"
 #include "fl_chart.h"
 #include "fl_dyn.h"
 #include "fl_fcs.h"
@@ -206,9 +207,62 @@ static void test_planned(void) {
     expect(n == 3, "three planned");
     expect(strcmp(list[0].status, "planned") == 0, "cfd planned");
     expect(strcmp(list[1].status, "active") == 0, "tunnel active");
+    expect(strcmp(list[2].status, "active") == 0, "hil active");
     char err[128];
     expect(fl_planned_cfd_mesh_import("x.msh", err, sizeof err) == -1, "cfd stub");
     expect(strstr(err, "not implemented") != NULL, "cfd msg");
+}
+
+static void test_hil_framing_and_mock(void) {
+    char line[160];
+    FlHilFrame fr;
+    expect(fl_hil_encode_hello(line, sizeof line) > 0, "hello enc");
+    expect(fl_hil_parse_line(line, &fr) == 0 && fr.kind == FL_HIL_FR_HELLO, "hello parse");
+    expect(fl_hil_encode_hello_ack(line, sizeof line, "ISM-FJ-MOCK", 14) > 0, "ack enc");
+    expect(fl_hil_parse_line(line, &fr) == 0 && fr.kind == FL_HIL_FR_HELLO_ACK, "ack parse");
+    expect(fr.channels == 14, "ack channels");
+    expect(fl_hil_encode_sync(line, sizeof line, 0.25) > 0, "sync enc");
+    expect(fl_hil_parse_line(line, &fr) == 0 && fr.kind == FL_HIL_FR_SYNC, "sync parse");
+    expect(fabs(fr.t_s - 0.25) < 1e-9, "sync t");
+    expect(fl_hil_encode_ch(line, sizeof line, "act_throttle", 14, 0.55) > 0, "ch enc");
+    expect(fl_hil_parse_line(line, &fr) == 0 && fr.kind == FL_HIL_FR_CH, "ch parse");
+    expect(strcmp(fr.role, "act_throttle") == 0 && fr.pin == 14, "ch fields");
+    expect(fabs(fr.value - 0.55) < 1e-9, "ch value");
+    expect(fl_hil_encode_bye(line, sizeof line) > 0, "bye enc");
+    expect(fl_hil_parse_line(line, &fr) == 0 && fr.kind == FL_HIL_FR_BYE, "bye parse");
+
+    FlHilSession sess;
+    FlSim host;
+    char err[240];
+    expect(fl_hil_connect("mock", &sess, &host, err, sizeof err) == 0, err);
+    expect(sess.connected == 1, "mock connected");
+    expect(sess.nsamples >= 2, "mock samples");
+    FlHilCorrReport rep;
+    expect(fl_hil_correlate(&sess, &host, "act_throttle", &rep) == 0, rep.summary);
+    expect(rep.ok == 1, rep.summary);
+    expect(strstr(rep.summary, "NR Ch.3.1") != NULL, "NR cite");
+    expect(fl_hil_correlate(&sess, &host, "imu_az", &rep) == 0, rep.summary);
+    expect(rep.ok == 1, "imu_az mock match");
+
+    expect(fl_hil_connect("/dev/ttyUSB0", &sess, &host, err, sizeof err) == -1, "serial refuse");
+    expect(strstr(err, "deferred") != NULL, err);
+
+    char *fx = slurp("fixtures/hil/mock-pcb-session.sqhil");
+    expect(fx != NULL, "hil fixture");
+    if (fx) {
+        expect(fl_hil_session_from_text(&sess, fx, err, sizeof err) == 0, err);
+        expect(sess.nsamples >= 2, "fixture samples");
+        /* Host sim for correlate — same controls as connect(). */
+        FlProject p;
+        fl_project_default_ism_fighter(&p);
+        fl_sim_init(&host, &p);
+        FlControls c = {0.55, -1.0, 0.0, 0.0};
+        fl_sim_set_controls(&host, &c);
+        expect(fl_sim_run(&host, 0.5, 0.05, 0.05) >= 2, "host hist");
+        expect(fl_hil_correlate(&sess, &host, "act_throttle", &rep) == 0, rep.summary);
+        expect(rep.ok == 1, rep.summary);
+        free(fx);
+    }
 }
 
 static void test_strip_chart(void) {
@@ -497,6 +551,7 @@ int main(void) {
     test_planned();
     test_tunnel_provider();
     test_strip_chart();
+    test_hil_framing_and_mock();
     test_ism_and_fcs();
     test_ism_interfaces();
     test_verify();

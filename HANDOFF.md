@@ -308,11 +308,20 @@ Done earlier (kept for history):
 - **Gaps:** real Eric/Victor tunnel logs (not Soft synthetic); CFD mesh import
   still planned; spline tunnel tables (NR Ch. 3.3) optional follow-up.
 
-### FLIGHTLAB-strip-chart — S7.4 sqgui strip chart  `status: done` (this PR)
+### FLIGHTLAB-strip-chart — S7.4 sqgui strip chart  `status: done` (#200)
 - `fl_chart` + CLI `strip-chart`: headless `sqgui` canvas of sim history
   (V/nz/α/θ); NR Ch. 3.1 lerp resample onto columns; optional PPM snapshot.
 - **Gaps:** interactive SDL strip window (optional); live HIL feed into chart
-  (S7.5); `gh issue create` may 401 — gaps recorded here / in the PR.
+  (partially unblocked by S7.5 mock path).
+
+### FLIGHTLAB-hil-mock — S7.5 Soft mock PCB HIL  `status: done` (this PR)
+- `fl_hil` Soft SQHIL1 framing (HELLO/ACK/SYNC/CH/BYE); `hil mock` and
+  `fixtures/hil/*.sqhil`; correlate host↔board with `sqn_lerp` (NR Ch. 3.1;
+  Soft original, no NR listings). Live `/dev`/`serial:` refused until Victor
+  freezes avionics PCB ICD; points at squirrel-os2#225 for host transport.
+- **Gaps (file Soft/ISM issues if missing):** live USB-CDC/UART framing once
+  ICD lands; feed Soft HIL samples into `fl_chart` live strip; refresh fixture
+  from ISM harness notes; `gh issue create` may 401 — gaps recorded here / PR.
 
 ### FLIGHTLAB-loadout — Soft #173  `status: done` (#194)
 - S7.2f: `fl_loadout` validates station×adapter×store against ISM interface

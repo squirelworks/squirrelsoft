@@ -1,0 +1,39 @@
+SQHIL1 Soft mock avionics PCB session
+# Soft CI fixture — synthetic; not a real PCB dump.
+# Protocol Soft-owned until Victor freezes live avionics ICD.
+HELLO SoftFlightLab/1.0
+HELLO_ACK ISM-FJ-MOCK channels=14 protocol=SQHIL1
+SYNC t_s=0.0000
+CH role=imu_az pin=3 value=9.806650
+CH role=act_throttle pin=14 value=0.550000
+SYNC t_s=0.0500
+CH role=imu_az pin=3 value=9.806650
+CH role=act_throttle pin=14 value=0.550000
+SYNC t_s=0.1000
+CH role=imu_az pin=3 value=9.806650
+CH role=act_throttle pin=14 value=0.550000
+SYNC t_s=0.1500
+CH role=imu_az pin=3 value=9.806650
+CH role=act_throttle pin=14 value=0.550000
+SYNC t_s=0.2000
+CH role=imu_az pin=3 value=9.806650
+CH role=act_throttle pin=14 value=0.550000
+SYNC t_s=0.2500
+CH role=imu_az pin=3 value=9.806650
+CH role=act_throttle pin=14 value=0.550000
+SYNC t_s=0.3000
+CH role=imu_az pin=3 value=9.806650
+CH role=act_throttle pin=14 value=0.550000
+SYNC t_s=0.3500
+CH role=imu_az pin=3 value=9.806650
+CH role=act_throttle pin=14 value=0.550000
+SYNC t_s=0.4000
+CH role=imu_az pin=3 value=9.806650
+CH role=act_throttle pin=14 value=0.550000
+SYNC t_s=0.4500
+CH role=imu_az pin=3 value=9.806650
+CH role=act_throttle pin=14 value=0.550000
+SYNC t_s=0.5000
+CH role=imu_az pin=3 value=9.806650
+CH role=act_throttle pin=14 value=0.550000
+BYE
