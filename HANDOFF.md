@@ -50,8 +50,9 @@ Used here, in `ROADMAP.md` and on the issues (as labels).
 - **Open Cursor/Codex coding items *(lane `-2eaf`)*:** Soft GNSS NTRIP/RTCM/
   Android caster wiring is done (#147–#162); ISM Soft UI S10.1–S10.4 and Eric
   companions S9.1–S9.3 (`squirrelramtest/` / #182) are on `main` or this PR.
-  Remaining Soft coding: S8.2 live HID, S8.3 PSU/UPS (open PR #202), S8.4b
-  live SPD/PSRAM. Next Squirrel-owned work remains **S6** repo split and
+  Remaining Soft coding: S8.2 live HID, S8.4b″ live SPD/PSRAM (#203/#204,
+  `-2eaf`), live printer USB / plotter fab. Soft storage Soft bench (S8.4b)
+  is this PR. Next Squirrel-owned work remains **S6** repo split and
   **PLAY** uploads (`needs: squirrel`): Sound 0.0.14/0.0.15, QR 0.1.7, Suica
   0.0.13/0.0.14.
 - **Agent lanes:** suite split is in [docs/AGENT_LANES.md](docs/AGENT_LANES.md)
@@ -324,7 +325,7 @@ Done earlier (kept for history):
 - **Gaps:** live USB-CDC/UART framing once ICD lands; refresh fixture from
   ISM harness notes.
 
-### FLIGHTLAB-hil-chart — S7.5′ Soft HIL → strip-chart  `status: done` (this PR)
+### FLIGHTLAB-hil-chart — S7.5′ Soft HIL → strip-chart  `status: done` (#209)
 - `fl_chart_draw_hil` / CLI `hil-chart`: Soft HIL board channel roles drawn
   into the same `sqgui` strip (NR Ch. 3.1 resample); optional PPM.
 - **Gaps:** SDL live window; live serial HIL feed once ICD lands;
@@ -370,6 +371,16 @@ Done earlier (kept for history):
   live `/dev/hidraw*` refused with clear deferral until Eric freezes Soft/host.
 - **Gaps:** live hidraw open/read once Soft host path exists; refresh Soft
   `.sqhid` from ISM capture notes.
+
+### ISMBENCH-storage-soft — Soft S8.4b Soft storage Soft bench  `status: in progress` (this PR)
+- `ib_storage` Soft SD/eMMC/flash Soft erase → LCG Soft program → Soft CRC-32
+  verify → Soft re-erase; CLI `storage-test`; Soft-proposed
+  `fixtures/storage/interface.ismstor` (NR Ch. 7.1 LCG class oracle; Soft
+  original, no NR listings). Checks `tests/test_ismbench.c`, `tests/cli_smoke.sh`.
+- **Gaps:** live removable-media / USB-CDC Soft storage path when Eric freezes
+  SoT; Soft #203 / #204 live I2C SPD + PSRAM remain `-2eaf` (do not steal);
+  live printer USB + plotter fab SoT (S8.4b″). `gh issue create` may 401 —
+  gaps recorded here / in the PR.
 
 ### KBDCFG-scaffold — Eric keyboard layout + firmware cfg  `status: done` (#184)
 - S9.1: `squirrelkbdcfg/` loads 60% fixture, prints layout, SQKB1 round-trip.

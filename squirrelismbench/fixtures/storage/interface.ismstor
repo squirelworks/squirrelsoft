@@ -1,0 +1,10 @@
+ISM-STOR storage interface 1
+# Soft CI fixture for Soft lab SD/eMMC Soft media (S8.4b Soft-proposed).
+# Soft does not design the card — refresh when Eric publishes SoT.
+media: sd_card
+part: Soft-SD-8MiB
+block_bytes: 512
+capacity_kib: 8192
+pattern_bytes: 4096
+lcg_seed: 1
+erase_value: 0xff

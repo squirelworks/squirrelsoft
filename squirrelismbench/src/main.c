@@ -8,6 +8,7 @@
 #include "ib_plotter.h"
 #include "ib_power.h"
 #include "ib_printer.h"
+#include "ib_storage.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -29,6 +30,7 @@ static void usage(FILE *f) {
         "  hid-test ENDPOINT              Soft S8.2: Soft mock USB HID (SQHID1)\n"
         "                                 ENDPOINT=mock | fixtures/hid/*.sqhid\n"
         "                                 live /dev/hidraw* deferred\n"
+        "  storage-test [--iface FILE]    Soft S8.4b: Soft SD/eMMC Soft bench\n"
         "  demo                           run all against CI fixtures\n"
         "\n"
         "Soft tests Eric's ISM consumer devices. Interfaces are SoT in\n"
@@ -272,6 +274,34 @@ static int cmd_hid(int argc, char **argv) {
     return res.ok ? 0 : 1;
 }
 
+static int cmd_storage(int argc, char **argv) {
+    const char *path = "fixtures/storage/interface.ismstor";
+    int i;
+    for (i = 0; i < argc; i++) {
+        if (strcmp(argv[i], "--iface") == 0) {
+            path = opt_val(argc, argv, &i);
+            if (!path) return 2;
+        } else
+            return 2;
+    }
+    char *text = NULL, err[IB_MSG_LEN];
+    if (read_file(path, &text) != 0) {
+        fprintf(stderr, "squirrelismbench: cannot read %s\n", path);
+        return 1;
+    }
+    IbStorageIface s;
+    if (ib_storage_parse(&s, text, err, sizeof err) != 0) {
+        fprintf(stderr, "squirrelismbench: %s\n", err);
+        free(text);
+        return 1;
+    }
+    free(text);
+    IbStorageTestResult res;
+    ib_storage_selftest(&s, &res);
+    puts(res.summary);
+    return res.ok ? 0 : 1;
+}
+
 int main(int argc, char **argv) {
     if (argc < 2) {
         usage(stderr);
@@ -291,6 +321,7 @@ int main(int argc, char **argv) {
     if (strcmp(cmd, "psu-test") == 0) return cmd_psu(argc - 2, argv + 2);
     if (strcmp(cmd, "ups-test") == 0) return cmd_ups(argc - 2, argv + 2);
     if (strcmp(cmd, "hid-test") == 0) return cmd_hid(argc - 2, argv + 2);
+    if (strcmp(cmd, "storage-test") == 0) return cmd_storage(argc - 2, argv + 2);
     if (strcmp(cmd, "demo") == 0) {
         int a = cmd_keyboard(0, NULL);
         int b = cmd_mouse(0, NULL);
@@ -302,7 +333,8 @@ int main(int argc, char **argv) {
         int h = cmd_ups(0, NULL);
         char *hid_argv[] = {"mock"};
         int i = cmd_hid(1, hid_argv);
-        if (a || b || c || d || e || f || g || h || i) return 1;
+        int j = cmd_storage(0, NULL);
+        if (a || b || c || d || e || f || g || h || i || j) return 1;
         puts("squirrelismbench demo ok");
         return 0;
     }
