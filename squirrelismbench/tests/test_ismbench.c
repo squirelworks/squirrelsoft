@@ -6,6 +6,7 @@
 #include "ib_plotter.h"
 #include "ib_power.h"
 #include "ib_printer.h"
+#include "ib_storage.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -149,6 +150,36 @@ int main(void) {
             expect(ib_hid_encode_report(line, sizeof line, &r) > 0, "enc report");
             expect(ib_hid_parse_line(line, &back, NULL, NULL, NULL, NULL, 0) == 0, "parse");
             expect(back.data[2] == 0x04 && back.len == 8, "A usage");
+        }
+    }
+
+    {
+        char *st = slurp("fixtures/storage/interface.ismstor");
+        expect(st != NULL, "storage fixture");
+        if (st) {
+            IbStorageIface stor;
+            char serr[128];
+            expect(ib_storage_parse(&stor, st, serr, sizeof serr) == 0, serr);
+            expect(strcmp(stor.media, "sd_card") == 0, "sd media");
+            expect(stor.block_bytes == 512, "512 block");
+            IbStorageTestResult sr;
+            ib_storage_selftest(&stor, &sr);
+            expect(sr.ok == 1, sr.summary);
+            expect(strstr(sr.summary, "NR Ch.7.1") != NULL, "storage NR");
+            free(st);
+        }
+        {
+            IbStorageIface bad;
+            char berr[128];
+            const char *bad_txt =
+                "ISM-STOR storage interface 1\n"
+                "media: tape\n"
+                "part: x\n"
+                "block_bytes: 512\n"
+                "capacity_kib: 64\n"
+                "pattern_bytes: 512\n";
+            expect(ib_storage_parse(&bad, bad_txt, berr, sizeof berr) != 0, "reject bad media");
+            expect(strstr(berr, "media") != NULL, berr);
         }
     }
 
