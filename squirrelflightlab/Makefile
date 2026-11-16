@@ -10,7 +10,7 @@ SQNLIB = $(SQN)/build/libsquirrelnum.a
 OBJ = $(BUILD)/fl_project.o $(BUILD)/fl_aero.o $(BUILD)/fl_dyn.o \
 	$(BUILD)/fl_avionics.o $(BUILD)/fl_scenario.o $(BUILD)/fl_planned.o \
 	$(BUILD)/fl_ism.o $(BUILD)/fl_fcs.o $(BUILD)/fl_yaml.o $(BUILD)/fl_iface.o \
-	$(BUILD)/fl_verify.o $(BUILD)/fl_viability.o
+	$(BUILD)/fl_verify.o $(BUILD)/fl_viability.o $(BUILD)/fl_loadout.o
 HDR = $(wildcard include/*.h)
 
 .PHONY: all test verify viability clean demo $(SQNLIB)

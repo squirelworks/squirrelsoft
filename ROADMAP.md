@@ -155,6 +155,9 @@ source of truth. Design note: `squirrelflightlab/docs/overview.md`.
 - [x] S7.2e Viability report from `viability-criteria.yaml` (Soft #176): Soft
   recomputes sizing gates vs class bands; MD+JSON; `viability-report` CLI;
   optional OpenVSP/AVL/CalculiX skip
+- [x] S7.2f Loadout validation (Soft #173): station×adapter×store vs
+  hardpoints / inert-stores / multi-origin / sms envelopes; mass/CG/asymmetry;
+  `loadout-check` CLI; legal + illegal fixtures
 - [ ] S7.3 Higher-fidelity replaceable aero provider + tunnel CSV override
 - [ ] S7.4 `sqgui` strip-chart window on the same core
 - [ ] S7.5 HIL against the real avionics PCB (planned stub today)
