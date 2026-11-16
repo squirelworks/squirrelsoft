@@ -21,6 +21,9 @@ libs/
 
 SquirrelFlightLab (`squirrelflightlab/`) is Soft test software for Victor’s
 ISM fighter jet (params/interfaces from ISM; Soft does not design hardware).
+SquirrelKbdCfg (`squirrelkbdcfg/`) is the Soft companion for Eric’s ISM
+keyboards (layout map + firmware config against Soft fixtures; hardware SoT
+stays in `international-squirrel-machines/keyboard/`).
 SquirrelISMBench (`squirrelismbench/`) is Soft HID/device bench software for
 Eric’s consumer devices (keyboard, mouse, typewriter matrix, RAM-module SPD /
 synthetic bank patterns, …).

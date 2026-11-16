@@ -17,8 +17,8 @@ M3 = destination **3.0.0**. Ask `-b55f` to confirm OS claim rows on #201 /
 
 | Lane | Branch suffix | Scope |
 |------|---------------|-------|
-| **A** | `-2eaf` | Gen2 desktop finish; Soft GNSS/NTRIP/RTCM; BIOS leftover Phase G / board configs; CI/rebase hygiene on own PRs |
-| **B** | `-b55f` | **2.9-lm-kernel** remainder + **2.9-syscall64** (and follow-ups that stay inside long-mode) |
+| **A** | `-2eaf` | Gen2 desktop finish; Soft ISM fighter UI (#80–#83) + Eric companions; BIOS leftovers; CI/rebase hygiene |
+| **B** | `-b55f` | **2.9-lm-kernel** tick ([os2#232](https://github.com/squirelworks/squirrel-os2/pull/232)) then **2.9-syscall64** — Soft does **not** open competing LM / syscall64 PRs |
 
 Shared files (`TODO.md`, `ROADMAP.md`, `HANDOFF.md`, check lists): rebase onto
 `main` after the other merges; never stack feature branches. Prefer one agent
@@ -46,7 +46,10 @@ Owner publish (agents prep only): optional OS/2 **v2.3.0 @ `fc3ae21`**
 (per #205); BIOS **v2.2.0** (fold capsule or **v2.2.1**); OS/2 **v2.3.1**
 (or **v2.4.0** Gen2) after #184+#197; Soft = PLAY uploads, no suite tag.
 
-Handshake: `-b55f` #204 → lm-kernel tick → syscall64; `-2eaf` #184 → #197 → W.6.
+Handshake: `-b55f` owns [os2#232](https://github.com/squirelworks/squirrel-os2/pull/232)
+(`2.9-lm-kernel-tick`) then `2.9-syscall64` (coordinate on the agreed issue
+before Soft touches that area). `-2eaf` Gen2 → W.6 after tip; Soft ISM apps
+in parallel (soft #184–#190).
 
 ---
 
@@ -93,11 +96,11 @@ Leave **S6** / **PLAY** to Squirrel (`needs: squirrel`).
 
 - [x] **2.9-lm-paging** `-b55f` — PR #193 (merged)
 - [x] **2.9-lm-stay-thunks** `-b55f` — PR #196 (merged)
-- [ ] **2.9-lm-boot64** `-b55f` — PR #204
-- [ ] **2.9-lm-kernel** tick `-b55f` — only when stay+thunks+boot64 are on `main`
-- [ ] **2.9-syscall64** `-b55f` — after lm-kernel ticked
+- [x] **2.9-lm-boot64** `-b55f` — merged (follow-ups on `main`)
+- [ ] **2.9-lm-kernel** tick `-b55f` — [os2#232](https://github.com/squirelworks/squirrel-os2/pull/232) (`REGRESS_FLAVOUR=lm64`, banner 2.9.0)
+- [ ] **2.9-syscall64** `-b55f` — next after #232; Soft must coordinate before touching
 
-**Stand down from:** 2.6-*, W.6 (and Gen2 Sarah follow-ups) while Lane A PRs are open.
+**Stand down (`-2eaf`):** no competing OS/2 LM-kernel or syscall64 PRs.
 
 ---
 
@@ -105,10 +108,13 @@ Leave **S6** / **PLAY** to Squirrel (`needs: squirrel`).
 
 | Repo | PR | Branch | Tag | Box |
 |------|----|--------|-----|-----|
-| os2 | #184 | `…-2.6-icons-drag-2eaf` | `-2eaf` | 2.6-icons, 2.6-drag |
-| os2 | #197 | `…-followup-gen2-sarah-2eaf` | `-2eaf` | Sarah Gen2 follow-ups |
-| os2 | #204 | `…-2.9-lm-boot64-b55f` | `-b55f` | 2.9-lm-boot64 |
-| os2 | #205 | `…-release-coord-b55f` | `-b55f` | docs release coord + `TO_3.0.0.md` |
+| os2 | [#232](https://github.com/squirelworks/squirrel-os2/pull/232) | `…-2.9-lm-kernel-tick-b55f` | `-b55f` | 2.9-lm-kernel tick |
+| soft | [#184](https://github.com/squirelworks/squirrelsoft/pull/184) | `…-ism-kbd-cfg-2eaf` | `-2eaf` | Eric keyboard cfg #180 |
+| soft | [#186](https://github.com/squirelworks/squirrelsoft/pull/186) | `…-ism-mc-stubs-2eaf` | `-2eaf` | MC stubs ISM #81 |
+| soft | [#187](https://github.com/squirelworks/squirrelsoft/pull/187) | `…-ism-hud-tool-2eaf` | `-2eaf` | HUD tool ISM #82 |
+| soft | [#188](https://github.com/squirelworks/squirrelsoft/pull/188) | `…-ism-mouse-cfg-2eaf` | `-2eaf` | Eric mouse cfg #181 |
+| soft | [#189](https://github.com/squirelworks/squirrelsoft/pull/189) | `…-ism-hil-bench-2eaf` | `-2eaf` | HIL UI ISM #80 |
+| soft | [#190](https://github.com/squirelworks/squirrelsoft/pull/190) | `…-ism-bus-analyzer-2eaf` | `-2eaf` | bus analyzer ISM #83 |
 
 **Merged (do not re-claim):** os2 #183 W.3, #188 shadows, #191 W.2, #192 W.5,
 #193 paging, #196 stay-thunks, #203 lanes canon; bios #189 capsule; soft
