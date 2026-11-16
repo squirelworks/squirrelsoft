@@ -1,0 +1,154 @@
+schema_version: "1.0.0"
+aircraft_id: "ISM-FJ-1"
+revision: "A"
+status: stub
+issue: 93
+provisional: true
+source_docs:
+  - fighter-jet/mechanical/carrier-suitability.md
+  - fighter-jet/mechanical/landing-gear.md
+  - fighter-jet/diagrams/stations.md
+source_drawings:
+  - ISM-FJ-DWG-030
+  - ISM-FJ-DWG-050
+  - ISM-FJ-DWG-040
+note: >
+  ISM conceptual carrier load cases for Flight Lab / structural co-check.
+  Not classified naval recovery data. Numbers are provisional placeholders
+  until weight class (# product decision) and validation (#78) freeze.
+
+mass_reference:
+  # Align with mass-properties.yaml when both loaded; duplicated for standalone import
+  provisional: true
+  design_landing_mass_kg: 14500
+  max_catapult_mass_kg: 17500
+
+datum: body_FS0_BL0_WL0
+
+hook:
+  engage_fs_pct: 0.90
+  stowed: true_default_land
+  material_primary: ISM-Ti-6
+  material_alternate: ISM-Steel-HS
+  damper:
+    stroke_m: 0.45
+    type: oleo_hydraulic_stub
+  load_path:
+    - hook_point
+    - damper
+    - keel_beam
+    - FS72_bulkhead
+    - FS62_carry_through
+    - mlg_keel_fittings
+
+nose_gear_launch_bar:
+  station_fs_pct: 0.18
+  articulating: true
+  holdback_attach_fs_pct_range: [0.55, 0.62]
+
+wing_fold:
+  hinge_ws_pct: 0.50
+  direction: up_and_in
+  dual_latches: true
+  inhibit_unless: [wow, park_or_chock_logic]
+  outboard_stations_when_folded: [STA-1, STA-2, STA-3, STA-4]
+
+corrosion:
+  prefer_ti_gear_hook: true
+  steel_alternate_requires_maintenance_plan: true
+  rinse_access_without_avionics_bay: true
+
+# --- Load cases for Steve / Flight Lab ------------------------------------
+load_cases:
+  - id: LC-ARR-01
+    name: design_arrestment
+    type: arrestment
+    description: Symmetric wire engagement at design landing mass; max expected cable load into hook.
+    mass_kg: 14500
+    sink_rate_m_s: 0.0  # horizontal engagement dominant; vertical from bounce separate
+    hook_peak_axial_force_n: 450000  # provisional
+    keel_bending_moment_nm: 180000   # provisional at FS-72
+    duration_s: 1.5
+    expected_behaviour:
+      fcc_mode: ground_or_recover
+      stores_jettison: not_required_nominal
+      structural_limit_check: true
+
+  - id: LC-ARR-02
+    name: offcenter_arrestment
+    type: arrestment
+    description: Lateral offset engagement; adds yaw/side load into keel and MLG.
+    mass_kg: 14500
+    hook_peak_axial_force_n: 400000
+    hook_side_force_n: 80000
+    yaw_moment_nm: 50000
+    expected_behaviour:
+      structural_limit_check: true
+      nws: free_caster_or_unlock
+
+  - id: LC-CAT-01
+    name: design_catapult_shot
+    type: catapult
+    description: Longitudinal tow via NLG launch bar to flight speed; hold-back release.
+    mass_kg: 17500
+    launch_bar_peak_axial_force_n: 320000
+    holdback_peak_force_n: 280000
+    acceleration_longitudinal_g: 4.0
+    end_speed_keas_kt: 140
+    expected_behaviour:
+      nws_limited: true
+      wow_true_until_rotate: true
+      fcc_mode: catapult_or_ground
+
+  - id: LC-CAT-02
+    name: rejected_or_holdback_spike
+    type: catapult_aborted
+    description: Hold-back remains engaged or early abort — spike into keel/NLG.
+    mass_kg: 17500
+    holdback_peak_force_n: 350000
+    launch_bar_peak_axial_force_n: 150000
+    expected_behaviour:
+      structural_limit_check: true
+
+  - id: LC-LDG-01
+    name: carrier_design_sink_rate
+    type: landing_gear
+    description: High sink-rate deck landing; spin-up / spring-back on MLG.
+    mass_kg: 14500
+    sink_rate_design_m_s: 7.2
+    mlg_peak_vertical_force_n_each: 220000
+    nlg_peak_vertical_force_n: 90000
+    expected_behaviour:
+      wow_asserts: true
+      fcc_switches_ground_laws: true
+
+  - id: LC-LDG-02
+    name: land_based_sink_rate
+    type: landing_gear
+    description: Lower sink-rate for shore basing comparison.
+    mass_kg: 14500
+    sink_rate_design_m_s: 3.0
+    mlg_peak_vertical_force_n_each: 120000
+    nlg_peak_vertical_force_n: 50000
+
+  - id: LC-FOLD-01
+    name: wing_fold_static
+    type: wing_fold
+    description: Folded wings, deck winds / ship motion static equivalent.
+    hinge_moment_nm_each: 25000
+    latch_load_n_each: 40000
+    expected_behaviour:
+      fold_inhibit_if_not_wow: true
+      sms_derates_outboard_stations: true
+
+parameters_summary:
+  sink_rate_carrier_m_s: 7.2
+  sink_rate_shore_m_s: 3.0
+  hook_engage_fs_pct: 0.90
+  wing_fold_hinge_ws_pct: 0.50
+  catapult_accel_g_design: 4.0
+
+expected_behaviour:
+  flight_lab_import: carrier-loads.yaml
+  third_party_sim_not_sot: true
+  classified_procedures_excluded: true

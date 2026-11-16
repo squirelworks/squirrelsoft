@@ -3,6 +3,7 @@
 #include "fl_avionics.h"
 #include "fl_dyn.h"
 #include "fl_fcs.h"
+#include "fl_iface.h"
 #include "fl_ism.h"
 #include "fl_planned.h"
 #include "fl_project.h"
@@ -180,6 +181,64 @@ static void test_ism_and_fcs(void) {
     free(iface);
 }
 
+static void test_ism_interfaces(void) {
+    FlIfaceBundle bundle;
+    char err[256];
+    expect(fl_iface_load_dir(&bundle, "fixtures/ism-interfaces",
+                             "schemas/ism-fj-1.0.0/top-level-allowlist.yaml", err,
+                             sizeof err) == 0,
+           err);
+    expect(bundle.nerrors == 0, "no iface errors");
+    expect(bundle.ndocs >= 16, "manifest + every listed YAML");
+    expect(strcmp(bundle.schema_version, "1.0.0") == 0, "schema_version 1.0.0");
+    expect(strcmp(bundle.aircraft_id, "ISM-FJ-1") == 0, "aircraft_id");
+
+    /* Unsupported schema_version */
+    FlIfaceSchema schema;
+    char *schema_text = slurp("schemas/ism-fj-1.0.0/top-level-allowlist.yaml");
+    expect(schema_text != NULL, "soft schema readable");
+    if (!schema_text) return;
+    expect(fl_iface_schema_load(&schema, schema_text, err, sizeof err) == 0, err);
+    free(schema_text);
+
+    const char *bad_ver =
+        "schema_version: \"9.9.9\"\n"
+        "aircraft_id: \"ISM-FJ-1\"\n";
+    FlIfaceDoc doc;
+    expect(fl_iface_validate_doc(&schema, "aircraft-geometry.yaml", bad_ver, &doc,
+                                 NULL, err, sizeof err) != 0,
+           "reject unknown schema_version");
+    expect(strstr(err, "unsupported schema_version") != NULL, err);
+
+    const char *unknown_key =
+        "schema_version: \"1.0.0\"\n"
+        "aircraft_id: \"ISM-FJ-1\"\n"
+        "not_a_real_field: 1\n"
+        "revision: \"A\"\n"
+        "status: stub\n"
+        "source_drawings: []\n"
+        "source_shell: x\n"
+        "datum: {}\n"
+        "study_model: {}\n"
+        "full_scale: {}\n"
+        "fuselage_stations_pct_fs: {}\n"
+        "wing_stations_pct_semi_span: {}\n"
+        "spars: {}\n"
+        "empennage: {}\n";
+    expect(fl_iface_validate_doc(&schema, "aircraft-geometry.yaml", unknown_key, &doc,
+                                 NULL, err, sizeof err) != 0,
+           "reject unknown key");
+    expect(strstr(err, "unknown key") != NULL, err);
+
+    const char *missing =
+        "schema_version: \"1.0.0\"\n"
+        "revision: \"A\"\n";
+    expect(fl_iface_validate_doc(&schema, "mass-properties.yaml", missing, &doc, NULL,
+                                 err, sizeof err) != 0,
+           "reject missing required");
+    expect(strstr(err, "missing required") != NULL, err);
+}
+
 int main(void) {
     test_project_roundtrip();
     test_aoa_sweep();
@@ -188,6 +247,7 @@ int main(void) {
     test_scenarios();
     test_planned();
     test_ism_and_fcs();
+    test_ism_interfaces();
     if (fails) {
         fprintf(stderr, "%d failure(s)\n", fails);
         return 1;

@@ -1,0 +1,115 @@
+schema_version: "1.0.0"
+aircraft_id: "ISM-FJ-1"
+revision: "A"
+status: stub
+source_drawings: ["ISM-FJ-DWG-040"]
+source_docs:
+  - fighter-jet/diagrams/hardpoints.md
+  - fighter-jet/sensors-weapons/stores.md
+  - fighter-jet/sensors-weapons/stores-integration.md
+related_interfaces:
+  - inert-stores.yaml
+  - sms-interface.yaml
+
+wet_hardpoints: false  # product decision baseline dry
+gun_bay: optional_product_decision
+issue_integration: 94
+
+stations:
+  - id: STA-1
+    side: left
+    fs_pct: 0.58
+    ws_pct: 1.0
+    bl_study_mm: -140
+    wl_study_mm: -6
+    role: wingtip_rail
+    hardware: rail_tip
+    mass_class_kg_max: 150
+  - id: STA-2
+    side: right
+    fs_pct: 0.58
+    ws_pct: 1.0
+    bl_study_mm: 140
+    wl_study_mm: -6
+    role: wingtip_rail
+    hardware: rail_tip
+    mass_class_kg_max: 150
+  - id: STA-3
+    side: left
+    fs_pct: 0.60
+    ws_pct: 0.75
+    bl_study_mm: -105
+    wl_study_mm: -8
+    role: outboard_pylon
+    hardware: pylon_rail_light
+    mass_class_kg_max: 300
+  - id: STA-4
+    side: right
+    fs_pct: 0.60
+    ws_pct: 0.75
+    bl_study_mm: 105
+    wl_study_mm: -8
+    role: outboard_pylon
+    hardware: pylon_rail_light
+    mass_class_kg_max: 300
+  - id: STA-5
+    side: left
+    fs_pct: 0.61
+    ws_pct: 0.50
+    bl_study_mm: -70
+    wl_study_mm: -10
+    role: mid_pylon
+    hardware: pylon_ejector_medium
+    mass_class_kg_max: 700
+  - id: STA-6
+    side: right
+    fs_pct: 0.61
+    ws_pct: 0.50
+    bl_study_mm: 70
+    wl_study_mm: -10
+    role: mid_pylon
+    hardware: pylon_ejector_medium
+    mass_class_kg_max: 700
+  - id: STA-7
+    side: left
+    fs_pct: 0.62
+    ws_pct: 0.25
+    bl_study_mm: -35
+    wl_study_mm: -12
+    role: inboard_pylon
+    hardware: pylon_ejector_heavy
+    mass_class_kg_max: 1200
+  - id: STA-8
+    side: right
+    fs_pct: 0.62
+    ws_pct: 0.25
+    bl_study_mm: 35
+    wl_study_mm: -12
+    role: inboard_pylon
+    hardware: pylon_ejector_heavy
+    mass_class_kg_max: 1200
+  - id: STA-9
+    side: centerline
+    fs_pct: 0.55
+    ws_pct: 0.0
+    bl_study_mm: 0
+    wl_study_mm: -28
+    role: centerline
+    hardware: pylon_ejector_heavy
+    mass_class_kg_max: 1500
+
+pylon_geometry_study:
+  lug_spacing_fore_aft_mm: 80
+  eject_clearance_cone_deg: {outboard: 15, inboard: 10}
+
+safeing:
+  mechanical_ground_pins: true
+  wow_inhibits_release: true
+  dual_consent: [mc_stores_logic, independent_safe_arm]
+  fcc_envelope_veto: true
+  jettison_guarded_path: true
+  live_fuzing_in_repo: false
+
+expected_behaviour:
+  release_blocked_if: [wow_and_not_override, envelope_unsafe, safe_arm_disagree]
+  asymmetry_reported_to_fcc: true

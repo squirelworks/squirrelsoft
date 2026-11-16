@@ -1,0 +1,85 @@
+schema_version: "1.0.0"
+aircraft_id: "ISM-FJ-1"
+revision: "A"
+status: stub
+source_drawings: ["ISM-FJ-DWG-010", "ISM-FJ-DWG-030"]
+source_docs:
+  - fighter-jet/flight-controls/fly-by-wire.md
+  - fighter-jet/flight-controls/control-laws.md
+  - fighter-jet/flight-controls/envelope.md
+
+architecture:
+  fbw: true
+  mechanical_backup: false
+  fcc_lanes: 4  # product decision baseline quadruplex
+  voting: mid_value_select
+  inceptors: [side_stick, throttle_quadrant, pedals]
+
+surfaces:
+  - id: aileron_L
+    axis: roll
+    hinge_ws_pct: 0.92
+    deflection_deg: {min: -25, max: 25}
+    rate_limit_deg_s: 80
+    actuator: eha_aileron_L
+  - id: aileron_R
+    axis: roll
+    hinge_ws_pct: 0.92
+    deflection_deg: {min: -25, max: 25}
+    rate_limit_deg_s: 80
+    actuator: eha_aileron_R
+  - id: flaperon_L
+    axis: [roll, lift]
+    deflection_deg: {min: -15, max: 35}
+    rate_limit_deg_s: 40
+    actuator: eha_flaperon_L
+  - id: flaperon_R
+    axis: [roll, lift]
+    deflection_deg: {min: -15, max: 35}
+    rate_limit_deg_s: 40
+    actuator: eha_flaperon_R
+  - id: ht
+    axis: pitch
+    type: all_moving
+    hinge_fs_pct: 0.92
+    deflection_deg: {min: -25, max: 15}
+    rate_limit_deg_s: 60
+    actuator: eha_ht
+  - id: rudder
+    axis: yaw
+    deflection_deg: {min: -30, max: 30}
+    rate_limit_deg_s: 70
+    actuator: eha_rudder
+
+modes:
+  - id: powered_approach
+    gains: high
+    emphasis: aoa
+  - id: up_and_away
+    command: pitch_rate_nz_blend
+    aoa_limit: true
+  - id: direct_degraded
+    augmentation: reduced
+    still_fbw: true
+  - id: ground
+    nws: true
+    surface_rate_derate: 0.4
+    thrust_idle_logic: true
+
+envelope:
+  provisional: true
+  aoa_limit_deg: {soft: 22, hard: 28}
+  nz_limit_g: {min: -3.0, max: 9.0}
+  roll_rate_limit_deg_s: 220
+  yaw_rate_limit_deg_s: 40
+  keas_limit_kt: {warn: 650, hard: 700}
+  mach_limit: {warn: 1.6, hard: 1.8}
+  gear_extend_max_keas_kt: 250
+  flap_extend_max_keas_kt: 230
+
+expected_behaviour:
+  carefree_handling: true
+  stores_asymmetry_derates_roll: true
+  wow_switches_laws: true
+  sensor_disagree_widens_protections: true
+  schedule_on: [dynamic_pressure, mach, gear, flap, stores_config]

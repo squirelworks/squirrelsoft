@@ -1,0 +1,65 @@
+schema_version: "1.0.0"
+aircraft_id: "ISM-FJ-1"
+revision: "A"
+status: stub
+source_docs:
+  - fighter-jet/avionics/buses-power.md
+  - fighter-jet/diagrams/wiring-harness.md
+
+buses:
+  - id: ISM-Bus-A
+    role: primary_mission_flight
+    media: dual_redundant_digital
+    frame_rate_hz_default: 100
+  - id: ISM-Bus-B
+    role: secondary_isolation
+    media: dual_redundant_digital
+    frame_rate_hz_default: 100
+  - id: ISM-Bay-Debug
+    role: development_usb
+    media: usb
+    flight_article: false
+
+topics:
+  - name: fcc.surface_cmd
+    bus: ISM-Bus-A
+    rate_hz: 100
+    payload: surface_deflection_commands
+  - name: fcc.surface_fb
+    bus: ISM-Bus-A
+    rate_hz: 100
+    payload: surface_position_feedback
+  - name: air_data.state
+    bus: ISM-Bus-A
+    rate_hz: 100
+    payload: keas_alt_mach_aoa_ss
+  - name: imu.state
+    bus: ISM-Bus-A
+    rate_hz: 200
+    payload: rates_accels
+  - name: mc.stores_config
+    bus: ISM-Bus-A
+    rate_hz: 10
+    payload: station_loadout_flags
+  - name: mc.radar_tracks
+    bus: ISM-Bus-A
+    rate_hz: 20
+    payload: track_list_stub
+  - name: mc.mode_request
+    bus: ISM-Bus-A
+    rate_hz: 20
+    payload: ap_at_modes
+  - name: pdu.power_status
+    bus: ISM-Bus-B
+    rate_hz: 10
+    payload: rail_health
+
+power:
+  primary_vdc: 28
+  essential_bus: true
+  bay_pcb_study: true
+
+expected_behaviour:
+  pinouts: freeze_with_bay_connector_icd
+  analyzer_fixtures: future_under_interfaces_or_fixtures
+  third_party_sim_not_sot: true

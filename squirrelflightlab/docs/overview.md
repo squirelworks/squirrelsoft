@@ -23,6 +23,13 @@ published aero references may inform models but must not be vendored.
                        │
                        └────────► fl_scenario (trim / pull-up / roll)
 
+ISM fighter-jet/interfaces/*.yaml
+        │
+        ▼
+fl_yaml ──► fl_iface (schema_version + Soft top-level allowlist)
+        │
+        └─ CLI: ism-interfaces DIR
+
 fl_planned ── stubs only: CFD mesh, wind tunnel, HIL
 main.c     ── thin CLI (future: sqgui window on the same core)
 ```
@@ -45,6 +52,9 @@ airframe PCB or shell.
 
 0. **ISM param/interface load** — `fl_ism` reads Victor's (or CI fixture)
    `.ismfj-params` / `.ismfj-iface`; `fcs-check` writes a pass/fail artifact.
+   `fl_iface` loads every YAML under `fighter-jet/interfaces/` (CI snapshot in
+   `fixtures/ism-interfaces/`) gated by Soft `schemas/ism-fj-*/` allowlists
+   and `schema_version` (Soft #170 / ROADMAP S7.2b). Soft does not fork SoT.
 
 1. **Project workspace** — default ISM fighter inputs; load/save `.sqflt`
    (fuselage length/scale, wing planform placeholders, control surfaces,
