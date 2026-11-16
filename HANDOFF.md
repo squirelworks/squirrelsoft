@@ -259,13 +259,19 @@ Done earlier (kept for history):
 ### FLIGHTLAB-scaffold — ISM Fighter Jet Flight Lab  `status: done` (#167)
 - Desktop app `squirrelflightlab/` scaffold on `main`.
 
-### FLIGHTLAB-ism-params — load ISM params + FCS co-check  `status: done` (this PR)
+### FLIGHTLAB-ism-params — load ISM params + FCS co-check  `status: done` (#169)
 - S7.2: `fl_ism` / `fl_fcs`, fixtures under `fixtures/ism-fighter/`, CLI
   `ism-load` and `fcs-check` with pass/fail report. Soft #168 acceptance for
   load + scripted FCS co-check. Victor SoT files: ISM #88. Soft does not design
   airframe hardware.
 
-### ISMBENCH-scaffold — keyboard/mouse HID harness  `status: done` (this PR)
+### FLIGHTLAB-ism-interfaces — load fighter-jet/interfaces YAML  `status: done` (this PR)
+- S7.2b / Soft #170: `fl_yaml` + `fl_iface`, Soft allowlist
+  `schemas/ism-fj-1.0.0/`, CI snapshot `fixtures/ism-interfaces/` from ISM
+  `main`, CLI `ism-interfaces`. Schema-version gate; loud missing/unknown
+  top-level keys. Soft does not fork SoT — refresh path in fixtures README.
+
+### ISMBENCH-scaffold — keyboard/mouse HID harness  `status: done` (#169)
 - S8.1: `squirrelismbench/` matrix + mouse self-tests. Eric interface docs:
   ISM #89 / #90. Live USB and other lab benches are S8.2+.
 

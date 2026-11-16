@@ -1,6 +1,6 @@
 # Fighter Jet Flight Lab (SquirrelFlightLab)
 
-**Status: Scaffolded** (S7.1–S7.2)
+**Status: Scaffolded** (S7.1–S7.2b)
 
 First-party SquirrelSoft lab for simulating and validating the International
 Squirrel Machines (ISM) fighter jet — aerodynamics, flight controls, avionics
@@ -35,6 +35,7 @@ trim / pull-up / roll scenarios.
 |--------|------|-------------|
 | `fl_project` | Workspace + `.sqflt` design inputs | Prefer ISM param files |
 | `fl_ism` | Load `ISM-FJ parameters` / `ISM-FJ interface` texts | Refresh fixtures from ISM #88 |
+| `fl_iface` | Load all `fighter-jet/interfaces/*.yaml` by `schema_version` | Nested closed allowlists |
 | `fl_fcs` | Scripted FCS co-check + pass/fail report | Envelope numbers from Victor |
 | `fl_aero` | Parametric CL/CD/Cm, AoA sweep, CSV | Higher-fidelity provider |
 | `fl_dyn` | 6-DOF sketch, history | Better integration |
@@ -67,12 +68,14 @@ Listed in the design note. Highlights:
 ## Code layout
 
 ```
-include/   portable headers (fl_*.h)
-src/       portable core + CLI main.c
-samples/   ism-fighter-v0.sqflt + device-doc channel stub
-scripts/   demo_happy_path.sh
-tests/     test_flightlab.c, cli_smoke.sh
-docs/      overview.md (architecture + decisions)
+include/    portable headers (fl_*.h)
+src/        portable core + CLI main.c
+samples/    ism-fighter-v0.sqflt + device-doc channel stub
+fixtures/   ism-fighter/ (params) + ism-interfaces/ (YAML snapshot)
+schemas/    Soft-owned ISM-FJ interface allowlists (not SoT)
+scripts/    demo_happy_path.sh
+tests/      test_flightlab.c, cli_smoke.sh
+docs/       overview.md (architecture + decisions)
 ```
 
 Original code only. No third-party flight-sim engines.

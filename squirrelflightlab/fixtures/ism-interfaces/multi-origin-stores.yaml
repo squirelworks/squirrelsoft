@@ -1,0 +1,222 @@
+schema_version: "1.0.0"
+aircraft_id: "ISM-FJ-1"
+revision: "A"
+status: stub
+issue: 101
+provisional: true
+scope: integration_multi_origin_only
+excluded:
+  - guidance
+  - seekers
+  - propulsion
+  - warheads
+  - fuzing
+  - arming_codes
+  - weapon_protocol_internals
+  - message_formats
+source_docs:
+  - fighter-jet/sensors-weapons/multi-origin-stores.md
+  - fighter-jet/interfaces/hardpoints.yaml
+  - fighter-jet/interfaces/inert-stores.yaml
+  - fighter-jet/interfaces/sms-interface.yaml
+source_drawings:
+  - ISM-FJ-DWG-040
+
+citations:
+  - id: mil-a-8591-table
+    title: "MIL-A-8591 / store suspension lug spacing table (public PDF mirror)"
+    url: "https://www.dror-aero.com/link/mil/mil-std-8591.pdf"
+    used_for: "14 in and 30 in lug spacing by weight class; cites MIL-STD-1760 as electrical interconnection standard"
+  - id: mil-r-85325
+    title: "MIL-R-85325 lug spacing excerpts (public)"
+    url: "https://mil-spec.tpub.com/MIL-R/MIL-R-85325/MIL-R-8532500006.htm"
+    used_for: "14 in (355.6 mm) and 30 in (762 mm) lug spacing examples"
+  - id: wiki-aim120
+    title: "AIM-120 AMRAAM (encyclopedia summary)"
+    url: "https://en.wikipedia.org/wiki/AIM-120_AMRAAM"
+    used_for: "order-of-magnitude length/diameter/mass for inert class"
+  - id: wiki-r73
+    title: "R-73 (missile) (encyclopedia summary)"
+    url: "https://en.wikipedia.org/wiki/R-73_(missile)"
+    used_for: "order-of-magnitude length/diameter/mass for RU AAM-class inert"
+  - id: wiki-pl15
+    title: "PL-15 (encyclopedia summary)"
+    url: "https://en.wikipedia.org/wiki/PL-15"
+    used_for: "order-of-magnitude length/mass for CN BVR-class inert"
+  - id: wiki-aam4
+    title: "AAM-4 (encyclopedia summary)"
+    url: "https://en.wikipedia.org/wiki/AAM-4"
+    used_for: "order-of-magnitude length/mass for JP BVR-class inert"
+  - id: wiki-mil1760
+    title: "MIL-STD-1760 (encyclopedia summary)"
+    url: "https://en.wikipedia.org/wiki/MIL-STD-1760"
+    used_for: "existence of aircraft/store electrical interconnection standard class"
+
+mechanical_interfaces:
+  - id: ism_native_80mm
+    family: ISM
+    type: pylon_lugs
+    lug_spacing_mm: 80
+    note: "ISM study native spacing from hardpoints.yaml"
+  - id: nato_14in
+    family: NATO
+    type: suspension_lugs
+    lug_spacing_in: 14
+    lug_spacing_mm: 355.6
+    citation_ids: [mil-a-8591-table, mil-r-85325]
+  - id: nato_30in
+    family: NATO
+    type: suspension_lugs
+    lug_spacing_in: 30
+    lug_spacing_mm: 762.0
+    citation_ids: [mil-a-8591-table, mil-r-85325]
+  - id: ru_apu_rail
+    family: RU
+    type: rail_launcher_class
+    note: "Generic APU-class rail abstraction; public naming only"
+  - id: ru_aku_ejector
+    family: RU
+    type: ejector_rack_class
+    note: "Generic AKU-class ejector abstraction; public naming only"
+  - id: cn_pylon_adapter
+    family: CN
+    type: adapter_pylon
+    adapts_to: [nato_14in, rail_or_cn_native_stub]
+  - id: jp_pylon_adapter
+    family: JP
+    type: adapter_pylon
+    adapts_to: [nato_14in, rail_or_jp_native_stub]
+
+electrical_layers:
+  - id: elec_ism_native
+    family: ISM
+    categories: [power_28vdc, release_discrete, safe_arm_discrete, ism_bus_serial]
+    protocol_internals: false
+  - id: elec_mil_std_1760_class
+    family: NATO
+    categories: [power, release_discrete, multipurpose_data_port]
+    standard_class: MIL-STD-1760
+    citation_ids: [wiki-mil1760, mil-a-8591-table]
+    protocol_internals: false
+    note: "Category-level only; no signal timing or message specs in-repo"
+  - id: elec_adapter_ru
+    family: RU
+    categories: [power, release_discrete, safe_discrete, serial_stub]
+    protocol_internals: false
+  - id: elec_adapter_cn
+    family: CN
+    categories: [power, release_discrete, safe_discrete, serial_stub]
+    protocol_internals: false
+  - id: elec_adapter_jp
+    family: JP
+    categories: [power, release_discrete, safe_discrete, serial_stub]
+    protocol_internals: false
+
+# Expanded inert catalogue (integration mass/drag only)
+inert_catalogue:
+  - id: ISM-INERT-AAM-S
+    family: ISM
+    class_ref: AIM-9_class
+    extends: inert-stores.yaml
+  - id: ISM-INERT-AGM-M
+    family: ISM
+    class_ref: AGM-114_class
+    extends: inert-stores.yaml
+  - id: ISM-INERT-AAM-M
+    family: NATO
+    class_ref: AIM-120_class
+    citation_ids: [wiki-aim120]
+    length_m: 3.66
+    diameter_m: 0.178
+    fin_span_m: 0.63
+    mass_kg: 152.0
+    cg_from_nose_pct_length: 0.46
+    reference_area_m2: 0.0249
+    cd_increment: 0.0015
+    preferred_mechanical: [nato_14in, ism_native_80mm]
+    preferred_electrical: [elec_mil_std_1760_class, elec_ism_native]
+  - id: ISM-INERT-RU-AAM-S
+    family: RU
+    class_ref: R-73_class
+    citation_ids: [wiki-r73]
+    length_m: 2.90
+    diameter_m: 0.170
+    fin_span_m: 0.51
+    mass_kg: 105.0
+    cg_from_nose_pct_length: 0.47
+    reference_area_m2: 0.0227
+    cd_increment: 0.0011
+    preferred_mechanical: [ru_apu_rail]
+    preferred_electrical: [elec_adapter_ru]
+  - id: ISM-INERT-CN-AAM-L
+    family: CN
+    class_ref: PL-15_class
+    citation_ids: [wiki-pl15]
+    length_m: 4.0
+    diameter_m: 0.20
+    fin_span_m: 0.70
+    mass_kg: 210.0
+    cg_from_nose_pct_length: 0.48
+    reference_area_m2: 0.0314
+    cd_increment: 0.0018
+    preferred_mechanical: [cn_pylon_adapter, nato_14in]
+    preferred_electrical: [elec_adapter_cn]
+  - id: ISM-INERT-JP-AAM-M
+    family: JP
+    class_ref: AAM-4_class
+    citation_ids: [wiki-aam4]
+    length_m: 3.67
+    diameter_m: 0.203
+    fin_span_m: 0.80
+    mass_kg: 220.0
+    cg_from_nose_pct_length: 0.47
+    reference_area_m2: 0.0324
+    cd_increment: 0.0017
+    preferred_mechanical: [jp_pylon_adapter, nato_14in]
+    preferred_electrical: [elec_adapter_jp]
+
+# family × station × adapters
+compatibility_matrix:
+  - family: ISM
+    stations: [STA-1, STA-2, STA-3, STA-4, STA-5, STA-6, STA-7, STA-8, STA-9]
+    mechanical: [ism_native_80mm]
+    electrical: [elec_ism_native]
+    stores: [ISM-INERT-AAM-S, ISM-INERT-AGM-M, ISM-INERT-FUEL-600]
+  - family: NATO
+    stations: [STA-3, STA-4, STA-5, STA-6, STA-7, STA-8, STA-9]
+    mechanical: [nato_14in, nato_30in]
+    electrical: [elec_mil_std_1760_class]
+    stores: [ISM-INERT-AAM-M]
+    notes: "STA-1/2 tip rails remain ISM/RU rail class; heavy 30in on STA-7…9 only"
+  - family: RU
+    stations: [STA-1, STA-2, STA-3, STA-4, STA-5, STA-6]
+    mechanical: [ru_apu_rail, ru_aku_ejector]
+    electrical: [elec_adapter_ru]
+    stores: [ISM-INERT-RU-AAM-S]
+  - family: CN
+    stations: [STA-3, STA-4, STA-5, STA-6, STA-7, STA-8]
+    mechanical: [cn_pylon_adapter]
+    electrical: [elec_adapter_cn]
+    stores: [ISM-INERT-CN-AAM-L]
+  - family: JP
+    stations: [STA-3, STA-4, STA-5, STA-6, STA-7, STA-8]
+    mechanical: [jp_pylon_adapter]
+    electrical: [elec_adapter_jp]
+    stores: [ISM-INERT-JP-AAM-M]
+
+station_mechanical_options:
+  STA-1: [ism_native_80mm, ru_apu_rail]
+  STA-2: [ism_native_80mm, ru_apu_rail]
+  STA-3: [ism_native_80mm, nato_14in, ru_apu_rail, ru_aku_ejector, cn_pylon_adapter, jp_pylon_adapter]
+  STA-4: [ism_native_80mm, nato_14in, ru_apu_rail, ru_aku_ejector, cn_pylon_adapter, jp_pylon_adapter]
+  STA-5: [ism_native_80mm, nato_14in, nato_30in, ru_aku_ejector, cn_pylon_adapter, jp_pylon_adapter]
+  STA-6: [ism_native_80mm, nato_14in, nato_30in, ru_aku_ejector, cn_pylon_adapter, jp_pylon_adapter]
+  STA-7: [ism_native_80mm, nato_14in, nato_30in, cn_pylon_adapter, jp_pylon_adapter]
+  STA-8: [ism_native_80mm, nato_14in, nato_30in, cn_pylon_adapter, jp_pylon_adapter]
+  STA-9: [ism_native_80mm, nato_14in, nato_30in]
+
+expected_behaviour:
+  flight_lab_loads: multi-origin-stores.yaml
+  sms_still_owns_consent: true
+  fcc_envelope_veto_unchanged: true
+  no_weapon_internals_in_repo: true

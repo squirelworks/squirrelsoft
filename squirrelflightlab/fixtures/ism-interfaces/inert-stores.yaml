@@ -1,0 +1,114 @@
+schema_version: "1.0.0"
+aircraft_id: "ISM-FJ-1"
+revision: "A"
+status: stub
+issue: 94
+provisional: true
+scope: inert_integration_only
+excluded:
+  - guidance
+  - seekers
+  - propulsion
+  - warheads
+  - fuzing
+source_docs:
+  - fighter-jet/sensors-weapons/stores-integration.md
+  - fighter-jet/sensors-weapons/stores.md
+  - fighter-jet/interfaces/hardpoints.yaml
+source_drawings:
+  - ISM-FJ-DWG-040
+
+note: >
+  Generic inert mass/geometry/drag models for Flight Lab. Public AIM-9 and
+  AGM-114 *class* figures seed dimensions only. ISM product IDs are original.
+  Not live munitions; not classified data.
+
+citations:
+  - id: wiki-aim9
+    title: "AIM-9 Sidewinder (public encyclopedia summary)"
+    url: "https://en.wikipedia.org/wiki/AIM-9_Sidewinder"
+    used_for: "order-of-magnitude length, diameter, mass"
+  - id: wiki-agm114
+    title: "AGM-114 Hellfire (public encyclopedia summary)"
+    url: "https://en.wikipedia.org/wiki/AGM-114_Hellfire"
+    used_for: "order-of-magnitude length, diameter, mass"
+
+hardware:
+  - id: rail_tip
+    type: rail
+    compatible_stations: [STA-1, STA-2]
+    eject_impulse_ns: 0
+  - id: pylon_rail_light
+    type: rail_or_ejector
+    compatible_stations: [STA-3, STA-4]
+    eject_impulse_ns: 1200  # provisional if ejector mode
+  - id: pylon_ejector_medium
+    type: ejector_rack
+    compatible_stations: [STA-5, STA-6]
+    eject_impulse_ns: 2500
+  - id: pylon_ejector_heavy
+    type: ejector_rack
+    compatible_stations: [STA-7, STA-8, STA-9]
+    eject_impulse_ns: 4000
+
+pylon_geometry:
+  lug_spacing_fore_aft_mm: 80
+
+stores:
+  - id: ISM-INERT-AAM-S
+    class_ref: AIM-9_class
+    citation_ids: [wiki-aim9]
+    description: "Short-range AAM-class inert shape for integration / Flight Lab"
+    length_m: 2.90
+    diameter_m: 0.127
+    mass_kg: 88.0
+    mass_range_kg: [85.0, 91.0]
+    cg_from_nose_pct_length: 0.45
+    reference_area_m2: 0.0127  # π*(d/2)^2 approx frontal
+    cd_increment: 0.0008      # parasite increment stub at store ref area
+    pitch_inertia_kg_m2: 45.0  # provisional about store CG
+    compatible_hardware: [rail_tip, pylon_rail_light]
+    compatible_stations: [STA-1, STA-2, STA-3, STA-4]
+    release_mode: rail
+
+  - id: ISM-INERT-AGM-M
+    class_ref: AGM-114_class
+    citation_ids: [wiki-agm114]
+    description: "Medium AGM-class inert shape for integration / Flight Lab"
+    length_m: 1.63
+    diameter_m: 0.178
+    mass_kg: 47.0
+    mass_range_kg: [45.0, 49.0]
+    cg_from_nose_pct_length: 0.48
+    reference_area_m2: 0.0249
+    cd_increment: 0.0012
+    pitch_inertia_kg_m2: 12.0
+    compatible_hardware: [pylon_ejector_medium, pylon_ejector_heavy]
+    compatible_stations: [STA-5, STA-6, STA-7, STA-8]
+    release_mode: ejector
+
+  - id: ISM-INERT-FUEL-600
+    class_ref: ISM_tank_stub
+    citation_ids: []
+    description: "Internal ISM external-tank inert stub (not a public missile class)"
+    length_m: 3.2
+    diameter_m: 0.45
+    mass_kg: 600.0  # fuel + tank dry provisional
+    cg_from_nose_pct_length: 0.50
+    reference_area_m2: 0.159
+    cd_increment: 0.004
+    compatible_hardware: [pylon_ejector_heavy]
+    compatible_stations: [STA-7, STA-8, STA-9]
+    release_mode: ejector_jettison
+
+flight_model_application:
+  add_mass_at_station: true
+  shift_cg: true
+  add_parasite_drag: true
+  report_asymmetry_to_fcc: true
+  reference_mass_file: mass-properties.yaml
+  reference_stations_file: hardpoints.yaml
+
+expected_behaviour:
+  inert_only: true
+  no_seeker_warhead_fuze_propulsion_fields: true

@@ -1,0 +1,78 @@
+schema_version: "1.0.0"
+aircraft_id: "ISM-FJ-1"
+revision: "A"
+status: stub
+source_drawings: ["ISM-FJ-DWG-010", "ISM-FJ-DWG-050", "ISM-FJ-DWG-060"]
+source_shell: "fighter-jet/shell/airframe.scad"
+
+datum:
+  origin: "nose_tip_FS0"
+  x_positive: aft
+  y_positive: right
+  z_positive: up
+  waterline: "fuselage_geometric_center"
+  units_study: mm
+  units_invariant: ["pct_fs", "pct_ws", "deg"]
+
+study_model:
+  provisional: true
+  fuselage_length_mm: 420
+  fuselage_width_mm: 48
+  fuselage_height_mm: 56
+  nose_length_mm: 90
+  wing_span_mm: 280
+  wing_root_chord_mm: 110
+  wing_tip_chord_mm: 45
+  wing_thickness_mm: 12
+  wing_sweep_le_deg: 35
+  htail_span_mm: 100
+  htail_chord_mm: 50
+  vtail_height_mm: 70
+  vtail_chord_mm: 60
+  avionics_bay_l_mm: 120
+  avionics_bay_w_mm: 80
+  avionics_bay_h_mm: 18
+  scale_note: "1 study mm = 1 OpenSCAD unit; full-scale length class TBD"
+
+full_scale:
+  provisional: true
+  length_class_m: 15.5  # study×36.9 provisional for viability (#103)
+  span_m: 10.3
+  wing_area_m2: 29.5
+  scale_from_study: 36.9
+  note: "Provisional mapping for viability gates; freeze with product decision #2"
+
+fuselage_stations_pct_fs:
+  FS-0: 0.0
+  FS-5: 0.05
+  FS-12: 0.12
+  FS-18: 0.18
+  FS-22: 0.22
+  FS-28: 0.28
+  FS-35: 0.35
+  FS-42: 0.42
+  FS-48: 0.48
+  FS-55: 0.55
+  FS-62: 0.62
+  FS-72: 0.72
+  FS-82: 0.82
+  FS-90: 0.90
+  FS-100: 1.0
+
+wing_stations_pct_semi_span:
+  WS-0: 0.0
+  WS-2: 0.25
+  WS-4: 0.50
+  WS-6: 0.75
+  WS-8: 0.92
+  WS-10: 1.0
+
+spars:
+  front_spar_pct_chord: 0.15
+  rear_spar_pct_chord: 0.65
+  carry_through_fs_pct: 0.62
+
+empennage:
+  ht_hinge_fs_pct: 0.92
+  vt_spar_fs_pct_range: [0.88, 0.96]
+  ht_type: all_moving  # product decision baseline

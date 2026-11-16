@@ -29,6 +29,9 @@ $P scenario nope >/dev/null 2>&1; [ $? -eq 2 ] || fail "bad scenario → 2"
 $P avionics-check >/dev/null || fail "avionics-check"
 $P ism-load --params fixtures/ism-fighter/ism-fj-1.ismfj-params \
   --iface fixtures/ism-fighter/bay-io.ismfj-iface | grep -q PASS || fail "ism-load"
+$P ism-interfaces fixtures/ism-interfaces | grep -q PASS || fail "ism-interfaces"
+$P ism-interfaces fixtures/ism-interfaces-bad-version >/dev/null 2>&1
+[ $? -eq 1 ] || fail "ism-interfaces bad version → 1"
 $P fcs-check --report "$B/fcs_report.txt" | grep -q "result: PASS" || fail "fcs-check"
 grep -q "result: PASS" "$B/fcs_report.txt" || fail "fcs report file"
 $P planned | grep -q cfd_mesh_import || fail "planned"

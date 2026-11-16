@@ -1,0 +1,148 @@
+schema_version: "1.0.0"
+aircraft_id: "ISM-FJ-1"
+revision: "A"
+status: stub
+issue: 92
+source_docs:
+  - fighter-jet/materials/trade-study.md
+  - fighter-jet/materials/candidates.yaml
+  - fighter-jet/materials/structure.md
+  - fighter-jet/materials/metallurgy-composites.md
+provisional: true
+wing_box_baseline: hybrid_al_cfrp  # product decision: all-composite alternate
+
+# Zone → material map for structural / Flight Lab consumers.
+# carrier_salt: good | fair | poor | n_a — relative to untreated exposure; coatings assumed per notes.
+zones:
+  - id: radome
+    assembly: A01
+    fs_pct_range: [0.0, 0.05]
+    primary_material: ISM-RF-Q
+    alternate_materials: []
+    role: rf_transparent_shell
+    carrier_salt: fair
+    notes: "Rain-erosion coat on LE; not primary flight structure"
+
+  - id: forward_fuselage_skins
+    assembly: A01
+    fs_pct_range: [0.05, 0.42]
+    primary_material: ISM-Al-2xxx
+    secondary_material: ISM-CFRP-A
+    alternate_materials: [ISM-Al-Li]
+    role: fatigue_skins_and_panels
+    carrier_salt: fair
+    corrosion_controls: [primer_system, sealant, drain_paths]
+
+  - id: pressure_bulkheads
+    assembly: A01
+    stations: [FS-22, FS-42]
+    primary_material: ISM-Al-7xxx
+    alternate_materials: [ISM-Al-Li]
+    role: cockpit_pressure_vessel
+    carrier_salt: fair
+
+  - id: avionics_bay_structure
+    assembly: A02
+    stations: [FS-48]
+    primary_material: ISM-CFRP-A
+    secondary_material: ISM-Al-7xxx
+    role: trays_and_bay_frames
+    carrier_salt: good
+    notes: "Al honeycomb / CFRP trays OK; isolate CFRP–Al"
+
+  - id: wing_skins
+    assembly: [A04, A05]
+    primary_material: ISM-CFRP-A
+    alternate_materials: []
+    role: bending_stiffness_skin
+    carrier_salt: good
+    lightning: mesh_or_foil_required
+
+  - id: wing_spar_caps
+    assembly: [A04, A05]
+    primary_material: ISM-Al-7xxx
+    alternate_materials: [ISM-Al-Li, ISM-CFRP-A]
+    role: wing_bending_caps
+    carrier_salt: fair
+    notes: "Hybrid baseline; all-CFRP caps are product-decision alternate"
+
+  - id: wing_spar_webs_ribs
+    assembly: [A04, A05]
+    primary_material: ISM-CFRP-A
+    alternate_materials: [ISM-Al-2xxx]
+    role: shear_and_fuel_cell_shape
+    carrier_salt: good
+
+  - id: carry_through_box
+    assembly: A02
+    stations: [FS-62]
+    primary_material: ISM-Al-7xxx
+    fittings_material: ISM-Ti-6
+    alternate_materials: [ISM-CFRP-A]
+    role: side_of_body_bending
+    carrier_salt: fair
+    source_drawing: ISM-FJ-DWG-030
+
+  - id: landing_gear
+    assembly: A08
+    primary_material: ISM-Ti-6
+    alternate_materials: [ISM-Steel-HS]
+    role: nlg_mlg_legs_fittings
+    carrier_salt: good  # Ti primary; steel alternate → poor without heavy protection
+    alternate_carrier_salt: poor
+
+  - id: arresting_hook_keel
+    assembly: A02
+    primary_material: ISM-Ti-6
+    alternate_materials: [ISM-Steel-HS]
+    role: hook_damper_keel_fittings
+    carrier_salt: good
+    related_issue: 93
+    notes: "Load cases land in carrier-loads.yaml when #93 ships"
+
+  - id: empennage_skins
+    assembly: [A06, A07]
+    primary_material: ISM-CFRP-A
+    role: ht_vt_skins
+    carrier_salt: good
+
+  - id: actuator_fittings
+    assembly: [A04, A05, A06, A07]
+    primary_material: ISM-Ti-6
+    role: eha_attach_bearings
+    carrier_salt: good
+
+  - id: aft_hot_structure
+    assembly: A03
+    fs_pct_range: [0.82, 1.0]
+    primary_material: ISM-Ti-6
+    secondary_material: ISM-Ni-HT
+    role: engine_bay_firewall_nozzle_adjacent
+    carrier_salt: good
+    temperature_class: high
+
+  - id: fasteners_primary
+    assembly: airframe
+    primary_material: Ti_or_CRES
+    role: bolted_joints
+    carrier_salt: good
+    galvanic_rules:
+      cfrp_to_al: "Ti or CRES + sealant; no bare Al washer on carbon"
+      cfrp_to_cfrp: "Ti fasteners + large footprint washers/inserts"
+      ti_to_ti: "Ti fasteners"
+
+joints_matrix:
+  - join: bonded
+    allowed_for: [CFRP_skins_to_cores, fairings]
+    rationale: "Continuous load / seal; inspectable bondlines"
+  - join: bolted
+    allowed_for: [fittings, gear, hook, access_panels, spar_root]
+    rationale: "Replaceable LRUs; high peaking loads"
+  - join: riveted
+    allowed_for: [Al_skins_longerons, secondary_structure]
+    rationale: "Established Al airframe practice"
+
+expected_behaviour:
+  flight_lab: "Consumers may weight mass model by zone primary_material density stubs later"
+  prefer_ti_for_naval: true
+  steel_hook_gear_requires_corrosion_plan: true

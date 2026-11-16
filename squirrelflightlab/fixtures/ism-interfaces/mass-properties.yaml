@@ -1,0 +1,53 @@
+schema_version: "1.0.0"
+aircraft_id: "ISM-FJ-1"
+revision: "A"
+status: stub
+source_drawings: ["ISM-FJ-DWG-010", "ISM-FJ-DWG-040"]
+coordinate_frame: "body_datum_FS0_BL0_WL0"  # same as aircraft-geometry datum
+inertia_about: "cg"
+
+# Provisional conceptual full-scale class for Flight Lab bring-up.
+# Study-model mass is NOT used for 6-DOF; consumers should read full_scale.
+study_model:
+  provisional: true
+  note: "OpenSCAD shell mass not authoritative; ignore for dynamics"
+
+full_scale:
+  provisional: true
+  empty_mass_kg: 9800
+  max_takeoff_mass_kg: 18500
+  fuel_internal_kg: 4200
+  cg_empty:
+    x_fs_pct: 0.58
+    y_bl_m: 0.0
+    z_wl_m: 0.05
+  cg_gross_nominal:
+    x_fs_pct: 0.56
+    y_bl_m: 0.0
+    z_wl_m: 0.02
+  inertia_empty_kg_m2:
+    Ixx: 18000
+    Iyy: 82000
+    Izz: 95000
+    Ixy: 0.0
+    Ixz: 3500
+    Iyz: 0.0
+  inertia_gross_nominal_kg_m2:
+    Ixx: 22000
+    Iyy: 110000
+    Izz: 125000
+    Ixy: 0.0
+    Ixz: 4200
+    Iyz: 0.0
+  notes: >
+    Numbers are ISM design placeholders for FCS co-check scaffolding.
+    Replace when weight/balance campaign (#78) freezes.
+
+stores_mass_delta:
+  reference: hardpoints.yaml
+  note: "Apply per-station store mass to CG/inertia in Flight Lab"
+
+expected_behaviour:
+  cg_travel_fs_pct_range: [0.52, 0.62]
+  lateral_cg_tolerance_m: 0.05
+  warn_if_asymmetric_stores_kg: 200

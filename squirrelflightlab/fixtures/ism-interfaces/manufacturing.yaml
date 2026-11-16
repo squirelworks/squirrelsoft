@@ -1,0 +1,229 @@
+schema_version: "1.0.0"
+aircraft_id: "ISM-FJ-1"
+revision: "A"
+status: stub
+issue: 100
+provisional: true
+scope: manufacturing_supply_research_only
+excluded:
+  - assembly_jigs
+  - layup_tools
+  - forming_dies
+  - shop_machine_designs  # Eric's lane
+source_docs:
+  - fighter-jet/materials/manufacturing-sourcing.md
+  - fighter-jet/interfaces/materials-zones.yaml
+  - fighter-jet/materials/trade-study.md
+source_drawings:
+  - ISM-FJ-DWG-010
+  - ISM-FJ-DWG-020
+  - ISM-FJ-DWG-030
+  - ISM-FJ-DWG-050
+  - ISM-FJ-DWG-060
+
+process_codes:
+  forge_machine: "closed-die forge + CNC machining"
+  hot_spf_db: "hot / superplastic forming + diffusion bond"
+  am_ded_pbf: "metal AM DED or PBF + finish machine"
+  sheet_rivet: "sheet form + rivet/fasten"
+  composite_auto: "composite layup + autoclave"
+
+titanium_supply_chain:
+  path:
+    - kroll_sponge
+    - electrode_consolidate
+    - optional_eb_or_pam_first_melt
+    - var_final_melt
+    - billet
+    - mill_products
+    - distributor_cut_to_size
+    - forge_or_machine
+  mill_products:
+    sheet_plate_spec: "AMS 4911"
+    bar_forging_spec: "AMS 4928"
+    alloy: "Ti-6Al-4V"
+  small_builder_buy_path: >
+    Buy certified AMS 4911/4928 from AS9100 aerospace distributors with MTRs;
+    cut-to-size; subcontract forge/CNC. Do not operate Kroll/VAR in-house.
+  lead_times:
+    distributor_stock: "days_to_weeks"
+    mill_order: "months"
+    provisional: true
+  risks:
+    - sponge_var_capacity_cycles
+    - domestic_melt_dfars_if_required
+    - hydrogen_and_alpha_case_control
+
+citations:
+  - id: dynamic-ti64
+    title: "Ti 6Al-4V AMS 4928 / AMS 4911 — Dynamic Metals"
+    url: "https://dynamicmetalsltd.com/products/titanium/6al4v/"
+    used_for: "VAR final melt; AMS 4911/4928 product forms"
+  - id: ssa-ti64
+    title: "Ti-6Al-4V AMS 4928 / AMS 4911 — Service Steel Aerospace"
+    url: "https://www.ssa-corp.com/en/Ti-6Al-4V-Titanium-AMS-4928-UNSR56400.php"
+    used_for: "Distributor mill products; melt route summary"
+  - id: ssa-300m
+    title: "300M / AMS 6417 data sheet — Service Steel Aerospace"
+    url: "https://www.ssa-corp.com/documents/Data%20Sheet%20300M-4340MOD-AMS-6417-UNSK44220.pdf"
+    used_for: "300M gear/hook alternate spec class"
+  - id: upm-ti64
+    title: "Ti-6AL-4V AMS 4911/4928 — United Performance Metals"
+    url: "https://www.upmet.com/products/titanium/ti-6al-4v"
+    used_for: "Sheet/plate/bar size classes"
+  - id: tw-ams
+    title: "AMS Specifications catalog — TW Metals"
+    url: "https://www.twmetals.com/resources/specs.html"
+    used_for: "AMS 4037 2024; AMS 4045 7075 class callouts"
+  - id: flight-300m
+    title: "AMS 6417 300M bar/forgings — Flight Metals"
+    url: "https://www.flightmetals.com/products/alloy-steel/ams-6417-300m-alloy-steel-bar-forgings/"
+    used_for: "300M public supplier example"
+
+required_equipment_eric_lane:
+  items:
+    - cnc_mill
+    - large_format_printer_study_models
+    - heat_treat_or_cure_oven
+    - hand_drill_rivet_tools
+    - ut_lpi_inspection_kits
+  note: "Reference only — do not design in ISM fighter-jet tree"
+
+zones:
+  - zone_id: radome
+    process: composite_auto
+    material_ism: ISM-RF-Q
+    spec_public: "quartz_epoxy_rf_prepreg_class"
+    heat_treat: "resin_cure_cycle"
+    ndt: [visual, tap_or_ut_bond]
+    drawing_refs: [ISM-FJ-DWG-050]
+
+  - zone_id: forward_fuselage_skins
+    process: sheet_rivet
+    secondary_process: composite_auto
+    material_ism: ISM-Al-2xxx
+    spec_public: "AMS 4037 2024-T3 sheet class"
+    heat_treat: "as_received_T3"
+    ndt: [visual, eddy_current_fastener_holes]
+    drawing_refs: [ISM-FJ-DWG-010, ISM-FJ-DWG-050]
+    citation_ids: [tw-ams]
+
+  - zone_id: pressure_bulkheads
+    process: forge_machine
+    alternate_process: plate_machine
+    material_ism: ISM-Al-7xxx
+    spec_public: "AMS 4045 7075-T6/T651 class"
+    heat_treat: "T6_or_T651"
+    ndt: [ultrasonic_plate, liquid_penetrant]
+    drawing_refs: [ISM-FJ-DWG-050]
+    citation_ids: [tw-ams]
+
+  - zone_id: avionics_bay_structure
+    process: composite_auto
+    secondary_process: forge_machine
+    material_ism: ISM-CFRP-A
+    secondary_material_ism: ISM-Al-7xxx
+    spec_public: "CFRP prepreg + 7075 tray frames"
+    heat_treat: "autoclave_cure"
+    ndt: [ut_laminate, visual]
+    drawing_refs: [ISM-FJ-DWG-020]
+
+  - zone_id: wing_skins
+    process: composite_auto
+    material_ism: ISM-CFRP-A
+    spec_public: "carbon_epoxy_prepreg_class"
+    heat_treat: "autoclave_cure"
+    ndt: [ut, thermography]
+    drawing_refs: [ISM-FJ-DWG-060]
+    lightning: mesh_or_foil
+
+  - zone_id: wing_spar_caps
+    process: forge_machine
+    material_ism: ISM-Al-7xxx
+    alternate_material_ism: [ISM-Al-Li, ISM-CFRP-A]
+    spec_public: "7075 or Al-Li bar/plate class"
+    heat_treat: "T6_or_T7351_class"
+    ndt: [ultrasonic, liquid_penetrant]
+    drawing_refs: [ISM-FJ-DWG-030, ISM-FJ-DWG-060]
+
+  - zone_id: wing_spar_webs_ribs
+    process: composite_auto
+    material_ism: ISM-CFRP-A
+    spec_public: "carbon_epoxy_prepreg_class"
+    heat_treat: "autoclave_cure"
+    ndt: [ut]
+    drawing_refs: [ISM-FJ-DWG-060]
+
+  - zone_id: carry_through_box
+    process: forge_machine
+    secondary_process: sheet_rivet
+    material_ism: ISM-Al-7xxx
+    fittings_material_ism: ISM-Ti-6
+    fittings_spec_public: "AMS 4928 bar/forging; AMS 4911 sheet as req."
+    heat_treat: "Al_T6; Ti_annealed_or_STA"
+    ndt: [ultrasonic, liquid_penetrant, mpi_optional]
+    drawing_refs: [ISM-FJ-DWG-030]
+    citation_ids: [dynamic-ti64, ssa-ti64, upm-ti64]
+
+  - zone_id: landing_gear
+    process: forge_machine
+    material_ism: ISM-Ti-6
+    alternate_material_ism: [ISM-Steel-HS]
+    spec_public: "AMS 4928 Ti-6Al-4V"
+    alternate_spec_public: "AMS 6417 300M"
+    heat_treat: "Ti_anneal_or_STA; 300M_quench_temper"
+    ndt: [ultrasonic, magnetic_particle]
+    drawing_refs: [ISM-FJ-DWG-050]
+    citation_ids: [dynamic-ti64, ssa-300m, flight-300m]
+
+  - zone_id: arresting_hook_keel
+    process: forge_machine
+    material_ism: ISM-Ti-6
+    alternate_material_ism: [ISM-Steel-HS]
+    spec_public: "AMS 4928 Ti-6Al-4V"
+    alternate_spec_public: "AMS 6417 300M"
+    heat_treat: "as_landing_gear"
+    ndt: [ultrasonic, magnetic_particle]
+    drawing_refs: [ISM-FJ-DWG-050]
+    related_issue: 93
+
+  - zone_id: empennage_skins
+    process: composite_auto
+    material_ism: ISM-CFRP-A
+    spec_public: "carbon_epoxy_prepreg_class"
+    heat_treat: "autoclave_cure"
+    ndt: [ut]
+    drawing_refs: [ISM-FJ-DWG-010]
+
+  - zone_id: actuator_fittings
+    process: forge_machine
+    alternate_process: am_ded_pbf
+    material_ism: ISM-Ti-6
+    spec_public: "AMS 4928"
+    heat_treat: "annealed_or_STA"
+    ndt: [liquid_penetrant, ultrasonic]
+    drawing_refs: [ISM-FJ-DWG-060]
+    am_note: "AM for proto/low-rate only until #78 qualification"
+
+  - zone_id: aft_hot_structure
+    process: forge_machine
+    alternate_process: hot_spf_db
+    material_ism: ISM-Ti-6
+    secondary_material_ism: ISM-Ni-HT
+    spec_public: "Ti-6Al-4V + nickel heat-resistant sheet class"
+    heat_treat: "per_alloy"
+    ndt: [ultrasonic, visual]
+    drawing_refs: [ISM-FJ-DWG-050]
+
+  - zone_id: fasteners_primary
+    process: buy_finished
+    material_ism: Ti_or_CRES
+    spec_public: "aerospace_fastener_standards_lot_cert"
+    heat_treat: "na"
+    ndt: [lot_certification]
+    drawing_refs: []
+
+expected_behaviour:
+  flight_lab: "Optional mass/cost proxies later; not required for FCS"
+  tooling_track_follows: true
+  steve_imports: manufacturing.yaml

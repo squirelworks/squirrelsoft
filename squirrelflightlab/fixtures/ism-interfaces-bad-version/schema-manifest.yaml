@@ -1,0 +1,11 @@
+# Negative fixture: unsupported schema_version (Soft #170).
+schema_version: "9.9.9"
+aircraft_id: "ISM-FJ-1"
+aircraft_name: "Nutcracker"
+revision: "A"
+status: stub
+owner_repo: "squirelworks/international-squirrel-machines"
+path_root: "fighter-jet/interfaces"
+source_drawings: []
+files: []
+notes: "Soft CI negative case — must fail the schema_version gate."

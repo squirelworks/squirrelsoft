@@ -1,0 +1,49 @@
+schema_version: "1.0.0"
+aircraft_id: "ISM-FJ-1"
+revision: "A"
+status: stub
+source_docs:
+  - fighter-jet/hydraulics/architecture.md
+  - fighter-jet/hydraulics/failure-modes.md
+
+architecture:
+  primary: electro_hydrostatic  # EHA
+  central_hydraulic: optional_stub
+  power: "28V_DC_primary"
+
+channels:
+  - id: eha_aileron_L
+    surface: aileron_L
+    authority_pct: 100
+    dual_lane: true
+  - id: eha_aileron_R
+    surface: aileron_R
+    authority_pct: 100
+    dual_lane: true
+  - id: eha_flaperon_L
+    surface: flaperon_L
+    authority_pct: 100
+    dual_lane: true
+  - id: eha_flaperon_R
+    surface: flaperon_R
+    authority_pct: 100
+    dual_lane: true
+  - id: eha_ht
+    surface: ht
+    authority_pct: 100
+    dual_lane: true
+  - id: eha_rudder
+    surface: rudder
+    authority_pct: 100
+    dual_lane: true
+
+failure_behaviour:
+  hardover: bypass_or_damp_per_surface_icd
+  single_lane_loss: continue_on_ surviving_lane
+  dual_lane_loss: surface_trail_or_locked_per_icd
+  monitor: actuator_model_comparison
+
+expected_behaviour:
+  command_source: fcc_voted
+  study_bay_pcb_pwm: development_parallel_only
+  bit_on_deck: true

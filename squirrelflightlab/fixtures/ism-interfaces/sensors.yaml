@@ -1,0 +1,57 @@
+schema_version: "1.0.0"
+aircraft_id: "ISM-FJ-1"
+revision: "A"
+status: stub
+source_drawings: ["ISM-FJ-DWG-020", "ISM-FJ-DWG-050"]
+source_docs:
+  - fighter-jet/avionics/sensors-nav.md
+  - fighter-jet/sensors-weapons/radar-eo.md
+
+imu:
+  lanes: 3
+  output_rate_hz: 200
+  axes: [p, q, r, ax, ay, az]
+  align_modes: [ground_gyrocompass, gnss_aided]
+  validity_timeout_ms: 50
+  provisional: true
+
+gnss:
+  rate_hz: 10
+  constellations: [multi]
+  fcc_hard_depend: false
+  antenna: spine_or_fin
+
+air_data:
+  channels: 2
+  outputs: [keas, pressure_altitude_m, mach, oat_c]
+  aoa_probes: 2
+  sideslip_probes: 1
+  rate_hz: 100
+  disagree_threshold:
+    aoa_deg: 3.0
+    keas_kt: 8.0
+  provisional: true
+
+radar:
+  id: ISM-R1
+  fictional: true
+  mount_fs_pct: 0.05
+  scan_modes: [search, track, stt]
+  track_capacity_stub: 16
+  cooling: ecs_or_liquid
+  data_bus: ISM-Bus-A
+  update_hz: 20
+
+eo_ir:
+  id: ISM-EO1
+  fictional: true
+  mount: ventral_nose
+  modes: [ir_search, tv]
+  slew_rate_deg_s: 60
+  data_bus: ISM-Bus-A
+  update_hz: 30
+
+expected_behaviour:
+  fcc_primary_attitude: imu_plus_air_data
+  mc_owns_radar_eo_tracks: true
+  loss_of_air_data: degrade_to_conservative_envelope

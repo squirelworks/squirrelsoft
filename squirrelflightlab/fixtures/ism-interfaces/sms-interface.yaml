@@ -1,0 +1,109 @@
+schema_version: "1.0.0"
+aircraft_id: "ISM-FJ-1"
+revision: "A"
+status: stub
+issue: 94
+provisional: true
+scope: integration_sms_and_separation
+excluded:
+  - guidance
+  - seekers
+  - propulsion
+  - warheads
+  - fuzing
+  - fuze_programming
+source_docs:
+  - fighter-jet/sensors-weapons/stores-integration.md
+  - fighter-jet/sensors-weapons/stores.md
+  - fighter-jet/interfaces/inert-stores.yaml
+  - fighter-jet/interfaces/hardpoints.yaml
+  - fighter-jet/interfaces/avionics-bus.yaml
+
+roles:
+  mc: owns_inventory_consent_release_logic
+  fcc: envelope_wow_veto_and_jettison_limits
+  sms: logical_partition_on_mc  # not a separate LRU in Block 1
+
+topics:
+  - name: mc.stores_config
+    bus: ISM-Bus-A
+    rate_hz: 10
+    payload:
+      stations: "map station_id -> {store_id|empty, hung, selected}"
+  - name: mc.stores_release_cmd
+    bus: ISM-Bus-A
+    rate_hz: on_event
+    payload:
+      station_id: string
+      mode: [release, jettison]
+      store_id: string
+    notes: "No fuze or arming code fields in-repo"
+  - name: fcc.stores_inhibit
+    bus: ISM-Bus-A
+    rate_hz: 20
+    payload:
+      inhibit: boolean
+      reason: [envelope, wow, sensor_disagree, structural]
+  - name: sms.safe_arm_discrete
+    path: independent_discrete
+    dual_consent_with: mc.stores_logic
+
+safeing:
+  mechanical_ground_pins: true
+  wow_inhibits_release: true
+  dual_consent: true
+  fcc_envelope_veto: true
+  jettison_guarded: true
+  live_fuzing_in_repo: false
+
+separation_envelopes:
+  provisional: true
+  note: "Engineering placeholders for Flight Lab co-check; not flight-cleared."
+  defaults:
+    - id: SEP-AAM-S-RAIL
+      store_id: ISM-INERT-AAM-S
+      release_mode: rail
+      keas_kt: {min: 200, max: 600}
+      aoa_deg: {min: -5, max: 15}
+      nz_g: {min: -1.0, max: 5.0}
+      sideslip_deg_abs_max: 5
+      gear: up
+      wow: false
+    - id: SEP-AGM-M-EJECT
+      store_id: ISM-INERT-AGM-M
+      release_mode: ejector
+      keas_kt: {min: 180, max: 500}
+      aoa_deg: {min: -2, max: 12}
+      nz_g: {min: 0.0, max: 3.5}
+      sideslip_deg_abs_max: 3
+      gear: up
+      wow: false
+      eject_impulse_required: true
+    - id: SEP-JETTISON-EMERGENCY
+      store_id: any_jettisonable
+      release_mode: jettison
+      keas_kt: {min: 0, max: 650}
+      aoa_deg: {min: -10, max: 20}
+      nz_g: {min: -2.0, max: 6.0}
+      wow_override_maintenance: true
+      structural_limits_still_apply: true
+
+station_hardware_defaults:
+  STA-1: rail_tip
+  STA-2: rail_tip
+  STA-3: pylon_rail_light
+  STA-4: pylon_rail_light
+  STA-5: pylon_ejector_medium
+  STA-6: pylon_ejector_medium
+  STA-7: pylon_ejector_heavy
+  STA-8: pylon_ejector_heavy
+  STA-9: pylon_ejector_heavy
+
+expected_behaviour:
+  release_blocked_if:
+    - wow_and_not_override
+    - fcc_inhibit
+    - safe_arm_disagree
+    - outside_separation_envelope
+  asymmetry_reported_to_fcc: true
+  flight_lab_consumes: [inert-stores.yaml, hardpoints.yaml, this_file]

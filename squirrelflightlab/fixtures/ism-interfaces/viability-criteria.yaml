@@ -1,0 +1,224 @@
+schema_version: "1.0.0"
+aircraft_id: "ISM-FJ-1"
+revision: "A"
+status: stub
+issue: 103
+provisional: true
+canonical_name: viability-criteria.yaml
+source_docs:
+  - fighter-jet/docs/viability.md
+  - fighter-jet/docs/research/comparative-fighter-survey.md
+  - fighter-jet/interfaces/mass-properties.yaml
+  - fighter-jet/interfaces/aircraft-geometry.yaml
+  - fighter-jet/interfaces/carrier-loads.yaml
+
+# Provisional full-scale mapping from study OML (L_study=420 mm → L≈15.5 m)
+derived_full_scale:
+  provisional: true
+  length_m: 15.5
+  span_m: 10.3
+  wing_area_m2: 29.5
+  scale_from_study: 36.9  # 15500/420
+  empty_mass_kg: 9800
+  mtow_kg: 18500
+  fuel_internal_kg: 4200
+  thrust_sl_reheat_total_n: 180000  # twin ~90 kN class each (EJ200-class public)
+  thrust_sl_dry_total_n: 120000
+  nz_limit_g: 9.0
+  combat_radius_km_assumption: 900  # mission stub pending aero DB
+  static_margin_pct_mac_assumption: 5.0
+
+citations:
+  - id: raymer-ads
+    title: "Aircraft Design: A Conceptual Approach (Raymer) — public textbook sizing heuristics"
+    note: "Empty-weight fraction, T/W, wing loading, fuel fraction class bands for fighters"
+    kind: textbook
+  - id: roskam-I
+    title: "Airplane Design Part I (Roskam) — public textbook preliminary sizing"
+    note: "Weight fractions, wing loading, T/W statistical ranges"
+    kind: textbook
+  - id: survey-99
+    title: "ISM comparative fighter survey (#99)"
+    path: fighter-jet/docs/research/comparative-fighter-survey.md
+    note: "Rafale/Typhoon/Flanker-class qualitative spread"
+  - id: eurofighter-features
+    title: "Eurofighter Typhoon Features (public)"
+    url: "https://www.eurofighter.com/the-aircraft/features"
+    used_for: "Twin ~90 kN class thrust; +9 g class claims"
+  - id: dassault-rafale-2023
+    title: "Rafale Paris Air Show 2023 press release"
+    url: "https://www.dassault-aviation.com/wp-content/blogs.dir/2/files/2023/06/RAFALE-Press-Release-Paris-Air-Show-2023.pdf"
+    used_for: "Omnirole twin-engine class context"
+  - id: wiki-typhoon
+    title: "Eurofighter Typhoon (encyclopedia)"
+    url: "https://en.wikipedia.org/wiki/Eurofighter_Typhoon"
+    used_for: "Public empty/MTOW/span order-of-magnitude class"
+  - id: mass-properties
+    path: fighter-jet/interfaces/mass-properties.yaml
+  - id: carrier-loads
+    path: fighter-jet/interfaces/carrier-loads.yaml
+
+class_comparison_bands:
+  # Bands for modern twin multirole / air-superiority class (public + textbook)
+  empty_weight_fraction:
+    # We/W0
+    min: 0.45
+    max: 0.65
+    citation_ids: [raymer-ads, roskam-I, wiki-typhoon]
+  thrust_to_weight_mtow_reheat:
+    min: 0.75
+    max: 1.20
+    citation_ids: [raymer-ads, eurofighter-features]
+  wing_loading_mtow_pa:
+    # N/m²
+    min: 3500
+    max: 6500
+    citation_ids: [raymer-ads, roskam-I]
+  fuel_fraction:
+    # Wf/W0 internal
+    min: 0.18
+    max: 0.35
+    citation_ids: [raymer-ads, roskam-I]
+  combat_radius_km:
+    min: 500
+    max: 1500
+    citation_ids: [survey-99, dassault-rafale-2023]
+  max_nz_g:
+    min: 7.0
+    max: 9.5
+    citation_ids: [eurofighter-features, raymer-ads]
+  cg_travel_pct_mac:
+    min: 0.0
+    max: 15.0
+    citation_ids: [raymer-ads]
+  static_margin_pct_mac:
+    min: 3.0
+    max: 15.0
+    citation_ids: [raymer-ads, roskam-I]
+  empty_mass_kg_class:
+    min: 8000
+    max: 14000
+    citation_ids: [wiki-typhoon, survey-99]
+  mtow_kg_class:
+    min: 15000
+    max: 25000
+    citation_ids: [wiki-typhoon, survey-99]
+
+gates:
+  - id: G-WE-FRAC
+    name: empty_weight_fraction
+    formula: "empty_mass / mtow"
+    our_value: 0.530  # 9800/18500
+    band_ref: empty_weight_fraction
+    unit: "1"
+    result: pass
+    citation_ids: [raymer-ads, roskam-I, mass-properties]
+
+  - id: G-TW-MTOW
+    name: thrust_to_weight_mtow_reheat
+    formula: "thrust_sl_reheat_total / (mtow * g)"
+    our_value: 0.992  # 180e3/(18500*9.81)
+    band_ref: thrust_to_weight_mtow_reheat
+    unit: "1"
+    result: pass
+    citation_ids: [raymer-ads, eurofighter-features]
+
+  - id: G-WING-LOAD
+    name: wing_loading_mtow
+    formula: "(mtow * g) / S"
+    our_value: 6154  # Pa
+    band_ref: wing_loading_mtow_pa
+    unit: Pa
+    result: pass
+    citation_ids: [raymer-ads, roskam-I]
+    note: "Near upper band — monitor when full-scale S freezes"
+
+  - id: G-FUEL-FRAC
+    name: fuel_fraction_internal
+    formula: "fuel_internal / mtow"
+    our_value: 0.227
+    band_ref: fuel_fraction
+    unit: "1"
+    result: pass
+    citation_ids: [raymer-ads, roskam-I, mass-properties]
+
+  - id: G-RADIUS
+    name: combat_radius_assumption
+    our_value: 900
+    band_ref: combat_radius_km
+    unit: km
+    result: provisional_pass
+    citation_ids: [survey-99]
+    note: "Mission stub until aero DB / Breguet check closes"
+
+  - id: G-BREGUET
+    name: breguet_range_sanity
+    description: >
+      Cruise Breguet check: R ≈ (V/c) * (L/D) * ln(Wi/Wf). Gate fails if implied
+      L/D or SFC outside fighter-cruise heuristics for assumed radius.
+    assumed_v_mps: 250
+    assumed_ld: 8.0
+    assumed_sfc_per_s: 0.000025  # ~0.9 /hr class crude
+    implied_range_km: 2100
+    combat_radius_fraction_of_ferry: 0.43
+    band_ld: {min: 6.0, max: 12.0}
+    result: provisional_pass
+    citation_ids: [raymer-ads, roskam-I]
+    note: "Crude; Steve replaces with Flight Lab aero"
+
+  - id: G-NZ
+    name: max_nz
+    our_value: 9.0
+    band_ref: max_nz_g
+    unit: g
+    result: pass
+    citation_ids: [eurofighter-features, raymer-ads]
+
+  - id: G-CG
+    name: cg_travel_fs
+    our_value_fs_pct_range: [0.52, 0.62]
+    approx_pct_mac: 10.0
+    band_ref: cg_travel_pct_mac
+    result: pass
+    citation_ids: [raymer-ads, mass-properties]
+
+  - id: G-SM
+    name: static_margin
+    our_value_pct_mac: 5.0
+    band_ref: static_margin_pct_mac
+    result: provisional_pass
+    citation_ids: [raymer-ads, roskam-I]
+    note: "Pending AVL neutral-point run"
+
+  - id: G-STRUCT-MARGIN
+    name: structural_limit_load_factor
+    description: "Design limit ≥ envelope nz; ultimate ≥ 1.5 * limit (textbook)"
+    limit_load_factor_g: 9.0
+    ultimate_factor: 1.5
+    our_ultimate_g: 13.5
+    result: pass
+    citation_ids: [raymer-ads]
+    carrier_override: "Arrestment/catapult cases in carrier-loads.yaml govern local fitting allowables"
+
+  - id: G-MASS-CLASS
+    name: empty_and_mtow_class
+    our_empty_kg: 9800
+    our_mtow_kg: 18500
+    band_empty_ref: empty_mass_kg_class
+    band_mtow_ref: mtow_kg_class
+    result: pass
+    citation_ids: [wiki-typhoon, survey-99, mass-properties]
+
+summary:
+  pass: 7
+  provisional_pass: 3
+  fail: 0
+  overall: provisional_pass
+  blockers_for_full_pass:
+    - freeze_full_scale_S_and_span
+    - avl_static_margin
+    - flight_lab_breguet_with_aero_db
+
+expected_behaviour:
+  steve_reads: viability-criteria.yaml
+  fail_gate_blocks_independent_analysis_signoff: true

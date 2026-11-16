@@ -1,0 +1,53 @@
+# Soft-owned allowlist for ISM-FJ interface schema_version 1.0.0
+# Generated from fixtures mirrored from ISM main; refresh when Victor adds keys.
+schema_version: "1.0.0"
+supported_schema_versions: ["1.0.0"]
+interfaces:
+  actuators.yaml:
+    required: [schema_version, aircraft_id]
+    allowed: [schema_version, aircraft_id, revision, status, source_docs, architecture, channels, failure_behaviour, expected_behaviour]
+  aircraft-geometry.yaml:
+    required: [schema_version, aircraft_id]
+    allowed: [schema_version, aircraft_id, revision, status, source_drawings, source_shell, datum, study_model, full_scale, fuselage_stations_pct_fs, wing_stations_pct_semi_span, spars, empennage]
+  avionics-bus.yaml:
+    required: [schema_version, aircraft_id]
+    allowed: [schema_version, aircraft_id, revision, status, source_docs, buses, topics, power, expected_behaviour]
+  carrier-loads.yaml:
+    required: [schema_version, aircraft_id]
+    allowed: [schema_version, aircraft_id, revision, status, issue, provisional, source_docs, source_drawings, note, mass_reference, datum, hook, nose_gear_launch_bar, wing_fold, corrosion, load_cases, parameters_summary, expected_behaviour]
+  flight-controls.yaml:
+    required: [schema_version, aircraft_id]
+    allowed: [schema_version, aircraft_id, revision, status, source_drawings, source_docs, architecture, surfaces, modes, envelope, expected_behaviour]
+  hardpoints.yaml:
+    required: [schema_version, aircraft_id]
+    allowed: [schema_version, aircraft_id, revision, status, source_drawings, source_docs, related_interfaces, wet_hardpoints, gun_bay, issue_integration, stations, pylon_geometry_study, safeing, expected_behaviour]
+  inert-stores.yaml:
+    required: [schema_version, aircraft_id]
+    allowed: [schema_version, aircraft_id, revision, status, issue, provisional, scope, excluded, source_docs, source_drawings, note, citations, hardware, pylon_geometry, stores, flight_model_application, expected_behaviour]
+  manufacturing.yaml:
+    required: [schema_version, aircraft_id]
+    allowed: [schema_version, aircraft_id, revision, status, issue, provisional, scope, excluded, source_docs, source_drawings, process_codes, titanium_supply_chain, citations, required_equipment_eric_lane, zones, expected_behaviour]
+  mass-properties.yaml:
+    required: [schema_version, aircraft_id]
+    allowed: [schema_version, aircraft_id, revision, status, source_drawings, coordinate_frame, inertia_about, study_model, full_scale, stores_mass_delta, expected_behaviour]
+  materials-allowables.yaml:
+    required: [schema_version, aircraft_id]
+    allowed: [schema_version, aircraft_id, revision, status, issue, related_issues, provisional, disclaimer, units, source_docs, material_callouts, stackups, joints_matrix, galvanic_rules, environment, prototype_vs_production, knockdown_factors_provisional, expected_behaviour]
+  materials-zones.yaml:
+    required: [schema_version, aircraft_id]
+    allowed: [schema_version, aircraft_id, revision, status, issue, source_docs, provisional, wing_box_baseline, zones, joints_matrix, expected_behaviour]
+  multi-origin-stores.yaml:
+    required: [schema_version, aircraft_id]
+    allowed: [schema_version, aircraft_id, revision, status, issue, provisional, scope, excluded, source_docs, source_drawings, citations, mechanical_interfaces, electrical_layers, inert_catalogue, compatibility_matrix, station_mechanical_options, expected_behaviour]
+  schema-manifest.yaml:
+    required: [schema_version, aircraft_id, files]
+    allowed: [schema_version, aircraft_id, aircraft_name, revision, status, owner_repo, path_root, source_drawings, files, notes]
+  sensors.yaml:
+    required: [schema_version, aircraft_id]
+    allowed: [schema_version, aircraft_id, revision, status, source_drawings, source_docs, imu, gnss, air_data, radar, eo_ir, expected_behaviour]
+  sms-interface.yaml:
+    required: [schema_version, aircraft_id]
+    allowed: [schema_version, aircraft_id, revision, status, issue, provisional, scope, excluded, source_docs, roles, topics, safeing, separation_envelopes, station_hardware_defaults, expected_behaviour]
+  viability-criteria.yaml:
+    required: [schema_version, aircraft_id]
+    allowed: [schema_version, aircraft_id, revision, status, issue, provisional, canonical_name, source_docs, derived_full_scale, citations, class_comparison_bands, gates, summary, expected_behaviour]

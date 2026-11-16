@@ -39,6 +39,10 @@ echo "-- ISM params + FCS co-check --"
 "$P" fcs-check --report "$OUT/fcs_report.txt"
 
 echo ""
+echo "-- ISM fighter-jet/interfaces YAML (schema_version gate) --"
+"$P" ism-interfaces fixtures/ism-interfaces | head -20
+
+echo ""
 echo "Wrote:"
 echo "  $OUT/aoa_sweep.csv"
 echo "  $OUT/flight_history.csv"

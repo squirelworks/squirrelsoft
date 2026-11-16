@@ -1,0 +1,58 @@
+# ISM-FJ-1 interface manifest — Flight Lab / HIL consumers
+schema_version: "1.0.0"
+aircraft_id: "ISM-FJ-1"
+aircraft_name: "Nutcracker"
+revision: "A"
+status: stub
+owner_repo: "squirelworks/international-squirrel-machines"
+path_root: "fighter-jet/interfaces"
+source_drawings:
+  - "ISM-FJ-DWG-010"  # orthographic three-view
+  - "ISM-FJ-DWG-020"  # section avionics bay
+  - "ISM-FJ-DWG-030"  # section wing root / main spar
+  - "ISM-FJ-DWG-040"  # hardpoints ICD
+  - "ISM-FJ-DWG-050"  # fuselage stations
+  - "ISM-FJ-DWG-060"  # wing plan
+files:
+  - path: aircraft-geometry.yaml
+    purpose: datum_scale_dimensions_stations
+  - path: mass-properties.yaml
+    purpose: mass_cg_inertia
+  - path: flight-controls.yaml
+    purpose: surfaces_laws_envelope
+  - path: sensors.yaml
+    purpose: sensor_io_limits
+  - path: hardpoints.yaml
+    purpose: stores_stations
+  - path: actuators.yaml
+    purpose: eha_channels
+  - path: avionics-bus.yaml
+    purpose: bus_topics_rates
+  - path: materials-zones.yaml
+    purpose: zone_material_map
+    issue: 92
+  - path: carrier-loads.yaml
+    purpose: carrier_load_cases
+    issue: 93
+  - path: inert-stores.yaml
+    purpose: inert_store_models
+    issue: 94
+  - path: sms-interface.yaml
+    purpose: sms_and_separation
+    issue: 94
+  - path: manufacturing.yaml
+    purpose: manufacturing_supply_research
+    issue: 100
+  - path: multi-origin-stores.yaml
+    purpose: multi_origin_stores_compatibility
+    issue: 101
+  - path: viability-criteria.yaml
+    purpose: viability_sanity_gates
+    issue: 103
+  - path: materials-allowables.yaml
+    purpose: materials_allowables_stackups_joints
+    issue: 71
+notes: >
+  Provisional stubs so SquirrelSoft Flight Lab can import contracts without
+  blocking on product-decision freeze. Fields marked provisional: true will
+  change; schema keys are intended to stay stable across Rev A→B.

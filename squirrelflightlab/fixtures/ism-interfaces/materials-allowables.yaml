@@ -1,0 +1,183 @@
+schema_version: "1.0.0"
+aircraft_id: "ISM-FJ-1"
+revision: "A"
+status: stub
+issue: 71
+related_issues: [92, 100]
+provisional: true
+disclaimer: >
+  Placeholder-class design allowables for Flight Lab / sizing only.
+  Not coupon-qualified; replace after #78 validation campaign.
+units:
+  stress_mpa: MPa
+  density_kg_m3: kg/m^3
+  temperature_c: degC
+source_docs:
+  - fighter-jet/materials/metallurgy-composites.md
+  - fighter-jet/materials/trade-study.md
+  - fighter-jet/interfaces/materials-zones.yaml
+  - fighter-jet/interfaces/manufacturing.yaml
+
+# Spec-style callouts (public AMS / class refs → ISM designations).
+material_callouts:
+  - id: ISM-Ti-6
+    public_class: Ti-6Al-4V
+    product_forms: [plate_AMS_4911, bar_AMS_4928, forging]
+    density_kg_m3: 4430
+    ftu_mpa_design: 900
+    fty_mpa_design: 830
+    e_gpa_design: 114
+    temp_limit_continuous_c: 300
+    fatigue_class: good
+    carrier_coating: none_required_baseline
+
+  - id: ISM-Al-7xxx
+    public_class: 7075-T6
+    product_forms: [sheet_AMS_4045, plate]
+    density_kg_m3: 2810
+    ftu_mpa_design: 540
+    fty_mpa_design: 470
+    e_gpa_design: 71
+    temp_limit_continuous_c: 120
+    fatigue_class: fair
+    carrier_coating: primer_sealant_required
+
+  - id: ISM-Al-2xxx
+    public_class: 2024-T3
+    product_forms: [sheet_AMS_4037]
+    density_kg_m3: 2780
+    ftu_mpa_design: 450
+    fty_mpa_design: 310
+    e_gpa_design: 73
+    temp_limit_continuous_c: 120
+    fatigue_class: good
+    carrier_coating: primer_sealant_required
+
+  - id: ISM-Al-Li
+    public_class: Al-Li_class
+    product_forms: [plate_sheet]
+    density_kg_m3: 2700
+    ftu_mpa_design: 480
+    fty_mpa_design: 400
+    e_gpa_design: 78
+    temp_limit_continuous_c: 120
+    fatigue_class: fair
+    note: production_weight_option
+
+  - id: ISM-Steel-HS
+    public_class: 300M_AMS_6417
+    product_forms: [bar_forging]
+    density_kg_m3: 7830
+    ftu_mpa_design: 1860
+    fty_mpa_design: 1520
+    e_gpa_design: 200
+    temp_limit_continuous_c: 200
+    fatigue_class: good
+    carrier_coating: heavy_protection_required
+    note: cost_alternate_for_gear_hook
+
+  - id: ISM-CFRP-A
+    public_class: carbon_epoxy_prepreg
+    product_forms: [tape_fabric_prepreg]
+    density_kg_m3: 1550
+    ftu_mpa_design_quasi_iso_laminate: 600
+    e_gpa_design_0deg_tape: 130
+    e_gpa_design_quasi_iso: 50
+    temp_limit_continuous_c: 120
+    moisture_knockdown_factor: 0.85
+    lightning: mesh_or_foil_required
+
+  - id: ISM-RF-Q
+    public_class: quartz_epoxy
+    product_forms: [radome_shell]
+    density_kg_m3: 1700
+    structural_allowable: secondary_only
+    temp_limit_continuous_c: 100
+
+  - id: ISM-Ni-HT
+    public_class: nickel_high_temp_stub
+    product_forms: [sheet_panel]
+    density_kg_m3: 8200
+    temp_limit_continuous_c: 600
+    role: firewall_nozzle_adjacent
+
+# Preliminary composite stack-ups (study; fiber areal weight TBD).
+stackups:
+  - id: wing_skin_qi
+    material: ISM-CFRP-A
+    layup: "[0/45/90/-45]s"
+    thickness_mm_study: 2.0
+    zones: [wing_skins]
+  - id: spar_web_shear
+    material: ISM-CFRP-A
+    layup: "[45/-45]ns"
+    thickness_mm_study: 3.0
+    zones: [wing_spar_webs_ribs]
+  - id: surface_sandwich
+    material: ISM-CFRP-A
+    facesheet_layup: "[0/45/90/-45]"
+    core: honeycomb_or_foam_tbd
+    zones: [empennage_skins, control_surfaces]
+
+joints_matrix:
+  - join: bonded
+    allowed_for: [CFRP_skins_to_cores, fairings, radome_attach_ring]
+    forbidden_for: [primary_gear_fittings, arresting_hook]
+    rationale: continuous_load_and_seal
+  - join: bolted
+    allowed_for: [fittings, gear, hook, access_panels, spar_root, carry_through]
+    fastener_family: Ti_or_CRES
+    rationale: replaceable_lru_high_peak_loads
+  - join: riveted
+    allowed_for: [Al_skins_longerons, secondary_structure]
+    fastener_family: Al_or_CRES_rivets
+    rationale: established_al_airframe_practice
+  - join: hybrid_bond_bolt
+    allowed_for: [CFRP_to_Al_splices]
+    rationale: peek_load_share_plus_fail_safe
+
+galvanic_rules:
+  - pair: CFRP_Al
+    required: [glass_isolation_ply_or_primer, sealant, Ti_or_CRES_fasteners]
+    forbidden: [bare_Al_washer_on_carbon]
+  - pair: CFRP_Ti
+    required: [sealant_optional]
+    note: preferred_dissimilar_pair
+  - pair: Al_Steel
+    required: [primer_sealant, drain_paths]
+  - pair: Ti_Steel
+    required: [sealant]
+
+environment:
+  temperature_avionics_bay_c: [-40, 70]
+  temperature_aft_hot_c_max: 300
+  moisture: marine_carrier_deck
+  corrosion_controls: [primer_system, sealant, drain_paths, filiform_mitigation]
+
+prototype_vs_production:
+  - zone: wing_spar_caps
+    prototype: ISM-Al-7xxx
+    production_option: ISM-Al-Li
+    reason: cost_then_mass
+  - zone: landing_gear
+    prototype: ISM-Ti-6
+    production_cost_alternate: ISM-Steel-HS
+    reason: ti_preferred_naval; steel_needs_heavy_coat
+  - zone: forward_fuselage_skins
+    prototype: ISM-Al-2xxx_sheet
+    production_option: ISM-CFRP-A_panels
+    reason: repairability_vs_mass
+  - zone: study_shell
+    prototype: printed_or_machined_soft_tooling
+    production: certified_mill_product_per_manufacturing_yaml
+    note: OpenSCAD study scale ×36.9 for full-scale
+
+knockdown_factors_provisional:
+  riveted_joint_efficiency: 0.75
+  bolted_fitting_bearing: 0.67
+  cfrp_bvid_residual_strength: 0.80
+  hot_wet_cfrp: 0.85
+
+expected_behaviour:
+  flight_lab_may_use_ftu_fty_for_sanity_gates: true
+  not_for_flight_release: true

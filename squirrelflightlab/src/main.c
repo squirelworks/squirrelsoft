@@ -4,6 +4,7 @@
 #include "fl_avionics.h"
 #include "fl_dyn.h"
 #include "fl_fcs.h"
+#include "fl_iface.h"
 #include "fl_ism.h"
 #include "fl_planned.h"
 #include "fl_project.h"
@@ -29,7 +30,11 @@ static void usage(FILE *f) {
         "  scenario NAME [options]      trim_cruise | pull_up | roll\n"
         "      --project FILE  --max-q DPS  --min-nz N  --min-roll DEG  --max-alt-loss M\n"
         "  avionics-check [FILE]        compare project channels to device-doc expect map\n"
-        "  ism-load --params F [--iface F]   load ISM-FJ parameter (+ interface) files\n"
+        "  ism-load --params F [--iface F]   load ISM-FJ parameter (+ bay interface) files\n"
+        "  ism-interfaces [DIR] [--schema F]  load all fighter-jet/interfaces YAML by\n"
+        "                                   schema_version (Soft allowlist gate)\n"
+        "      DIR default: fixtures/ism-interfaces\n"
+        "      --schema Soft top-level allowlist YAML\n"
         "  fcs-check [options]          scripted FCS co-check; writes pass/fail report\n"
         "      --params F  --iface F  --report FILE\n"
         "  planned                      list scaffold/planned surfaces (CFD, tunnel, HIL)\n"
@@ -37,7 +42,8 @@ static void usage(FILE *f) {
         "                               planned stubs (always fail with a clear message)\n"
         "\n"
         "ISM SoT: international-squirrel-machines fighter-jet/ (Victor). Soft loads\n"
-        "params/interfaces; CI fixtures under fixtures/ism-fighter/ until ISM #88.\n"
+        "params + interfaces YAML; CI snapshots under fixtures/ism-fighter/ and\n"
+        "fixtures/ism-interfaces/ (refresh from ISM main; Soft does not fork SoT).\n"
         "Units: geometry mm/g; dynamics SI. Axes: +X nose, +Y right, +Z down.\n",
         f);
 }
@@ -399,6 +405,33 @@ static int cmd_ism_load(int argc, char **argv) {
     return v.ok ? 0 : 1;
 }
 
+static int cmd_ism_interfaces(int argc, char **argv) {
+    const char *dir = "fixtures/ism-interfaces";
+    const char *schema = "schemas/ism-fj-1.0.0/top-level-allowlist.yaml";
+    int i;
+    for (i = 0; i < argc; i++) {
+        if (strcmp(argv[i], "--schema") == 0) {
+            schema = opt_val(argc, argv, &i);
+            if (!schema) return 2;
+        } else if (argv[i][0] == '-') {
+            return 2;
+        } else {
+            dir = argv[i];
+        }
+    }
+    FlIfaceBundle bundle;
+    char err[FL_MAX_MSG];
+    int rc = fl_iface_load_dir(&bundle, dir, schema, err, sizeof err);
+    char report[8192];
+    fl_iface_report(&bundle, report, sizeof report);
+    fputs(report, rc == 0 ? stdout : stderr);
+    if (rc != 0) {
+        fprintf(stderr, "squirrelflightlab: %s\n", err);
+        return 1;
+    }
+    return 0;
+}
+
 static int cmd_fcs_check(int argc, char **argv) {
     const char *params = "fixtures/ism-fighter/ism-fj-1.ismfj-params";
     const char *iface = "fixtures/ism-fighter/bay-io.ismfj-iface";
@@ -503,6 +536,8 @@ int main(int argc, char **argv) {
     if (strcmp(cmd, "avionics-check") == 0)
         return cmd_avionics(argc >= 3 ? argv[2] : NULL);
     if (strcmp(cmd, "ism-load") == 0) return cmd_ism_load(argc - 2, argv + 2);
+    if (strcmp(cmd, "ism-interfaces") == 0)
+        return cmd_ism_interfaces(argc - 2, argv + 2);
     if (strcmp(cmd, "fcs-check") == 0) return cmd_fcs_check(argc - 2, argv + 2);
     if (strcmp(cmd, "planned") == 0) {
         int n = 0;

@@ -139,6 +139,10 @@ source of truth. Design note: `squirrelflightlab/docs/overview.md`.
   from published ISM study numbers; `ism-load` + scripted `fcs-check` pass/fail
   report; checks `tests/test_flightlab.c`, `fixtures/ism-fighter/`
   *(Victor publishes machine-readable SoT under fighter-jet/ — ISM #88)*
+- [x] S7.2b Load all ISM `fighter-jet/interfaces/` YAML by `schema_version` (Soft #170);
+  Soft top-level allowlist gate; `ism-interfaces` CLI; fixtures
+  `fixtures/ism-interfaces/` refreshed from ISM `main`; checks
+  `tests/test_flightlab.c`, `tests/cli_smoke.sh`
 - [ ] S7.3 Higher-fidelity replaceable aero provider + tunnel CSV override
 - [ ] S7.4 `sqgui` strip-chart window on the same core
 - [ ] S7.5 HIL against the real avionics PCB (planned stub today)
