@@ -314,14 +314,13 @@ Done earlier (kept for history):
 - **Gaps:** interactive SDL strip window (optional); live HIL feed into chart
   (partially unblocked by S7.5 mock path).
 
-### FLIGHTLAB-hil-mock — S7.5 Soft mock PCB HIL  `status: done` (this PR)
+### FLIGHTLAB-hil-mock — S7.5 Soft mock PCB HIL  `status: done` (#201)
 - `fl_hil` Soft SQHIL1 framing (HELLO/ACK/SYNC/CH/BYE); `hil mock` and
   `fixtures/hil/*.sqhil`; correlate host↔board with `sqn_lerp` (NR Ch. 3.1;
   Soft original, no NR listings). Live `/dev`/`serial:` refused until Victor
   freezes avionics PCB ICD; points at squirrel-os2#225 for host transport.
-- **Gaps (file Soft/ISM issues if missing):** live USB-CDC/UART framing once
-  ICD lands; feed Soft HIL samples into `fl_chart` live strip; refresh fixture
-  from ISM harness notes; `gh issue create` may 401 — gaps recorded here / PR.
+- **Gaps:** live USB-CDC/UART framing once ICD lands; feed Soft HIL samples
+  into `fl_chart` live strip; refresh fixture from ISM harness notes.
 
 ### FLIGHTLAB-loadout — Soft #173  `status: done` (#194)
 - S7.2f: `fl_loadout` validates station×adapter×store against ISM interface
@@ -350,8 +349,15 @@ Done earlier (kept for history):
 - S8.5: `squirrelshipbench/` warship hydro + board allowlist (ISM #43) and
   bomber teaching heat-flux (ISM #37); Soft Simpson I_T (NR Ch. 4.1 class).
 - **Gaps:** live printer USB; plotter fab SoT when ISM #6 leaves Planned;
-  warship live board CDC; refresh Soft fixtures from ISM YAML when SoT freezes;
-  could not `gh issue create` (401) — gaps recorded here / in the PR.
+  warship live board CDC; refresh Soft fixtures from ISM YAML when SoT freezes.
+
+### ISMBENCH-psu-ups — S8.3 PSU/UPS load + telemetry  `status: done` (this PR)
+- `ib_power` + CLI `psu-test` / `ups-test`: Soft-proposed fixtures, load-step
+  nameplate checks, required telemetry channels, Soft composite Simpson energy
+  (NR Ch. 4.1 class; Soft original, no NR listings). UPS capacity/SOC gate.
+- **Gaps (file Soft/ISM issues if missing):** live USB-CDC PSU/UPS telemetry;
+  Eric machine-readable SoT refresh; S8.2 live HID still open; `gh issue create`
+  may 401 — gaps recorded here / in the PR.
 
 ### KBDCFG-scaffold — Eric keyboard layout + firmware cfg  `status: done` (#184)
 - S9.1: `squirrelkbdcfg/` loads 60% fixture, prints layout, SQKB1 round-trip.

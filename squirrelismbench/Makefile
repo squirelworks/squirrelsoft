@@ -8,7 +8,8 @@ BUILD = build
 SQNLIB = $(SQN)/build/libsquirrelnum.a
 
 OBJ = $(BUILD)/ib_iface.o $(BUILD)/ib_keyboard.o $(BUILD)/ib_mouse.o \
-	$(BUILD)/ib_memory.o $(BUILD)/ib_printer.o $(BUILD)/ib_plotter.o
+	$(BUILD)/ib_memory.o $(BUILD)/ib_printer.o $(BUILD)/ib_plotter.o \
+	$(BUILD)/ib_power.o
 HDR = $(wildcard include/*.h)
 
 .PHONY: all test clean demo $(SQNLIB)

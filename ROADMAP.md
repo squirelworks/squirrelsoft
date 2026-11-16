@@ -196,7 +196,10 @@ military. Gaps → ISM issues, not Soft hardware PRs.
   *(Eric interface docs: ISM #89 keyboard, #90 mouse)*
 - [x] S8.1b Typewriter 4×12 matrix fixture + `typewriter-test` (ISM #4 / PR #159)
 - [ ] S8.2 Live USB HID path against real 60% keyboard / mouse
-- [ ] S8.3 PSU / UPS load + telemetry benches
+- [x] S8.3 PSU / UPS load + telemetry benches in `squirrelismbench`
+  (`psu-test` / `ups-test`; Soft-proposed fixtures); Soft composite Simpson
+  energy over load schedule (NR Ch. 4.1 class); live CDC/telemetry deferred;
+  checks `tests/test_ismbench.c`, `tests/cli_smoke.sh`
 - [x] S8.4a RAM-module SPD + synthetic bank patterns in `squirrelismbench`
   (`memory-test`; Soft #182 fixture slice / ISM #156); Park–Miller LCG oracle
   (NR Ch. 7.1 class, Soft original — no NR listings)

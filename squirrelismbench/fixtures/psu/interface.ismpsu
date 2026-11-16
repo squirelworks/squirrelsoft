@@ -1,0 +1,10 @@
+ISM-PSU power interface 1
+# Soft CI fixture for Eric's ISM bench PSU (S8.3 Soft-proposed contract).
+# Soft does not design the PSU — refresh when ISM publishes machine-readable SoT.
+model: Soft-Bench-PSU-60W
+v_out_nom_v: 12.0
+i_max_a: 5.0
+p_max_w: 60.0
+telemetry: v_out,i_out,temp_c,fault
+load_steps_w: 0,12,30,48,60
+dwell_s: 1,1,1,1,1
