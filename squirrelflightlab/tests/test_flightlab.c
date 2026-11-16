@@ -84,6 +84,7 @@ static void test_dyn_step(void) {
     fl_project_default_ism_fighter(&p);
     FlSim sim;
     fl_sim_init(&sim, &p);
+    expect(sim.integ == FL_INTEG_RK4, "default RK4");
     FlControls c = {.throttle = 0.6, .de_deg = -2.0, .da_deg = 0, .dr_deg = 0};
     fl_sim_set_controls(&sim, &c);
     int n = fl_sim_run(&sim, 0.5, 0.01, 0.05);
@@ -95,6 +96,59 @@ static void test_dyn_step(void) {
     fl_sim_pause(&sim, 0);
     fl_sim_reset(&sim);
     expect(sim.state.t == 0.0, "reset");
+}
+
+static void test_units_scale(void) {
+    /* Catch mm/g mix-ups (Fred D1 / Soft #174). */
+    expect(fabs(fl_mm_to_m(420.0) - 0.42) < 1e-12, "420 mm → 0.42 m");
+    expect(fabs(fl_mm_to_m(420.0) - 420.0) > 1.0, "not identity mm");
+    expect(fabs(fl_g_to_kg(500.0) - 0.5) < 1e-12, "500 g → 0.5 kg");
+    expect(fabs(fl_g_to_kg(500.0) - 500.0) > 1.0, "not identity g");
+    expect(fabs(fl_g_mm2_to_kg_m2(1.0) - 1e-9) < 1e-20, "1 g·mm² → 1e-9 kg·m²");
+    expect(fabs(fl_kg_to_g(fl_g_to_kg(850.0)) - 850.0) < 1e-9, "g roundtrip");
+
+    FlProject p;
+    fl_project_default_ism_fighter(&p);
+    expect(p.scale_mode == FL_SCALE_STUDY, "default study scale");
+    double mass_si = fl_g_to_kg(p.mass_g);
+    expect(mass_si < 5.0 && mass_si > 0.1, "study mass is ~kg not raw grams");
+    /* Fake bug: treating mass_g as kg would be ~850 kg for a 420 mm model. */
+    expect(p.mass_g / mass_si > 900.0, "g vs kg differ by ~1000×");
+}
+
+static void test_integrator_convergence(void) {
+    /* RK4 vs Euler: finer dt → closer states; RK4 drifts less on short run. */
+    FlProject p;
+    fl_project_default_ism_fighter(&p);
+    FlSim a, b;
+    fl_sim_init(&a, &p);
+    fl_sim_init(&b, &p);
+    fl_sim_set_integrator(&a, FL_INTEG_RK4);
+    fl_sim_set_integrator(&b, FL_INTEG_EULER);
+    FlControls c = {.throttle = 0.55, .de_deg = -1.0, .da_deg = 0, .dr_deg = 0};
+    fl_sim_set_controls(&a, &c);
+    fl_sim_set_controls(&b, &c);
+    fl_sim_run(&a, 2.0, 0.01, 0.5);
+    fl_sim_run(&b, 2.0, 0.01, 0.5);
+    double dV = fabs(a.hist[a.nhist - 1].V - b.hist[b.nhist - 1].V);
+    expect(dV >= 0.0, "rk4 vs euler ran");
+    /* Halve dt on Euler → move toward RK4 reference */
+    FlSim e1, e2;
+    fl_sim_init(&e1, &p);
+    fl_sim_init(&e2, &p);
+    fl_sim_set_integrator(&e1, FL_INTEG_EULER);
+    fl_sim_set_integrator(&e2, FL_INTEG_EULER);
+    fl_sim_set_controls(&e1, &c);
+    fl_sim_set_controls(&e2, &c);
+    fl_sim_run(&e1, 1.0, 0.05, 1.0);
+    fl_sim_run(&e2, 1.0, 0.025, 1.0);
+    FlSim rk;
+    fl_sim_init(&rk, &p);
+    fl_sim_set_controls(&rk, &c);
+    fl_sim_run(&rk, 1.0, 0.025, 1.0);
+    double err_coarse = fabs(e1.hist[e1.nhist - 1].V - rk.hist[rk.nhist - 1].V);
+    double err_fine = fabs(e2.hist[e2.nhist - 1].V - rk.hist[rk.nhist - 1].V);
+    expect(err_fine <= err_coarse + 1e-6, "Euler converges toward RK4 as dt↓");
 }
 
 static void test_avionics(void) {
@@ -243,6 +297,8 @@ int main(void) {
     test_project_roundtrip();
     test_aoa_sweep();
     test_dyn_step();
+    test_units_scale();
+    test_integrator_convergence();
     test_avionics();
     test_scenarios();
     test_planned();

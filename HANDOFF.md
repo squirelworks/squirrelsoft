@@ -265,11 +265,16 @@ Done earlier (kept for history):
   load + scripted FCS co-check. Victor SoT files: ISM #88. Soft does not design
   airframe hardware.
 
-### FLIGHTLAB-ism-interfaces — load fighter-jet/interfaces YAML  `status: done` (this PR)
+### FLIGHTLAB-ism-interfaces — load fighter-jet/interfaces YAML  `status: done` (#178)
 - S7.2b / Soft #170: `fl_yaml` + `fl_iface`, Soft allowlist
   `schemas/ism-fj-1.0.0/`, CI snapshot `fixtures/ism-interfaces/` from ISM
   `main`, CLI `ism-interfaces`. Schema-version gate; loud missing/unknown
   top-level keys. Soft does not fork SoT — refresh path in fixtures README.
+
+### SQUIRRELNUM + Flight Lab RK/units — Soft #174  `status: done` (this PR)
+- S7.2c: `libs/squirrelnum` (RK4, DP5(4), Brent, spline, LA, quaternions);
+  Flight Lab `fl_dyn` defaults to RK4; `docs/units-and-scale.md` + mm/g
+  mix-up tests. Fred D1 risks (Euler + mm/g) folded in per Sarah.
 
 ### ISMBENCH-scaffold — keyboard/mouse HID harness  `status: done` (#169)
 - S8.1: `squirrelismbench/` matrix + mouse self-tests. Eric interface docs:
