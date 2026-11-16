@@ -309,8 +309,7 @@ Done earlier (kept for history):
 - S8.1: `squirrelismbench/` matrix + mouse self-tests. Eric interface docs:
   ISM #89 / #90. Live USB and other lab benches are S8.2+.
 
-<<<<<<< HEAD
-### ISMBENCH-ram-typewriter — Soft #182 fixture + typewriter matrix  `status: done` (this PR)
+### ISMBENCH-ram-typewriter — Soft #182 fixture + typewriter matrix  `status: done` (#197)
 - S8.1b: typewriter 4×12 fixture + `typewriter-test` (ISM #4 / open PR #159).
 - S8.4a: `memory-test` — SPD XOR Soft contract (I2C `0x50`) + walking /
   checkerboard / Park–Miller LCG bank patterns (NR Ch. 7.1 class oracle;
@@ -321,11 +320,10 @@ Done earlier (kept for history):
   (`ISM SPD: …`); live PSRAM march once Soft has a host path; refresh
   typewriter fixture when ISM #159 merges; Soft #182 companion UI still open
   on `-2eaf`.
-=======
+
 ### KBDCFG-scaffold — Eric keyboard layout + firmware cfg  `status: done` (#180)
 - S9.1: `squirrelkbdcfg/` loads 60% fixture, prints layout, SQKB1 round-trip.
   Mouse settings #181 and RAM self-test #182 follow in Eric order.
->>>>>>> 91b91b1 (Add squirrelkbdcfg: Eric ISM keyboard layout + firmware configurator)
 
 ### HILBENCH-scaffold — fighter HIL bench UI  `status: done` (#189, lane `-2eaf`)
 - S10.1 / ISM #80: `squirrelhilbench/` mock profile connect, actuator /
