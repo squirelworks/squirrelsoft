@@ -115,7 +115,8 @@ Leave **S6** / **PLAY** to Squirrel (`needs: squirrel`).
 | soft | [#188](https://github.com/squirelworks/squirrelsoft/pull/188) | `…-ism-mouse-cfg-2eaf` | `-2eaf` | Eric mouse cfg #181 |
 | soft | [#189](https://github.com/squirelworks/squirrelsoft/pull/189) | `…-ism-hil-bench-2eaf` | `-2eaf` | HIL UI ISM #80 |
 | soft | [#190](https://github.com/squirelworks/squirrelsoft/pull/190) | `…-ism-bus-analyzer-2eaf` | `-2eaf` | bus analyzer ISM #83 *(merged)* |
-| soft | *(this PR)* | `…-ism-ram-test-2eaf` | `-2eaf` | Eric RAM self-test #182 / S9.3 |
+| soft | [#205](https://github.com/squirelworks/squirrelsoft/pull/205) | `…-ism-ram-test-2eaf` | `-2eaf` | Eric RAM self-test #182 *(merged)* |
+| soft | *(this PR)* | `…-ism-live-hid-2eaf` | `-2eaf` | Soft HID path S8.2 |
 
 **Merged (do not re-claim):** os2 #183 W.3, #188 shadows, #191 W.2, #192 W.5,
 #193 paging, #196 stay-thunks, #203 lanes canon; bios #189 capsule; soft

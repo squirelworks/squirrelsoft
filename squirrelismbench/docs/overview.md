@@ -19,9 +19,21 @@ ISM device README / interfaces  →  ib_iface / ib_memory / ib_printer / ib_plot
         ├─ ib_memory    SPD XOR + walking/checker/LCG patterns (synthetic)
         ├─ ib_printer   motor / paper / head SPI stub (synthetic)
         ├─ ib_plotter   workspace + NR Ch.3.1 lerp path check (synthetic)
-        └─ ib_power     PSU/UPS load steps + Soft Simpson energy (NR Ch.4.1)
-main.c  CLI; live USB HID / I2C / power CDC planned
+        ├─ ib_power     PSU/UPS load steps + Soft Simpson energy (NR Ch.4.1)
+        └─ ib_hid       Soft HID transport (`file:` capture / `live` stand-down)
+main.c  CLI; Soft host USB (libusb/etc.) deferred — see Soft gap issue
 ```
+
+## Soft HID path (S8.2)
+
+`keyboard-hid` / `mouse-hid` open a Soft transport:
+
+- `file:PATH` — write Soft `ISM-HID-CAP` boot reports and round-trip verify
+  (CI default under `build/*.ismhidcap`)
+- `live` — explicit stand-down until a Soft USB HID host backend exists
+
+This is Soft’s path layer for real 60% keyboard / mouse bring-up; it does not
+claim OS USB stacks or vendor HID drivers.
 
 ## RAM patterns and NR
 

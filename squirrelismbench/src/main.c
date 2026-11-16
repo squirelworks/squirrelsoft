@@ -1,5 +1,6 @@
 /* SquirrelISMBench — Soft HID / device bench harness. Original code. */
 #define _POSIX_C_SOURCE 200809L
+#include "ib_hid.h"
 #include "ib_iface.h"
 #include "ib_keyboard.h"
 #include "ib_memory.h"
@@ -25,10 +26,15 @@ static void usage(FILE *f) {
         "  plotter-test [--iface FILE]    plotter path + NR Ch.3.1 lerp\n"
         "  psu-test [--iface FILE]        PSU load steps + telemetry (S8.3)\n"
         "  ups-test [--iface FILE]        UPS load + capacity (S8.3)\n"
+        "  keyboard-hid [--iface FILE] [--transport SPEC]\n"
+        "                                 S8.2 Soft HID path (file: CI / live)\n"
+        "  mouse-hid [--iface FILE] [--transport SPEC]\n"
+        "                                 S8.2 Soft HID path (file: CI / live)\n"
         "  demo                           run all against CI fixtures\n"
         "\n"
         "Soft tests Eric's ISM consumer devices. Interfaces are SoT in\n"
-        "international-squirrel-machines. CI uses fixtures until SoT lands.\n",
+        "international-squirrel-machines. CI uses fixtures; HID transport\n"
+        "defaults to file:build/*.ismhidcap (live USB host path deferred).\n",
         f);
 }
 
@@ -245,6 +251,69 @@ static int cmd_ups(int argc, char **argv) {
     return cmd_power("fixtures/ups/interface.ismups", argc, argv);
 }
 
+static int cmd_hid_path(IbHidDeviceKind kind, const char *default_iface,
+                        const char *default_transport, int argc, char **argv) {
+    const char *iface = default_iface;
+    const char *transport = default_transport;
+    int i;
+    char *text = NULL, err[IB_MSG_LEN];
+    IbHidTransport t;
+    IbHidTestResult res;
+
+    for (i = 0; i < argc; i++) {
+        if (strcmp(argv[i], "--iface") == 0) {
+            iface = opt_val(argc, argv, &i);
+            if (!iface) return 2;
+        } else if (strcmp(argv[i], "--transport") == 0) {
+            transport = opt_val(argc, argv, &i);
+            if (!transport) return 2;
+        } else
+            return 2;
+    }
+    if (read_file(iface, &text) != 0) {
+        fprintf(stderr, "squirrelismbench: cannot read %s\n", iface);
+        return 1;
+    }
+    if (ib_hid_open(&t, transport, kind, err, (int)sizeof(err)) != 0) {
+        fprintf(stderr, "squirrelismbench: %s\n", err);
+        free(text);
+        return 1;
+    }
+    if (kind == IB_HID_DEV_KEYBOARD) {
+        IbKeyboardIface k;
+        if (ib_keyboard_parse(&k, text, err, (int)sizeof(err)) != 0) {
+            fprintf(stderr, "squirrelismbench: %s\n", err);
+            ib_hid_close(&t);
+            free(text);
+            return 1;
+        }
+        ib_hid_keyboard_path_selftest(&k, &t, &res);
+    } else {
+        IbMouseIface m;
+        if (ib_mouse_parse(&m, text, err, (int)sizeof(err)) != 0) {
+            fprintf(stderr, "squirrelismbench: %s\n", err);
+            ib_hid_close(&t);
+            free(text);
+            return 1;
+        }
+        ib_hid_mouse_path_selftest(&m, &t, &res);
+    }
+    free(text);
+    ib_hid_close(&t);
+    puts(res.summary);
+    return res.ok ? 0 : 1;
+}
+
+static int cmd_keyboard_hid(int argc, char **argv) {
+    return cmd_hid_path(IB_HID_DEV_KEYBOARD, "fixtures/keyboard-60/interface.ismhid",
+                        "file:build/keyboard.ismhidcap", argc, argv);
+}
+
+static int cmd_mouse_hid(int argc, char **argv) {
+    return cmd_hid_path(IB_HID_DEV_MOUSE, "fixtures/mouse/interface.ismhid",
+                        "file:build/mouse.ismhidcap", argc, argv);
+}
+
 int main(int argc, char **argv) {
     if (argc < 2) {
         usage(stderr);
@@ -263,6 +332,8 @@ int main(int argc, char **argv) {
     if (strcmp(cmd, "plotter-test") == 0) return cmd_plotter(argc - 2, argv + 2);
     if (strcmp(cmd, "psu-test") == 0) return cmd_psu(argc - 2, argv + 2);
     if (strcmp(cmd, "ups-test") == 0) return cmd_ups(argc - 2, argv + 2);
+    if (strcmp(cmd, "keyboard-hid") == 0) return cmd_keyboard_hid(argc - 2, argv + 2);
+    if (strcmp(cmd, "mouse-hid") == 0) return cmd_mouse_hid(argc - 2, argv + 2);
     if (strcmp(cmd, "demo") == 0) {
         int a = cmd_keyboard(0, NULL);
         int b = cmd_mouse(0, NULL);
@@ -272,7 +343,9 @@ int main(int argc, char **argv) {
         int f = cmd_plotter(0, NULL);
         int g = cmd_psu(0, NULL);
         int h = cmd_ups(0, NULL);
-        if (a || b || c || d || e || f || g || h) return 1;
+        int i = cmd_keyboard_hid(0, NULL);
+        int j = cmd_mouse_hid(0, NULL);
+        if (a || b || c || d || e || f || g || h || i || j) return 1;
         puts("squirrelismbench demo ok");
         return 0;
     }

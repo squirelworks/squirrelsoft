@@ -1,3 +1,4 @@
+#include "ib_hid.h"
 #include "ib_iface.h"
 #include "ib_keyboard.h"
 #include "ib_memory.h"
@@ -118,6 +119,35 @@ int main(void) {
         IbPowerTestResult br;
         ib_power_selftest(&bad, &br);
         expect(br.ok == 0, "overcurrent fail");
+    }
+
+    /* S8.2 Soft HID path: file: round-trip + live stand-down. */
+    {
+        IbHidTransport ht, live;
+        IbHidTestResult hr;
+        char herr[128];
+        expect(ib_hid_open(&ht, "file:build/test-kbd.ismhidcap", IB_HID_DEV_KEYBOARD, herr,
+                           (int)sizeof(herr)) == 0,
+               "hid open kbd file");
+        ib_hid_keyboard_path_selftest(&k, &ht, &hr);
+        expect(hr.ok == 1, hr.summary);
+        expect(strstr(hr.summary, "PASS") != NULL, "kbd hid PASS");
+        ib_hid_close(&ht);
+
+        expect(ib_hid_open(&ht, "file:build/test-mouse.ismhidcap", IB_HID_DEV_MOUSE, herr,
+                           (int)sizeof(herr)) == 0,
+               "hid open mouse file");
+        ib_hid_mouse_path_selftest(&m, &ht, &hr);
+        expect(hr.ok == 1, hr.summary);
+        ib_hid_close(&ht);
+
+        expect(ib_hid_open(&live, "live", IB_HID_DEV_KEYBOARD, herr, (int)sizeof(herr)) == 0,
+               "hid open live");
+        expect(live.live_refused == 1, "live refused");
+        ib_hid_keyboard_path_selftest(&k, &live, &hr);
+        expect(hr.ok == 1, "live standdown ok");
+        expect(strstr(hr.summary, "STANDDOWN") != NULL, "live standdown text");
+        ib_hid_close(&live);
     }
 
     free(kt);

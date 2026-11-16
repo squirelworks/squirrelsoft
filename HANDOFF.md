@@ -48,12 +48,12 @@ Used here, in `ROADMAP.md` and on the issues (as labels).
   `.github/workflows/ci.yml` on every PR. Desktop packages: see
   `docs/packaging.md` and `.github/workflows/release.yml`.
 - **Open Cursor/Codex coding items *(lane `-2eaf`)*:** Soft GNSS NTRIP/RTCM/
-  Android caster wiring is done (#147–#162); ISM Soft UI S10.1–S10.4 and Eric
-  companions S9.1–S9.3 (`squirrelramtest/` / #182) are on `main` or this PR.
-  Remaining Soft coding: S8.2 live HID, S8.3 PSU/UPS (open PR #202), S8.4b
-  live SPD/PSRAM. Next Squirrel-owned work remains **S6** repo split and
-  **PLAY** uploads (`needs: squirrel`): Sound 0.0.14/0.0.15, QR 0.1.7, Suica
-  0.0.13/0.0.14.
+  Android caster wiring is done (#147–#162); ISM Soft UI S10.1–S10.4, Eric
+  companions S9.1–S9.3, S8.3 PSU/UPS (#202), and Soft S8.2 HID path (`file:`
+  + `live` stand-down) are on `main` or this PR. Remaining Soft coding: Soft
+  host USB for real HID, S8.4b live SPD/PSRAM (#203/#204). Next Squirrel-owned
+  work remains **S6** repo split and **PLAY** uploads (`needs: squirrel`):
+  Sound 0.0.14/0.0.15, QR 0.1.7, Suica 0.0.13/0.0.14.
 - **Agent lanes:** suite split is in [docs/AGENT_LANES.md](docs/AGENT_LANES.md)
   (`-2eaf` = this Soft/Gen2/BIOS lane; `-b55f` = OS/2 2.9 only).
 - **Path to suite/OS 3.0.0:** Soft [docs/PATH_TO_3.0.0.md](docs/PATH_TO_3.0.0.md)
@@ -343,7 +343,7 @@ Done earlier (kept for history):
   `-2eaf` after kbd/mouse configurators.
 - **Gaps (file Soft/ISM issues if missing):** live USB-CDC SPD line parse
   (`ISM SPD: …`); live PSRAM march once Soft has a host path; refresh
-  typewriter fixture when ISM #159 merges; Soft #182 companion UI is `squirrelramtest/` (S9.3; this PR).
+  typewriter fixture when ISM #159 merges; Soft #182 companion UI is `squirrelramtest/` (S9.3; #205).
 
 ### ISMBENCH-printer-plotter + SHIPBENCH — Soft lab expansion  `status: done` (#198)
 - S8.4b′: `printer-test` (ISM #5 Steve GPIO/VID map) + Soft-proposed
@@ -353,13 +353,22 @@ Done earlier (kept for history):
 - **Gaps:** live printer USB; plotter fab SoT when ISM #6 leaves Planned;
   warship live board CDC; refresh Soft fixtures from ISM YAML when SoT freezes.
 
-### ISMBENCH-psu-ups — S8.3 PSU/UPS load + telemetry  `status: done` (this PR)
+### ISMBENCH-psu-ups — S8.3 PSU/UPS load + telemetry  `status: done` (#202)
 - `ib_power` + CLI `psu-test` / `ups-test`: Soft-proposed fixtures, load-step
   nameplate checks, required telemetry channels, Soft composite Simpson energy
   (NR Ch. 4.1 class; Soft original, no NR listings). UPS capacity/SOC gate.
 - **Gaps (file Soft/ISM issues if missing):** live USB-CDC PSU/UPS telemetry;
-  Eric machine-readable SoT refresh; S8.2 live HID still open; `gh issue create`
-  may 401 — gaps recorded here / in the PR.
+  Eric machine-readable SoT refresh; S8.2 Soft HID path is `ib_hid` (this PR);
+  Soft host USB still open (gap issue).
+
+
+### ISMBENCH-hid-path — S8.2 Soft USB HID transport  `status: done` (this PR)
+- Soft `ib_hid` + CLI `keyboard-hid` / `mouse-hid`: `file:` ISM-HID-CAP
+  boot-report round-trip for 60% keyboard / mouse; `live` returns explicit
+  STANDDOWN until Soft host USB lands. Checks `tests/test_ismbench.c`,
+  `tests/cli_smoke.sh`.
+- **Gaps:** Soft libusb/WinUSB/IOHID host backend for real devices (Soft #207);
+  OS/2 HID host gaps stay on squirrel-os2.
 
 ### KBDCFG-scaffold — Eric keyboard layout + firmware cfg  `status: done` (#184)
 - S9.1: `squirrelkbdcfg/` loads 60% fixture, prints layout, SQKB1 round-trip.
@@ -395,7 +404,7 @@ Done earlier (kept for history):
 
 
 
-### RAMTEST-scaffold — Eric RAM-module self-test utility  `status: done` (this PR)
+### RAMTEST-scaffold — Eric RAM-module self-test utility  `status: done` (#205)
 - S9.3: `squirrelramtest/` loads ISM-MEM fixture, prints SPD Soft XOR contract,
   runs fixture bank patterns, writes pass/fail artifact; checks
   `tests/test_ramtest.c`, `tests/cli_smoke.sh`. Bench harness remains
