@@ -48,7 +48,7 @@ trim / pull-up / roll scenarios.
 | `fl_scenario` | `trim_cruise`, `pull_up`, `roll` | More envelopes |
 | `fl_hil` | Soft SQHIL1 mock PCB framing + correlate (S7.5) | Live serial PCB ICD |
 | `fl_planned` / tunnel | CFD stubbed; **tunnel (S7.3) + Soft HIL mock (S7.5) active** | Real tunnel logs / live PCB |
-| `fl_chart` | **sqgui strip (S7.4)** + **HIL feed (S7.5′ `hil-chart`)** | Optional SDL live window |
+| `fl_chart` | **sqgui strip (S7.4)** + **SDL `--gui` (S7.4′)** + **HIL feed (S7.5′)** | Live serial HIL |
 
 Out of scope for v0: photoreal visuals, multiplayer, weapons, classified data,
 full CFD, certified flight-test tooling, shipping Gerbers/STLs.

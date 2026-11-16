@@ -9,12 +9,24 @@ BUILD = build
 SQNLIB = $(SQN)/build/libsquirrelnum.a
 SQGUILIB = $(SQGUI)/build/libsqgui.a
 
+# Soft S7.4′ optional SDL strip window (same pattern as squirrelcalc).
+HAS_SDL ?= $(shell pkg-config --exists sdl2 && echo 1)
+ifeq ($(HAS_SDL),1)
+CHART_GUI = $(BUILD)/fl_chart_sdl.o
+SQGUI_SDL = $(SQGUI)/build/sqgui_sdl.o
+$(BUILD)/fl_chart_sdl.o: CFLAGS += $(shell pkg-config --cflags sdl2)
+LDFLAGS += $(shell pkg-config --libs sdl2)
+else
+CHART_GUI = $(BUILD)/fl_chart_nosdl.o
+endif
+
 OBJ = $(BUILD)/fl_project.o $(BUILD)/fl_aero.o $(BUILD)/fl_dyn.o \
 	$(BUILD)/fl_avionics.o $(BUILD)/fl_scenario.o $(BUILD)/fl_planned.o \
 	$(BUILD)/fl_ism.o $(BUILD)/fl_fcs.o $(BUILD)/fl_yaml.o $(BUILD)/fl_iface.o \
 	$(BUILD)/fl_verify.o $(BUILD)/fl_viability.o $(BUILD)/fl_loadout.o \
 	$(BUILD)/fl_chart.o $(BUILD)/fl_hil.o
 HDR = $(wildcard include/*.h)
+LIBS = $(SQNLIB) $(SQGUI_SDL) $(SQGUILIB)
 
 .PHONY: all test verify viability clean demo $(SQNLIB) $(SQGUILIB)
 
@@ -27,13 +39,17 @@ $(SQNLIB):
 	$(MAKE) -C $(SQN)
 
 $(SQGUILIB):
-	$(MAKE) -C $(SQGUI)
+	$(MAKE) -C $(SQGUI) build/libsqgui.a $(if $(SQGUI_SDL),build/sqgui_sdl.o)
+ifneq ($(SQGUI_SDL),)
+$(SQGUI_SDL): $(SQGUILIB)
+	@:
+endif
 
 $(BUILD)/%.o: src/%.c $(HDR) | $(BUILD)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(BUILD)/squirrelflightlab: src/main.c $(OBJ) $(SQNLIB) $(SQGUILIB) | $(BUILD)
-	$(CC) $(CFLAGS) src/main.c $(OBJ) $(SQNLIB) $(SQGUILIB) -o $@ $(LDFLAGS)
+$(BUILD)/squirrelflightlab: src/main.c $(OBJ) $(CHART_GUI) $(LIBS) | $(BUILD)
+	$(CC) $(CFLAGS) src/main.c $(OBJ) $(CHART_GUI) $(LIBS) -o $@ $(LDFLAGS)
 
 $(BUILD)/test_flightlab: tests/test_flightlab.c $(OBJ) $(SQNLIB) $(SQGUILIB) | $(BUILD)
 	$(CC) $(CFLAGS) tests/test_flightlab.c $(OBJ) $(SQNLIB) $(SQGUILIB) -o $@ $(LDFLAGS)
@@ -44,6 +60,12 @@ test: $(BUILD)/test_flightlab $(BUILD)/squirrelflightlab
 	sh scripts/demo_happy_path.sh $(BUILD)
 	$(MAKE) verify
 	$(MAKE) viability
+	@if [ "$(HAS_SDL)" = 1 ]; then \
+		SDL_VIDEODRIVER=dummy $(BUILD)/squirrelflightlab strip-chart --gui --frames 8 \
+			| grep -q "strip-chart-gui" && echo "squirrelflightlab strip-gui ok"; \
+		SDL_VIDEODRIVER=dummy $(BUILD)/squirrelflightlab hil-chart mock --gui --frames 8 \
+			| grep -q "hil-chart-gui" && echo "squirrelflightlab hil-gui ok"; \
+	else echo "squirrelflightlab: no SDL2, strip --gui not tested"; fi
 	@echo "squirrelflightlab tests ok"
 
 verify: $(BUILD)/squirrelflightlab

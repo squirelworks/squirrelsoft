@@ -50,11 +50,11 @@ Used here, in `ROADMAP.md` and on the issues (as labels).
 - **Open Cursor/Codex coding items *(lane `-2eaf`)*:** Soft GNSS NTRIP/RTCM/
   Android caster wiring is done (#147–#162); ISM Soft UI S10.1–S10.4 and Eric
   companions S9.1–S9.3 (`squirrelramtest/` / #182) are on `main` or this PR.
-  Remaining Soft coding: S8.2 live HID, S8.4b″ live SPD/PSRAM (#203/#204,
-  `-2eaf`), live printer USB / plotter fab. Soft storage Soft bench (S8.4b)
-  is this PR. Next Squirrel-owned work remains **S6** repo split and
-  **PLAY** uploads (`needs: squirrel`): Sound 0.0.14/0.0.15, QR 0.1.7, Suica
-  0.0.13/0.0.14.
+  Remaining Soft coding: Soft #207 live HID host (`-2eaf`), S8.4b″ live
+  SPD/PSRAM (#203/#204, `-2eaf`), live printer USB / plotter fab, live HIL
+  serial once ICD lands. Soft S7.4′ SDL strip window is this PR. Next
+  Squirrel-owned work remains **S6** repo split and **PLAY** uploads
+  (`needs: squirrel`): Sound 0.0.14/0.0.15, QR 0.1.7, Suica 0.0.13/0.0.14.
 - **Agent lanes:** suite split is in [docs/AGENT_LANES.md](docs/AGENT_LANES.md)
   (`-2eaf` = this Soft/Gen2/BIOS lane; `-b55f` = OS/2 2.9 only).
 - **Path to suite/OS 3.0.0:** Soft [docs/PATH_TO_3.0.0.md](docs/PATH_TO_3.0.0.md)
@@ -315,7 +315,12 @@ Done earlier (kept for history):
 ### FLIGHTLAB-strip-chart — S7.4 sqgui strip chart  `status: done` (#200)
 - `fl_chart` + CLI `strip-chart`: headless `sqgui` canvas of sim history
   (V/nz/α/θ); NR Ch. 3.1 lerp resample onto columns; optional PPM snapshot.
-- **Gaps:** interactive SDL strip window (optional).
+
+### FLIGHTLAB-sdl-strip — Soft S7.4′ SDL strip window  `status: done` (#211)
+- `fl_chart_gui` + `strip-chart --gui [--frames N]` / `hil-chart … --gui` on the
+  same `fl_chart` core (`sqgui_sdl`); CI dummy driver; nosdl stub without SDL2.
+- **Gaps:** live serial HIL once Victor freezes PCB ICD; Soft #207 live HID
+  host stays `-2eaf`. `gh issue create` may 401 — gaps recorded here / PR.
 
 ### FLIGHTLAB-hil-mock — S7.5 Soft mock PCB HIL  `status: done` (#201)
 - `fl_hil` Soft SQHIL1 framing (HELLO/ACK/SYNC/CH/BYE); `hil mock` and
@@ -327,9 +332,9 @@ Done earlier (kept for history):
 
 ### FLIGHTLAB-hil-chart — S7.5′ Soft HIL → strip-chart  `status: done` (#209)
 - `fl_chart_draw_hil` / CLI `hil-chart`: Soft HIL board channel roles drawn
-  into the same `sqgui` strip (NR Ch. 3.1 resample); optional PPM.
-- **Gaps:** SDL live window; live serial HIL feed once ICD lands;
-  `gh issue create` may 401 — gaps recorded here / in the PR.
+  into the same `sqgui` strip (NR Ch. 3.1 resample); optional PPM; Soft S7.4′
+  `--gui` shares the SDL path.
+- **Gaps:** live serial HIL feed once ICD lands.
 
 ### FLIGHTLAB-loadout — Soft #173  `status: done` (#194)
 - S7.2f: `fl_loadout` validates station×adapter×store against ISM interface

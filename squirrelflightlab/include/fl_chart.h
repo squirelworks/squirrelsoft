@@ -1,6 +1,6 @@
 /*
- * Soft Flight Lab strip-chart on libs/sqgui (S7.4 + S7.5′ HIL feed).
- * Headless canvas draw + optional PPM; same core as a future SDL window.
+ * Soft Flight Lab strip-chart on libs/sqgui (S7.4 + S7.4′ SDL + S7.5′ HIL).
+ * Headless canvas draw + optional PPM; SDL window via fl_chart_gui when linked.
  */
 #ifndef FL_CHART_H
 #define FL_CHART_H
