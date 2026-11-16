@@ -1,0 +1,13 @@
+SQHUD page 1
+type: hud
+name: primary-flight
+width: 1024
+height: 768
+element attitude: kind=attitude x=412 y=284 w=200 h=200
+element airspeed: kind=airspeed x=120 y=284 w=80 h=200
+element altitude: kind=altitude x=824 y=284 w=80 h=200
+element heading: kind=heading x=392 y=64 w=240 h=40
+element aoa: kind=aoa x=220 y=300 w=40 h=80
+element gear: kind=gear_status x=80 y=700 w=60 h=40
+element sta1: kind=stores_station x=40 y=40 w=24 h=24 station=1 state=empty
+element sta2: kind=stores_station x=72 y=40 w=24 h=24 station=2 state=loaded
