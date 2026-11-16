@@ -8,6 +8,7 @@
 #include "fl_planned.h"
 #include "fl_project.h"
 #include "fl_scenario.h"
+#include "fl_verify.h"
 
 #include <math.h>
 #include <stdio.h>
@@ -235,6 +236,20 @@ static void test_ism_and_fcs(void) {
     free(iface);
 }
 
+static void test_verify(void) {
+    FlVerifyReport rep;
+    expect(fl_verify_run_analytic(&rep) == 0, "analytic verify");
+    expect(rep.nfail == 0, "no verify fails");
+    expect(strstr(rep.label, "provisional") != NULL, "provisional label");
+    char md[4096];
+    expect(fl_verify_report_md(&rep, md, sizeof md) == 0, "md report");
+    expect(strstr(md, "pendulum_energy") != NULL, "pendulum case");
+    expect(strstr(md, "torque_free_energy") != NULL, "rigid case");
+    char err[128];
+    expect(fl_verify_optional_xcheck(NULL, NULL, &rep, err, sizeof err) == 1,
+           "optional xcheck skip");
+}
+
 static void test_ism_interfaces(void) {
     FlIfaceBundle bundle;
     char err[256];
@@ -304,6 +319,7 @@ int main(void) {
     test_planned();
     test_ism_and_fcs();
     test_ism_interfaces();
+    test_verify();
     if (fails) {
         fprintf(stderr, "%d failure(s)\n", fails);
         return 1;

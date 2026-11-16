@@ -271,10 +271,15 @@ Done earlier (kept for history):
   `main`, CLI `ism-interfaces`. Schema-version gate; loud missing/unknown
   top-level keys. Soft does not fork SoT — refresh path in fixtures README.
 
-### SQUIRRELNUM + Flight Lab RK/units — Soft #174  `status: done` (this PR)
+### SQUIRRELNUM + Flight Lab RK/units — Soft #174  `status: done` (#185)
 - S7.2c: `libs/squirrelnum` (RK4, DP5(4), Brent, spline, LA, quaternions);
   Flight Lab `fl_dyn` defaults to RK4; `docs/units-and-scale.md` + mm/g
   mix-up tests. Fred D1 risks (Euler + mm/g) folded in per Sarah.
+
+### FLIGHTLAB-verify — analytic verification Soft #172  `status: done` (this PR)
+- S7.2d: `fl_verify` analytic cases + optional AVL/OpenVSP harness (skip if
+  absent); provisional label; `make verify`. NESC CSV / F-16 TP-1538 deferred
+  (licence check before vendoring).
 
 ### ISMBENCH-scaffold — keyboard/mouse HID harness  `status: done` (#169)
 - S8.1: `squirrelismbench/` matrix + mouse self-tests. Eric interface docs:

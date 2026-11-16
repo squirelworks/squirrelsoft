@@ -9,10 +9,11 @@ SQNLIB = $(SQN)/build/libsquirrelnum.a
 
 OBJ = $(BUILD)/fl_project.o $(BUILD)/fl_aero.o $(BUILD)/fl_dyn.o \
 	$(BUILD)/fl_avionics.o $(BUILD)/fl_scenario.o $(BUILD)/fl_planned.o \
-	$(BUILD)/fl_ism.o $(BUILD)/fl_fcs.o $(BUILD)/fl_yaml.o $(BUILD)/fl_iface.o
+	$(BUILD)/fl_ism.o $(BUILD)/fl_fcs.o $(BUILD)/fl_yaml.o $(BUILD)/fl_iface.o \
+	$(BUILD)/fl_verify.o
 HDR = $(wildcard include/*.h)
 
-.PHONY: all test clean demo $(SQNLIB)
+.PHONY: all test verify clean demo $(SQNLIB)
 
 all: $(BUILD)/squirrelflightlab
 
@@ -35,7 +36,12 @@ test: $(BUILD)/test_flightlab $(BUILD)/squirrelflightlab
 	$(BUILD)/test_flightlab
 	sh tests/cli_smoke.sh $(BUILD)
 	sh scripts/demo_happy_path.sh $(BUILD)
+	$(MAKE) verify
 	@echo "squirrelflightlab tests ok"
+
+verify: $(BUILD)/squirrelflightlab
+	$(BUILD)/squirrelflightlab verify | tee $(BUILD)/verify_report.md
+	@grep -q "0 fail" $(BUILD)/verify_report.md
 
 demo: $(BUILD)/squirrelflightlab
 	sh scripts/demo_happy_path.sh $(BUILD)

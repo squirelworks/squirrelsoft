@@ -149,6 +149,9 @@ source of truth. Design note: `squirrelflightlab/docs/overview.md`.
   Euler retained for comparison; SI unit helpers + mm/g mix-up tests;
   `docs/units-and-scale.md`; checks `libs/squirrelnum/tests/`,
   `tests/test_flightlab.c`
+- [x] S7.2d Analytic verification suite (Soft #172): pendulum, torque-free,
+  ballistic, trim (Brent), phugoid closed form; optional AVL/OpenVSP skip;
+  provisional labelling; `make verify` / `verify` CLI; `docs/credibility.md`
 - [ ] S7.3 Higher-fidelity replaceable aero provider + tunnel CSV override
 - [ ] S7.4 `sqgui` strip-chart window on the same core
 - [ ] S7.5 HIL against the real avionics PCB (planned stub today)

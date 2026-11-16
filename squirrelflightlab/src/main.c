@@ -9,6 +9,7 @@
 #include "fl_planned.h"
 #include "fl_project.h"
 #include "fl_scenario.h"
+#include "fl_verify.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -37,6 +38,7 @@ static void usage(FILE *f) {
         "      --schema Soft top-level allowlist YAML\n"
         "  fcs-check [options]          scripted FCS co-check; writes pass/fail report\n"
         "      --params F  --iface F  --report FILE\n"
+        "  verify [--openvsp F] [--avl F]  analytic verification suite (Soft #172)\n"
         "  planned                      list scaffold/planned surfaces (CFD, tunnel, HIL)\n"
         "  cfd-import PATH | tunnel PATH | hil ENDPOINT\n"
         "                               planned stubs (always fail with a clear message)\n"
@@ -539,6 +541,26 @@ int main(int argc, char **argv) {
     if (strcmp(cmd, "ism-interfaces") == 0)
         return cmd_ism_interfaces(argc - 2, argv + 2);
     if (strcmp(cmd, "fcs-check") == 0) return cmd_fcs_check(argc - 2, argv + 2);
+    if (strcmp(cmd, "verify") == 0) {
+        const char *vsp = NULL, *avl = NULL;
+        int i;
+        for (i = 2; i < argc; i++) {
+            if (strcmp(argv[i], "--openvsp") == 0 && i + 1 < argc)
+                vsp = argv[++i];
+            else if (strcmp(argv[i], "--avl") == 0 && i + 1 < argc)
+                avl = argv[++i];
+            else if (argv[i][0] == '-')
+                return 2;
+        }
+        FlVerifyReport rep;
+        int rc = fl_verify_run_analytic(&rep);
+        char err[FL_MAX_MSG];
+        fl_verify_optional_xcheck(vsp, avl, &rep, err, sizeof err);
+        char md[8192];
+        fl_verify_report_md(&rep, md, sizeof md);
+        fputs(md, stdout);
+        return (rc != 0 || rep.nfail) ? 1 : 0;
+    }
     if (strcmp(cmd, "planned") == 0) {
         int n = 0;
         const FlPlannedSurface *list = fl_planned_list(&n);
