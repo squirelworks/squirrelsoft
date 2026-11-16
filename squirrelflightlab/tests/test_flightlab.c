@@ -307,18 +307,23 @@ static void test_ism_interfaces(void) {
     expect(strcmp(bundle.aircraft_id, "ISM-FJ-1") == 0, "aircraft_id");
 
     /* Unsupported schema_version */
-    FlIfaceSchema schema;
+    FlIfaceSchema *schema = calloc(1, sizeof *schema);
+    expect(schema != NULL, "schema oom");
+    if (!schema) return;
     char *schema_text = slurp("schemas/ism-fj-1.0.0/top-level-allowlist.yaml");
     expect(schema_text != NULL, "soft schema readable");
-    if (!schema_text) return;
-    expect(fl_iface_schema_load(&schema, schema_text, err, sizeof err) == 0, err);
+    if (!schema_text) {
+        free(schema);
+        return;
+    }
+    expect(fl_iface_schema_load(schema, schema_text, err, sizeof err) == 0, err);
     free(schema_text);
 
     const char *bad_ver =
         "schema_version: \"9.9.9\"\n"
         "aircraft_id: \"ISM-FJ-1\"\n";
     FlIfaceDoc doc;
-    expect(fl_iface_validate_doc(&schema, "aircraft-geometry.yaml", bad_ver, &doc,
+    expect(fl_iface_validate_doc(schema, "aircraft-geometry.yaml", bad_ver, &doc,
                                  NULL, err, sizeof err) != 0,
            "reject unknown schema_version");
     expect(strstr(err, "unsupported schema_version") != NULL, err);
@@ -338,7 +343,7 @@ static void test_ism_interfaces(void) {
         "wing_stations_pct_semi_span: {}\n"
         "spars: {}\n"
         "empennage: {}\n";
-    expect(fl_iface_validate_doc(&schema, "aircraft-geometry.yaml", unknown_key, &doc,
+    expect(fl_iface_validate_doc(schema, "aircraft-geometry.yaml", unknown_key, &doc,
                                  NULL, err, sizeof err) != 0,
            "reject unknown key");
     expect(strstr(err, "unknown key") != NULL, err);
@@ -346,10 +351,59 @@ static void test_ism_interfaces(void) {
     const char *missing =
         "schema_version: \"1.0.0\"\n"
         "revision: \"A\"\n";
-    expect(fl_iface_validate_doc(&schema, "mass-properties.yaml", missing, &doc, NULL,
+    expect(fl_iface_validate_doc(schema, "mass-properties.yaml", missing, &doc, NULL,
                                  err, sizeof err) != 0,
            "reject missing required");
     expect(strstr(err, "missing required") != NULL, err);
+
+    /* Soft #177: nested unknown / missing required paths */
+    char *fc = slurp("fixtures/ism-interfaces/flight-controls.yaml");
+    expect(fc != NULL, "flight-controls fixture");
+    if (fc) {
+        expect(fl_iface_validate_doc(schema, "flight-controls.yaml", fc, &doc, NULL,
+                                     err, sizeof err) == 0,
+               err);
+        free(fc);
+    }
+
+    const char *nested_unknown =
+        "schema_version: \"1.0.0\"\n"
+        "aircraft_id: \"ISM-FJ-1\"\n"
+        "revision: \"A\"\n"
+        "status: stub\n"
+        "source_drawings: []\n"
+        "source_docs: []\n"
+        "architecture: {fbw: true}\n"
+        "surfaces:\n"
+        "  - id: aileron_L\n"
+        "    not_a_surface_field: 1\n"
+        "modes: [{id: ground}]\n"
+        "envelope: {aoa_limit_deg: 20, nz_limit_g: 9}\n"
+        "expected_behaviour: {}\n";
+    expect(fl_iface_validate_doc(schema, "flight-controls.yaml", nested_unknown, &doc,
+                                 NULL, err, sizeof err) != 0,
+           "reject nested unknown key");
+    expect(strstr(err, "unknown key") != NULL && strstr(err, "surfaces[0]") != NULL,
+           err);
+
+    const char *nested_missing =
+        "schema_version: \"1.0.0\"\n"
+        "aircraft_id: \"ISM-FJ-1\"\n"
+        "revision: \"A\"\n"
+        "status: stub\n"
+        "source_drawings: []\n"
+        "source_docs: []\n"
+        "architecture: {fbw: true}\n"
+        "surfaces: [{id: aileron_L}]\n"
+        "modes: [{id: ground}]\n"
+        "envelope: {provisional: true}\n"
+        "expected_behaviour: {}\n";
+    expect(fl_iface_validate_doc(schema, "flight-controls.yaml", nested_missing, &doc,
+                                 NULL, err, sizeof err) != 0,
+           "reject nested missing required");
+    expect(strstr(err, "missing required") != NULL && strstr(err, "envelope") != NULL,
+           err);
+    free(schema);
 }
 
 int main(void) {

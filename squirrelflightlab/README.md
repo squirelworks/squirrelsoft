@@ -37,7 +37,7 @@ trim / pull-up / roll scenarios.
 |--------|------|-------------|
 | `fl_project` | Workspace + `.sqflt` design inputs | Prefer ISM param files |
 | `fl_ism` | Load `ISM-FJ parameters` / `ISM-FJ interface` texts | Refresh fixtures from ISM #88 |
-| `fl_iface` | Load all `fighter-jet/interfaces/*.yaml` by `schema_version` | Nested closed allowlists |
+| `fl_iface` | Load all `fighter-jet/interfaces/*.yaml` by `schema_version` + nested Soft allowlists (#177) | Deeper Soft-cared nested paths as Victor evolves stubs |
 | `fl_verify` | Analytic verification (pendulum/rigid/ballistic/trim/phugoid) | NESC / F-16 TP-1538 |
 | `fl_viability` | Evaluate `viability-criteria.yaml` → MD/JSON | Full AVL/OpenVSP/CalculiX compare |
 | `fl_loadout` | Station×adapter×store validation (inert) | More multi-origin matrix cases |

@@ -1,5 +1,6 @@
 # Soft-owned allowlist for ISM-FJ interface schema_version 1.0.0
 # Generated from fixtures mirrored from ISM main; refresh when Victor adds keys.
+# Soft #177: optional nested: closed maps (dotted / [] paths Soft cares about).
 schema_version: "1.0.0"
 supported_schema_versions: ["1.0.0"]
 interfaces:
@@ -18,9 +19,26 @@ interfaces:
   flight-controls.yaml:
     required: [schema_version, aircraft_id]
     allowed: [schema_version, aircraft_id, revision, status, source_drawings, source_docs, architecture, surfaces, modes, envelope, expected_behaviour]
+    nested:
+      architecture:
+        required: [fbw]
+        allowed: [fbw, mechanical_backup, fcc_lanes, voting, inceptors]
+      surfaces[]:
+        required: [id]
+        allowed: [id, axis, hinge_ws_pct, hinge_fs_pct, deflection_deg, rate_limit_deg_s, actuator, type]
+      modes[]:
+        required: [id]
+        allowed: [id, gains, emphasis, command, aoa_limit, augmentation, still_fbw, nws, surface_rate_derate, thrust_idle_logic]
+      envelope:
+        required: [aoa_limit_deg, nz_limit_g]
+        allowed: [provisional, aoa_limit_deg, nz_limit_g, roll_rate_limit_deg_s, yaw_rate_limit_deg_s, keas_limit_kt, mach_limit, gear_extend_max_keas_kt, flap_extend_max_keas_kt]
   hardpoints.yaml:
     required: [schema_version, aircraft_id]
     allowed: [schema_version, aircraft_id, revision, status, source_drawings, source_docs, related_interfaces, wet_hardpoints, gun_bay, issue_integration, stations, pylon_geometry_study, safeing, expected_behaviour]
+    nested:
+      stations[]:
+        required: [id, side, hardware, mass_class_kg_max]
+        allowed: [id, side, fs_pct, ws_pct, bl_study_mm, wl_study_mm, role, hardware, mass_class_kg_max]
   inert-stores.yaml:
     required: [schema_version, aircraft_id]
     allowed: [schema_version, aircraft_id, revision, status, issue, provisional, scope, excluded, source_docs, source_drawings, note, citations, hardware, pylon_geometry, stores, flight_model_application, expected_behaviour]
@@ -30,6 +48,13 @@ interfaces:
   mass-properties.yaml:
     required: [schema_version, aircraft_id]
     allowed: [schema_version, aircraft_id, revision, status, source_drawings, coordinate_frame, inertia_about, study_model, full_scale, stores_mass_delta, expected_behaviour]
+    nested:
+      full_scale:
+        required: [empty_mass_kg, max_takeoff_mass_kg]
+        allowed: [provisional, empty_mass_kg, max_takeoff_mass_kg, fuel_internal_kg, cg_empty, cg_gross_nominal, inertia_empty_kg_m2, inertia_gross_nominal_kg_m2, notes]
+      expected_behaviour:
+        required: [lateral_cg_tolerance_m, warn_if_asymmetric_stores_kg]
+        allowed: [cg_travel_fs_pct_range, lateral_cg_tolerance_m, warn_if_asymmetric_stores_kg]
   materials-allowables.yaml:
     required: [schema_version, aircraft_id]
     allowed: [schema_version, aircraft_id, revision, status, issue, related_issues, provisional, disclaimer, units, source_docs, material_callouts, stackups, joints_matrix, galvanic_rules, environment, prototype_vs_production, knockdown_factors_provisional, expected_behaviour]
@@ -48,6 +73,13 @@ interfaces:
   sms-interface.yaml:
     required: [schema_version, aircraft_id]
     allowed: [schema_version, aircraft_id, revision, status, issue, provisional, scope, excluded, source_docs, roles, topics, safeing, separation_envelopes, station_hardware_defaults, expected_behaviour]
+    nested:
+      separation_envelopes:
+        required: [defaults]
+        allowed: [provisional, note, defaults]
+      separation_envelopes.defaults[]:
+        required: [id, store_id, release_mode]
+        allowed: [id, store_id, release_mode, keas_kt, aoa_deg, nz_g, sideslip_deg_abs_max, gear, wow, eject_impulse_required, wow_override_maintenance, structural_limits_still_apply]
   viability-criteria.yaml:
     required: [schema_version, aircraft_id]
     allowed: [schema_version, aircraft_id, revision, status, issue, provisional, canonical_name, source_docs, derived_full_scale, citations, class_comparison_bands, gates, summary, expected_behaviour]
