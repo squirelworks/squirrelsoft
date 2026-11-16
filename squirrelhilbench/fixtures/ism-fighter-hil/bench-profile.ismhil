@@ -1,0 +1,23 @@
+ISM-HIL bench profile 1
+# Soft CI mock bench profile for Victor's ISM fighter HIL.
+# Hardware / harness SoT: international-squirrel-machines fighter-jet/
+#   interfaces: actuators.yaml, avionics-bus.yaml, sensors.yaml, flight-controls.yaml
+# Soft does not design the bench — refresh from ISM when harness notes land (ISM #80).
+aircraft_id: ISM-FJ-1
+transport: mock
+endpoint: mock://ism-fj-1-hil
+estop: clear
+safeing: safe
+actuator eha_aileron_L: ok
+actuator eha_aileron_R: ok
+actuator eha_flaperon_L: ok
+actuator eha_flaperon_R: ok
+actuator eha_ht: ok
+actuator eha_rudder: ok
+inceptor side_stick: ok
+inceptor throttle_quadrant: ok
+inceptor pedals: ok
+bus ISM-Bus-A: ok
+bus ISM-Bus-B: ok
+bus ISM-Bay-Debug: ok
+stores_display station_display: ok

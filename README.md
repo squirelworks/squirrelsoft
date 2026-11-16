@@ -21,6 +21,7 @@ libraries.
 | `squirreldebug/` | **SquirrelDebug** | Debugger for Squirrel OS/2 over QEMU's gdbstub or a serial line, on `libs/sqgui` (desktop; freestanding core) |
 | `squirrelflightlab/` | **Fighter Jet Flight Lab** (SquirrelFlightLab) | ISM fighter-jet aero / flight-dynamics / avionics lab (desktop scaffold) |
 | `squirrelismbench/` | **SquirrelISMBench** | Soft HID/device bench harness for ISM consumer gear (keyboard, mouse, …) |
+| `squirrelhilbench/` | **SquirrelHILBench** | ISM fighter HIL bench UI (mock profile, channel health, stimulus, Flight Lab replay CSV) |
 
 ## Build
 
