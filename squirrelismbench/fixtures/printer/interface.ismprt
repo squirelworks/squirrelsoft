@@ -1,0 +1,18 @@
+ISM-PRT printer interface 1
+# Soft CI fixture for Eric's ISM printer (ISM #5). Steve map from printer/README.
+# Soft does not design the PCB — proposed test contract until machine-readable SoT.
+driver: DRV8833
+vid: 0x1209
+pid: 0x000F
+ain1: GP0
+ain2: GP1
+bin1: GP2
+bin2: GP3
+nsleep: GP4
+head_cs: GP5
+head_sck: GP6
+head_mosi: GP7
+paper_gp: GP8
+btn_feed: GP9
+btn_cancel: GP10
+btn_pwr: GP11

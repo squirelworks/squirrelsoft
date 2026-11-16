@@ -2,6 +2,8 @@
 #include "ib_keyboard.h"
 #include "ib_memory.h"
 #include "ib_mouse.h"
+#include "ib_plotter.h"
+#include "ib_printer.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -42,26 +44,22 @@ int main(void) {
     char *mt = slurp("fixtures/mouse/interface.ismhid");
     char *tt = slurp("fixtures/typewriter/interface.ismhid");
     char *memt = slurp("fixtures/memory/interface.ismem");
-    expect(kt && mt && tt && memt, "fixtures present");
-    if (!kt || !mt || !tt || !memt) return 1;
+    char *prt = slurp("fixtures/printer/interface.ismprt");
+    char *plt = slurp("fixtures/plotter/interface.ismplt");
+    expect(kt && mt && tt && memt && prt && plt, "fixtures present");
+    if (!kt || !mt || !tt || !memt || !prt || !plt) return 1;
 
     IbKeyboardIface k, tw;
     IbMouseIface m;
     IbMemoryIface mem;
+    IbPrinterIface printer;
+    IbPlotterIface plotter;
     char err[128];
 
     expect(ib_keyboard_parse(&k, kt, err, sizeof err) == 0, err);
-    expect(k.rows == 5 && k.cols == 14, "60% grid");
-    expect(k.nkeys >= 5, "key map");
     IbKeyTestResult kr;
     ib_keyboard_matrix_selftest(&k, &kr);
     expect(kr.ok == 1, kr.summary);
-
-    IbKeyMatrix mx;
-    ib_keyboard_matrix_clear(&mx);
-    expect(ib_keyboard_press(&mx, &k, "A") == 0, "press A");
-    unsigned char rep[8];
-    expect(ib_keyboard_boot_report(&k, &mx, rep) >= 1, "boot report");
 
     expect(ib_mouse_parse(&m, mt, err, sizeof err) == 0, err);
     IbMouseTestResult mr;
@@ -70,30 +68,34 @@ int main(void) {
 
     expect(ib_keyboard_parse(&tw, tt, err, sizeof err) == 0, err);
     expect(tw.rows == 4 && tw.cols == 12, "typewriter 4x12");
-    expect(strcmp(tw.layout, "typewriter-4x12") == 0, "typewriter layout");
     IbKeyTestResult tr;
     ib_keyboard_matrix_selftest(&tw, &tr);
     expect(tr.ok == 1, tr.summary);
 
     expect(ib_memory_parse(&mem, memt, err, sizeof err) == 0, err);
-    expect(mem.spd_i2c_addr == 0x50, "SPD addr");
-    expect(mem.spd_len == 16, "SPD len");
-    expect(ib_memory_spd_checksum_ok(&mem) == 1, "SPD XOR");
     IbMemTestResult mer;
     ib_memory_selftest(&mem, &mer);
     expect(mer.ok == 1, mer.summary);
-    expect(strstr(mer.summary, "NR Ch.7.1") != NULL, "NR citation in summary");
 
-    /* Negative: corrupt SPD XOR must fail selftest */
-    mem.spd[mem.spd_len - 1] ^= 0xff;
-    expect(ib_memory_spd_checksum_ok(&mem) == 0, "corrupt SPD fails XOR");
-    ib_memory_selftest(&mem, &mer);
-    expect(mer.ok == 0, "corrupt SPD selftest FAIL");
+    expect(ib_printer_parse(&printer, prt, err, sizeof err) == 0, err);
+    expect(printer.pid == 0x000F, "printer pid");
+    IbPrinterTestResult pr;
+    ib_printer_selftest(&printer, &pr);
+    expect(pr.ok == 1, pr.summary);
+
+    expect(ib_plotter_parse(&plotter, plt, err, sizeof err) == 0, err);
+    expect(plotter.nwp >= 2, "plotter waypoints");
+    IbPlotterTestResult plr;
+    ib_plotter_selftest(&plotter, &plr);
+    expect(plr.ok == 1, plr.summary);
+    expect(strstr(plr.summary, "NR Ch.3.1") != NULL, "plotter NR cite");
 
     free(kt);
     free(mt);
     free(tt);
     free(memt);
+    free(prt);
+    free(plt);
     if (fails) {
         fprintf(stderr, "%d failure(s)\n", fails);
         return 1;

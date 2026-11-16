@@ -20,11 +20,12 @@ libraries.
 | `squirrelgames/` | **SquirrelGames** | Patience, Mines, Hearts, Bridge, Chess and Tiles on `libs/sqgui` (desktop; freestanding core) |
 | `squirreldebug/` | **SquirrelDebug** | Debugger for Squirrel OS/2 over QEMU's gdbstub or a serial line, on `libs/sqgui` (desktop; freestanding core) |
 | `squirrelflightlab/` | **Fighter Jet Flight Lab** (SquirrelFlightLab) | ISM fighter-jet aero / flight-dynamics / avionics lab (desktop scaffold) |
-| `squirrelismbench/` | **SquirrelISMBench** | Soft HID/device bench harness for ISM consumer gear (keyboard, mouse, …) |
+| `squirrelismbench/` | **SquirrelISMBench** | Soft HID/device bench harness for ISM consumer gear (keyboard, mouse, typewriter, RAM, printer, plotter, …) |
 | `squirrelhilbench/` | **SquirrelHILBench** | ISM fighter HIL bench UI (mock profile, channel health, stimulus, Flight Lab replay CSV) |
 | `squirrelmcstubs/` | **SquirrelMCStubs** | Soft mission-computer stubs for fighter ICD (not flight software) |
 | `squirrelkbdcfg/` | **SquirrelKbdCfg** | Eric ISM keyboard layout map + firmware configurator (Soft #180) |
 | `squirrelhudtool/` | **SquirrelHUDTool** | ISM fighter HUD/HMI symbology & page layout CLI (Soft tooling) |
+| `squirrelshipbench/` | **SquirrelShipBench** | Soft harness for Victor warship hydro/board + bomber heat-flux stubs |
 
 ## Build
 

@@ -1,0 +1,8 @@
+ISM-HB heat-flux 1
+# Soft CI fixture from ISM hypersonic-bomber/interfaces/aerothermal.yaml (#37).
+# Educational cold-wall stub only — not TPS sizing or vehicle performance.
+program_id: ISM-HB-1
+k_teach: 1.83e-4
+rho_kg_m3: 0.001
+rn_m: 0.5
+v_m_s: 6000.0
