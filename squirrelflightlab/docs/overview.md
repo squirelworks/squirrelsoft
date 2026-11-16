@@ -114,6 +114,18 @@ fuselage** placeholder called out in the open decisions.
 6. **Shared types location** — stay in-app until S6, or introduce
    `libs/sqflight` earlier for the hardware repo to compile against?
 
+## OS/2 ground-station host gaps
+
+Squirrel OS/2 is the planned **lab / ground** host (not flight-critical FCC).
+Capability gap matrix vs this app:
+
+- [squirrel-os2 `documentation/guides/ism-flightlab-gaps.md`](https://github.com/squirelworks/squirrel-os2/blob/cursor/ism-flightlab-gaps-b55f/documentation/guides/ism-flightlab-gaps.md)
+  (branch until merged to `main`)
+- Tracker: [squirrel-os2#225](https://github.com/squirelworks/squirrel-os2/issues/225) (lane `-b55f`)
+
+Soft keeps owning Flight Lab / HIL UI code here; OS/2 owns UART/USB CDC,
+soft-RT timing, freestanding packaging, and the lab setup guide.
+
 ## What to deepen next
 
 1. Correlate parametric derivatives to a published (non-classified) method note
@@ -121,6 +133,7 @@ fuselage** placeholder called out in the open decisions.
 3. Wire `sqgui` for live strip charts (same core, freestanding-friendly draw)
 4. Import path for tunnel CSV → override `FlAeroModel` coefficients
 5. HIL serial framing once the avionics firmware protocol exists
+6. Track OS/2 host gaps (#225) as packaging / HIL transport unblocks
 
 ## Non-goals (reminders)
 
