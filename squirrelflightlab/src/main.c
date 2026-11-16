@@ -10,6 +10,7 @@
 #include "fl_project.h"
 #include "fl_scenario.h"
 #include "fl_verify.h"
+#include "fl_viability.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -39,6 +40,8 @@ static void usage(FILE *f) {
         "  fcs-check [options]          scripted FCS co-check; writes pass/fail report\n"
         "      --params F  --iface F  --report FILE\n"
         "  verify [--openvsp F] [--avl F]  analytic verification suite (Soft #172)\n"
+        "  viability-report [FILE] [--json OUT] [--md OUT]\n"
+        "                               evaluate viability-criteria.yaml (Soft #176)\n"
         "  planned                      list scaffold/planned surfaces (CFD, tunnel, HIL)\n"
         "  cfd-import PATH | tunnel PATH | hil ENDPOINT\n"
         "                               planned stubs (always fail with a clear message)\n"
@@ -560,6 +563,38 @@ int main(int argc, char **argv) {
         fl_verify_report_md(&rep, md, sizeof md);
         fputs(md, stdout);
         return (rc != 0 || rep.nfail) ? 1 : 0;
+    }
+    if (strcmp(cmd, "viability-report") == 0) {
+        const char *path = "fixtures/ism-interfaces/viability-criteria.yaml";
+        const char *json_out = NULL, *md_out = NULL;
+        int i;
+        for (i = 2; i < argc; i++) {
+            if (strcmp(argv[i], "--json") == 0 && i + 1 < argc)
+                json_out = argv[++i];
+            else if (strcmp(argv[i], "--md") == 0 && i + 1 < argc)
+                md_out = argv[++i];
+            else if (argv[i][0] == '-')
+                return 2;
+            else
+                path = argv[i];
+        }
+        FlViaReport rep;
+        char err[FL_MAX_MSG];
+        int rc = fl_viability_eval_file(path, &rep, err, sizeof err);
+        if (rc < 0) {
+            fprintf(stderr, "squirrelflightlab: %s\n", err);
+            return 1;
+        }
+        char md[16384], js[16384];
+        fl_viability_report_md(&rep, md, sizeof md);
+        fl_viability_report_json(&rep, js, sizeof js);
+        fputs(md, stdout);
+        if (md_out && write_text(md_out, md) != 0) return 1;
+        if (json_out && write_text(json_out, js) != 0) return 1;
+        char note[240];
+        fl_viability_optional_xcheck(NULL, NULL, NULL, note, sizeof note);
+        fprintf(stderr, "%s\n", note);
+        return rep.nfail ? 1 : 0;
     }
     if (strcmp(cmd, "planned") == 0) {
         int n = 0;
