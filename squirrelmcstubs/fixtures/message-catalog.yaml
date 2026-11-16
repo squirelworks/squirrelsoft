@@ -1,0 +1,23 @@
+# Soft CI copy of ISM avionics-bus + sms-interface topic names only.
+# SoT remains international-squirrel-machines fighter-jet/interfaces/.
+# Refresh from squirrelflightlab/fixtures/ism-interfaces/ when ISM drafts move.
+# Stubs are not flight software.
+schema_version: "1.0.0"
+aircraft_id: "ISM-FJ-1"
+source:
+  - avionics-bus.yaml
+  - sms-interface.yaml
+topics:
+  # avionics-bus.yaml
+  - name: fcc.surface_cmd
+  - name: fcc.surface_fb
+  - name: air_data.state
+  - name: imu.state
+  - name: mc.stores_config
+  - name: mc.radar_tracks
+  - name: mc.mode_request
+  - name: pdu.power_status
+  # sms-interface.yaml (names only; no weapon-protocol payloads here)
+  - name: mc.stores_release_cmd
+  - name: fcc.stores_inhibit
+  - name: sms.safe_arm_discrete

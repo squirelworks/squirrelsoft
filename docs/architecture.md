@@ -26,6 +26,9 @@ Eric’s consumer devices (keyboard, mouse, …).
 SquirrelHILBench (`squirrelhilbench/`) is Soft operator UI for ISM fighter HIL
 benches (mock transport, channel health, stimulus logs); harness SoT stays in
 ISM. Weapons boundary: stores display only — no guidance / seekers / arming.
+SquirrelMCStubs (`squirrelmcstubs/`) provides Soft mission-computer stubs for
+the fighter ICD (MC / SMC-SMS display / display-page publisher). Stubs are not
+flight software and are separate from Flight Lab.
 
 The app folders stay where they are for now. Moving them under `apps/` is churn with no benefit until a split happens.
 

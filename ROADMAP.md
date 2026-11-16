@@ -192,12 +192,15 @@ military. Gaps → ISM issues, not Soft hardware PRs.
 Steve owns Flight Lab (`squirrelflightlab/`). Soft lane `-2eaf` owns the other
 fighter Soft apps from ISM #80–#83. Weapons boundary: stores integration and
 display only — no guidance, seekers, propulsion, warheads, fuzing, arming codes,
-or weapon-protocol internals.
+or weapon-protocol internals. MC stubs are **not flight software**.
 
 - [x] S10.1 HIL bench UI (ISM #80): `squirrelhilbench/` portable core + CLI,
   mock bench profile, channel health, canned stimulus, Flight Lab replay CSV;
   checks `tests/test_hilbench.c`, `tests/cli_smoke.sh`
-- [ ] S10.2 Mission-computer stubs (ISM #81)
+- [x] S10.2 Mission-computer stubs (ISM #81): `squirrelmcstubs/` MC + SMC/SMS
+  (display + loadout flags + safeing only) + display-page publisher; fixture
+  catalog; deterministic headless ticks; checks `tests/test_mcstubs.c`,
+  `tests/cli_smoke.sh`
 - [ ] S10.3 HUD / HMI tooling (ISM #82)
 - [ ] S10.4 Avionics data-bus analyzer (ISM #83)
 

@@ -1,0 +1,23 @@
+# Synthetic safeing / loadout display state for headless CI.
+# SMC/SMS stub may show these fields only — never guidance, seekers,
+# propulsion, warheads, fuzing, arming codes, or weapon-protocol internals.
+schema_version: "1.0.0"
+aircraft_id: "ISM-FJ-1"
+station_loadout_flags:
+  STA-1: empty
+  STA-2: empty
+  STA-3: hung
+  STA-4: hung
+  STA-5: selected
+  STA-6: empty
+  STA-7: empty
+  STA-8: empty
+  STA-9: empty
+safeing:
+  mechanical_ground_pins: true
+  wow_inhibits_release: true
+  dual_consent: true
+  fcc_envelope_veto: true
+  jettison_guarded: true
+  live_fuzing_in_repo: false
+  safe_arm_discrete: safe

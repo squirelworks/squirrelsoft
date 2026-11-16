@@ -22,6 +22,7 @@ libraries.
 | `squirrelflightlab/` | **Fighter Jet Flight Lab** (SquirrelFlightLab) | ISM fighter-jet aero / flight-dynamics / avionics lab (desktop scaffold) |
 | `squirrelismbench/` | **SquirrelISMBench** | Soft HID/device bench harness for ISM consumer gear (keyboard, mouse, …) |
 | `squirrelhilbench/` | **SquirrelHILBench** | ISM fighter HIL bench UI (mock profile, channel health, stimulus, Flight Lab replay CSV) |
+| `squirrelmcstubs/` | **SquirrelMCStubs** | Soft mission-computer stubs for fighter ICD (not flight software) |
 
 ## Build
 

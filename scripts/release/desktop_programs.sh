@@ -15,4 +15,5 @@ squirreldebug
 squirrelflightlab
 squirrelismbench
 squirrelhilbench
+squirrelmcstubs
 EOF

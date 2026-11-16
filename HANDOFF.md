@@ -309,11 +309,17 @@ Done earlier (kept for history):
 - S8.1: `squirrelismbench/` matrix + mouse self-tests. Eric interface docs:
   ISM #89 / #90. Live USB and other lab benches are S8.2+.
 
-### HILBENCH-scaffold — fighter HIL bench UI  `status: done` (this PR, lane `-2eaf`)
+### HILBENCH-scaffold — fighter HIL bench UI  `status: done` (#189, lane `-2eaf`)
 - S10.1 / ISM #80: `squirrelhilbench/` mock profile connect, actuator /
   inceptor / bus health, canned stimulus, Flight Lab–compatible
   `hil-*-replay.csv` export. Harness SoT linked to ISM `fighter-jet/`.
   Weapons boundary: stores display only. Does not duplicate Flight Lab.
+
+### MCSTUBS-scaffold — mission-computer stubs for fighter ICD  `status: done` (this PR)
+- S10.2 / ISM #81: `squirrelmcstubs/` MC, SMC/SMS (display+loadout+safeing only),
+  and one display-page publisher; fixture catalog; deterministic ticks; checks
+  `tests/test_mcstubs.c`, `tests/cli_smoke.sh`. Stubs are not flight software.
+  Weapons boundary: `live_fuzing_in_repo` stays false.
 
 ### PLAY-0.0.14 — upload SquirrelSound 0.0.14  `needs: squirrel`
 - Build the AAB locally with the upload key and upload it to closed testing
