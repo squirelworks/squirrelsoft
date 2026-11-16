@@ -23,6 +23,7 @@ libraries.
 | `squirrelismbench/` | **SquirrelISMBench** | Soft HID/device bench harness for ISM consumer gear (keyboard, mouse, …) |
 | `squirrelhilbench/` | **SquirrelHILBench** | ISM fighter HIL bench UI (mock profile, channel health, stimulus, Flight Lab replay CSV) |
 | `squirrelmcstubs/` | **SquirrelMCStubs** | Soft mission-computer stubs for fighter ICD (not flight software) |
+| `squirrelkbdcfg/` | **SquirrelKbdCfg** | Eric ISM keyboard layout map + firmware configurator (Soft #180) |
 
 ## Build
 
