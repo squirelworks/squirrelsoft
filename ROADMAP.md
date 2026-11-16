@@ -181,6 +181,10 @@ source of truth. Design note: `squirrelflightlab/docs/overview.md`.
   correlate via `sqn_lerp` (NR Ch. 3.1); live serial/USB refused until Victor
   freezes PCB ICD (clear message; OS/2 host gaps squirrel-os2#225); checks in
   `tests/test_flightlab.c`, `tests/cli_smoke.sh`
+- [x] S7.5′ Soft HIL samples into `fl_chart` strip: `fl_chart_draw_hil` /
+  `hil-chart ENDPOINT` overlays board channel roles (NR Ch. 3.1 resample);
+  PPM optional; live serial still deferred; checks in
+  `tests/test_flightlab.c`, `tests/cli_smoke.sh`
 - OS/2 as lab / ground host (UART, soft-RT, packaging): squirrel-os2#225 and
   [`ism-flightlab-gaps.md`](https://github.com/squirelworks/squirrel-os2/blob/cursor/ism-flightlab-gaps-b55f/documentation/guides/ism-flightlab-gaps.md)
   (lane `-b55f`; retarget link to `main` after merge). Soft keeps the app; OS owns the host gaps.

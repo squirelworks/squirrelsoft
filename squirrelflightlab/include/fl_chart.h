@@ -1,11 +1,12 @@
 /*
- * Soft Flight Lab strip-chart on libs/sqgui (S7.4).
+ * Soft Flight Lab strip-chart on libs/sqgui (S7.4 + S7.5′ HIL feed).
  * Headless canvas draw + optional PPM; same core as a future SDL window.
  */
 #ifndef FL_CHART_H
 #define FL_CHART_H
 
 #include "fl_dyn.h"
+#include "fl_hil.h"
 #include "sqgui.h"
 
 typedef enum {
@@ -35,5 +36,18 @@ int fl_chart_draw(sqg_canvas *c, sqg_rect r, const FlSim *sim, const FlChartStyl
 /* Run a short default sim and draw; used by CLI / tests. */
 int fl_chart_render_demo(sqg_canvas *c, const FlProject *p, const FlChartStyle *st,
                          double duration_s, double dt);
+
+/*
+ * Soft S7.5′: draw Soft HIL board samples for `role` into the chart
+ * (NR Ch. 3.1 lerp onto columns). Optional second role overlays trace[1].
+ * Returns segments drawn, or -1 on error.
+ */
+int fl_chart_draw_hil(sqg_canvas *c, sqg_rect r, const FlHilSession *sess,
+                      const char *role0, const char *role1, const FlChartStyle *st);
+
+/* Connect Soft HIL endpoint, draw roles into canvas (CLI / tests). */
+int fl_chart_render_hil(sqg_canvas *c, const char *endpoint, const char *role0,
+                        const char *role1, const FlChartStyle *st, char *err,
+                        int err_cap);
 
 #endif

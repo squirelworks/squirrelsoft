@@ -314,16 +314,21 @@ Done earlier (kept for history):
 ### FLIGHTLAB-strip-chart — S7.4 sqgui strip chart  `status: done` (#200)
 - `fl_chart` + CLI `strip-chart`: headless `sqgui` canvas of sim history
   (V/nz/α/θ); NR Ch. 3.1 lerp resample onto columns; optional PPM snapshot.
-- **Gaps:** interactive SDL strip window (optional); live HIL feed into chart
-  (partially unblocked by S7.5 mock path).
+- **Gaps:** interactive SDL strip window (optional).
 
 ### FLIGHTLAB-hil-mock — S7.5 Soft mock PCB HIL  `status: done` (#201)
 - `fl_hil` Soft SQHIL1 framing (HELLO/ACK/SYNC/CH/BYE); `hil mock` and
   `fixtures/hil/*.sqhil`; correlate host↔board with `sqn_lerp` (NR Ch. 3.1;
   Soft original, no NR listings). Live `/dev`/`serial:` refused until Victor
   freezes avionics PCB ICD; points at squirrel-os2#225 for host transport.
-- **Gaps:** live USB-CDC/UART framing once ICD lands; feed Soft HIL samples
-  into `fl_chart` live strip; refresh fixture from ISM harness notes.
+- **Gaps:** live USB-CDC/UART framing once ICD lands; refresh fixture from
+  ISM harness notes.
+
+### FLIGHTLAB-hil-chart — S7.5′ Soft HIL → strip-chart  `status: done` (this PR)
+- `fl_chart_draw_hil` / CLI `hil-chart`: Soft HIL board channel roles drawn
+  into the same `sqgui` strip (NR Ch. 3.1 resample); optional PPM.
+- **Gaps:** SDL live window; live serial HIL feed once ICD lands;
+  `gh issue create` may 401 — gaps recorded here / in the PR.
 
 ### FLIGHTLAB-loadout — Soft #173  `status: done` (#194)
 - S7.2f: `fl_loadout` validates station×adapter×store against ISM interface
@@ -359,13 +364,12 @@ Done earlier (kept for history):
   (NR Ch. 4.1 class; Soft original, no NR listings). UPS capacity/SOC gate.
 - **Gaps:** live USB-CDC PSU/UPS telemetry; Eric machine-readable SoT refresh.
 
-### ISMBENCH-hid-soft — S8.2 Soft mock USB HID path  `status: done` (this PR)
+### ISMBENCH-hid-soft — S8.2 Soft mock USB HID path  `status: done` (#206)
 - `ib_hid` Soft SQHID1 framing of boot keyboard (8-byte) + mouse (4-byte)
   reports; `hid-test mock` / `fixtures/hid/*.sqhid`; encode/parse round-trip;
   live `/dev/hidraw*` refused with clear deferral until Eric freezes Soft/host.
-- **Gaps (file Soft/ISM issues if missing):** live hidraw open/read once Soft
-  host path exists; refresh Soft `.sqhid` from ISM capture notes; `gh issue
-  create` may 401 — gaps recorded here / in the PR.
+- **Gaps:** live hidraw open/read once Soft host path exists; refresh Soft
+  `.sqhid` from ISM capture notes.
 
 ### KBDCFG-scaffold — Eric keyboard layout + firmware cfg  `status: done` (#184)
 - S9.1: `squirrelkbdcfg/` loads 60% fixture, prints layout, SQKB1 round-trip.
@@ -401,12 +405,12 @@ Done earlier (kept for history):
 
 
 
-### RAMTEST-scaffold — Eric RAM-module self-test utility  `status: done` (this PR)
+### RAMTEST-scaffold — Eric RAM-module self-test utility  `status: done` (#205)
 - S9.3: `squirrelramtest/` loads ISM-MEM fixture, prints SPD Soft XOR contract,
   runs fixture bank patterns, writes pass/fail artifact; checks
   `tests/test_ramtest.c`, `tests/cli_smoke.sh`. Bench harness remains
   `squirrelismbench/` `memory-test`. Live I2C SPD / PSRAM → Soft #203 / #204
-  (S8.4b gaps).
+  (S8.4b gaps; lane `-2eaf`).
 
 ### PLAY-0.0.14 — upload SquirrelSound 0.0.14  `needs: squirrel`
 - Build the AAB locally with the upload key and upload it to closed testing

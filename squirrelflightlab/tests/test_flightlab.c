@@ -289,6 +289,33 @@ static void test_strip_chart(void) {
     free(px);
 }
 
+static void test_hil_chart(void) {
+    FlChartStyle st;
+    fl_chart_style_default(&st);
+    st.w = 320;
+    st.h = 180;
+    uint32_t *px = calloc((size_t)st.w * (size_t)st.h, sizeof *px);
+    expect(px != NULL, "hil chart pixels");
+    if (!px) return;
+    sqg_canvas cv;
+    sqg_canvas_init(&cv, px, st.w, st.h, st.w);
+    char err[240];
+    int segs = fl_chart_render_hil(&cv, "mock", "act_throttle", "imu_az", &st, err,
+                                   sizeof err);
+    expect(segs > 10, err[0] ? err : "hil chart segments");
+    {
+        int i, painted = 0;
+        for (i = 0; i < st.w * st.h; i++)
+            if (px[i] != st.bg) painted++;
+        expect(painted > 100, "hil painted pixels");
+    }
+    expect(fl_chart_render_hil(&cv, "/dev/ttyUSB0", "act_throttle", NULL, &st, err,
+                               sizeof err) == -1,
+           "hil-chart serial refuse");
+    expect(strstr(err, "deferred") != NULL, err);
+    free(px);
+}
+
 static void test_tunnel_provider(void) {
     char *csv = slurp("fixtures/tunnel/soft-scaffold-correlate.csv");
     expect(csv != NULL, "tunnel fixture");
@@ -551,6 +578,7 @@ int main(void) {
     test_planned();
     test_tunnel_provider();
     test_strip_chart();
+    test_hil_chart();
     test_hil_framing_and_mock();
     test_ism_and_fcs();
     test_ism_interfaces();

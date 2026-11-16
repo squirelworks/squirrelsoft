@@ -141,7 +141,7 @@ soft-RT timing, freestanding packaging, and the lab setup guide.
 5. ~~Soft mock HIL framing + correlate~~ **done (S7.5)**; live serial once ICD exists
 6. Track OS/2 host gaps (#225) as packaging / HIL transport unblocks
 7. Optional NR Ch. 3.3 spline tunnel tables; wire real Eric/Victor tunnel logs
-8. Optional SDL interactive strip-chart window; feed Soft HIL samples into `fl_chart`
+8. ~~Feed Soft HIL samples into `fl_chart`~~ **done (S7.5′ `hil-chart`)**; optional SDL window deferred
 
 ## Non-goals (reminders)
 
