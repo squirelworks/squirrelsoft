@@ -316,7 +316,7 @@ Done earlier (kept for history):
 - `fl_chart` + CLI `strip-chart`: headless `sqgui` canvas of sim history
   (V/nz/α/θ); NR Ch. 3.1 lerp resample onto columns; optional PPM snapshot.
 
-### FLIGHTLAB-sdl-strip — Soft S7.4′ SDL strip window  `status: done` (this PR)
+### FLIGHTLAB-sdl-strip — Soft S7.4′ SDL strip window  `status: done` (#211)
 - `fl_chart_gui` + `strip-chart --gui [--frames N]` / `hil-chart … --gui` on the
   same `fl_chart` core (`sqgui_sdl`); CI dummy driver; nosdl stub without SDL2.
 - **Gaps:** live serial HIL once Victor freezes PCB ICD; Soft #207 live HID
