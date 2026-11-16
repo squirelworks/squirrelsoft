@@ -37,7 +37,7 @@ Used here, in `ROADMAP.md` and on the issues (as labels).
   GUI, encoder — S3.4 done via #138 / #142), SquirrelCalc, SquirrelPaint,
   SquirrelGames, SquirrelDebug, SquirrelFlightLab, SquirrelISMBench (scaffold),
   SquirrelHILBench (HIL UI scaffold), SquirrelMCStubs, SquirrelKbdCfg,
-  SquirrelHUDTool (scaffold).
+  SquirrelHUDTool (scaffold), SquirrelMouseCfg (scaffold).
   S3, S4 and S5 are complete on `main`. PKG
   (S3.5 + S4) is on `main`.
 - **Shared cores:** `libs/sqdsp`, `libs/sqfelica`, `libs/sqqr`, `libs/sqmath`, `libs/sqgui`.
@@ -322,7 +322,7 @@ Done earlier (kept for history):
   typewriter fixture when ISM #159 merges; Soft #182 companion UI still open
   on `-2eaf`.
 
-### ISMBENCH-printer-plotter + SHIPBENCH — Soft lab expansion  `status: done` (this PR)
+### ISMBENCH-printer-plotter + SHIPBENCH — Soft lab expansion  `status: done` (#198)
 - S8.4b′: `printer-test` (ISM #5 Steve GPIO/VID map) + Soft-proposed
   `plotter-test` (ISM #6; NR Ch. 3.1 lerp via squirrelnum).
 - S8.5: `squirrelshipbench/` warship hydro + board allowlist (ISM #43) and
@@ -331,9 +331,14 @@ Done earlier (kept for history):
   warship live board CDC; refresh Soft fixtures from ISM YAML when SoT freezes;
   could not `gh issue create` (401) — gaps recorded here / in the PR.
 
-### KBDCFG-scaffold — Eric keyboard layout + firmware cfg  `status: done` (#180)
+### KBDCFG-scaffold — Eric keyboard layout + firmware cfg  `status: done` (#184)
 - S9.1: `squirrelkbdcfg/` loads 60% fixture, prints layout, SQKB1 round-trip.
   Mouse settings #181 and RAM self-test #182 follow in Eric order.
+
+### MOUSECFG-scaffold — Eric mouse DPI + button settings  `status: done` (#181)
+- S9.2: `squirrelmousecfg/` loads mouse fixture, shows/edits DPI steps and
+  button remap, SQMS1 Soft config round-trip. Bench harness stays in
+  `squirrelismbench/`. Keyboard #180 and RAM #182 remain separate.
 
 ### HILBENCH-scaffold — fighter HIL bench UI  `status: done` (#189, lane `-2eaf`)
 - S10.1 / ISM #80: `squirrelhilbench/` mock profile connect, actuator /
@@ -347,7 +352,7 @@ Done earlier (kept for history):
   `tests/test_mcstubs.c`, `tests/cli_smoke.sh`. Stubs are not flight software.
   Weapons boundary: `live_fuzing_in_repo` stays false.
 
-### HUDTOOL-scaffold — ISM HUD/HMI symbology CLI  `status: done` (this PR)
+### HUDTOOL-scaffold — ISM HUD/HMI symbology CLI  `status: done` (#187)
 - S10.3: `squirrelhudtool/` authors HUD + MFD pages, exports SQHUD/JSON;
   fixtures under `fixtures/pages/`; checks `tests/test_hudtool.c`,
   `tests/cli_smoke.sh`. ISM #82 / `fighter-jet/avionics/hmi-hud.md`. No
