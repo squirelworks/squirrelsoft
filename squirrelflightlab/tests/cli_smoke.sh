@@ -55,6 +55,9 @@ $P hil mock | grep -q PASS || fail "hil mock"
 $P hil mock | grep -q "NR Ch.3.1" || fail "hil NR"
 $P hil fixtures/hil/mock-pcb-session.sqhil | grep -q PASS || fail "hil fixture"
 $P hil /dev/ttyUSB0 >/dev/null 2>&1; [ $? -eq 1 ] || fail "hil serial refuse exit 1"
+$P hil-chart mock --ppm "$B/hil_strip.ppm" | grep -q "NR Ch.3.1" || fail "hil-chart"
+[ -f "$B/hil_strip.ppm" ] || fail "hil-chart ppm"
+$P hil-chart /dev/ttyUSB0 >/dev/null 2>&1; [ $? -eq 1 ] || fail "hil-chart serial refuse"
 
 # Sample project file
 S=samples/ism-fighter-v0.sqflt

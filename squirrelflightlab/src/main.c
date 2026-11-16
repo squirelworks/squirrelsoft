@@ -58,6 +58,9 @@ static void usage(FILE *f) {
         "  hil ENDPOINT                 Soft S7.5: Soft mock / fixture HIL (SQHIL1)\n"
         "                               ENDPOINT=mock | fixtures/hil/*.sqhil\n"
         "                               live serial/USB deferred (clear refuse msg)\n"
+        "  hil-chart ENDPOINT [options] Soft S7.5′: strip-chart Soft HIL samples\n"
+        "      --role ROLE [--role2 ROLE]  --ppm FILE\n"
+        "                               default roles act_throttle,imu_az\n"
         "  cfd-import PATH              planned CFD stub (always fails clearly)\n"
         "\n"
         "ISM SoT: international-squirrel-machines fighter-jet/ (Victor). Soft loads\n"
@@ -804,6 +807,59 @@ int main(int argc, char **argv) {
         printf("frame: %s\n", line);
         printf("NR Ch.3.1 lerp correlate ok=%d\n", rep.ok);
         return rep.ok ? 0 : 1;
+    }
+    if (strcmp(cmd, "hil-chart") == 0) {
+        if (argc < 3) {
+            usage(stderr);
+            return 2;
+        }
+        const char *endpoint = argv[2];
+        const char *role0 = "act_throttle";
+        const char *role1 = "imu_az";
+        const char *ppm = NULL;
+        int i;
+        for (i = 3; i < argc; i++) {
+            if (strcmp(argv[i], "--role") == 0) {
+                role0 = opt_val(argc, argv, &i);
+                if (!role0) return 2;
+            } else if (strcmp(argv[i], "--role2") == 0) {
+                role1 = opt_val(argc, argv, &i);
+                if (!role1) return 2;
+            } else if (strcmp(argv[i], "--ppm") == 0) {
+                ppm = opt_val(argc, argv, &i);
+                if (!ppm) return 2;
+            } else
+                return 2;
+        }
+        FlChartStyle st;
+        fl_chart_style_default(&st);
+        uint32_t *px = calloc((size_t)st.w * (size_t)st.h, sizeof *px);
+        if (!px) {
+            fprintf(stderr, "squirrelflightlab: oom\n");
+            return 1;
+        }
+        sqg_canvas cv;
+        sqg_canvas_init(&cv, px, st.w, st.h, st.w);
+        char err[FL_MAX_MSG];
+        int segs = fl_chart_render_hil(&cv, endpoint, role0, role1, &st, err, sizeof err);
+        if (segs < 1) {
+            fprintf(stderr, "squirrelflightlab: hil-chart: %s\n", err[0] ? err : "draw failed");
+            free(px);
+            return 1;
+        }
+        printf("hil-chart %dx%d segments=%d roles=%s,%s (NR Ch.3.1 resample)\n", st.w, st.h,
+               segs, role0, role1 ? role1 : "-");
+        puts("label: provisional, unvalidated against tunnel/flight test");
+        if (ppm) {
+            if (sqg_write_ppm(&cv, ppm) != 0) {
+                fprintf(stderr, "squirrelflightlab: cannot write %s\n", ppm);
+                free(px);
+                return 1;
+            }
+            printf("wrote %s\n", ppm);
+        }
+        free(px);
+        return 0;
     }
     if (strcmp(cmd, "cfd-import") == 0) {
         if (argc < 3) {
