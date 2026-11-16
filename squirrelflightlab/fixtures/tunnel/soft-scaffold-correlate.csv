@@ -1,0 +1,8 @@
+alpha_deg,CL,CD,Cm
+# Soft CI synthetic tunnel table = scaffold parametric at knots (not Eric lab data).
+# S7.3 provider override; replace when real tunnel logs exist.
+-4.0000,-0.185103,0.039025,0.058397
+0.0000,0.150000,0.037643,0.020000
+4.0000,0.485103,0.062644,-0.018397
+8.0000,0.820206,0.114028,-0.056794
+12.0000,1.155310,0.191794,-0.095192

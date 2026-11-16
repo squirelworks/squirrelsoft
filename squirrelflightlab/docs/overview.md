@@ -135,9 +135,10 @@ soft-RT timing, freestanding packaging, and the lab setup guide.
 1. Correlate parametric derivatives to a published (non-classified) method note
 2. Actuator rate limits and surface hinge-moment stubs from the hardware map
 3. Wire `sqgui` for live strip charts (same core, freestanding-friendly draw)
-4. Import path for tunnel CSV → override `FlAeroModel` coefficients
+4. ~~Import path for tunnel CSV → override `FlAeroModel` coefficients~~ **done (S7.3)**
 5. HIL serial framing once the avionics firmware protocol exists
 6. Track OS/2 host gaps (#225) as packaging / HIL transport unblocks
+7. Optional NR Ch. 3.3 spline tunnel tables; wire real Eric/Victor tunnel logs
 
 ## Non-goals (reminders)
 

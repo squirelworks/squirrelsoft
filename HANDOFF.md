@@ -293,13 +293,21 @@ Done earlier (kept for history):
 - S7.2e: `fl_viability` evaluates ISM `viability-criteria.yaml` gates vs class
   bands; MD+JSON reports; `viability-report` CLI; optional tool xcheck skip.
 
-### FLIGHTLAB-viability-soft-recompute — Soft #176 follow-up  `status: done` (this PR)
+### FLIGHTLAB-viability-soft-recompute — Soft #176 follow-up  `status: done` (#196)
 - Soft recompute of formerly deferred gates: G-BREGUET (Breguet + Brent L/D
   oracle, NR Ch. 9.3 via squirrelnum; no NR listings), G-CG travel %MAC,
   G-STRUCT-MARGIN ultimate = limit×factor.
 - **Gaps (file Soft issues if missing):** numeric AVL/OpenVSP/CalculiX table
   compare; Eric scale static / tunnel / RC FC log correlation; NESC CSV /
   F-16 TP-1538 (licence check before vendoring).
+
+### FLIGHTLAB-tunnel-csv — S7.3 replaceable aero + tunnel CSV  `status: done` (this PR)
+- Soft tunnel CSV → `FL_AERO_PROVIDER_TUNNEL_TABLE`; CL/CD/Cm(α) via
+  `sqn_lerp` (NR Ch. 3.1); linear CL/Cm fit (NR Ch. 15.1 class ideas, Soft
+  original); `tunnel PATH` correlate vs parametric scaffold.
+- **Gaps:** real Eric/Victor tunnel logs (not Soft synthetic); CFD mesh import
+  still planned; spline tunnel tables (NR Ch. 3.3) optional follow-up;
+  `gh issue create` may 401 — gaps recorded here / in the PR.
 
 ### FLIGHTLAB-loadout — Soft #173  `status: done` (#194)
 - S7.2f: `fl_loadout` validates station×adapter×store against ISM interface
@@ -322,7 +330,7 @@ Done earlier (kept for history):
   typewriter fixture when ISM #159 merges; Soft #182 companion UI still open
   on `-2eaf`.
 
-### ISMBENCH-printer-plotter + SHIPBENCH — Soft lab expansion  `status: done` (this PR)
+### ISMBENCH-printer-plotter + SHIPBENCH — Soft lab expansion  `status: done` (#198)
 - S8.4b′: `printer-test` (ISM #5 Steve GPIO/VID map) + Soft-proposed
   `plotter-test` (ISM #6; NR Ch. 3.1 lerp via squirrelnum).
 - S8.5: `squirrelshipbench/` warship hydro + board allowlist (ISM #43) and

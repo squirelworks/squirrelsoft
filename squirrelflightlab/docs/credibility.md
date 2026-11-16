@@ -16,6 +16,7 @@
 | G-STRUCT-MARGIN Soft | Soft ultimate = limit×factor ≥ nz×factor | Soft #176 follow-up | Textbook ultimate factor |
 | ISM-FJ aero vs AVL/OpenVSP/CalculiX | Optional path presence | Soft follow-up | Skip if artifacts absent; full table compare later |
 | F-16 / NESC cases | Not in this PR | Soft follow-up | Licence check before vendoring CSV |
+| Tunnel CSV aero provider (S7.3) | Soft lerp + correlate vs parametric | Soft synthetic fixture | NR Ch. 3.1 / 15.1 class; real tunnel logs later |
 | Eric scale / RC correlation | — | Soft follow-up | Needs Eric logging formats |
 
 ISM SoT snapshot: `fixtures/ism-interfaces/` (refresh from ISM `main`). Soft does not design hardware.
