@@ -18,6 +18,7 @@
 | F-16 / NESC cases | Not in this PR | Soft follow-up | Licence check before vendoring CSV |
 | Tunnel CSV aero provider (S7.3) | Soft lerp + correlate vs parametric | Soft synthetic fixture | NR Ch. 3.1 / 15.1 class; real tunnel logs later |
 | Strip chart (S7.4) | Headless sqgui draw + PPM; segment count | Soft sim history | NR Ch. 3.1 resample; SDL window deferred |
+| Soft mock HIL (S7.5) | SQHIL1 framing round-trip + host↔board RMS | Soft synthetic PCB | NR Ch. 3.1 lerp; live serial deferred |
 | Eric scale / RC correlation | — | Soft follow-up | Needs Eric logging formats |
 
 ISM SoT snapshot: `fixtures/ism-interfaces/` (refresh from ISM `main`). Soft does not design hardware.

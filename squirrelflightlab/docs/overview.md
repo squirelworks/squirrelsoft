@@ -31,7 +31,8 @@ fl_yaml ──► fl_iface (schema_version + Soft top-level + nested allowlists)
         └─ CLI: ism-interfaces DIR
 
 fl_dyn ── RK4 via libs/squirrelnum (Euler optional); SI internals
-fl_planned ── stubs only: CFD mesh, wind tunnel, HIL
+fl_planned ── CFD stub; tunnel (S7.3) + Soft HIL mock (S7.5) active
+fl_hil     ── Soft SQHIL1 mock PCB framing + host↔board correlate
 main.c     ── thin CLI (future: sqgui window on the same core)
 
 Units: see docs/units-and-scale.md (mm/g project → SI dynamics).
@@ -43,7 +44,8 @@ aero take structs; the front-end owns I/O. Extension points:
 
 - Swap `fl_aero_from_project` / `FlAeroModel` for a higher-fidelity provider
 - Shared channel / pin types with the ISM fighter-jet hardware repo
-- HIL transport behind `fl_planned_hil_connect` once the PCB protocol exists
+- Soft HIL mock via `fl_hil` / `hil mock|fixture` (S7.5); live serial once
+  Victor freezes the PCB ICD (OS/2 host: squirrel-os2#225)
 - Optional `libs/sqflight` extraction if another app needs the same core (S6)
 
 ## Soft lane rule
@@ -71,8 +73,8 @@ airframe PCB or shell.
    flag missing roles and pin mismatches; sample simulated sensor outputs.
 5. **Scenario runner** — `trim_cruise`, `pull_up`, `roll` with editable
    pass/fail thresholds on the CLI.
-6. **Planned surfaces** — CFD / tunnel / HIL commands exist and refuse with a
-   clear “not implemented in scaffold v0” message.
+6. **Planned surfaces** — CFD remains stubbed; tunnel (S7.3) and Soft HIL mock
+   (S7.5 SQHIL1) are active; live serial HIL still refuses clearly.
 
 ## Units and axis conventions
 
@@ -136,10 +138,10 @@ soft-RT timing, freestanding packaging, and the lab setup guide.
 2. Actuator rate limits and surface hinge-moment stubs from the hardware map
 3. ~~Wire `sqgui` for live strip charts~~ **done (S7.4 headless + PPM; SDL window deferred)**
 4. ~~Import path for tunnel CSV → override `FlAeroModel` coefficients~~ **done (S7.3)**
-5. HIL serial framing once the avionics firmware protocol exists
+5. ~~Soft mock HIL framing + correlate~~ **done (S7.5)**; live serial once ICD exists
 6. Track OS/2 host gaps (#225) as packaging / HIL transport unblocks
 7. Optional NR Ch. 3.3 spline tunnel tables; wire real Eric/Victor tunnel logs
-8. Optional SDL interactive strip-chart window on `fl_chart`
+8. Optional SDL interactive strip-chart window; feed Soft HIL samples into `fl_chart`
 
 ## Non-goals (reminders)
 

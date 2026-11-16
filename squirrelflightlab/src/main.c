@@ -2,6 +2,7 @@
 #define _POSIX_C_SOURCE 200809L
 #include "fl_aero.h"
 #include "fl_avionics.h"
+#include "fl_hil.h"
 #include "fl_chart.h"
 #include "fl_dyn.h"
 #include "fl_fcs.h"
@@ -54,8 +55,10 @@ static void usage(FILE *f) {
         "  strip-chart [options]        Soft S7.4: sqgui strip chart of sim history\n"
         "      --project FILE  --duration S  --dt S  --ppm FILE\n"
         "      --channels V,nz,alpha,theta\n"
-        "  cfd-import PATH | hil ENDPOINT\n"
-        "                               planned stubs (always fail with a clear message)\n"
+        "  hil ENDPOINT                 Soft S7.5: Soft mock / fixture HIL (SQHIL1)\n"
+        "                               ENDPOINT=mock | fixtures/hil/*.sqhil\n"
+        "                               live serial/USB deferred (clear refuse msg)\n"
+        "  cfd-import PATH              planned CFD stub (always fails clearly)\n"
         "\n"
         "ISM SoT: international-squirrel-machines fighter-jet/ (Victor). Soft loads\n"
         "params + interfaces YAML; CI snapshots under fixtures/ism-fighter/ and\n"
@@ -771,17 +774,44 @@ int main(int argc, char **argv) {
         puts("label: provisional, unvalidated against tunnel/flight test");
         return rep.ok ? 0 : 1;
     }
-    if (strcmp(cmd, "cfd-import") == 0 || strcmp(cmd, "hil") == 0) {
+    if (strcmp(cmd, "hil") == 0) {
+        if (argc < 3) {
+            usage(stderr);
+            return 2;
+        }
+        FlHilSession sess;
+        FlSim host;
+        char err[FL_MAX_MSG];
+        if (fl_hil_connect(argv[2], &sess, &host, err, sizeof err) != 0) {
+            fprintf(stderr, "squirrelflightlab: %s\n", err);
+            return 1;
+        }
+        FlHilCorrReport rep;
+        /* Soft fixture + mock both pin throttle; reliable CI gate. */
+        const char *role = "act_throttle";
+        if (fl_hil_correlate(&sess, &host, role, &rep) != 0) {
+            fprintf(stderr, "squirrelflightlab: %s\n", rep.summary);
+            return 1;
+        }
+        char text[2048];
+        fl_hil_report_text(&sess, &rep, text, sizeof text);
+        fputs(text, stdout);
+        /* Framing round-trip smoke on stdout for CI greps */
+        char line[FL_HIL_LINE];
+        fl_hil_encode_hello(line, sizeof line);
+        printf("frame: %s\n", line);
+        fl_hil_encode_hello_ack(line, sizeof line, sess.board_id, sess.nchannels_ack);
+        printf("frame: %s\n", line);
+        printf("NR Ch.3.1 lerp correlate ok=%d\n", rep.ok);
+        return rep.ok ? 0 : 1;
+    }
+    if (strcmp(cmd, "cfd-import") == 0) {
         if (argc < 3) {
             usage(stderr);
             return 2;
         }
         char err[FL_MAX_MSG];
-        int rc;
-        if (strcmp(cmd, "cfd-import") == 0)
-            rc = fl_planned_cfd_mesh_import(argv[2], err, sizeof err);
-        else
-            rc = fl_planned_hil_connect(argv[2], err, sizeof err);
+        int rc = fl_planned_cfd_mesh_import(argv[2], err, sizeof err);
         fprintf(stderr, "squirrelflightlab: %s\n", err);
         return rc ? 1 : 0;
     }

@@ -46,7 +46,8 @@ trim / pull-up / roll scenarios.
 | `fl_dyn` | 6-DOF sketch, history (RK4 via squirrelnum) | Atmosphere + quaternions |
 | `fl_avionics` | Channel co-check vs bay expect map | HIL |
 | `fl_scenario` | `trim_cruise`, `pull_up`, `roll` | More envelopes |
-| `fl_planned` / tunnel | CFD/HIL stubbed; **tunnel CSV provider active (S7.3)** | Real tunnel logs / HIL PCB |
+| `fl_hil` | Soft SQHIL1 mock PCB framing + correlate (S7.5) | Live serial PCB ICD |
+| `fl_planned` / tunnel | CFD stubbed; **tunnel (S7.3) + Soft HIL mock (S7.5) active** | Real tunnel logs / live PCB |
 | `fl_chart` | **sqgui strip chart (S7.4)** headless + PPM | Optional SDL live window |
 
 Out of scope for v0: photoreal visuals, multiplayer, weapons, classified data,
