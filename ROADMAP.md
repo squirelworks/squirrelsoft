@@ -232,7 +232,9 @@ for HUD: `squirrelhudtool/docs/overview.md`.
 - [x] S10.3 HUD / HMI tooling (ISM #82): `squirrelhudtool/` scaffold —
   `new-hud` / `new-mfd` / `export` / `demo`, SQHUD text + JSON, fixtures under
   `fixtures/pages/`; checks `tests/test_hudtool.c`, `tests/cli_smoke.sh`
-- [ ] S10.4 Avionics data-bus analyzer (ISM #83)
+- [x] S10.4 Avionics data-bus analyzer (ISM #83): `squirrelbusmon/` decode /
+  filter / replay vs ICD catalog fixtures; replay hook for Flight Lab / HIL;
+  checks `tests/test_busmon.c`, `tests/cli_smoke.sh`
 
 ## S6 — Repo split (#32)
 - [x] Prep inventory (agent): `scripts/s6_repo_split_prep.sh`, `docs/s6-repo-split.md`, `docs/s6-ci-stubs/` — path lists, suggested CI, umbrella README link draft. No remotes created or deleted.

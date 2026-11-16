@@ -1,0 +1,20 @@
+ISM-BUS-ICD 1
+aircraft: ISM-FJ-1
+revision: A
+source: https://github.com/squirelworks/international-squirrel-machines/blob/main/fighter-jet/interfaces/avionics-bus.yaml
+# Soft-held sample catalog mirroring ISM topic names. Protocol SoT stays in ISM.
+# opaque=1 → SMS/stores: topic + safe display fields only (weapons boundary).
+
+topic fcc.surface_cmd bus=ISM-Bus-A msgid=0x0101 rate_hz=100 payload=surface_deflection_commands
+topic fcc.surface_fb bus=ISM-Bus-A msgid=0x0102 rate_hz=100 payload=surface_position_feedback
+topic air_data.state bus=ISM-Bus-A msgid=0x0201 rate_hz=100 payload=keas_alt_mach_aoa_ss
+topic imu.state bus=ISM-Bus-A msgid=0x0202 rate_hz=200 payload=rates_accels
+topic mc.radar_tracks bus=ISM-Bus-A msgid=0x0301 rate_hz=20 payload=track_list_stub
+topic mc.mode_request bus=ISM-Bus-A msgid=0x0302 rate_hz=20 payload=ap_at_modes
+topic pdu.power_status bus=ISM-Bus-B msgid=0x0401 rate_hz=10 payload=rail_health
+topic fcc.lane_health bus=ISM-Bus-B msgid=0x0402 rate_hz=10 payload=vote_bit_status
+topic mc.bit bus=ISM-Bus-B msgid=0x0403 rate_hz=10 payload=mc_lru_health
+topic bay_io.bit bus=ISM-Bus-A msgid=0x0601 rate_hz=10 payload=concentrator_health
+topic mc.stores_config bus=ISM-Bus-A msgid=0x0501 rate_hz=10 payload=station_loadout_flags opaque=1
+topic mc.stores_mode bus=ISM-Bus-A msgid=0x0502 rate_hz=5 payload=stores_mode_safe_display opaque=1
+topic sms.safe_arm_discrete bus=ISM-Bus-A msgid=0x0503 rate_hz=0 payload=safe_consent_display opaque=1

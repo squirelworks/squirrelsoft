@@ -41,6 +41,10 @@ for Victor’s fighter displays (ISM #82; no weapons internals).
 SquirrelShipBench (`squirrelshipbench/`) is Soft test software for Victor’s
 warship scale-model board / teaching hydrostatics and hypersonic-bomber
 educational heat-flux stubs (no weapons interfaces).
+SquirrelBusMon (`squirrelbusmon/`) is the Soft avionics data-bus analyzer
+(ISM #83): sample capture decode/filter/replay against an ICD catalog fixture;
+protocol SoT stays in ISM `fighter-jet/interfaces/`; SMS/stores topics are
+opaque display fields only.
 
 The app folders stay where they are for now. Moving them under `apps/` is churn with no benefit until a split happens.
 

@@ -1,0 +1,17 @@
+ISM-BUS-CAPTURE 1
+# Synthetic Soft sample capture for CI. Not live flight data.
+# SMS/stores frames carry only safe display fields (mode/state/stations=opaque).
+
+frame t_ms=0 bus=ISM-Bus-A node=FCC msgid=0x0101 topic=fcc.surface_cmd elev_deg=1.2 ail_deg=-0.5 rud_deg=0.0
+frame t_ms=10 bus=ISM-Bus-A node=FCC msgid=0x0102 topic=fcc.surface_fb elev_deg=1.1 ail_deg=-0.4 rud_deg=0.0
+frame t_ms=20 bus=ISM-Bus-A node=ADS msgid=0x0201 topic=air_data.state keas=220.0 alt_ft=5000 mach=0.35 aoa_deg=2.1
+frame t_ms=25 bus=ISM-Bus-A node=IMU msgid=0x0202 topic=imu.state p=0.01 q=-0.02 r=0.0 ax=0.0 ay=0.0 az=1.0
+frame t_ms=100 bus=ISM-Bus-A node=MC msgid=0x0501 topic=mc.stores_config stations=opaque
+frame t_ms=110 bus=ISM-Bus-A node=MC msgid=0x0502 topic=mc.stores_mode mode=safe
+frame t_ms=120 bus=ISM-Bus-A node=SMS msgid=0x0503 topic=sms.safe_arm_discrete state=SAFE
+frame t_ms=200 bus=ISM-Bus-B node=PDU msgid=0x0401 topic=pdu.power_status primary_ok=1 essential_ok=1
+frame t_ms=210 bus=ISM-Bus-B node=FCC msgid=0x0402 topic=fcc.lane_health lanes_ok=4
+frame t_ms=220 bus=ISM-Bus-B node=MC msgid=0x0403 topic=mc.bit lru_ok=1
+frame t_ms=300 bus=ISM-Bus-A node=MC msgid=0x0301 topic=mc.radar_tracks n_tracks=2
+frame t_ms=310 bus=ISM-Bus-A node=MC msgid=0x0302 topic=mc.mode_request ap=0 at=1
+frame t_ms=400 bus=ISM-Bus-A node=BAY msgid=0x0601 topic=bay_io.bit concentrator_ok=1

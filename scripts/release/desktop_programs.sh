@@ -20,4 +20,5 @@ squirrelshipbench
 squirrelkbdcfg
 squirrelhudtool
 squirrelmousecfg
+squirrelbusmon
 EOF

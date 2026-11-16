@@ -27,6 +27,7 @@ libraries.
 | `squirrelhudtool/` | **SquirrelHUDTool** | ISM fighter HUD/HMI symbology & page layout CLI (Soft tooling) |
 | `squirrelshipbench/` | **SquirrelShipBench** | Soft harness for Victor warship hydro/board + bomber heat-flux stubs |
 | `squirrelmousecfg/` | **SquirrelMouseCfg** | Eric ISM mouse DPI profiles + button remap (Soft #181) |
+| `squirrelbusmon/` | **SquirrelBusMon** | ISM avionics data-bus analyzer (decode / filter / replay; Soft tooling) |
 
 ## Build
 
