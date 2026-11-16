@@ -309,13 +309,25 @@ Done earlier (kept for history):
 - S8.1: `squirrelismbench/` matrix + mouse self-tests. Eric interface docs:
   ISM #89 / #90. Live USB and other lab benches are S8.2+.
 
+### ISMBENCH-ram-typewriter — Soft #182 fixture + typewriter matrix  `status: done` (this PR)
+- S8.1b: typewriter 4×12 fixture + `typewriter-test` (ISM #4 / open PR #159).
+- S8.4a: `memory-test` — SPD XOR Soft contract (I2C `0x50`) + walking /
+  checkerboard / Park–Miller LCG bank patterns (NR Ch. 7.1 class oracle;
+  Soft original, no NR listings). Soft #182 acceptance for **fixture harness**
+  via `squirrelismbench` (test-equipment lane). Companion Soft UI app remains
+  `-2eaf` after kbd/mouse configurators.
+- **Gaps (file Soft/ISM issues if missing):** live USB-CDC SPD line parse
+  (`ISM SPD: …`); live PSRAM march once Soft has a host path; refresh
+  typewriter fixture when ISM #159 merges; Soft #182 companion UI still open
+  on `-2eaf`.
+
 ### HILBENCH-scaffold — fighter HIL bench UI  `status: done` (#189, lane `-2eaf`)
 - S10.1 / ISM #80: `squirrelhilbench/` mock profile connect, actuator /
   inceptor / bus health, canned stimulus, Flight Lab–compatible
   `hil-*-replay.csv` export. Harness SoT linked to ISM `fighter-jet/`.
   Weapons boundary: stores display only. Does not duplicate Flight Lab.
 
-### MCSTUBS-scaffold — mission-computer stubs for fighter ICD  `status: done` (this PR)
+### MCSTUBS-scaffold — mission-computer stubs for fighter ICD  `status: done` (#186, lane `-2eaf`)
 - S10.2 / ISM #81: `squirrelmcstubs/` MC, SMC/SMS (display+loadout+safeing only),
   and one display-page publisher; fixture catalog; deterministic ticks; checks
   `tests/test_mcstubs.c`, `tests/cli_smoke.sh`. Stubs are not flight software.

@@ -37,4 +37,6 @@ typedef struct {
 int ib_keyboard_parse(IbKeyboardIface *k, const char *text, char *err, int err_cap);
 int ib_mouse_parse(IbMouseIface *m, const char *text, char *err, int err_cap);
 
+/* Memory iface types live in ib_memory.h (ISM-MEM). */
+
 #endif

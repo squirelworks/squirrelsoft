@@ -1,0 +1,40 @@
+ISM-HID keyboard interface 1
+# Soft CI fixture for Eric's ISM typewriter 4×12 matrix (ISM #4 / PR #159).
+# ROW0–3 × COL0–11; Soft does not design the PCB — proposed test contract.
+# Refresh from international-squirrel-machines/typewriter/ when SoT lands.
+layout: typewriter-4x12
+rows: 4
+cols: 12
+diode: col2row
+hid_report: boot_keyboard
+debounce_ms: 5
+scan_hz: 1000
+key ESC: 0 0
+key Q: 0 1
+key W: 0 2
+key E: 0 3
+key R: 0 4
+key T: 0 5
+key Y: 0 6
+key U: 0 7
+key I: 0 8
+key O: 0 9
+key P: 0 10
+key A: 1 1
+key S: 1 2
+key D: 1 3
+key F: 1 4
+key G: 1 5
+key H: 1 6
+key J: 1 7
+key K: 1 8
+key L: 1 9
+key Z: 2 1
+key X: 2 2
+key C: 2 3
+key V: 2 4
+key B: 2 5
+key N: 2 6
+key M: 2 7
+key SPC: 3 5
+key ENT: 3 11

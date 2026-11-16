@@ -2,6 +2,7 @@
 #define _POSIX_C_SOURCE 200809L
 #include "ib_iface.h"
 #include "ib_keyboard.h"
+#include "ib_memory.h"
 #include "ib_mouse.h"
 
 #include <stdio.h>
@@ -14,12 +15,14 @@ static void usage(FILE *f) {
         "\n"
         "  help\n"
         "  keyboard-test [--iface FILE]   matrix self-test from interface file\n"
+        "  typewriter-test [--iface FILE] 4×12 typewriter matrix (ISM #4 / #159)\n"
         "  mouse-test [--iface FILE]      sensor/scroll/button self-test\n"
-        "  demo                           run both against CI fixtures\n"
+        "  memory-test [--iface FILE]     RAM SPD + synthetic bank patterns\n"
+        "  demo                           run all against CI fixtures\n"
         "\n"
         "Soft tests Eric's ISM consumer devices. Interfaces are SoT in\n"
-        "international-squirrel-machines (keyboard/60-percent, mouse). CI uses\n"
-        "fixtures until Eric publishes (ISM #89 / #90). Live USB HID is planned.\n",
+        "international-squirrel-machines (keyboard, mouse, typewriter, memory).\n"
+        "CI uses fixtures until machine-readable SoT lands. Live USB/I2C planned.\n",
         f);
 }
 
@@ -58,8 +61,7 @@ static const char *opt_val(int argc, char **argv, int *i) {
     return argv[*i];
 }
 
-static int cmd_keyboard(int argc, char **argv) {
-    const char *path = "fixtures/keyboard-60/interface.ismhid";
+static int cmd_keyboard_path(const char *path, int argc, char **argv) {
     int i;
     for (i = 0; i < argc; i++) {
         if (strcmp(argv[i], "--iface") == 0) {
@@ -83,6 +85,14 @@ static int cmd_keyboard(int argc, char **argv) {
     ib_keyboard_matrix_selftest(&k, &res);
     puts(res.summary);
     return res.ok ? 0 : 1;
+}
+
+static int cmd_keyboard(int argc, char **argv) {
+    return cmd_keyboard_path("fixtures/keyboard-60/interface.ismhid", argc, argv);
+}
+
+static int cmd_typewriter(int argc, char **argv) {
+    return cmd_keyboard_path("fixtures/typewriter/interface.ismhid", argc, argv);
 }
 
 static int cmd_mouse(int argc, char **argv) {
@@ -112,6 +122,33 @@ static int cmd_mouse(int argc, char **argv) {
     return res.ok ? 0 : 1;
 }
 
+static int cmd_memory(int argc, char **argv) {
+    const char *path = "fixtures/memory/interface.ismem";
+    int i;
+    for (i = 0; i < argc; i++) {
+        if (strcmp(argv[i], "--iface") == 0) {
+            path = opt_val(argc, argv, &i);
+            if (!path) return 2;
+        } else return 2;
+    }
+    char *text = NULL, err[IB_MSG_LEN];
+    if (read_file(path, &text) != 0) {
+        fprintf(stderr, "squirrelismbench: cannot read %s\n", path);
+        return 1;
+    }
+    IbMemoryIface m;
+    if (ib_memory_parse(&m, text, err, sizeof err) != 0) {
+        fprintf(stderr, "squirrelismbench: %s\n", err);
+        free(text);
+        return 1;
+    }
+    free(text);
+    IbMemTestResult res;
+    ib_memory_selftest(&m, &res);
+    puts(res.summary);
+    return res.ok ? 0 : 1;
+}
+
 int main(int argc, char **argv) {
     if (argc < 2) {
         usage(stderr);
@@ -123,11 +160,15 @@ int main(int argc, char **argv) {
         return 0;
     }
     if (strcmp(cmd, "keyboard-test") == 0) return cmd_keyboard(argc - 2, argv + 2);
+    if (strcmp(cmd, "typewriter-test") == 0) return cmd_typewriter(argc - 2, argv + 2);
     if (strcmp(cmd, "mouse-test") == 0) return cmd_mouse(argc - 2, argv + 2);
+    if (strcmp(cmd, "memory-test") == 0) return cmd_memory(argc - 2, argv + 2);
     if (strcmp(cmd, "demo") == 0) {
         int a = cmd_keyboard(0, NULL);
         int b = cmd_mouse(0, NULL);
-        if (a || b) return 1;
+        int c = cmd_typewriter(0, NULL);
+        int d = cmd_memory(0, NULL);
+        if (a || b || c || d) return 1;
         puts("squirrelismbench demo ok");
         return 0;
     }
