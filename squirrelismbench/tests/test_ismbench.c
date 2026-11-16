@@ -3,6 +3,7 @@
 #include "ib_memory.h"
 #include "ib_mouse.h"
 #include "ib_plotter.h"
+#include "ib_power.h"
 #include "ib_printer.h"
 
 #include <stdio.h>
@@ -46,14 +47,17 @@ int main(void) {
     char *memt = slurp("fixtures/memory/interface.ismem");
     char *prt = slurp("fixtures/printer/interface.ismprt");
     char *plt = slurp("fixtures/plotter/interface.ismplt");
-    expect(kt && mt && tt && memt && prt && plt, "fixtures present");
-    if (!kt || !mt || !tt || !memt || !prt || !plt) return 1;
+    char *psu = slurp("fixtures/psu/interface.ismpsu");
+    char *ups = slurp("fixtures/ups/interface.ismups");
+    expect(kt && mt && tt && memt && prt && plt && psu && ups, "fixtures present");
+    if (!kt || !mt || !tt || !memt || !prt || !plt || !psu || !ups) return 1;
 
     IbKeyboardIface k, tw;
     IbMouseIface m;
     IbMemoryIface mem;
     IbPrinterIface printer;
     IbPlotterIface plotter;
+    IbPowerIface psu_i, ups_i;
     char err[128];
 
     expect(ib_keyboard_parse(&k, kt, err, sizeof err) == 0, err);
@@ -90,12 +94,40 @@ int main(void) {
     expect(plr.ok == 1, plr.summary);
     expect(strstr(plr.summary, "NR Ch.3.1") != NULL, "plotter NR cite");
 
+    expect(ib_power_parse(&psu_i, psu, err, sizeof err) == 0, err);
+    expect(psu_i.kind == IB_POWER_PSU, "psu kind");
+    expect(psu_i.nsteps == 5, "psu steps");
+    IbPowerTestResult psr;
+    ib_power_selftest(&psu_i, &psr);
+    expect(psr.ok == 1, psr.summary);
+    expect(strstr(psr.summary, "NR Ch.4.1") != NULL, "psu NR cite");
+    expect(psr.energy_wh > 0.0, "psu energy");
+
+    expect(ib_power_parse(&ups_i, ups, err, sizeof err) == 0, err);
+    expect(ups_i.kind == IB_POWER_UPS, "ups kind");
+    expect(ups_i.capacity_wh == 50.0, "ups capacity");
+    IbPowerTestResult usr;
+    ib_power_selftest(&ups_i, &usr);
+    expect(usr.ok == 1, usr.summary);
+    expect(usr.energy_wh <= ups_i.capacity_wh + 1e-9, "ups energy under capacity");
+
+    /* Over-nameplate step must fail. */
+    {
+        IbPowerIface bad = psu_i;
+        bad.load_w[bad.nsteps - 1] = bad.p_max_w + 10.0;
+        IbPowerTestResult br;
+        ib_power_selftest(&bad, &br);
+        expect(br.ok == 0, "overcurrent fail");
+    }
+
     free(kt);
     free(mt);
     free(tt);
     free(memt);
     free(prt);
     free(plt);
+    free(psu);
+    free(ups);
     if (fails) {
         fprintf(stderr, "%d failure(s)\n", fails);
         return 1;

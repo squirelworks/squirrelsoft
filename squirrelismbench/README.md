@@ -1,10 +1,10 @@
 # SquirrelISMBench
 
-**Status: Active (S8.1 + S8.1b + S8.4a + S8.4b′)**
+**Status: Active (S8.1 + S8.1b + S8.3 + S8.4a + S8.4b′)**
 
 Soft-side test harness for International Squirrel Machines **consumer** devices
-(Eric): keyboard, mouse, typewriter, RAM module, **printer**, and Soft-proposed
-**plotter**.
+(Eric): keyboard, mouse, typewriter, RAM module, **printer**, Soft-proposed
+**plotter**, and Soft S8.3 **PSU / UPS** load + telemetry benches.
 
 ```
 make -C squirrelismbench
@@ -22,12 +22,15 @@ make -C squirrelismbench test
 | `memory-test` | SPD XOR + walking/checker/LCG patterns (NR Ch. 7.1) |
 | `printer-test` | Motor/paper/head synthetic self-test (ISM #5) |
 | `plotter-test` | Workspace + path; midpoints via NR Ch. 3.1 lerp |
+| `psu-test` | PSU load steps + telemetry (S8.3; NR Ch. 4.1 Simpson) |
+| `ups-test` | UPS load + capacity/SOC (S8.3; NR Ch. 4.1 Simpson) |
 | `demo` | All against fixtures |
 
 ## Numerical Recipes
 
 - RAM random patterns: Park–Miller LCG (NR **Ch. 7.1** class)
 - Plotter polyline midpoints: `sqn_lerp` (NR **Ch. 3.1**)
+- PSU/UPS schedule energy: Soft composite Simpson (NR **Ch. 4.1** class)
 
 Soft original code only — no NR listings.
 

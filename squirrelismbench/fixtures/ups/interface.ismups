@@ -1,0 +1,11 @@
+ISM-UPS power interface 1
+# Soft CI fixture for Eric's ISM bench UPS (S8.3 Soft-proposed contract).
+# Soft does not design the UPS — refresh when ISM publishes machine-readable SoT.
+model: Soft-Bench-UPS-100VA
+v_out_nom_v: 12.0
+i_max_a: 8.0
+p_max_w: 90.0
+capacity_wh: 50.0
+telemetry: v_batt,v_out,i_out,soc_pct,on_battery
+load_steps_w: 0,25,50,75
+dwell_s: 2,2,2,2

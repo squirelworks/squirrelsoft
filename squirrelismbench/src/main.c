@@ -5,6 +5,7 @@
 #include "ib_memory.h"
 #include "ib_mouse.h"
 #include "ib_plotter.h"
+#include "ib_power.h"
 #include "ib_printer.h"
 
 #include <stdio.h>
@@ -22,6 +23,8 @@ static void usage(FILE *f) {
         "  memory-test [--iface FILE]     RAM SPD + synthetic bank patterns\n"
         "  printer-test [--iface FILE]    printer motor/paper/head self-test\n"
         "  plotter-test [--iface FILE]    plotter path + NR Ch.3.1 lerp\n"
+        "  psu-test [--iface FILE]        PSU load steps + telemetry (S8.3)\n"
+        "  ups-test [--iface FILE]        UPS load + capacity (S8.3)\n"
         "  demo                           run all against CI fixtures\n"
         "\n"
         "Soft tests Eric's ISM consumer devices. Interfaces are SoT in\n"
@@ -206,6 +209,42 @@ static int cmd_plotter(int argc, char **argv) {
     return res.ok ? 0 : 1;
 }
 
+static int cmd_power(const char *default_path, int argc, char **argv) {
+    const char *path = default_path;
+    int i;
+    for (i = 0; i < argc; i++) {
+        if (strcmp(argv[i], "--iface") == 0) {
+            path = opt_val(argc, argv, &i);
+            if (!path) return 2;
+        } else
+            return 2;
+    }
+    char *text = NULL, err[IB_MSG_LEN];
+    if (read_file(path, &text) != 0) {
+        fprintf(stderr, "squirrelismbench: cannot read %s\n", path);
+        return 1;
+    }
+    IbPowerIface p;
+    if (ib_power_parse(&p, text, err, sizeof err) != 0) {
+        fprintf(stderr, "squirrelismbench: %s\n", err);
+        free(text);
+        return 1;
+    }
+    free(text);
+    IbPowerTestResult res;
+    ib_power_selftest(&p, &res);
+    puts(res.summary);
+    return res.ok ? 0 : 1;
+}
+
+static int cmd_psu(int argc, char **argv) {
+    return cmd_power("fixtures/psu/interface.ismpsu", argc, argv);
+}
+
+static int cmd_ups(int argc, char **argv) {
+    return cmd_power("fixtures/ups/interface.ismups", argc, argv);
+}
+
 int main(int argc, char **argv) {
     if (argc < 2) {
         usage(stderr);
@@ -222,6 +261,8 @@ int main(int argc, char **argv) {
     if (strcmp(cmd, "memory-test") == 0) return cmd_memory(argc - 2, argv + 2);
     if (strcmp(cmd, "printer-test") == 0) return cmd_printer(argc - 2, argv + 2);
     if (strcmp(cmd, "plotter-test") == 0) return cmd_plotter(argc - 2, argv + 2);
+    if (strcmp(cmd, "psu-test") == 0) return cmd_psu(argc - 2, argv + 2);
+    if (strcmp(cmd, "ups-test") == 0) return cmd_ups(argc - 2, argv + 2);
     if (strcmp(cmd, "demo") == 0) {
         int a = cmd_keyboard(0, NULL);
         int b = cmd_mouse(0, NULL);
@@ -229,7 +270,9 @@ int main(int argc, char **argv) {
         int d = cmd_memory(0, NULL);
         int e = cmd_printer(0, NULL);
         int f = cmd_plotter(0, NULL);
-        if (a || b || c || d || e || f) return 1;
+        int g = cmd_psu(0, NULL);
+        int h = cmd_ups(0, NULL);
+        if (a || b || c || d || e || f || g || h) return 1;
         puts("squirrelismbench demo ok");
         return 0;
     }
