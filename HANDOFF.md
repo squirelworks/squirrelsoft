@@ -272,6 +272,12 @@ Done earlier (kept for history):
   `main`, CLI `ism-interfaces`. Schema-version gate; loud missing/unknown
   top-level keys. Soft does not fork SoT — refresh path in fixtures README.
 
+### FLIGHTLAB-nested-allowlists — Soft #177  `status: done` (this PR)
+- S7.2g: Soft schema `nested:` closed maps/seqs (`surfaces[]`, `envelope`,
+  `stations[]`, `separation_envelopes.defaults[]`, …). Unknown nested key or
+  missing required nested path → hard error with dotted/indexed path.
+  Numerics remain Soft #174 / #172 (NR-cited; no NR code copied).
+
 ### SQUIRRELNUM + Flight Lab RK/units — Soft #174  `status: done` (#185)
 - S7.2c: `libs/squirrelnum` (RK4, DP5(4), Brent, spline, LA, quaternions);
   Flight Lab `fl_dyn` defaults to RK4; `docs/units-and-scale.md` + mm/g
@@ -286,7 +292,7 @@ Done earlier (kept for history):
 - S7.2e: `fl_viability` evaluates ISM `viability-criteria.yaml` gates vs class
   bands; MD+JSON reports; `viability-report` CLI; optional tool xcheck skip.
 
-### FLIGHTLAB-loadout — Soft #173  `status: done` (this PR)
+### FLIGHTLAB-loadout — Soft #173  `status: done` (#194)
 - S7.2f: `fl_loadout` validates station×adapter×store against ISM interface
   fixtures; mass/CG/asymmetry + release envelopes; `loadout-check` CLI;
   legal/illegal fixtures under `fixtures/loadouts/`.

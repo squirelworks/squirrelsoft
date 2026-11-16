@@ -158,6 +158,10 @@ source of truth. Design note: `squirrelflightlab/docs/overview.md`.
 - [x] S7.2f Loadout validation (Soft #173): station×adapter×store vs
   hardpoints / inert-stores / multi-origin / sms envelopes; mass/CG/asymmetry;
   `loadout-check` CLI; legal + illegal fixtures
+- [x] S7.2g Nested closed allowlists for ISM-FJ interface YAML (Soft #177): Soft
+  schema `nested:` paths (`envelope`, `surfaces[]`, dotted maps); unknown /
+  missing nested keys fail with dotted/indexed path; CI fixtures + negative
+  cases; Soft does not fork SoT
 - [ ] S7.3 Higher-fidelity replaceable aero provider + tunnel CSV override
 - [ ] S7.4 `sqgui` strip-chart window on the same core
 - [ ] S7.5 HIL against the real avionics PCB (planned stub today)

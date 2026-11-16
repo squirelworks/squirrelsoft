@@ -149,6 +149,44 @@ int fl_iface_schema_load(FlIfaceSchema *out, const char *text, char *err,
             free(doc);
             return -1;
         }
+        FlYNode *nested = fl_yaml_map_get(f, "nested");
+        if (nested) {
+            if (nested->kind != FL_Y_MAP) {
+                snprintf(err, err_cap, "iface schema: %s.nested not a map", f->key);
+                free(doc);
+                return -1;
+            }
+            for (FlYNode *nr = nested->child; nr; nr = nr->next) {
+                if (fs->nnested >= FL_IFACE_MAX_NESTED) {
+                    snprintf(err, err_cap, "iface schema: %s too many nested rules",
+                             f->key);
+                    free(doc);
+                    return -1;
+                }
+                FlIfaceNestedRule *rule = &fs->nested[fs->nnested++];
+                snprintf(rule->path, sizeof rule->path, "%s", nr->key);
+                if (nr->kind != FL_Y_MAP) {
+                    snprintf(err, err_cap, "iface schema: %s.nested.%s not a map",
+                             f->key, nr->key);
+                    free(doc);
+                    return -1;
+                }
+                if (parse_str_list(fl_yaml_map_get(nr, "required"), rule->required,
+                                   FL_IFACE_NEST_KEYS, &rule->nrequired) != 0) {
+                    snprintf(err, err_cap, "iface schema: %s.nested.%s.required bad",
+                             f->key, nr->key);
+                    free(doc);
+                    return -1;
+                }
+                if (parse_str_list(fl_yaml_map_get(nr, "allowed"), rule->allowed,
+                                   FL_IFACE_NEST_KEYS, &rule->nallowed) != 0) {
+                    snprintf(err, err_cap, "iface schema: %s.nested.%s.allowed bad",
+                             f->key, nr->key);
+                    free(doc);
+                    return -1;
+                }
+            }
+        }
     }
     free(doc);
     return 0;
@@ -171,6 +209,136 @@ static int key_in_list(const char (*list)[FL_YAML_KEY_LEN], int n, const char *k
     for (int i = 0; i < n; i++)
         if (strcmp(list[i], k) == 0) return 1;
     return 0;
+}
+
+/* Validate one map against a nested required/allowed closed list. */
+static int validate_closed_map(const FlYNode *map, const FlIfaceNestedRule *rule,
+                               const char *basename, const char *path_ctx, char *err,
+                               int err_cap) {
+    if (!map || map->kind != FL_Y_MAP) {
+        snprintf(err, err_cap, "%s: %s is not a map", basename, path_ctx);
+        return -1;
+    }
+    for (int i = 0; i < rule->nrequired; i++) {
+        if (!fl_yaml_map_get(map, rule->required[i])) {
+            snprintf(err, err_cap, "%s: missing required key '%s.%s'", basename,
+                     path_ctx, rule->required[i]);
+            return -1;
+        }
+    }
+    for (const FlYNode *c = map->child; c; c = c->next) {
+        if (!key_in_list(rule->allowed, rule->nallowed, c->key)) {
+            snprintf(err, err_cap, "%s: unknown key '%s.%s'", basename, path_ctx,
+                     c->key);
+            return -1;
+        }
+    }
+    return 0;
+}
+
+/*
+ * Resolve Soft nested path (dotted segments; trailing [] means every seq
+ * element). Soft #177. Examples: envelope  surfaces[]  full_scale.cg_empty
+ */
+static int apply_nested_rule(const FlYNode *root, const FlIfaceNestedRule *rule,
+                             const char *basename, char *err, int err_cap) {
+    char path_copy[FL_IFACE_NEST_PATH];
+    snprintf(path_copy, sizeof path_copy, "%s", rule->path);
+    if (!path_copy[0]) {
+        snprintf(err, err_cap, "%s: empty nested path", basename);
+        return -1;
+    }
+
+    /* Split into segments once (max depth small). */
+    char *segs[16];
+    int nsegs = 0;
+    for (char *p = path_copy; *p && nsegs < 16;) {
+        segs[nsegs++] = p;
+        char *dot = strchr(p, '.');
+        if (!dot) break;
+        *dot = 0;
+        p = dot + 1;
+    }
+
+    const FlYNode *cur = root;
+    char ctx[FL_IFACE_NEST_PATH];
+    ctx[0] = 0;
+
+    for (int si = 0; si < nsegs; si++) {
+        char *seg = segs[si];
+        int is_seq = 0;
+        size_t seglen = strlen(seg);
+        if (seglen >= 2 && seg[seglen - 2] == '[' && seg[seglen - 1] == ']') {
+            is_seq = 1;
+            seg[seglen - 2] = 0;
+        }
+        if (!cur || cur->kind != FL_Y_MAP) {
+            snprintf(err, err_cap, "%s: nested path '%s' parent is not a map",
+                     basename, rule->path);
+            return -1;
+        }
+        const FlYNode *next = fl_yaml_map_get(cur, seg);
+        if (!next) {
+            snprintf(err, err_cap, "%s: missing required nested path '%s'",
+                     basename, rule->path);
+            return -1;
+        }
+
+        char next_ctx[FL_IFACE_NEST_PATH];
+        if (ctx[0])
+            snprintf(next_ctx, sizeof next_ctx, "%s.%s", ctx, seg);
+        else
+            snprintf(next_ctx, sizeof next_ctx, "%s", seg);
+
+        int last = (si == nsegs - 1);
+
+        if (is_seq) {
+            if (next->kind != FL_Y_SEQ) {
+                snprintf(err, err_cap, "%s: %s is not a sequence", basename,
+                         next_ctx);
+                return -1;
+            }
+            if (!last) {
+                /* Remaining path applies under each sequence element map. */
+                FlIfaceNestedRule sub = *rule;
+                char rest[FL_IFACE_NEST_PATH];
+                rest[0] = 0;
+                for (int j = si + 1; j < nsegs; j++) {
+                    size_t used = strlen(rest);
+                    snprintf(rest + used, sizeof rest - used, "%s%s",
+                             used ? "." : "", segs[j]);
+                }
+                snprintf(sub.path, sizeof sub.path, "%s", rest);
+                int idx = 0;
+                for (const FlYNode *it = next->child; it; it = it->next, idx++) {
+                    if (it->kind != FL_Y_MAP) {
+                        snprintf(err, err_cap, "%s: %s[%d] is not a map", basename,
+                                 next_ctx, idx);
+                        return -1;
+                    }
+                    if (apply_nested_rule(it, &sub, basename, err, err_cap) != 0)
+                        return -1;
+                }
+                return 0;
+            }
+            int idx = 0;
+            for (const FlYNode *it = next->child; it; it = it->next, idx++) {
+                char item_ctx[FL_IFACE_NEST_PATH];
+                snprintf(item_ctx, sizeof item_ctx, "%s[%d]", next_ctx, idx);
+                if (validate_closed_map(it, rule, basename, item_ctx, err,
+                                        err_cap) != 0)
+                    return -1;
+            }
+            return 0;
+        }
+
+        snprintf(ctx, sizeof ctx, "%s", next_ctx);
+        cur = next;
+        if (last)
+            return validate_closed_map(cur, rule, basename, ctx, err, err_cap);
+    }
+    snprintf(err, err_cap, "%s: empty nested path", basename);
+    return -1;
 }
 
 int fl_iface_validate_doc(const FlIfaceSchema *schema, const char *basename,
@@ -256,6 +424,13 @@ int fl_iface_validate_doc(const FlIfaceSchema *schema, const char *basename,
         }
     }
 
+    for (int i = 0; i < fs->nnested; i++) {
+        if (apply_nested_rule(root, &fs->nested[i], basename, err, err_cap) != 0) {
+            free(heap);
+            return -1;
+        }
+    }
+
     if (doc_out) doc_out->ok = 1;
     free(heap);
     return 0;
@@ -279,9 +454,15 @@ int fl_iface_load_dir(FlIfaceBundle *bundle, const char *dir,
         snprintf(err, err_cap, "cannot read Soft schema %s", soft_schema_path);
         return -1;
     }
-    FlIfaceSchema schema;
-    if (fl_iface_schema_load(&schema, schema_text, err, err_cap) != 0) {
+    FlIfaceSchema *schema = calloc(1, sizeof *schema);
+    if (!schema) {
         free(schema_text);
+        set_err(err, err_cap, "oom");
+        return -1;
+    }
+    if (fl_iface_schema_load(schema, schema_text, err, err_cap) != 0) {
+        free(schema_text);
+        free(schema);
         return -1;
     }
     free(schema_text);
@@ -303,13 +484,14 @@ int fl_iface_load_dir(FlIfaceBundle *bundle, const char *dir,
 
     FlIfaceDoc manifest_doc;
     char local_err[FL_IFACE_MSG_LEN];
-    if (fl_iface_validate_doc(&schema, "schema-manifest.yaml", manifest_text,
+    if (fl_iface_validate_doc(schema, "schema-manifest.yaml", manifest_text,
                               &manifest_doc, manifest_tree, local_err,
                               sizeof local_err) != 0) {
         add_error(bundle, local_err);
         snprintf(err, err_cap, "%s", local_err);
         free(manifest_text);
         free(manifest_tree);
+        free(schema);
         return -1;
     }
     free(manifest_text);
@@ -320,6 +502,7 @@ int fl_iface_load_dir(FlIfaceBundle *bundle, const char *dir,
     if (!files || files->kind != FL_Y_SEQ) {
         set_err(err, err_cap, "schema-manifest.yaml: files must be a sequence");
         free(manifest_tree);
+        free(schema);
         return -1;
     }
     for (FlYNode *it = files->child; it; it = it->next) {
@@ -333,11 +516,13 @@ int fl_iface_load_dir(FlIfaceBundle *bundle, const char *dir,
         if (!path || !*path) {
             set_err(err, err_cap, "schema-manifest.yaml: files entry missing path");
             free(manifest_tree);
+            free(schema);
             return -1;
         }
         if (nlisted >= FL_IFACE_MAX_FILES) {
             set_err(err, err_cap, "schema-manifest.yaml: too many files");
             free(manifest_tree);
+            free(schema);
             return -1;
         }
         snprintf(listed[nlisted], sizeof listed[0], "%s", path);
@@ -352,6 +537,7 @@ int fl_iface_load_dir(FlIfaceBundle *bundle, const char *dir,
 
     if (bundle->ndocs >= FL_IFACE_MAX_FILES) {
         set_err(err, err_cap, "too many interface docs");
+        free(schema);
         return -1;
     }
     bundle->docs[bundle->ndocs++] = manifest_doc;
@@ -369,10 +555,11 @@ int fl_iface_load_dir(FlIfaceBundle *bundle, const char *dir,
         if (bundle->ndocs >= FL_IFACE_MAX_FILES) {
             free(text);
             set_err(err, err_cap, "too many interface docs");
+            free(schema);
             return -1;
         }
         FlIfaceDoc *d = &bundle->docs[bundle->ndocs];
-        if (fl_iface_validate_doc(&schema, listed[i], text, d, NULL, local_err,
+        if (fl_iface_validate_doc(schema, listed[i], text, d, NULL, local_err,
                                   sizeof local_err) != 0) {
             add_error(bundle, local_err);
             free(text);
@@ -394,6 +581,7 @@ int fl_iface_load_dir(FlIfaceBundle *bundle, const char *dir,
     DIR *dp = opendir(dir);
     if (!dp) {
         snprintf(err, err_cap, "cannot open directory %s", dir);
+        free(schema);
         return -1;
     }
     struct dirent *de;
@@ -414,7 +602,7 @@ int fl_iface_load_dir(FlIfaceBundle *bundle, const char *dir,
             add_error(bundle, local_err);
             continue;
         }
-        if (!find_file_schema(&schema, de->d_name)) {
+        if (!find_file_schema(schema, de->d_name)) {
             snprintf(local_err, sizeof local_err,
                      "%s: listed/present but missing from Soft allowlist schema",
                      de->d_name);
@@ -424,7 +612,7 @@ int fl_iface_load_dir(FlIfaceBundle *bundle, const char *dir,
     closedir(dp);
 
     for (int i = 0; i < nlisted; i++) {
-        if (!find_file_schema(&schema, listed[i])) {
+        if (!find_file_schema(schema, listed[i])) {
             snprintf(local_err, sizeof local_err,
                      "%s: in ISM manifest but Soft allowlist has no entry "
                      "(refresh schemas/ism-fj-*)",
@@ -433,6 +621,7 @@ int fl_iface_load_dir(FlIfaceBundle *bundle, const char *dir,
         }
     }
 
+    free(schema);
     if (bundle->nerrors) {
         snprintf(err, err_cap, "ism-interfaces: %d error(s); first: %s",
                  bundle->nerrors, bundle->errors[0]);

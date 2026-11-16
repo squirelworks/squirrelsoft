@@ -1,6 +1,7 @@
 /*
  * Load ISM fighter-jet/interfaces YAML by Soft-owned schema allowlists.
- * SoT remains ISM; Soft only validates schema_version + required/allowed keys.
+ * SoT remains ISM; Soft only validates schema_version + required/allowed keys
+ * (top-level and optional nested closed maps — Soft #177).
  */
 #ifndef FL_IFACE_H
 #define FL_IFACE_H
@@ -11,8 +12,19 @@
 
 #define FL_IFACE_MAX_FILES 32
 #define FL_IFACE_MAX_KEYS 48
+#define FL_IFACE_MAX_NESTED 8
+#define FL_IFACE_NEST_KEYS 32
 #define FL_IFACE_PATH_LEN 256
 #define FL_IFACE_MSG_LEN 512
+#define FL_IFACE_NEST_PATH 96
+
+typedef struct {
+    char path[FL_IFACE_NEST_PATH]; /* e.g. surfaces[]  or  envelope  or  full_scale.cg_empty */
+    char required[FL_IFACE_NEST_KEYS][FL_YAML_KEY_LEN];
+    int nrequired;
+    char allowed[FL_IFACE_NEST_KEYS][FL_YAML_KEY_LEN];
+    int nallowed;
+} FlIfaceNestedRule;
 
 typedef struct {
     char name[96];
@@ -20,6 +32,8 @@ typedef struct {
     int nrequired;
     char allowed[FL_IFACE_MAX_KEYS][FL_YAML_KEY_LEN];
     int nallowed;
+    FlIfaceNestedRule nested[FL_IFACE_MAX_NESTED];
+    int nnested;
 } FlIfaceFileSchema;
 
 typedef struct {
