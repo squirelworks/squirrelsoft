@@ -147,8 +147,8 @@ source of truth. Design note: `squirrelflightlab/docs/overview.md`.
 - [ ] S7.4 `sqgui` strip-chart window on the same core
 - [ ] S7.5 HIL against the real avionics PCB (planned stub today)
 - OS/2 as lab / ground host (UART, soft-RT, packaging): squirrel-os2#225 and
-  [`ism-flightlab-gaps.md`](https://github.com/squirelworks/squirrel-os2/blob/main/documentation/guides/ism-flightlab-gaps.md)
-  (lane `-b55f`). Soft keeps the app; OS owns the host gaps.
+  [`ism-flightlab-gaps.md`](https://github.com/squirelworks/squirrel-os2/blob/cursor/ism-flightlab-gaps-b55f/documentation/guides/ism-flightlab-gaps.md)
+  (lane `-b55f`; retarget link to `main` after merge). Soft keeps the app; OS owns the host gaps.
 
 ## S8 — ISM device bench harness (Soft test software)
 
