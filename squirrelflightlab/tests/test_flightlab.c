@@ -9,6 +9,7 @@
 #include "fl_project.h"
 #include "fl_scenario.h"
 #include "fl_verify.h"
+#include "fl_viability.h"
 
 #include <math.h>
 #include <stdio.h>
@@ -236,6 +237,24 @@ static void test_ism_and_fcs(void) {
     free(iface);
 }
 
+static void test_viability(void) {
+    FlViaReport rep;
+    char err[256];
+    expect(fl_viability_eval_file("fixtures/ism-interfaces/viability-criteria.yaml",
+                                  &rep, err, sizeof err) == 0,
+           err);
+    expect(rep.nfail == 0, "no viability hard fails");
+    expect(strstr(rep.label, "provisional") != NULL, "via provisional");
+    expect(strcmp(rep.aircraft_id, "ISM-FJ-1") == 0, "via aircraft");
+    char md[8192], js[8192];
+    expect(fl_viability_report_md(&rep, md, sizeof md) == 0, "via md");
+    expect(fl_viability_report_json(&rep, js, sizeof js) == 0, "via json");
+    expect(strstr(js, "\"overall\"") != NULL, "json overall");
+    char note[128];
+    expect(fl_viability_optional_xcheck(NULL, NULL, NULL, note, sizeof note) == 1,
+           "xcheck skip");
+}
+
 static void test_verify(void) {
     FlVerifyReport rep;
     expect(fl_verify_run_analytic(&rep) == 0, "analytic verify");
@@ -320,6 +339,7 @@ int main(void) {
     test_ism_and_fcs();
     test_ism_interfaces();
     test_verify();
+    test_viability();
     if (fails) {
         fprintf(stderr, "%d failure(s)\n", fails);
         return 1;

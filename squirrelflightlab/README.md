@@ -1,6 +1,6 @@
 # Fighter Jet Flight Lab (SquirrelFlightLab)
 
-**Status: Scaffolded** (S7.1–S7.2b)
+**Status: Scaffolded** (S7.1–S7.2e)
 
 First-party SquirrelSoft lab for simulating and validating the International
 Squirrel Machines (ISM) fighter jet — aerodynamics, flight controls, avionics
@@ -13,7 +13,9 @@ Working title alternatives (open): *SquirrelFlightLab*, *ISM Flight Lab*,
 
 ```
 make -C squirrelflightlab            # build/squirrelflightlab
-make -C squirrelflightlab test       # unit + CLI smoke + happy-path demo
+make -C squirrelflightlab test       # unit + CLI smoke + happy-path + verify + viability
+make -C squirrelflightlab verify     # analytic verification report (Soft #172)
+make -C squirrelflightlab viability  # viability-criteria.md/json (Soft #176)
 make -C squirrelflightlab demo       # AoA sweep + flight history only
 ```
 
@@ -36,9 +38,11 @@ trim / pull-up / roll scenarios.
 | `fl_project` | Workspace + `.sqflt` design inputs | Prefer ISM param files |
 | `fl_ism` | Load `ISM-FJ parameters` / `ISM-FJ interface` texts | Refresh fixtures from ISM #88 |
 | `fl_iface` | Load all `fighter-jet/interfaces/*.yaml` by `schema_version` | Nested closed allowlists |
+| `fl_verify` | Analytic verification (pendulum/rigid/ballistic/trim/phugoid) | NESC / F-16 TP-1538 |
+| `fl_viability` | Evaluate `viability-criteria.yaml` → MD/JSON | Full AVL/OpenVSP/CalculiX compare |
 | `fl_fcs` | Scripted FCS co-check + pass/fail report | Envelope numbers from Victor |
 | `fl_aero` | Parametric CL/CD/Cm, AoA sweep, CSV | Higher-fidelity provider |
-| `fl_dyn` | 6-DOF sketch, history | Better integration |
+| `fl_dyn` | 6-DOF sketch, history (RK4 via squirrelnum) | Atmosphere + quaternions |
 | `fl_avionics` | Channel co-check vs bay expect map | HIL |
 | `fl_scenario` | `trim_cruise`, `pull_up`, `roll` | More envelopes |
 | `fl_planned` | CFD / tunnel / HIL — **stubbed** | When hardware lands |

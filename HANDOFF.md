@@ -276,10 +276,14 @@ Done earlier (kept for history):
   Flight Lab `fl_dyn` defaults to RK4; `docs/units-and-scale.md` + mm/g
   mix-up tests. Fred D1 risks (Euler + mm/g) folded in per Sarah.
 
-### FLIGHTLAB-verify — analytic verification Soft #172  `status: done` (this PR)
+### FLIGHTLAB-verify — analytic verification Soft #172  `status: done` (#191)
 - S7.2d: `fl_verify` analytic cases + optional AVL/OpenVSP harness (skip if
   absent); provisional label; `make verify`. NESC CSV / F-16 TP-1538 deferred
   (licence check before vendoring).
+
+### FLIGHTLAB-viability — Soft #176  `status: done` (this PR)
+- S7.2e: `fl_viability` evaluates ISM `viability-criteria.yaml` gates vs class
+  bands; MD+JSON reports; `viability-report` CLI; optional tool xcheck skip.
 
 ### ISMBENCH-scaffold — keyboard/mouse HID harness  `status: done` (#169)
 - S8.1: `squirrelismbench/` matrix + mouse self-tests. Eric interface docs:

@@ -152,6 +152,9 @@ source of truth. Design note: `squirrelflightlab/docs/overview.md`.
 - [x] S7.2d Analytic verification suite (Soft #172): pendulum, torque-free,
   ballistic, trim (Brent), phugoid closed form; optional AVL/OpenVSP skip;
   provisional labelling; `make verify` / `verify` CLI; `docs/credibility.md`
+- [x] S7.2e Viability report from `viability-criteria.yaml` (Soft #176): Soft
+  recomputes sizing gates vs class bands; MD+JSON; `viability-report` CLI;
+  optional OpenVSP/AVL/CalculiX skip
 - [ ] S7.3 Higher-fidelity replaceable aero provider + tunnel CSV override
 - [ ] S7.4 `sqgui` strip-chart window on the same core
 - [ ] S7.5 HIL against the real avionics PCB (planned stub today)
