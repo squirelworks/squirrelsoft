@@ -11,6 +11,9 @@
 | Phugoid closed form | Textbook T_ph = 2πV/(g√2) | — | Etkin/Nelson-style approx |
 | Short-period | Soft response presence check | Deferred | Full eigenvalue compare later |
 | ISM-FJ viability gates | Soft recompute vs class bands (`fl_viability`) | Soft #176 | MD+JSON; provisional label |
+| G-BREGUET Soft ferry | Soft Breguet + Brent L/D oracle (NR Ch. 9.3) | Soft #176 follow-up | Raymer form; squirrelnum Brent |
+| G-CG Soft travel | Soft %MAC from FS span | Soft #176 follow-up | vs `cg_travel_pct_mac` band |
+| G-STRUCT-MARGIN Soft | Soft ultimate = limit×factor ≥ nz×factor | Soft #176 follow-up | Textbook ultimate factor |
 | ISM-FJ aero vs AVL/OpenVSP/CalculiX | Optional path presence | Soft follow-up | Skip if artifacts absent; full table compare later |
 | F-16 / NESC cases | Not in this PR | Soft follow-up | Licence check before vendoring CSV |
 | Eric scale / RC correlation | — | Soft follow-up | Needs Eric logging formats |

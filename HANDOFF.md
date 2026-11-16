@@ -272,7 +272,7 @@ Done earlier (kept for history):
   `main`, CLI `ism-interfaces`. Schema-version gate; loud missing/unknown
   top-level keys. Soft does not fork SoT — refresh path in fixtures README.
 
-### FLIGHTLAB-nested-allowlists — Soft #177  `status: done` (this PR)
+### FLIGHTLAB-nested-allowlists — Soft #177  `status: done` (#195)
 - S7.2g: Soft schema `nested:` closed maps/seqs (`surfaces[]`, `envelope`,
   `stations[]`, `separation_envelopes.defaults[]`, …). Unknown nested key or
   missing required nested path → hard error with dotted/indexed path.
@@ -291,6 +291,14 @@ Done earlier (kept for history):
 ### FLIGHTLAB-viability — Soft #176  `status: done` (#193)
 - S7.2e: `fl_viability` evaluates ISM `viability-criteria.yaml` gates vs class
   bands; MD+JSON reports; `viability-report` CLI; optional tool xcheck skip.
+
+### FLIGHTLAB-viability-soft-recompute — Soft #176 follow-up  `status: done` (this PR)
+- Soft recompute of formerly deferred gates: G-BREGUET (Breguet + Brent L/D
+  oracle, NR Ch. 9.3 via squirrelnum; no NR listings), G-CG travel %MAC,
+  G-STRUCT-MARGIN ultimate = limit×factor.
+- **Gaps (file Soft issues if missing):** numeric AVL/OpenVSP/CalculiX table
+  compare; Eric scale static / tunnel / RC FC log correlation; NESC CSV /
+  F-16 TP-1538 (licence check before vendoring).
 
 ### FLIGHTLAB-loadout — Soft #173  `status: done` (#194)
 - S7.2f: `fl_loadout` validates station×adapter×store against ISM interface

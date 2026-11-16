@@ -271,6 +271,28 @@ static void test_viability(void) {
     expect(rep.nfail == 0, "no viability hard fails");
     expect(strstr(rep.label, "provisional") != NULL, "via provisional");
     expect(strcmp(rep.aircraft_id, "ISM-FJ-1") == 0, "via aircraft");
+    int saw_breguet = 0, saw_cg = 0, saw_struct = 0;
+    int i;
+    for (i = 0; i < rep.ngates; i++) {
+        if (strcmp(rep.gates[i].id, "G-BREGUET") == 0) {
+            saw_breguet = 1;
+            expect(rep.gates[i].soft_pass, "Soft Breguet pass");
+            expect(strstr(rep.gates[i].detail, "Brent") != NULL, "Brent oracle");
+            expect(strstr(rep.gates[i].detail, "deferred") == NULL,
+                   "Breguet not deferred");
+        }
+        if (strcmp(rep.gates[i].id, "G-CG") == 0) {
+            saw_cg = 1;
+            expect(rep.gates[i].soft_pass, "Soft CG pass");
+            expect(fabs(rep.gates[i].measured - 10.0) < 1e-6, "CG travel 10%MAC");
+        }
+        if (strcmp(rep.gates[i].id, "G-STRUCT-MARGIN") == 0) {
+            saw_struct = 1;
+            expect(rep.gates[i].soft_pass, "Soft struct pass");
+            expect(fabs(rep.gates[i].measured - 13.5) < 1e-6, "ultimate 13.5g");
+        }
+    }
+    expect(saw_breguet && saw_cg && saw_struct, "Soft recomputed deferred gates");
     char md[8192], js[8192];
     expect(fl_viability_report_md(&rep, md, sizeof md) == 0, "via md");
     expect(fl_viability_report_json(&rep, js, sizeof js) == 0, "via json");

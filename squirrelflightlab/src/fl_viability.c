@@ -1,15 +1,44 @@
 /*
- * Soft #176: evaluate Victor's viability-criteria.yaml gates.
+ * Soft #176 follow-up: evaluate Victor's viability-criteria.yaml gates.
  * Recomputes sizing metrics from derived_full_scale and checks class bands.
+ * Deferred Soft recomputes: G-BREGUET (Brent on L/D), G-CG travel, G-STRUCT-MARGIN.
+ *
+ * Numerics: Breguet cruise R=(V/c)(L/D)ln(Wi/Wf) — Raymer/Roskam textbook form.
+ * Soft solves for L/D via Brent (squirrelnum / NR 3rd ed. Ch. 9.3 method narrative;
+ * original Brent wrapper — no NR listings).
  */
 #include "fl_viability.h"
 
 #include "fl_units.h"
+#include "squirrelnum.h"
 
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+
+typedef struct {
+    double V;   /* m/s */
+    double c;   /* 1/s SFC */
+    double ln_wr;
+    double R_m; /* target ferry range, m */
+} SoftBreguetCtx;
+
+/* f(LD) = (V/c)*LD*ln(Wi/Wf) - R_m  (zero at Soft ferry L/D) */
+static double soft_breguet_residual(double ld, void *ctx) {
+    SoftBreguetCtx *b = ctx;
+    return (b->V / b->c) * ld * b->ln_wr - b->R_m;
+}
+
+static FlYNode *gate_by_id(FlYNode *gates, const char *want) {
+    if (!gates || gates->kind != FL_Y_SEQ) return NULL;
+    for (FlYNode *it = gates->child; it; it = it->next) {
+        FlYNode *id = fl_yaml_map_get(it, "id");
+        if (id && strcmp(fl_yaml_as_cstr(id), want) == 0) return it;
+    }
+    return NULL;
+}
 
 static double node_num(FlYNode *n, double fallback) {
     double v;
@@ -164,8 +193,106 @@ int fl_viability_eval(const char *yaml_text, FlViaReport *rep, char *err,
              node_num(fl_yaml_map_get(b, "min"), 0),
              node_num(fl_yaml_map_get(b, "max"), 0), "MTOW class");
 
-    /* Walk YAML gates list for unknown ids Soft does not yet recompute */
     FlYNode *gates = fl_yaml_map_get(root, "gates");
+
+    /*
+     * G-BREGUET: Soft ferry R=(V/c)(L/D)ln(Wi/Wf) with YAML assumed_ld.
+     * Pass if L/D in band_ld and Soft ferry×frac covers combat radius.
+     * Soft Brent (NR Ch. 9.3 method) recovers assumed_ld from Soft R (oracle).
+     */
+    {
+        FlYNode *g = gate_by_id(gates, "G-BREGUET");
+        if (!g) {
+            if (err) snprintf(err, err_cap, "missing gate G-BREGUET");
+            free(doc);
+            return -1;
+        }
+        double V = node_num(fl_yaml_map_get(g, "assumed_v_mps"), 0);
+        double sfc = node_num(fl_yaml_map_get(g, "assumed_sfc_per_s"), 0);
+        double ld = node_num(fl_yaml_map_get(g, "assumed_ld"), 0);
+        double frac = node_num(fl_yaml_map_get(g, "combat_radius_fraction_of_ferry"), 0);
+        FlYNode *bld = fl_yaml_map_get(g, "band_ld");
+        double ld_lo = node_num(fl_yaml_map_get(bld, "min"), 6.0);
+        double ld_hi = node_num(fl_yaml_map_get(bld, "max"), 12.0);
+        double Wf = mtow - fuel;
+        if (V <= 0 || sfc <= 0 || ld <= 0 || frac <= 0 || Wf <= 0 || fuel <= 0) {
+            if (err) snprintf(err, err_cap, "G-BREGUET invalid V/sfc/ld/frac/fuel");
+            free(doc);
+            return -1;
+        }
+        double ln_wr = log(mtow / Wf);
+        double R_soft_m = (V / sfc) * ld * ln_wr;
+        double R_soft_km = R_soft_m / 1000.0;
+        SoftBreguetCtx bctx;
+        bctx.V = V;
+        bctx.c = sfc;
+        bctx.ln_wr = ln_wr;
+        bctx.R_m = R_soft_m;
+        double ld_root = 0;
+        int iters = 0;
+        int brc = sqn_brent(soft_breguet_residual, &bctx, ld_lo * 0.5, ld_hi * 1.5,
+                            1e-9, 80, &ld_root, &iters);
+        int ld_ok = ld >= ld_lo && ld <= ld_hi;
+        int radius_ok = R_soft_km * frac + 1e-6 >= radius;
+        int brent_ok = brc == SQN_OK && fabs(ld_root - ld) < 1e-6;
+        int ok = ld_ok && radius_ok && brent_ok;
+        char detail[FL_VIA_MSG];
+        snprintf(detail, sizeof detail,
+                 "Soft R≈%.0f km (L/D=%.2f); combat %.0f needs ferry≥%.0f; "
+                 "Brent L/D=%.4f (NR 9.3)",
+                 R_soft_km, ld, radius, radius / frac, ld_root);
+        add_gate(rep, "G-BREGUET", "breguet_range_sanity",
+                 ok ? "provisional_pass" : "fail", ok, ld, ld_lo, ld_hi, detail);
+    }
+
+    /* G-CG: Soft CG travel %MAC from fuselage-station fraction span. */
+    {
+        FlYNode *g = gate_by_id(gates, "G-CG");
+        if (!g) {
+            if (err) snprintf(err, err_cap, "missing gate G-CG");
+            free(doc);
+            return -1;
+        }
+        FlYNode *rng = fl_yaml_map_get(g, "our_value_fs_pct_range");
+        double fs0 = 0, fs1 = 0;
+        if (rng && rng->kind == FL_Y_SEQ && rng->child) {
+            fs0 = node_num(rng->child, 0);
+            fs1 = node_num(rng->child->next, fs0);
+        }
+        double travel = fabs(fs1 - fs0) * 100.0; /* fraction → %MAC proxy */
+        b = band_of(root, "cg_travel_pct_mac");
+        double lo = node_num(fl_yaml_map_get(b, "min"), 0);
+        double hi = node_num(fl_yaml_map_get(b, "max"), 15);
+        int ok = in_band(travel, b);
+        char detail[FL_VIA_MSG];
+        snprintf(detail, sizeof detail,
+                 "Soft travel=%.1f %%MAC from FS [%.2f,%.2f]", travel, fs0, fs1);
+        add_gate(rep, "G-CG", "cg_travel_fs", ok ? "pass" : "fail", ok, travel, lo,
+                 hi, detail);
+    }
+
+    /* G-STRUCT-MARGIN: Soft ultimate = limit × factor ≥ nz_limit × factor. */
+    {
+        FlYNode *g = gate_by_id(gates, "G-STRUCT-MARGIN");
+        if (!g) {
+            if (err) snprintf(err, err_cap, "missing gate G-STRUCT-MARGIN");
+            free(doc);
+            return -1;
+        }
+        double lim = node_num(fl_yaml_map_get(g, "limit_load_factor_g"), 0);
+        double uf = node_num(fl_yaml_map_get(g, "ultimate_factor"), 1.5);
+        double soft_ult = lim * uf;
+        double need = nz * uf;
+        int ok = lim + 1e-9 >= nz && soft_ult + 1e-9 >= need;
+        char detail[FL_VIA_MSG];
+        snprintf(detail, sizeof detail,
+                 "Soft ultimate=%.1f g (limit×%.2f); need≥nz×factor=%.1f", soft_ult,
+                 uf, need);
+        add_gate(rep, "G-STRUCT-MARGIN", "structural_limit_load_factor",
+                 ok ? "pass" : "fail", ok, soft_ult, need, need, detail);
+    }
+
+    /* Remaining YAML gates Soft does not yet Soft-recompute */
     if (gates && gates->kind == FL_Y_SEQ) {
         for (FlYNode *it = gates->child; it; it = it->next) {
             FlYNode *id = fl_yaml_map_get(it, "id");
@@ -186,7 +313,6 @@ int fl_viability_eval(const char *yaml_text, FlViaReport *rep, char *err,
             if (!known) {
                 FlYNode *res = fl_yaml_map_get(it, "result");
                 const char *rs = res ? fl_yaml_as_cstr(res) : "unknown";
-                /* Soft acknowledges but does not fail on unrecomputed gates */
                 add_gate(rep, gid, fl_yaml_as_cstr(fl_yaml_map_get(it, "name")),
                          rs, 1, 0.0, 0.0, 0.0,
                          "YAML gate recorded; Soft recompute deferred");
