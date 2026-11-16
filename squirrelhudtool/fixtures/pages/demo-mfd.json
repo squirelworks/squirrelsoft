@@ -1,0 +1,16 @@
+{
+  "format": "sqhud",
+  "version": 1,
+  "type": "mfd",
+  "name": "systems-synoptic",
+  "width": 1280,
+  "height": 800,
+  "elements": [
+    {"id": "radar", "kind": "radar_plan", "x": 40, "y": 40, "w": 600, "h": 520},
+    {"id": "eo", "kind": "eo_video", "x": 660, "y": 40, "w": 560, "h": 320},
+    {"id": "caution", "kind": "caution_panel", "x": 660, "y": 380, "w": 560, "h": 180},
+    {"id": "fuel", "kind": "fuel_synoptic", "x": 40, "y": 580, "w": 400, "h": 180},
+    {"id": "engines", "kind": "engine_synoptic", "x": 460, "y": 580, "w": 400, "h": 180},
+    {"id": "menu", "kind": "bezel_menu", "x": 880, "y": 580, "w": 340, "h": 180}
+  ]
+}

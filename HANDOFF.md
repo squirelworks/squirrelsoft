@@ -36,7 +36,8 @@ Used here, in `ROADMAP.md` and on the issues (as labels).
   S3.3 done), SquirrelQR (files, PNG, X11/portal/Win/mac capture, V4L2 webcam,
   GUI, encoder — S3.4 done via #138 / #142), SquirrelCalc, SquirrelPaint,
   SquirrelGames, SquirrelDebug, SquirrelFlightLab, SquirrelISMBench (scaffold),
-  SquirrelHILBench (HIL UI scaffold).
+  SquirrelHILBench (HIL UI scaffold), SquirrelMCStubs, SquirrelKbdCfg,
+  SquirrelHUDTool (scaffold).
   S3, S4 and S5 are complete on `main`. PKG
   (S3.5 + S4) is on `main`.
 - **Shared cores:** `libs/sqdsp`, `libs/sqfelica`, `libs/sqqr`, `libs/sqmath`, `libs/sqgui`.
@@ -337,8 +338,14 @@ Done earlier (kept for history):
   `tests/test_mcstubs.c`, `tests/cli_smoke.sh`. Stubs are not flight software.
   Weapons boundary: `live_fuzing_in_repo` stays false.
 
-### FIGHTER-SOFT-UI — ISM #82–#83 remaining  `status: open`
-- Soft owns HUD tool and bus analyzer PRs still open. Skip #79 (Steve’s
+### HUDTOOL-scaffold — ISM HUD/HMI symbology CLI  `status: done` (this PR)
+- S10.3: `squirrelhudtool/` authors HUD + MFD pages, exports SQHUD/JSON;
+  fixtures under `fixtures/pages/`; checks `tests/test_hudtool.c`,
+  `tests/cli_smoke.sh`. ISM #82 / `fighter-jet/avionics/hmi-hud.md`. No
+  weapons internals — stores station flags are display symbology only.
+
+### FIGHTER-SOFT-UI — ISM #83 remaining  `status: open`
+- Soft owns bus analyzer PR still open. Skip #79 (Steve’s
   `squirrelflightlab/` on `main`). Weapons = stores display/integration only.
 
 ### PLAY-0.0.14 — upload SquirrelSound 0.0.14  `needs: squirrel`

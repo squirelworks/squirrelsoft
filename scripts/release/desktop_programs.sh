@@ -17,4 +17,5 @@ squirrelismbench
 squirrelhilbench
 squirrelmcstubs
 squirrelkbdcfg
+squirrelhudtool
 EOF

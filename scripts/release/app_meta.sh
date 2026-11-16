@@ -43,6 +43,7 @@ case "$app" in
   squirrelhilbench)       name=SquirrelHILBench;      desktop=c;      binary=squirrelhilbench ;;
   squirrelmcstubs)        name=SquirrelMCStubs;       desktop=c;      binary=squirrelmcstubs ;;
   squirrelkbdcfg)         name=SquirrelKbdCfg;        desktop=c;      binary=squirrelkbdcfg ;;
+  squirrelhudtool)        name=SquirrelHUDTool;       desktop=c;      binary=squirrelhudtool ;;
   *) echo "unknown app: $app" >&2; exit 2 ;;
 esac
 
