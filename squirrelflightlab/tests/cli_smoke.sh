@@ -32,6 +32,8 @@ $P ism-load --params fixtures/ism-fighter/ism-fj-1.ismfj-params \
 $P ism-interfaces fixtures/ism-interfaces | grep -q PASS || fail "ism-interfaces"
 $P ism-interfaces fixtures/ism-interfaces-bad-version >/dev/null 2>&1
 [ $? -eq 1 ] || fail "ism-interfaces bad version → 1"
+$P verify | grep -q "provisional, unvalidated" || fail "verify provisional label"
+$P verify | grep -q "0 fail" || fail "verify all pass"
 $P fcs-check --report "$B/fcs_report.txt" | grep -q "result: PASS" || fail "fcs-check"
 grep -q "result: PASS" "$B/fcs_report.txt" || fail "fcs report file"
 $P planned | grep -q cfd_mesh_import || fail "planned"
