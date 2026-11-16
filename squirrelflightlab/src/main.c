@@ -4,6 +4,7 @@
 #include "fl_avionics.h"
 #include "fl_hil.h"
 #include "fl_chart.h"
+#include "fl_chart_gui.h"
 #include "fl_dyn.h"
 #include "fl_fcs.h"
 #include "fl_iface.h"
@@ -52,14 +53,16 @@ static void usage(FILE *f) {
         "  planned                      list scaffold/planned surfaces (CFD, tunnel, HIL)\n"
         "  tunnel PATH [--project FILE] Soft S7.3: load tunnel CSV into replaceable\n"
         "                               aero provider (NR Ch.3.1 lerp) + correlate\n"
-        "  strip-chart [options]        Soft S7.4: sqgui strip chart of sim history\n"
+        "  strip-chart [options]        Soft S7.4 / S7.4′: sqgui strip of sim history\n"
         "      --project FILE  --duration S  --dt S  --ppm FILE\n"
         "      --channels V,nz,alpha,theta\n"
+        "      --gui [--frames N]       Soft S7.4′ SDL window (CI: dummy + frames)\n"
         "  hil ENDPOINT                 Soft S7.5: Soft mock / fixture HIL (SQHIL1)\n"
         "                               ENDPOINT=mock | fixtures/hil/*.sqhil\n"
         "                               live serial/USB deferred (clear refuse msg)\n"
         "  hil-chart ENDPOINT [options] Soft S7.5′: strip-chart Soft HIL samples\n"
         "      --role ROLE [--role2 ROLE]  --ppm FILE\n"
+        "      --gui [--frames N]       Soft S7.4′ SDL window on Soft HIL feed\n"
         "                               default roles act_throttle,imu_az\n"
         "  cfd-import PATH              planned CFD stub (always fails clearly)\n"
         "\n"
@@ -652,6 +655,7 @@ int main(int argc, char **argv) {
     if (strcmp(cmd, "strip-chart") == 0) {
         const char *project = NULL, *ppm = NULL, *channels = "V,nz";
         double duration = 2.0, dt = 0.02;
+        int gui = 0, frames = 0;
         int i;
         for (i = 2; i < argc; i++) {
             if (strcmp(argv[i], "--project") == 0) {
@@ -671,6 +675,12 @@ int main(int argc, char **argv) {
             } else if (strcmp(argv[i], "--channels") == 0) {
                 channels = opt_val(argc, argv, &i);
                 if (!channels) return 2;
+            } else if (strcmp(argv[i], "--gui") == 0) {
+                gui = 1;
+            } else if (strcmp(argv[i], "--frames") == 0) {
+                const char *v = opt_val(argc, argv, &i);
+                if (!v) return 2;
+                frames = atoi(v);
             } else return 2;
         }
         FlProject p;
@@ -702,6 +712,12 @@ int main(int argc, char **argv) {
         if (st.nch < 1) {
             fprintf(stderr, "squirrelflightlab: need >=1 channel\n");
             return 2;
+        }
+        if (gui) {
+            int rc = fl_chart_gui_run(&p, &st, duration, dt, frames);
+            if (rc != 0) return rc == 2 ? 2 : 1;
+            puts("label: provisional, unvalidated against tunnel/flight test");
+            return 0;
         }
         uint32_t *px = calloc((size_t)st.w * (size_t)st.h, sizeof *px);
         if (!px) {
@@ -817,6 +833,7 @@ int main(int argc, char **argv) {
         const char *role0 = "act_throttle";
         const char *role1 = "imu_az";
         const char *ppm = NULL;
+        int gui = 0, frames = 0;
         int i;
         for (i = 3; i < argc; i++) {
             if (strcmp(argv[i], "--role") == 0) {
@@ -828,11 +845,27 @@ int main(int argc, char **argv) {
             } else if (strcmp(argv[i], "--ppm") == 0) {
                 ppm = opt_val(argc, argv, &i);
                 if (!ppm) return 2;
+            } else if (strcmp(argv[i], "--gui") == 0) {
+                gui = 1;
+            } else if (strcmp(argv[i], "--frames") == 0) {
+                const char *v = opt_val(argc, argv, &i);
+                if (!v) return 2;
+                frames = atoi(v);
             } else
                 return 2;
         }
         FlChartStyle st;
         fl_chart_style_default(&st);
+        char err[FL_MAX_MSG];
+        if (gui) {
+            int rc = fl_chart_gui_run_hil(endpoint, role0, role1, &st, frames, err, sizeof err);
+            if (rc != 0) {
+                if (err[0]) fprintf(stderr, "squirrelflightlab: hil-chart: %s\n", err);
+                return rc == 2 ? 2 : 1;
+            }
+            puts("label: provisional, unvalidated against tunnel/flight test");
+            return 0;
+        }
         uint32_t *px = calloc((size_t)st.w * (size_t)st.h, sizeof *px);
         if (!px) {
             fprintf(stderr, "squirrelflightlab: oom\n");
@@ -840,7 +873,6 @@ int main(int argc, char **argv) {
         }
         sqg_canvas cv;
         sqg_canvas_init(&cv, px, st.w, st.h, st.w);
-        char err[FL_MAX_MSG];
         int segs = fl_chart_render_hil(&cv, endpoint, role0, role1, &st, err, sizeof err);
         if (segs < 1) {
             fprintf(stderr, "squirrelflightlab: hil-chart: %s\n", err[0] ? err : "draw failed");

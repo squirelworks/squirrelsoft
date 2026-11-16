@@ -17,7 +17,8 @@
 | ISM-FJ aero vs AVL/OpenVSP/CalculiX | Optional path presence | Soft follow-up | Skip if artifacts absent; full table compare later |
 | F-16 / NESC cases | Not in this PR | Soft follow-up | Licence check before vendoring CSV |
 | Tunnel CSV aero provider (S7.3) | Soft lerp + correlate vs parametric | Soft synthetic fixture | NR Ch. 3.1 / 15.1 class; real tunnel logs later |
-| Strip chart (S7.4) | Headless sqgui draw + PPM; segment count | Soft sim history | NR Ch. 3.1 resample; SDL window deferred |
+| Strip chart (S7.4) | Headless sqgui draw + PPM; segment count | Soft sim history | NR Ch. 3.1 resample |
+| Strip SDL window (S7.4′) | `strip-chart --gui --frames` / hil-chart GUI | Soft sim + Soft HIL | sqgui_sdl; dummy driver in CI |
 | Soft mock HIL (S7.5) | SQHIL1 framing round-trip + host↔board RMS | Soft synthetic PCB | NR Ch. 3.1 lerp; live serial deferred |
 | Soft HIL → strip-chart (S7.5′) | `hil-chart` segment/paint checks | Soft HIL samples | NR Ch. 3.1 resample; SDL deferred |
 | Eric scale / RC correlation | — | Soft follow-up | Needs Eric logging formats |

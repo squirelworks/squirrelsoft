@@ -174,8 +174,12 @@ source of truth. Design note: `squirrelflightlab/docs/overview.md`.
   `tests/test_flightlab.c`, `tests/cli_smoke.sh`
 - [x] S7.4 `sqgui` strip-chart on the same core: `fl_chart` draws V/nz/α/θ
   history into a headless `sqgui` canvas (PPM via `strip-chart --ppm`);
-  series resampled onto pixel columns with `sqn_lerp` (NR Ch. 3.1); SDL live
-  window deferred; checks in `tests/test_flightlab.c`, `tests/cli_smoke.sh`
+  series resampled onto pixel columns with `sqn_lerp` (NR Ch. 3.1); checks in
+  `tests/test_flightlab.c`, `tests/cli_smoke.sh`
+- [x] S7.4′ Optional SDL strip window on the same `fl_chart` core:
+  `strip-chart --gui [--frames N]` / `hil-chart … --gui` via `sqgui_sdl`
+  (CI: `SDL_VIDEODRIVER=dummy`); nosdl stub when SDL2 absent; live serial HIL
+  still deferred
 - [x] S7.5 Soft mock HIL against avionics PCB framing: `fl_hil` SQHIL1 line
   protocol (encode/parse, fixture `.sqhil`, `hil mock`); host↔board channel
   correlate via `sqn_lerp` (NR Ch. 3.1); live serial/USB refused until Victor

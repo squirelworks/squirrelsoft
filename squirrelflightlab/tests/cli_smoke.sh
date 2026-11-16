@@ -51,6 +51,7 @@ $P tunnel fixtures/tunnel/soft-scaffold-correlate.csv | grep -q PASS || fail "tu
 $P tunnel fixtures/tunnel/soft-scaffold-correlate.csv | grep -q "NR Ch.3.1" || fail "tunnel NR"
 $P strip-chart --ppm "$B/strip.ppm" | grep -q "NR Ch.3.1" || fail "strip-chart"
 [ -f "$B/strip.ppm" ] || fail "strip ppm"
+$P help | grep -q "\-\-gui" || fail "help gui"
 $P hil mock | grep -q PASS || fail "hil mock"
 $P hil mock | grep -q "NR Ch.3.1" || fail "hil NR"
 $P hil fixtures/hil/mock-pcb-session.sqhil | grep -q PASS || fail "hil fixture"
