@@ -46,7 +46,7 @@ trim / pull-up / roll scenarios.
 | `fl_dyn` | 6-DOF sketch, history (RK4 via squirrelnum) | Atmosphere + quaternions |
 | `fl_avionics` | Channel co-check vs bay expect map | HIL |
 | `fl_scenario` | `trim_cruise`, `pull_up`, `roll` | More envelopes |
-| `fl_planned` | CFD / tunnel / HIL — **stubbed** | When hardware lands |
+| `fl_planned` / tunnel | CFD/HIL stubbed; **tunnel CSV provider active (S7.3)** | Real tunnel logs / HIL PCB |
 
 Out of scope for v0: photoreal visuals, multiplayer, weapons, classified data,
 full CFD, certified flight-test tooling, shipping Gerbers/STLs.
