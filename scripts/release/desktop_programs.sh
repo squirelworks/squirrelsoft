@@ -16,6 +16,7 @@ squirrelflightlab
 squirrelismbench
 squirrelhilbench
 squirrelmcstubs
+squirrelshipbench
 squirrelkbdcfg
 squirrelhudtool
 EOF

@@ -322,6 +322,15 @@ Done earlier (kept for history):
   typewriter fixture when ISM #159 merges; Soft #182 companion UI still open
   on `-2eaf`.
 
+### ISMBENCH-printer-plotter + SHIPBENCH — Soft lab expansion  `status: done` (this PR)
+- S8.4b′: `printer-test` (ISM #5 Steve GPIO/VID map) + Soft-proposed
+  `plotter-test` (ISM #6; NR Ch. 3.1 lerp via squirrelnum).
+- S8.5: `squirrelshipbench/` warship hydro + board allowlist (ISM #43) and
+  bomber teaching heat-flux (ISM #37); Soft Simpson I_T (NR Ch. 4.1 class).
+- **Gaps:** live printer USB; plotter fab SoT when ISM #6 leaves Planned;
+  warship live board CDC; refresh Soft fixtures from ISM YAML when SoT freezes;
+  could not `gh issue create` (401) — gaps recorded here / in the PR.
+
 ### KBDCFG-scaffold — Eric keyboard layout + firmware cfg  `status: done` (#180)
 - S9.1: `squirrelkbdcfg/` loads 60% fixture, prints layout, SQKB1 round-trip.
   Mouse settings #181 and RAM self-test #182 follow in Eric order.

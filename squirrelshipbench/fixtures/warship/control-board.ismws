@@ -1,0 +1,12 @@
+ISM-WS control-board 1
+# Soft CI fixture from ISM warship/interfaces/control-board.yaml (#43).
+# Scale-model actuators / telemetry only — weapons roles must fail Soft check.
+board_id: ism-warship-control
+no_weapons: 1
+scale_model_only: 1
+channel: I2C_IMU attitude_trim_stub
+channel: SPI_RADIO telemetry_stub
+channel: PWM_PORT port_thruster_stub
+channel: PWM_STBD stbd_thruster_stub
+channel: PWM_RUDDER rudder_servo_stub
+channel: PWM_BALLAST ballast_trim_stub

@@ -12,11 +12,13 @@ synthetic bank self-tests.
 ## Architecture
 
 ```
-ISM device README / interfaces  →  ib_iface / ib_memory parse
+ISM device README / interfaces  →  ib_iface / ib_memory / ib_printer / ib_plotter
         │
         ├─ ib_keyboard  matrix self-test + boot HID report (synthetic)
         ├─ ib_mouse     sensor/scroll/button self-test (synthetic)
-        └─ ib_memory    SPD XOR + walking/checker/LCG patterns (synthetic)
+        ├─ ib_memory    SPD XOR + walking/checker/LCG patterns (synthetic)
+        ├─ ib_printer   motor / paper / head SPI stub (synthetic)
+        └─ ib_plotter   workspace + NR Ch.3.1 lerp path check (synthetic)
 main.c  CLI; live USB HID / I2C planned
 ```
 

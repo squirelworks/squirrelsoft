@@ -1,0 +1,13 @@
+ISM-PLT plotter interface 1
+# Soft-proposed CI fixture for ISM plotter (ISM #6). ISM README is still Planned;
+# Soft owns the harness contract until Eric publishes fab/README SoT.
+status: soft_proposed
+axes: 2
+x_steps_per_mm: 80
+y_steps_per_mm: 80
+workspace_mm: 300 200
+waypoint: 10 10
+waypoint: 100 10
+waypoint: 100 80
+waypoint: 10 80
+waypoint: 10 10

@@ -1,0 +1,19 @@
+ISM-WS hydrostatics 1
+# Soft CI fixture mirrored from ISM warship/interfaces/hydrostatics.yaml (#43).
+# Soft recomputes GM; Simpson I_T from rectangular waterplane ordinates.
+ship_id: ISM-WS-1
+rho_kg_m3: 1025.0
+length_wl_m: 100.0
+beam_wl_m: 12.0
+volume_m3: 3500.0
+kb_m: 3.2
+kg_m: 5.0
+i_t_ref_m4: 14400.0
+bm_ref_m: 4.114
+gm_ref_m: 2.314
+# half-breadth y = B/2 = 6 at 5 equally spaced stations (odd count for Simpson)
+ordinate: 0 6
+ordinate: 25 6
+ordinate: 50 6
+ordinate: 75 6
+ordinate: 100 6

@@ -188,7 +188,14 @@ military. Gaps → ISM issues, not Soft hardware PRs.
 - [x] S8.4a RAM-module SPD + synthetic bank patterns in `squirrelismbench`
   (`memory-test`; Soft #182 fixture slice / ISM #156); Park–Miller LCG oracle
   (NR Ch. 7.1 class, Soft original — no NR listings)
-- [ ] S8.4b Remaining storage / lab equipment benches; live I2C SPD + PSRAM
+- [x] S8.4b′ Printer + Soft-proposed plotter harnesses in `squirrelismbench`
+  (`printer-test` / `plotter-test`; ISM #5 / #6); plotter polyline midpoints via
+  `sqn_lerp` (NR Ch. 3.1)
+- [x] S8.5 `squirrelshipbench/` — warship hydrostatics + control-board allowlist
+  (ISM #43) and hypersonic bomber teaching heat-flux (ISM #37); Soft Simpson
+  I_T (NR Ch. 4.1 class); checks `tests/test_shipbench.c`, `tests/cli_smoke.sh`
+- [ ] S8.4b Remaining storage / lab equipment benches; live I2C SPD + PSRAM;
+  live printer USB; plotter fab SoT refresh when ISM #6 lands
 
 ## S9 — Eric ISM companion apps (peripherals first)
 

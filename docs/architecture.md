@@ -26,7 +26,7 @@ keyboards (layout map + firmware config against Soft fixtures; hardware SoT
 stays in `international-squirrel-machines/keyboard/`).
 SquirrelISMBench (`squirrelismbench/`) is Soft HID/device bench software for
 Eric’s consumer devices (keyboard, mouse, typewriter matrix, RAM-module SPD /
-synthetic bank patterns, …).
+synthetic bank patterns, printer, Soft-proposed plotter, …).
 SquirrelHILBench (`squirrelhilbench/`) is Soft operator UI for ISM fighter HIL
 benches (mock transport, channel health, stimulus logs); harness SoT stays in
 ISM. Weapons boundary: stores display only — no guidance / seekers / arming.
@@ -35,6 +35,9 @@ the fighter ICD (MC / SMC-SMS display / display-page publisher). Stubs are not
 flight software and are separate from Flight Lab.
 SquirrelHUDTool (`squirrelhudtool/`) is Soft symbology / HUD+MFD page tooling
 for Victor’s fighter displays (ISM #82; no weapons internals).
+SquirrelShipBench (`squirrelshipbench/`) is Soft test software for Victor’s
+warship scale-model board / teaching hydrostatics and hypersonic-bomber
+educational heat-flux stubs (no weapons interfaces).
 
 The app folders stay where they are for now. Moving them under `apps/` is churn with no benefit until a split happens.
 
