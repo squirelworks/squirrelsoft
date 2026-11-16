@@ -45,6 +45,7 @@ typedef enum {
 #define FL_MAX_CHANNELS 32
 #define FL_MAX_HISTORY 4096
 #define FL_MAX_SWEEP 256
+#define FL_MAX_TUNNEL 64
 #define FL_MAX_MSG 240
 
 #endif

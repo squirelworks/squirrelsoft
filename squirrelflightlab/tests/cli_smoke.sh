@@ -44,8 +44,10 @@ $P loadout-check fixtures/loadouts/illegal-envelope.yaml >/dev/null 2>&1; [ $? -
 $P fcs-check --report "$B/fcs_report.txt" | grep -q "result: PASS" || fail "fcs-check"
 grep -q "result: PASS" "$B/fcs_report.txt" || fail "fcs report file"
 $P planned | grep -q cfd_mesh_import || fail "planned"
+$P planned | grep -q "wind_tunnel_correlate \[active\]" || fail "tunnel active"
 $P cfd-import x.msh >/dev/null 2>&1; [ $? -eq 1 ] || fail "cfd stub exit 1"
-$P tunnel x.csv >/dev/null 2>&1; [ $? -eq 1 ] || fail "tunnel stub exit 1"
+$P tunnel fixtures/tunnel/soft-scaffold-correlate.csv | grep -q PASS || fail "tunnel correlate"
+$P tunnel fixtures/tunnel/soft-scaffold-correlate.csv | grep -q "NR Ch.3.1" || fail "tunnel NR"
 $P hil /dev/ttyUSB0 >/dev/null 2>&1; [ $? -eq 1 ] || fail "hil stub exit 1"
 
 # Sample project file

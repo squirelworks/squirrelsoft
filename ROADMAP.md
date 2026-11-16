@@ -166,7 +166,12 @@ source of truth. Design note: `squirrelflightlab/docs/overview.md`.
   schema `nested:` paths (`envelope`, `surfaces[]`, dotted maps); unknown /
   missing nested keys fail with dotted/indexed path; CI fixtures + negative
   cases; Soft does not fork SoT
-- [ ] S7.3 Higher-fidelity replaceable aero provider + tunnel CSV override
+- [x] S7.3 Higher-fidelity replaceable aero provider + tunnel CSV override:
+  `FL_AERO_PROVIDER_TUNNEL_TABLE` loads Soft CSV (`alpha_deg,CL,CD,Cm`); eval
+  uses `sqn_lerp` (NR Ch. 3.1); optional linear CL/Cm fit (NR Ch. 15.1 class
+  ideas); `tunnel PATH` correlates vs parametric; CI fixture
+  `fixtures/tunnel/soft-scaffold-correlate.csv`; checks in
+  `tests/test_flightlab.c`, `tests/cli_smoke.sh`
 - [ ] S7.4 `sqgui` strip-chart window on the same core
 - [ ] S7.5 HIL against the real avionics PCB (planned stub today)
 - OS/2 as lab / ground host (UART, soft-RT, packaging): squirrel-os2#225 and

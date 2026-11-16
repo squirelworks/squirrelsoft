@@ -201,10 +201,41 @@ static void test_planned(void) {
     int n = 0;
     const FlPlannedSurface *list = fl_planned_list(&n);
     expect(n == 3, "three planned");
-    expect(strcmp(list[0].status, "planned") == 0, "status");
+    expect(strcmp(list[0].status, "planned") == 0, "cfd planned");
+    expect(strcmp(list[1].status, "active") == 0, "tunnel active");
     char err[128];
     expect(fl_planned_cfd_mesh_import("x.msh", err, sizeof err) == -1, "cfd stub");
     expect(strstr(err, "not implemented") != NULL, "cfd msg");
+}
+
+static void test_tunnel_provider(void) {
+    char *csv = slurp("fixtures/tunnel/soft-scaffold-correlate.csv");
+    expect(csv != NULL, "tunnel fixture");
+    if (!csv) return;
+    FlProject p;
+    fl_project_default_ism_fighter(&p);
+    FlAeroModel m;
+    fl_aero_from_project(&m, &p);
+    char err[128];
+    expect(fl_aero_load_tunnel_csv(&m, csv, err, sizeof err) == 0, err);
+    expect(m.provider == FL_AERO_PROVIDER_TUNNEL_TABLE, "provider");
+    expect(m.n_tunnel == 5, "5 knots");
+    FlAeroState s;
+    memset(&s, 0, sizeof s);
+    s.V = 20.0;
+    s.alpha_rad = fl_rad(4.0);
+    FlAeroForces f;
+    fl_aero_eval(&m, &s, &f);
+    expect(fabs(f.CL - 0.485103) < 1e-5, "lerp CL@4deg");
+    /* Midpoint between 0 and 4 via NR Ch.3.1 */
+    s.alpha_rad = fl_rad(2.0);
+    fl_aero_eval(&m, &s, &f);
+    expect(fabs(f.CL - 0.5 * (0.150000 + 0.485103)) < 1e-5, "lerp mid");
+    FlTunnelCorrReport rep;
+    expect(fl_aero_tunnel_correlate(&m, &p, &rep) == 0, "correlate");
+    expect(rep.ok == 1, rep.summary);
+    expect(strstr(rep.summary, "NR Ch.3.1") != NULL, "NR cite");
+    free(csv);
 }
 
 static void test_ism_and_fcs(void) {
@@ -437,6 +468,7 @@ int main(void) {
     test_avionics();
     test_scenarios();
     test_planned();
+    test_tunnel_provider();
     test_ism_and_fcs();
     test_ism_interfaces();
     test_verify();

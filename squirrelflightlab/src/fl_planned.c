@@ -5,8 +5,8 @@
 static const FlPlannedSurface k_planned[] = {
     {FL_PLANNED_CFD_MESH, "cfd_mesh_import", "planned",
      "Import volume/surface meshes for higher-fidelity aero correlation. Not wired in v0."},
-    {FL_PLANNED_WIND_TUNNEL, "wind_tunnel_correlate", "planned",
-     "Compare parametric CL/CD/Cm tables to tunnel runs. Stub only."},
+    {FL_PLANNED_WIND_TUNNEL, "wind_tunnel_correlate", "active",
+     "S7.3: load Soft tunnel CSV → FlAeroModel table provider + correlate vs parametric."},
     {FL_PLANNED_HIL, "hardware_in_the_loop", "planned",
      "Talk to the real ISM avionics PCB over serial/USB for HIL. Stub only."},
 };
@@ -24,9 +24,11 @@ int fl_planned_cfd_mesh_import(const char *path, char *err, int err_cap) {
 }
 
 int fl_planned_wind_tunnel_correlate(const char *path, char *err, int err_cap) {
-    (void)path;
+    /* Legacy stub entry: real path is fl_aero_load_tunnel_csv + correlate via CLI. */
     if (err && err_cap)
-        snprintf(err, err_cap, "planned: wind_tunnel_correlate is not implemented in scaffold v0");
+        snprintf(err, err_cap,
+                 "use: squirrelflightlab tunnel %s  (S7.3 CSV provider + correlate)",
+                 path ? path : "FILE.csv");
     return -1;
 }
 

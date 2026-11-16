@@ -46,7 +46,9 @@ static void usage(FILE *f) {
         "  loadout-check FILE [--iface DIR]\n"
         "                               validate station×adapter×store loadout (Soft #173)\n"
         "  planned                      list scaffold/planned surfaces (CFD, tunnel, HIL)\n"
-        "  cfd-import PATH | tunnel PATH | hil ENDPOINT\n"
+        "  tunnel PATH [--project FILE] Soft S7.3: load tunnel CSV into replaceable\n"
+        "                               aero provider (NR Ch.3.1 lerp) + correlate\n"
+        "  cfd-import PATH | hil ENDPOINT\n"
         "                               planned stubs (always fail with a clear message)\n"
         "\n"
         "ISM SoT: international-squirrel-machines fighter-jet/ (Victor). Soft loads\n"
@@ -635,8 +637,54 @@ int main(int argc, char **argv) {
             printf("%s [%s]: %s\n", list[i].name, list[i].status, list[i].note);
         return 0;
     }
-    if (strcmp(cmd, "cfd-import") == 0 || strcmp(cmd, "tunnel") == 0 ||
-        strcmp(cmd, "hil") == 0) {
+    if (strcmp(cmd, "tunnel") == 0) {
+        if (argc < 3) {
+            usage(stderr);
+            return 2;
+        }
+        const char *path = argv[2];
+        const char *project = NULL;
+        int i;
+        for (i = 3; i < argc; i++) {
+            if (strcmp(argv[i], "--project") == 0) {
+                project = opt_val(argc, argv, &i);
+                if (!project) return 2;
+            } else return 2;
+        }
+        char *text = NULL;
+        size_t n = 0;
+        if (read_file(path, &text, &n) != 0) {
+            fprintf(stderr, "squirrelflightlab: cannot read %s\n", path);
+            return 1;
+        }
+        FlProject p;
+        char err[FL_MAX_MSG];
+        if (load_project(&p, project, err, sizeof err) != 0) {
+            fprintf(stderr, "squirrelflightlab: %s\n", err);
+            free(text);
+            return 1;
+        }
+        FlAeroModel m;
+        fl_aero_from_project(&m, &p);
+        if (fl_aero_load_tunnel_csv(&m, text, err, sizeof err) != 0) {
+            fprintf(stderr, "squirrelflightlab: %s\n", err);
+            free(text);
+            return 1;
+        }
+        free(text);
+        FlTunnelCorrReport rep;
+        if (fl_aero_tunnel_correlate(&m, &p, &rep) != 0) {
+            fprintf(stderr, "squirrelflightlab: %s\n", rep.summary);
+            return 1;
+        }
+        printf("provider=tunnel_table points=%d\n", m.n_tunnel);
+        printf("fitted: CL0=%.4f CLa=%.4f Cm0=%.4f Cma=%.4f\n", m.CL0, m.CLa, m.Cm0,
+               m.Cma);
+        puts(rep.summary);
+        puts("label: provisional, unvalidated against tunnel/flight test");
+        return rep.ok ? 0 : 1;
+    }
+    if (strcmp(cmd, "cfd-import") == 0 || strcmp(cmd, "hil") == 0) {
         if (argc < 3) {
             usage(stderr);
             return 2;
@@ -645,8 +693,6 @@ int main(int argc, char **argv) {
         int rc;
         if (strcmp(cmd, "cfd-import") == 0)
             rc = fl_planned_cfd_mesh_import(argv[2], err, sizeof err);
-        else if (strcmp(cmd, "tunnel") == 0)
-            rc = fl_planned_wind_tunnel_correlate(argv[2], err, sizeof err);
         else
             rc = fl_planned_hil_connect(argv[2], err, sizeof err);
         fprintf(stderr, "squirrelflightlab: %s\n", err);
