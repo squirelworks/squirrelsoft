@@ -155,6 +155,10 @@ source of truth. Design note: `squirrelflightlab/docs/overview.md`.
 - [x] S7.2e Viability report from `viability-criteria.yaml` (Soft #176): Soft
   recomputes sizing gates vs class bands; MD+JSON; `viability-report` CLI;
   optional OpenVSP/AVL/CalculiX skip
+- [x] S7.2e′ Soft recompute G-BREGUET / G-CG / G-STRUCT-MARGIN (Soft #176
+  follow-up): Breguet ferry + Brent L/D oracle (NR Ch. 9.3 via squirrelnum);
+  CG travel %MAC; structural ultimate = limit×factor; checks in
+  `tests/test_flightlab.c`
 - [x] S7.2f Loadout validation (Soft #173): station×adapter×store vs
   hardpoints / inert-stores / multi-origin / sms envelopes; mass/CG/asymmetry;
   `loadout-check` CLI; legal + illegal fixtures
