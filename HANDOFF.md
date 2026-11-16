@@ -372,7 +372,7 @@ Done earlier (kept for history):
 - **Gaps:** live hidraw open/read once Soft host path exists; refresh Soft
   `.sqhid` from ISM capture notes.
 
-### ISMBENCH-storage-soft — Soft S8.4b Soft storage Soft bench  `status: in progress` (this PR)
+### ISMBENCH-storage-soft — Soft S8.4b Soft storage Soft bench  `status: done` (#210)
 - `ib_storage` Soft SD/eMMC/flash Soft erase → LCG Soft program → Soft CRC-32
   verify → Soft re-erase; CLI `storage-test`; Soft-proposed
   `fixtures/storage/interface.ismstor` (NR Ch. 7.1 LCG class oracle; Soft
