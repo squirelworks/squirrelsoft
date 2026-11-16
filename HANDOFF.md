@@ -37,7 +37,7 @@ Used here, in `ROADMAP.md` and on the issues (as labels).
   GUI, encoder — S3.4 done via #138 / #142), SquirrelCalc, SquirrelPaint,
   SquirrelGames, SquirrelDebug, SquirrelFlightLab, SquirrelISMBench (scaffold),
   SquirrelHILBench (HIL UI scaffold), SquirrelMCStubs, SquirrelKbdCfg,
-  SquirrelHUDTool (scaffold), SquirrelMouseCfg (scaffold).
+  SquirrelHUDTool (scaffold), SquirrelMouseCfg (scaffold), SquirrelBusMon (scaffold).
   S3, S4 and S5 are complete on `main`. PKG
   (S3.5 + S4) is on `main`.
 - **Shared cores:** `libs/sqdsp`, `libs/sqfelica`, `libs/sqqr`, `libs/sqmath`, `libs/sqgui`.
@@ -371,9 +371,11 @@ Done earlier (kept for history):
   `tests/cli_smoke.sh`. ISM #82 / `fighter-jet/avionics/hmi-hud.md`. No
   weapons internals — stores station flags are display symbology only.
 
-### FIGHTER-SOFT-UI — ISM #83 remaining  `status: open`
-- Soft owns bus analyzer PR still open. Skip #79 (Steve’s
-  `squirrelflightlab/` on `main`). Weapons = stores display/integration only.
+### BUSMON-scaffold — ISM avionics data-bus analyzer  `status: done` (this PR)
+- S10.4: `squirrelbusmon/` decode / filter / replay against ICD catalog fixtures;
+  checks `tests/test_busmon.c`, `tests/cli_smoke.sh`. Protocol SoT in ISM;
+  SMS/stores topics opaque display fields only. Replay hook for Flight Lab / HIL.
+
 
 ### PLAY-0.0.14 — upload SquirrelSound 0.0.14  `needs: squirrel`
 - Build the AAB locally with the upload key and upload it to closed testing
