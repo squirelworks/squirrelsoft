@@ -1,4 +1,5 @@
 #include "rm_iface.h"
+#include "rm_live.h"
 #include "rm_report.h"
 #include "rm_selftest.h"
 #include "rm_spd.h"
@@ -63,6 +64,20 @@ int main(void)
            "cdc stub");
     expect(m.spd_len == 16 && rm_spd_checksum_ok(&m), "cdc xor");
     expect(rm_selftest_run(&m, &res) == 0 && res.ok, "cdc selftest");
+
+    /* Soft #204: Soft host Soft-driven live march */
+    {
+        RmLive live;
+        expect(rm_live_open(&live, "stub", m.pattern_bytes, err,
+                            (int)sizeof(err)) == 0,
+               "live open");
+        expect(rm_live_march(&live, &m, &res) == 0 && res.ok, "live march");
+        expect(strstr(res.summary, "live march") != NULL, "live summary");
+        rm_live_close(&live);
+        expect(rm_live_open(&live, "/dev/ttyACM0", 4096, err,
+                            (int)sizeof(err)) == -1,
+               "acm refuse");
+    }
 
     /* Bad SPD xor must fail. */
     m.spd[m.spd_len - 1] ^= 0xffu;

@@ -1,6 +1,7 @@
 #include "ib_iface.h"
 #include "ib_keyboard.h"
 #include "ib_memory.h"
+#include "ib_mem_live.h"
 #include "ib_mouse.h"
 #include "ib_hid.h"
 #include "ib_plotter.h"
@@ -106,6 +107,30 @@ int main(void) {
                "stub xor");
         ib_memory_selftest(&live, &mer);
         expect(mer.ok == 1, mer.summary);
+    }
+
+    /* Soft #204: Soft host Soft-driven live march (CI stub) */
+    {
+        IbMemLive bank;
+        IbMemTestResult lr;
+        char lerr[128];
+        expect(ib_memory_live_open(&bank, "stub", mem.pattern_bytes, lerr,
+                                   sizeof lerr) == 0,
+               lerr);
+        ib_memory_live_march(&bank, &mem, &lr);
+        expect(lr.ok == 1, lr.summary);
+        expect(strstr(lr.summary, "live march") != NULL, "live summary");
+        ib_memory_live_close(&bank);
+        expect(ib_memory_live_open(&bank, "fixtures/memory/live-stub.sqmem",
+                                   mem.pattern_bytes, lerr, sizeof lerr) == 0,
+               lerr);
+        ib_memory_live_march(&bank, &mem, &lr);
+        expect(lr.ok == 1, lr.summary);
+        ib_memory_live_close(&bank);
+        expect(ib_memory_live_open(&bank, "/dev/ttyACM0", 4096, lerr,
+                                   sizeof lerr) == -1,
+               "acm refuse");
+        expect(strstr(lerr, "deferred") != NULL, lerr);
     }
 
     expect(ib_printer_parse(&printer, prt, err, sizeof err) == 0, err);

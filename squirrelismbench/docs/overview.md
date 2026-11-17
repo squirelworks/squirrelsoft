@@ -18,11 +18,12 @@ ISM device README / interfaces  →  ib_iface / ib_memory / ib_printer / ib_plot
         ├─ ib_mouse     sensor/scroll/button self-test (synthetic)
         ├─ ib_memory    SPD XOR + walking/checker/LCG patterns (synthetic);
         │               Soft #203 USB-CDC `ISM SPD:` parse + .sqspd stub
+        ├─ ib_mem_live  Soft #204 Soft host Soft-driven Soft PSRAM Soft march
         ├─ ib_printer   motor / paper / head SPI stub (synthetic)
         ├─ ib_plotter   workspace + NR Ch.3.1 lerp path check (synthetic)
         ├─ ib_power     PSU/UPS load steps + Soft Simpson energy (NR Ch.4.1)
         └─ ib_hid       Soft SQHID1 mock USB HID framing (S8.2; live hidraw deferred)
-main.c  CLI; `memory-test --spd-cdc` (Soft #203); live hidraw / PSRAM (#204) planned
+main.c  CLI; `memory-test --spd-cdc` / `--live-march`; live hidraw (#207) planned
 ```
 
 ## RAM patterns and NR

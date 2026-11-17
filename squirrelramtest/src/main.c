@@ -1,4 +1,5 @@
 #include "rm_iface.h"
+#include "rm_live.h"
 #include "rm_report.h"
 #include "rm_selftest.h"
 #include "rm_spd.h"
@@ -49,7 +50,7 @@ static int cmd_show(const char *iface_path, const char *spd_cdc)
 }
 
 static int cmd_selftest(const char *iface_path, const char *report_path,
-                        const char *spd_cdc)
+                        const char *spd_cdc, const char *live_ep)
 {
     RmIface m;
     RmTestResult res;
@@ -57,9 +58,22 @@ static int cmd_selftest(const char *iface_path, const char *report_path,
         return 1;
     if (apply_cdc(&m, spd_cdc) != 0)
         return 1;
-    if (rm_selftest_run(&m, &res) != 0)
-        return 1;
-    puts(res.summary);
+    if (live_ep) {
+        RmLive live;
+        char err[RM_MSG_LEN];
+        if (rm_live_open(&live, live_ep, m.pattern_bytes, err,
+                         (int)sizeof(err)) != 0) {
+            fprintf(stderr, "live-march: %s\n", err);
+            return 1;
+        }
+        rm_live_march(&live, &m, &res);
+        puts(res.summary);
+        rm_live_close(&live);
+    } else {
+        if (rm_selftest_run(&m, &res) != 0)
+            return 1;
+        puts(res.summary);
+    }
     if (report_path) {
         if (rm_report_write(report_path, &m, &res) != 0) {
             fprintf(stderr, "report write failed\n");
@@ -74,10 +88,11 @@ int main(int argc, char **argv)
 {
     const char *iface = default_iface();
     const char *spd_cdc = NULL;
+    const char *live_ep = NULL;
     if (argc < 2) {
         fprintf(stderr,
                 "usage: %s show|selftest|demo [--iface FILE] [--spd-cdc PATH] "
-                "[--report FILE]\n",
+                "[--live-march ENDPOINT] [--report FILE]\n",
                 argv[0]);
         return 2;
     }
@@ -99,18 +114,21 @@ int main(int argc, char **argv)
                 iface = argv[++i];
             } else if (strcmp(argv[i], "--spd-cdc") == 0 && i + 1 < argc) {
                 spd_cdc = argv[++i];
+            } else if (strcmp(argv[i], "--live-march") == 0 && i + 1 < argc) {
+                live_ep = argv[++i];
             } else if (strcmp(argv[i], "--report") == 0 && i + 1 < argc) {
                 report = argv[++i];
             }
         }
         if (!report)
             report = "build/ramtest-report.txt";
-        return cmd_selftest(iface, report, spd_cdc);
+        return cmd_selftest(iface, report, spd_cdc, live_ep);
     }
     if (strcmp(argv[1], "demo") == 0) {
         if (cmd_show(iface, spd_cdc) != 0)
             return 1;
-        return cmd_selftest(iface, "build/demo-ramtest-report.txt", spd_cdc);
+        return cmd_selftest(iface, "build/demo-ramtest-report.txt", spd_cdc,
+                            NULL);
     }
     fprintf(stderr, "unknown command\n");
     return 2;

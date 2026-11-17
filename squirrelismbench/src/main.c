@@ -3,6 +3,7 @@
 #include "ib_iface.h"
 #include "ib_keyboard.h"
 #include "ib_memory.h"
+#include "ib_mem_live.h"
 #include "ib_mouse.h"
 #include "ib_hid.h"
 #include "ib_plotter.h"
@@ -22,10 +23,11 @@ static void usage(FILE *f) {
         "  keyboard-test [--iface FILE]   matrix self-test from interface file\n"
         "  typewriter-test [--iface FILE] 4×12 typewriter matrix (ISM #4 / #159)\n"
         "  mouse-test [--iface FILE]      sensor/scroll/button self-test\n"
-        "  memory-test [--iface FILE] [--spd-cdc PATH]\n"
+        "  memory-test [--iface FILE] [--spd-cdc PATH] [--live-march ENDPOINT]\n"
         "                                 RAM SPD + synthetic bank patterns;\n"
-        "                                 --spd-cdc applies Soft USB-CDC\n"
-        "                                 ISM SPD: framing (stub .sqspd or ACM)\n"
+        "                                 --spd-cdc Soft USB-CDC ISM SPD:;\n"
+        "                                 --live-march Soft host Soft-driven\n"
+        "                                 PSRAM march (stub|.sqmem; ACM deferred)\n"
         "  printer-test [--iface FILE]    printer motor/paper/head self-test\n"
         "  plotter-test [--iface FILE]    plotter path + NR Ch.3.1 lerp\n"
         "  psu-test [--iface FILE]        PSU load steps + telemetry (S8.3)\n"
@@ -140,6 +142,7 @@ static int cmd_mouse(int argc, char **argv) {
 static int cmd_memory(int argc, char **argv) {
     const char *path = "fixtures/memory/interface.ismem";
     const char *spd_cdc = NULL;
+    const char *live_ep = NULL;
     int i;
     for (i = 0; i < argc; i++) {
         if (strcmp(argv[i], "--iface") == 0) {
@@ -148,6 +151,9 @@ static int cmd_memory(int argc, char **argv) {
         } else if (strcmp(argv[i], "--spd-cdc") == 0) {
             spd_cdc = opt_val(argc, argv, &i);
             if (!spd_cdc) return 2;
+        } else if (strcmp(argv[i], "--live-march") == 0) {
+            live_ep = opt_val(argc, argv, &i);
+            if (!live_ep) return 2;
         } else return 2;
     }
     char *text = NULL, err[IB_MSG_LEN];
@@ -169,6 +175,19 @@ static int cmd_memory(int argc, char **argv) {
         }
         printf("spd-cdc: applied %d bytes from %s (xor ok)\n", m.spd_len,
                spd_cdc);
+    }
+    if (live_ep) {
+        IbMemLive live;
+        IbMemTestResult res;
+        if (ib_memory_live_open(&live, live_ep, m.pattern_bytes, err,
+                                sizeof err) != 0) {
+            fprintf(stderr, "squirrelismbench: live-march: %s\n", err);
+            return 1;
+        }
+        ib_memory_live_march(&live, &m, &res);
+        puts(res.summary);
+        ib_memory_live_close(&live);
+        return res.ok ? 0 : 1;
     }
     IbMemTestResult res;
     ib_memory_selftest(&m, &res);
