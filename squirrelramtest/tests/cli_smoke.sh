@@ -7,6 +7,8 @@ cd "$(dirname "$0")/.."
 "$BUILD/squirrelramtest" show --iface fixtures/memory/interface.ismem --spd-cdc fixtures/memory/cdc-spd-stub.sqspd | grep -q 'spd-cdc: applied'
 "$BUILD/squirrelramtest" selftest --iface fixtures/memory/interface.ismem --report "$BUILD/cli-ramtest-report.txt" | grep -q 'PASS'
 "$BUILD/squirrelramtest" selftest --iface fixtures/memory/interface.ismem --spd-cdc fixtures/memory/cdc-spd-stub.sqspd --report "$BUILD/cli-ramtest-cdc-report.txt" | grep -q 'PASS'
+"$BUILD/squirrelramtest" selftest --iface fixtures/memory/interface.ismem --live-march stub --report "$BUILD/cli-ramtest-live-report.txt" | grep -q 'live march'
+"$BUILD/squirrelramtest" selftest --iface fixtures/memory/interface.ismem --live-march fixtures/memory/live-stub.sqmem --report "$BUILD/cli-ramtest-sqmem-report.txt" | grep -q 'PASS'
 grep -q 'result: PASS' "$BUILD/cli-ramtest-report.txt"
 "$BUILD/squirrelramtest" demo | grep -q 'PASS'
 echo "cli_smoke ok"

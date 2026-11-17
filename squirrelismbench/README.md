@@ -20,7 +20,7 @@ make -C squirrelismbench test
 | `keyboard-test` | Matrix press/release self-test |
 | `typewriter-test` | 4×12 typewriter matrix |
 | `mouse-test` | Sensor clamp, scroll, buttons |
-| `memory-test` | SPD XOR + walking/checker/LCG patterns (NR Ch. 7.1); `--spd-cdc` applies Soft USB-CDC `ISM SPD:` framing (Soft #203) |
+| `memory-test` | SPD XOR + walking/checker/LCG (NR Ch. 7.1); `--spd-cdc` Soft #203; `--live-march` Soft #204 Soft host Soft-driven Soft march |
 | `printer-test` | Motor/paper/head synthetic self-test (ISM #5) |
 | `plotter-test` | Workspace + path; midpoints via NR Ch. 3.1 lerp |
 | `psu-test` | PSU load steps + telemetry (S8.3; NR Ch. 4.1 Simpson) |

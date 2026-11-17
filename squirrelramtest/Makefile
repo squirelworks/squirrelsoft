@@ -4,7 +4,8 @@ CFLAGS ?= -std=c11 -Wall -Wextra -O2 -D_POSIX_C_SOURCE=200809L
 CFLAGS += -Iinclude
 BUILD = build
 
-OBJ = $(BUILD)/rm_iface.o $(BUILD)/rm_spd.o $(BUILD)/rm_selftest.o $(BUILD)/rm_report.o
+OBJ = $(BUILD)/rm_iface.o $(BUILD)/rm_spd.o $(BUILD)/rm_selftest.o \
+	$(BUILD)/rm_report.o $(BUILD)/rm_live.o
 HDR = $(wildcard include/*.h)
 
 .PHONY: all test clean demo

@@ -1,0 +1,5 @@
+ISM-MEM-LIVE stub 1
+# Soft CI Soft live-bank descriptor for Soft #204 PSRAM march host path.
+# Soft opens an in-memory Soft bank of this size; Soft-driven Soft march
+# goes through Soft write/read. Real ACM Soft MEM framing: docs/psram-live.md.
+size: 4096

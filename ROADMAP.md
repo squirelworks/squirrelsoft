@@ -227,8 +227,11 @@ military. Gaps → ISM issues, not Soft hardware PRs.
 - [x] S8.4b″a Soft USB-CDC `ISM SPD:` framing + CI live-stub (Soft #203,
   lane `-2eaf`): `ib_memory_spd_*` / `rm_spd_*`; `docs/spd-cdc.md`;
   `memory-test --spd-cdc` / `squirrelramtest --spd-cdc`
-- [ ] S8.4b″ Remaining live lab: PSRAM march (Soft #204, `-2eaf`); live
-  printer USB; plotter fab SoT refresh when ISM #6 lands
+- [x] S8.4b″b Soft host Soft-driven PSRAM march path (Soft #204, `-2eaf`):
+  `ib_memory_live_*` / `rm_live_*`; `memory-test --live-march`; CI Soft stub /
+  `.sqmem`; ACM Soft MEM CDC deferred; `docs/psram-live.md`
+- [ ] S8.4b″ Remaining live lab: live printer USB; plotter fab SoT refresh when
+  ISM #6 lands
 
 ## S9 — Eric ISM companion apps (peripherals first)
 
