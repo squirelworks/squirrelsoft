@@ -83,6 +83,31 @@ int main(void) {
     ib_memory_selftest(&mem, &mer);
     expect(mer.ok == 1, mer.summary);
 
+    /* Soft #203: USB-CDC ISM SPD: framing + live-stub */
+    {
+        unsigned char spd[IB_SPD_MAX];
+        int n = 0;
+        IbMemoryIface live = mem;
+        expect(ib_memory_spd_parse_line(
+                   "ISM SPD: addr=0x50 23 10 0c 02 0b 01 40 00 aa 55 01 02 03 "
+                   "04 05 89",
+                   spd, &n, IB_SPD_MAX, err, sizeof err) == 0,
+               err);
+        expect(n == 16, "spd len 16");
+        expect(spd[15] == 0x89, "spd xor byte");
+        expect(ib_memory_spd_parse_line("ISM SPD: 01", spd, &n, IB_SPD_MAX, err,
+                                        sizeof err) == -1,
+               "short spd");
+        expect(ib_memory_spd_apply_cdc_path(
+                   &live, "fixtures/memory/cdc-spd-stub.sqspd", err,
+                   sizeof err) == 0,
+               err);
+        expect(live.spd_len == 16 && ib_memory_spd_checksum_ok(&live),
+               "stub xor");
+        ib_memory_selftest(&live, &mer);
+        expect(mer.ok == 1, mer.summary);
+    }
+
     expect(ib_printer_parse(&printer, prt, err, sizeof err) == 0, err);
     expect(printer.pid == 0x000F, "printer pid");
     IbPrinterTestResult pr;

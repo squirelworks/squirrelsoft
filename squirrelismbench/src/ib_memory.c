@@ -31,6 +31,175 @@ int ib_memory_spd_checksum_ok(const IbMemoryIface *m) {
     return x == m->spd[m->spd_len - 1];
 }
 
+static int starts_with(const char *s, const char *p) {
+    while (*p) {
+        if (*s++ != *p++) return 0;
+    }
+    return 1;
+}
+
+int ib_memory_spd_parse_line(const char *line, unsigned char *spd, int *spd_len,
+                             int spd_cap, char *err, int err_cap) {
+    const char *p;
+    int n = 0;
+    if (!line || !spd || !spd_len || spd_cap < 2) {
+        if (err && err_cap) snprintf(err, err_cap, "null args");
+        return -1;
+    }
+    p = line;
+    while (*p == ' ' || *p == '\t' || *p == '\r') p++;
+    if (!starts_with(p, "ISM SPD:")) {
+        if (err && err_cap) snprintf(err, err_cap, "need ISM SPD: prefix");
+        return -1;
+    }
+    p += 8; /* strlen("ISM SPD:") */
+    while (*p == ' ' || *p == '\t') p++;
+    while (*p && *p != '\n' && *p != '\r') {
+        while (*p == ' ' || *p == '\t') p++;
+        if (!*p || *p == '\n' || *p == '\r') break;
+        /* skip Soft optional keywords addr=… / len=… */
+        if ((starts_with(p, "addr=") || starts_with(p, "ADDR=") ||
+             starts_with(p, "len=") || starts_with(p, "LEN="))) {
+            while (*p && *p != ' ' && *p != '\t' && *p != '\n' && *p != '\r') p++;
+            continue;
+        }
+        {
+            char *end = NULL;
+            unsigned long v = strtoul(p, &end, 16);
+            if (end == p) {
+                if (err && err_cap) snprintf(err, err_cap, "bad SPD hex");
+                return -1;
+            }
+            if (n >= spd_cap) {
+                if (err && err_cap) snprintf(err, err_cap, "SPD too long");
+                return -1;
+            }
+            if (v > 0xfful) {
+                if (err && err_cap) snprintf(err, err_cap, "SPD byte out of range");
+                return -1;
+            }
+            spd[n++] = (unsigned char)(v & 0xffu);
+            p = end;
+        }
+    }
+    if (n < 2) {
+        if (err && err_cap) snprintf(err, err_cap, "SPD needs >= 2 bytes");
+        return -1;
+    }
+    *spd_len = n;
+    return 0;
+}
+
+int ib_memory_spd_apply_cdc_text(IbMemoryIface *m, const char *text, char *err,
+                                 int err_cap) {
+    char *buf, *save = NULL, *line;
+    unsigned char tmp[IB_SPD_MAX];
+    int n = 0, found = 0;
+    if (!m || !text) {
+        if (err && err_cap) snprintf(err, err_cap, "null args");
+        return -1;
+    }
+    buf = strdup(text);
+    if (!buf) {
+        if (err && err_cap) snprintf(err, err_cap, "oom");
+        return -1;
+    }
+    for (line = strtok_r(buf, "\n", &save); line; line = strtok_r(NULL, "\n", &save)) {
+        char *t = line;
+        while (*t == ' ' || *t == '\t') t++;
+        if (!*t || *t == '#') continue;
+        if (!starts_with(t, "ISM SPD:")) continue;
+        if (ib_memory_spd_parse_line(t, tmp, &n, IB_SPD_MAX, err, err_cap) != 0) {
+            free(buf);
+            return -1;
+        }
+        found = 1;
+        break;
+    }
+    free(buf);
+    if (!found) {
+        if (err && err_cap) snprintf(err, err_cap, "no ISM SPD: line in CDC text");
+        return -1;
+    }
+    memcpy(m->spd, tmp, (size_t)n);
+    m->spd_len = n;
+    if (!ib_memory_spd_checksum_ok(m)) {
+        if (err && err_cap) snprintf(err, err_cap, "SPD Soft XOR contract failed");
+        return -1;
+    }
+    return 0;
+}
+
+int ib_memory_spd_apply_cdc_path(IbMemoryIface *m, const char *path, char *err,
+                                 int err_cap) {
+    FILE *f;
+    long n;
+    char *text;
+    int rc;
+    char line[512];
+    unsigned char tmp[IB_SPD_MAX];
+    int len = 0, found = 0, i;
+    if (!m || !path) {
+        if (err && err_cap) snprintf(err, err_cap, "null args");
+        return -1;
+    }
+    f = fopen(path, "rb");
+    if (!f) {
+        if (err && err_cap)
+            snprintf(err, err_cap, "cannot open CDC path %s", path);
+        return -1;
+    }
+    /* Regular Soft stub files are seekable; live ACM often is not. */
+    if (fseek(f, 0, SEEK_END) == 0 && (n = ftell(f)) >= 0 && n <= (1 << 20)) {
+        rewind(f);
+        text = malloc((size_t)n + 1);
+        if (!text) {
+            fclose(f);
+            if (err && err_cap) snprintf(err, err_cap, "oom");
+            return -1;
+        }
+        if (fread(text, 1, (size_t)n, f) != (size_t)n) {
+            free(text);
+            fclose(f);
+            if (err && err_cap) snprintf(err, err_cap, "read failed on %s", path);
+            return -1;
+        }
+        text[n] = 0;
+        fclose(f);
+        rc = ib_memory_spd_apply_cdc_text(m, text, err, err_cap);
+        free(text);
+        return rc;
+    }
+    /* Non-seekable or oversized: scan lines (live USB-CDC Soft path). */
+    clearerr(f);
+    rewind(f);
+    for (i = 0; i < 64 && fgets(line, (int)sizeof line, f); i++) {
+        char *t = line;
+        while (*t == ' ' || *t == '\t') t++;
+        if (!starts_with(t, "ISM SPD:")) continue;
+        if (ib_memory_spd_parse_line(t, tmp, &len, IB_SPD_MAX, err, err_cap) !=
+            0) {
+            fclose(f);
+            return -1;
+        }
+        found = 1;
+        break;
+    }
+    fclose(f);
+    if (!found) {
+        if (err && err_cap)
+            snprintf(err, err_cap, "no ISM SPD: line on %s", path);
+        return -1;
+    }
+    memcpy(m->spd, tmp, (size_t)len);
+    m->spd_len = len;
+    if (!ib_memory_spd_checksum_ok(m)) {
+        if (err && err_cap) snprintf(err, err_cap, "SPD Soft XOR contract failed");
+        return -1;
+    }
+    return 0;
+}
+
 int ib_memory_parse(IbMemoryIface *m, const char *text, char *err, int err_cap) {
     if (!m || !text) {
         if (err && err_cap) snprintf(err, err_cap, "null args");

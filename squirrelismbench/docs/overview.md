@@ -16,12 +16,13 @@ ISM device README / interfaces  →  ib_iface / ib_memory / ib_printer / ib_plot
         │
         ├─ ib_keyboard  matrix self-test + boot HID report (synthetic)
         ├─ ib_mouse     sensor/scroll/button self-test (synthetic)
-        ├─ ib_memory    SPD XOR + walking/checker/LCG patterns (synthetic)
+        ├─ ib_memory    SPD XOR + walking/checker/LCG patterns (synthetic);
+        │               Soft #203 USB-CDC `ISM SPD:` parse + .sqspd stub
         ├─ ib_printer   motor / paper / head SPI stub (synthetic)
         ├─ ib_plotter   workspace + NR Ch.3.1 lerp path check (synthetic)
         ├─ ib_power     PSU/UPS load steps + Soft Simpson energy (NR Ch.4.1)
         └─ ib_hid       Soft SQHID1 mock USB HID framing (S8.2; live hidraw deferred)
-main.c  CLI; live hidraw / I2C / power CDC planned
+main.c  CLI; `memory-test --spd-cdc` (Soft #203); live hidraw / PSRAM (#204) planned
 ```
 
 ## RAM patterns and NR
@@ -30,6 +31,9 @@ Synthetic bank tests: all-0 / all-1, walking-1 / walking-0, checkerboard, and
 a Park–Miller LCG fill/verify stream. The LCG is the NR **Ch. 7.1** “minimal
 standard” class (a=16807, m=2³¹−1), implemented in Soft original code as a
 test oracle — **no Numerical Recipes source is copied**.
+
+USB-CDC SPD framing: `docs/spd-cdc.md`. Soft stub
+`fixtures/memory/cdc-spd-stub.sqspd`.
 
 SPD Soft contract (fixture): last of N bytes equals XOR of the preceding
 bytes; I2C address fixed at `0x50` per ISM `memory/README` Steve interface.

@@ -22,7 +22,10 @@ static void usage(FILE *f) {
         "  keyboard-test [--iface FILE]   matrix self-test from interface file\n"
         "  typewriter-test [--iface FILE] 4×12 typewriter matrix (ISM #4 / #159)\n"
         "  mouse-test [--iface FILE]      sensor/scroll/button self-test\n"
-        "  memory-test [--iface FILE]     RAM SPD + synthetic bank patterns\n"
+        "  memory-test [--iface FILE] [--spd-cdc PATH]\n"
+        "                                 RAM SPD + synthetic bank patterns;\n"
+        "                                 --spd-cdc applies Soft USB-CDC\n"
+        "                                 ISM SPD: framing (stub .sqspd or ACM)\n"
         "  printer-test [--iface FILE]    printer motor/paper/head self-test\n"
         "  plotter-test [--iface FILE]    plotter path + NR Ch.3.1 lerp\n"
         "  psu-test [--iface FILE]        PSU load steps + telemetry (S8.3)\n"
@@ -136,11 +139,15 @@ static int cmd_mouse(int argc, char **argv) {
 
 static int cmd_memory(int argc, char **argv) {
     const char *path = "fixtures/memory/interface.ismem";
+    const char *spd_cdc = NULL;
     int i;
     for (i = 0; i < argc; i++) {
         if (strcmp(argv[i], "--iface") == 0) {
             path = opt_val(argc, argv, &i);
             if (!path) return 2;
+        } else if (strcmp(argv[i], "--spd-cdc") == 0) {
+            spd_cdc = opt_val(argc, argv, &i);
+            if (!spd_cdc) return 2;
         } else return 2;
     }
     char *text = NULL, err[IB_MSG_LEN];
@@ -155,6 +162,14 @@ static int cmd_memory(int argc, char **argv) {
         return 1;
     }
     free(text);
+    if (spd_cdc) {
+        if (ib_memory_spd_apply_cdc_path(&m, spd_cdc, err, sizeof err) != 0) {
+            fprintf(stderr, "squirrelismbench: spd-cdc: %s\n", err);
+            return 1;
+        }
+        printf("spd-cdc: applied %d bytes from %s (xor ok)\n", m.spd_len,
+               spd_cdc);
+    }
     IbMemTestResult res;
     ib_memory_selftest(&m, &res);
     puts(res.summary);
