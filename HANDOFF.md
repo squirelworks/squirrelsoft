@@ -47,14 +47,17 @@ Used here, in `ROADMAP.md` and on the issues (as labels).
   (`./gradlew :app:assembleDebug :app:testDebugUnitTest` per app), in
   `.github/workflows/ci.yml` on every PR. Desktop packages: see
   `docs/packaging.md` and `.github/workflows/release.yml`.
-- **Open Cursor/Codex coding items *(lane `-2eaf`)*:** Soft GNSS NTRIP/RTCM/
-  Android caster wiring is done (#147–#162); ISM Soft UI S10.1–S10.4 and Eric
-  companions S9.1–S9.3 (`squirrelramtest/` / #182) are on `main` or this PR.
-  Remaining Soft coding: Soft #207 live HID host (`-2eaf`), live printer USB /
-  plotter fab, live HIL serial once ICD lands. Soft #203 SPD CDC and Soft
-  #204 Soft live march are on `main` / this PR. Next Squirrel-owned work
-  remains **S6** repo split and **PLAY** uploads (`needs: squirrel`): Sound
-  0.0.14/0.0.15, QR 0.1.7, Suica 0.0.13/0.0.14.
+- **Open Cursor/Codex coding items *(lane `-2eaf`)* — wrap 2026-11-17, paused:**
+  Soft GNSS (#147–#162), ISM Soft UI S10.1–S10.4, Eric companions S9.1–S9.3,
+  Soft #203 SPD CDC (#213), Soft #204 PSRAM live march (#215) are on `main`.
+  **Do not start new Soft code until Sarah says go.** Resume queue:
+  1. Soft **#207** live USB HID host (`libusb` / WinUSB / IOHID) — next coding.
+  2. Soft **#212** / **#214** ACM / MEM CDC soaks — only with Eric board.
+  3. Live printer USB / plotter fab / live HIL serial — after HID, when SoT lands.
+  OS/2 Gen2 W.6 is complete on os2#239 (`PM_GMAX`); next OS/2 coding after
+  owner Gen2 `2.6.0` ship is `3.0-taskmgr` (#217) / `3.0-themes` (#218).
+  Next Squirrel-owned work remains **S6** repo split and **PLAY** uploads
+  (`needs: squirrel`): Sound 0.0.14/0.0.15, QR 0.1.7, Suica 0.0.13/0.0.14.
 - **Agent lanes:** suite split is in [docs/AGENT_LANES.md](docs/AGENT_LANES.md)
   (`-2eaf` = this Soft/Gen2/BIOS lane; `-b55f` = OS/2 2.9 only).
 - **Path to suite/OS 3.0.0:** Soft [docs/PATH_TO_3.0.0.md](docs/PATH_TO_3.0.0.md)
@@ -391,11 +394,12 @@ Done earlier (kept for history):
   `squirrelramtest --spd-cdc`; framing note `squirrelismbench/docs/spd-cdc.md`.
 - **Gaps:** optional ACM soak #212 when Eric’s board is available.
 
-### ISMBENCH-psram-live — Soft #204 Soft live PSRAM march  `status: done` (this PR)
+### ISMBENCH-psram-live — Soft #204 Soft live PSRAM march  `status: done` (#215 on `main`)
 - Soft host Soft bank API (`ib_memory_live_*` / `rm_live_*`); Soft-driven Soft
   march via Soft write/read; CI Soft `stub` / `live-stub.sqmem`; ACM Soft MEM
   CDC refused until Eric freezes Soft/host; `docs/psram-live.md`.
-- **Gaps:** Soft MEM CDC soak #214 when Soft/host SoT lands; Soft #207 live HID.
+- **Gaps / next:** Soft #207 live HID (next coding when resumed); Soft MEM CDC
+  soak #214 / ACM soak #212 when Soft/host SoT + board land.
 
 ### KBDCFG-scaffold — Eric keyboard layout + firmware cfg  `status: done` (#184)
 - S9.1: `squirrelkbdcfg/` loads 60% fixture, prints layout, SQKB1 round-trip.
