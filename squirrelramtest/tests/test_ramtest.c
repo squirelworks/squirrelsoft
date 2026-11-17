@@ -56,6 +56,14 @@ int main(void)
         fclose(f);
     }
 
+    /* Soft #203: USB-CDC ISM SPD: framing from live-stub */
+    expect(rm_iface_load(iface, &m, err, (int)sizeof(err)) == 0, "reload");
+    expect(rm_spd_apply_cdc_path(&m, "fixtures/memory/cdc-spd-stub.sqspd", err,
+                                 (int)sizeof(err)) == 0,
+           "cdc stub");
+    expect(m.spd_len == 16 && rm_spd_checksum_ok(&m), "cdc xor");
+    expect(rm_selftest_run(&m, &res) == 0 && res.ok, "cdc selftest");
+
     /* Bad SPD xor must fail. */
     m.spd[m.spd_len - 1] ^= 0xffu;
     expect(!rm_spd_checksum_ok(&m), "bad xor detected");

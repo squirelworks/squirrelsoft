@@ -50,11 +50,11 @@ Used here, in `ROADMAP.md` and on the issues (as labels).
 - **Open Cursor/Codex coding items *(lane `-2eaf`)*:** Soft GNSS NTRIP/RTCM/
   Android caster wiring is done (#147–#162); ISM Soft UI S10.1–S10.4 and Eric
   companions S9.1–S9.3 (`squirrelramtest/` / #182) are on `main` or this PR.
-  Remaining Soft coding: Soft #207 live HID host (`-2eaf`), S8.4b″ live
-  SPD/PSRAM (#203/#204, `-2eaf`), live printer USB / plotter fab, live HIL
-  serial once ICD lands. Soft S7.4′ SDL strip window is this PR. Next
-  Squirrel-owned work remains **S6** repo split and **PLAY** uploads
-  (`needs: squirrel`): Sound 0.0.14/0.0.15, QR 0.1.7, Suica 0.0.13/0.0.14.
+  Remaining Soft coding: Soft #207 live HID host (`-2eaf`), Soft #204 live
+  PSRAM march (`-2eaf`), live printer USB / plotter fab, live HIL serial once
+  ICD lands. Soft #203 USB-CDC SPD framing is this PR. Next Squirrel-owned
+  work remains **S6** repo split and **PLAY** uploads (`needs: squirrel`):
+  Sound 0.0.14/0.0.15, QR 0.1.7, Suica 0.0.13/0.0.14.
 - **Agent lanes:** suite split is in [docs/AGENT_LANES.md](docs/AGENT_LANES.md)
   (`-2eaf` = this Soft/Gen2/BIOS lane; `-b55f` = OS/2 2.9 only).
 - **Path to suite/OS 3.0.0:** Soft [docs/PATH_TO_3.0.0.md](docs/PATH_TO_3.0.0.md)
@@ -382,10 +382,15 @@ Done earlier (kept for history):
   verify → Soft re-erase; CLI `storage-test`; Soft-proposed
   `fixtures/storage/interface.ismstor` (NR Ch. 7.1 LCG class oracle; Soft
   original, no NR listings). Checks `tests/test_ismbench.c`, `tests/cli_smoke.sh`.
-- **Gaps:** live removable-media / USB-CDC Soft storage path when Eric freezes
-  SoT; Soft #203 / #204 live I2C SPD + PSRAM remain `-2eaf` (do not steal);
-  live printer USB + plotter fab SoT (S8.4b″). `gh issue create` may 401 —
-  gaps recorded here / in the PR.
+- **Gaps:** live removable-media Soft storage path when Eric freezes SoT;
+  Soft #204 live PSRAM; live printer USB + plotter fab SoT (S8.4b″).
+
+### ISMBENCH-spd-cdc — Soft #203 USB-CDC SPD framing  `status: done` (this PR)
+- Soft `ISM SPD:` line parse + Soft XOR contract; CI live-stub
+  `fixtures/memory/cdc-spd-stub.sqspd`; `memory-test --spd-cdc` and
+  `squirrelramtest --spd-cdc`; framing note `squirrelismbench/docs/spd-cdc.md`.
+- **Gaps:** Soft #204 PSRAM march host path; optional ACM soak #212 when
+  Eric’s board is available (CI stays on the stub).
 
 ### KBDCFG-scaffold — Eric keyboard layout + firmware cfg  `status: done` (#184)
 - S9.1: `squirrelkbdcfg/` loads 60% fixture, prints layout, SQKB1 round-trip.
@@ -425,8 +430,8 @@ Done earlier (kept for history):
 - S9.3: `squirrelramtest/` loads ISM-MEM fixture, prints SPD Soft XOR contract,
   runs fixture bank patterns, writes pass/fail artifact; checks
   `tests/test_ramtest.c`, `tests/cli_smoke.sh`. Bench harness remains
-  `squirrelismbench/` `memory-test`. Live I2C SPD / PSRAM → Soft #203 / #204
-  (S8.4b gaps; lane `-2eaf`).
+  `squirrelismbench/` `memory-test`. Soft #203 `--spd-cdc` on `main` / this PR;
+  live PSRAM → Soft #204 (S8.4b″; lane `-2eaf`).
 
 ### PLAY-0.0.14 — upload SquirrelSound 0.0.14  `needs: squirrel`
 - Build the AAB locally with the upload key and upload it to closed testing

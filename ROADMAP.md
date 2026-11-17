@@ -224,8 +224,11 @@ military. Gaps → ISM issues, not Soft hardware PRs.
   SD/eMMC/flash Soft erase/program/verify; Park–Miller LCG NR Ch. 7.1 class +
   Soft CRC-32; Soft-proposed `fixtures/storage/*.ismstor`); live removable-
   media / CDC deferred
-- [ ] S8.4b″ Remaining live lab equipment: I2C SPD + PSRAM (Soft #203 / #204,
-  lane `-2eaf`); live printer USB; plotter fab SoT refresh when ISM #6 lands
+- [x] S8.4b″a Soft USB-CDC `ISM SPD:` framing + CI live-stub (Soft #203,
+  lane `-2eaf`): `ib_memory_spd_*` / `rm_spd_*`; `docs/spd-cdc.md`;
+  `memory-test --spd-cdc` / `squirrelramtest --spd-cdc`
+- [ ] S8.4b″ Remaining live lab: PSRAM march (Soft #204, `-2eaf`); live
+  printer USB; plotter fab SoT refresh when ISM #6 lands
 
 ## S9 — Eric ISM companion apps (peripherals first)
 
