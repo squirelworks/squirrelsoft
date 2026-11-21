@@ -230,8 +230,10 @@ military. Gaps → ISM issues, not Soft hardware PRs.
 - [x] S8.4b″b Soft host Soft-driven PSRAM march path (Soft #204, `-2eaf`):
   `ib_memory_live_*` / `rm_live_*`; `memory-test --live-march`; CI Soft stub /
   `.sqmem`; ACM Soft MEM CDC deferred; `docs/psram-live.md`
-- [ ] S8.4b″ Remaining live lab: live printer USB; plotter fab SoT refresh when
-  ISM #6 lands
+- [ ] S8.2′ Soft live USB HID host backend (Soft #207, `-2eaf`) — next Soft
+  coding when resumed: `libusb` / WinUSB / IOHID open/read; keep mock fixtures
+- [ ] S8.4b″ Remaining live lab: Soft #212 / #214 board soaks (Eric ACM/MEM);
+  live printer USB; plotter fab SoT refresh when ISM #6 lands
 
 ## S9 — Eric ISM companion apps (peripherals first)
 
